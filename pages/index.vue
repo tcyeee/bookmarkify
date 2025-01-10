@@ -1,6 +1,6 @@
 <template>
   <div>
-    Index
+    index test
   </div>
 </template>
 
