@@ -1,10 +1,5 @@
 <template>
-  <div>title</div>
-  <NuxtPage class="top-[4rem]" />
+  <NuxtPage />
 </template>
 <style>
-:root {
-  overflow-x: hidden;
-  user-select: none;
-}
 </style>
