@@ -12,11 +12,11 @@
   "dependencies": {
     "@pinia/nuxt": "0.9.0",
     "nuxt": "^3.15.1",
-    "nuxt-vue3-google-signin": "^0.0.11",
     "pinia": "^2.3.0",
     "pinia-plugin-persistedstate": "^4.2.0",
     "vue": "latest",
-    "vue-router": "latest"
+    "vue-router": "latest",
+    "nuxt-vue3-google-signin": "^0.0.11"
   },
   "devDependencies": {
     "@element-plus/nuxt": "^1.1.1",

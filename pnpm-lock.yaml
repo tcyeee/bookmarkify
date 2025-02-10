@@ -26,6 +26,9 @@ dependencies:
   vue-router:
     specifier: latest
     version: 4.5.0(vue@3.5.13)
+  vue3-google-signin:
+    specifier: ^2.0.1
+    version: 2.0.1(vue@3.5.13)
 
 devDependencies:
   '@element-plus/nuxt':
