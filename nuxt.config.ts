@@ -18,5 +18,5 @@ export default defineNuxtConfig({
   tailwindcss: {},
   googleSignIn: {
     clientId: process.env.BOOKMARKIFY_GOOGLE_LOGIN_ID
-  }
+  },
 })
