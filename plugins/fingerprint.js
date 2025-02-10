@@ -1,0 +1,9 @@
+import FingerprintJS from '@fingerprintjs/fingerprintjs'
+
+export default defineNuxtPlugin(async (nuxtApp) => {
+    if (!import.meta.client) return
+
+    const fp = await FingerprintJS.load()
+    const result = await fp.get()
+    useState('userFingerprint', () => result.visitorId)
+})
