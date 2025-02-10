@@ -11,6 +11,9 @@ dependencies:
   nuxt:
     specifier: ^3.15.1
     version: 3.15.1(typescript@5.7.3)(vite@6.0.7)
+  nuxt-vue3-google-signin:
+    specifier: ^0.0.11
+    version: 0.0.11(vue@3.5.13)
   pinia:
     specifier: ^2.3.0
     version: 2.3.0(typescript@5.7.3)(vue@3.5.13)
@@ -4347,6 +4350,20 @@ packages:
     hasBin: true
     dev: false
 
+  /nuxt-vue3-google-signin@0.0.11(vue@3.5.13):
+    resolution: {integrity: sha512-GLXAGwOXFCaTg+Bvu76qDY5qxbm9S5zxxVKAAFb4f/jaUiCRVesD8NxToQvY9c9Xf83W0W1rYLjfTABF+pmqNA==}
+    engines: {node: '>=16.0.0'}
+    dependencies:
+      '@nuxt/kit': 3.15.1(magicast@0.3.5)
+      unimport: 3.14.5(rollup@4.30.1)
+      vue3-google-signin: 2.0.1(vue@3.5.13)
+    transitivePeerDependencies:
+      - magicast
+      - rollup
+      - supports-color
+      - vue
+    dev: false
+
   /nuxt@3.15.1(typescript@5.7.3)(vite@6.0.7):
     resolution: {integrity: sha512-8sKgqjhu5JoaVv89TnBW5S0jvsXRrEWGF+CguYUPK+6sRAtNcJAwcWxd4pEmURYQ2D0jjdfgr/VyH0i9CdhkBQ==}
     engines: {node: ^18.20.5 || ^20.9.0 || >=22.0.0}
@@ -6380,6 +6397,14 @@ packages:
       vue: ^3.2.0
     dependencies:
       '@vue/devtools-api': 6.6.4
+      vue: 3.5.13(typescript@5.7.3)
+    dev: false
+
+  /vue3-google-signin@2.0.1(vue@3.5.13):
+    resolution: {integrity: sha512-vZTlVrG56JERtqQ+6YI8e92wqfhAMDyNONCsLgKKXxzCNCWEfSkZcAvz7COm9V4bvzmGsebZ8KC3ljol2qsIcg==}
+    peerDependencies:
+      vue: ^3
+    dependencies:
       vue: 3.5.13(typescript@5.7.3)
     dev: false
 
