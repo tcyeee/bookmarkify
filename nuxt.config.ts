@@ -9,9 +9,9 @@ export default defineNuxtConfig({
   elementPlus: { /** Options */ },
   css: ['~/assets/css/styles.css'],
   plugins: [
-    '~/plugins/fingerprint.js',
-    '~/plugins/keyListener.js',
-    '~/plugins/contextMenu.js'
+    '~/plugins/fingerprint.ts',
+    '~/plugins/keyListener.ts',
+    '~/plugins/contextMenu.ts'
   ],
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },

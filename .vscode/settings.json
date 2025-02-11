@@ -1,0 +1,7 @@
+{
+    "editor.defaultFormatter": "octref.vetur",
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+    "files.autoSaveWhenNoErrors": true,
+    "files.autoSaveWorkspaceFilesOnly": true
+}

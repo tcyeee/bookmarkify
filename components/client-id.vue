@@ -3,7 +3,6 @@
     <div class="text-2xl mb-2"> user status</div>
     <div>Last client-id:&emsp;9f4dbdc2431838fa0cebe88d736e4661</div>
     <div>You client-id:&emsp;{{ data.clientId }}</div>
-
   </div>
 </template>
 
