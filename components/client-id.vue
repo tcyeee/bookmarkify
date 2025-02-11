@@ -1,23 +1,30 @@
 <template>
   <div class="bg-green-100 p-10">
     <div class="text-2xl mb-2"> user status</div>
-    <div>Last client-id:&emsp;9f4dbdc2431838fa0cebe88d736e4661</div>
-    <div>You client-id:&emsp;{{ data.clientId }}</div>
+    <div>pinia client-id:&emsp;{{ data.fingerprint }}</div>
+    <div class="cy-btn m-10 cy-btn-primary" @click="addOne()">current: {{ storeUser.count }}</div>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { StoreUser } from "@/stores/user.store";
+const storeUser = StoreUser();
+
 let data = reactive({
   clientId: "",
+  fingerprint: "",
 });
 
 onMounted(() => {
   setClientId();
 });
 
+function addOne() {
+  
+}
+
 function setClientId() {
-  const userFingerprint = useState("userFingerprint");
-  data.clientId = String(userFingerprint.value);
+  data.fingerprint = storeUser.fingerprint;
 }
 </script>
 

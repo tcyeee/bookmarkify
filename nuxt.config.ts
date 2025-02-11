@@ -6,17 +6,24 @@ export default defineNuxtConfig({
     '@element-plus/nuxt',
     'nuxt-vue3-google-signin'
   ],
-  elementPlus: { /** Options */ },
-  css: ['~/assets/css/styles.css'],
+
   plugins: [
-    '~/plugins/fingerprint.ts',
     '~/plugins/keyListener.ts',
     '~/plugins/contextMenu.ts'
   ],
-  compatibilityDate: '2024-11-01',
+
+  elementPlus: { /** Options */ },
+  css: ['~/assets/css/styles.css'],
   devtools: { enabled: true },
   tailwindcss: {},
+
+  pinia: {
+    storesDirs: ['./stores/**'],
+  },
+
   googleSignIn: {
     clientId: process.env.BOOKMARKIFY_GOOGLE_LOGIN_ID
   },
+
+  compatibilityDate: '2025-02-11',
 })
