@@ -5,7 +5,7 @@ export * from './typing'
 
 
 // 登录
-export const authInit = (fingerPrint: string) => http.post(`/auth/init?fp=${fingerPrint}`) as Promise<UserStore>;
+export const authByFingerprint = (fingerPrint: string) => http.get(`/auth/init?fp=${fingerPrint}`) as Promise<UserStore>;
 
 export const authLogin = (params: LoginParams) => http.post('/auth/login', params) as Promise<UserStore>;
 

@@ -1,5 +1,5 @@
 import { type FetchConfig, type Result } from './types';
-import { ElMessage } from 'element-plus'
+import { StoreUser } from "@/stores/user.store";
 
 export default class http {
     static put(path: string, params?: any): any {
@@ -16,7 +16,7 @@ export default class http {
 
     static async start(path: string, method: string, params?: any): Promise<any> {
         console.log(`[DEBUG] 产生${method}请求,路径为${path}`);
-        const userStore = useBaseStore()
+        const userStore = StoreUser()
         const config: FetchConfig = {
             method,
             headers: {
