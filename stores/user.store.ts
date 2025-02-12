@@ -8,6 +8,7 @@ export const StoreUser = defineStore('user', {
   state: () => ({
     count: 12,
     fingerprint: '',
+    clientUid: '',
     isLoggedIn: false,
     profile: {
       token: ''
@@ -47,5 +48,14 @@ export const StoreUser = defineStore('user', {
         type: 'success',
       })
     },
+
+    /**
+     * 1.fingerprint id 实时更新
+     * 2.client id 没有才添加
+     */
+    updateFingerprint(fingerprintId: string) {
+      if (this.clientUid == '') this.clientUid = nanoid()
+      this.fingerprint = fingerprintId
+    }
   }
 })

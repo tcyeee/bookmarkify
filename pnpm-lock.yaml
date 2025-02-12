@@ -37,6 +37,9 @@ devDependencies:
   '@element-plus/nuxt':
     specifier: ^1.1.1
     version: 1.1.1(@element-plus/icons-vue@2.3.1)(element-plus@2.9.3)
+  '@fingerprintjs/fingerprintjs':
+    specifier: ^4.5.1
+    version: 4.5.1
   '@imengyu/vue3-context-menu':
     specifier: ^1.4.4
     version: 1.4.4
@@ -839,6 +842,12 @@ packages:
     requiresBuild: true
     dev: false
     optional: true
+
+  /@fingerprintjs/fingerprintjs@4.5.1:
+    resolution: {integrity: sha512-hKJaRoLHNeUUPhb+Md3pTlY/Js2YR4aXjroaDHpxrjoM8kGnEFyZVZxXo6l3gRyKnQN52Uoqsycd3M73eCdMzw==}
+    dependencies:
+      tslib: 2.8.1
+    dev: true
 
   /@floating-ui/core@1.6.9:
     resolution: {integrity: sha512-uMXCuQ3BItDUbAMhIXw7UPXRfAlOAvZzdK9BWpE60MCn+Svt3aLn9jsPTi/WNGlRUu2uI0v5S7JiIUsbsvh3fw==}
@@ -5823,6 +5832,10 @@ packages:
 
   /ts-interface-checker@0.1.13:
     resolution: {integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==}
+    dev: true
+
+  /tslib@2.8.1:
+    resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
     dev: true
 
   /tsscmp@1.0.6:
