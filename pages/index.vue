@@ -3,6 +3,7 @@
 </template>
 
 <script lang="ts" setup>
+// @ts-ignore
 import { useOneTap, type CredentialResponse } from "vue3-google-signin";
 import { Environments } from "~/types/environments";
 

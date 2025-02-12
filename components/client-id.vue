@@ -3,14 +3,28 @@
     <div class="text-2xl mb-2"> user status</div>
     <div>fingerprint:&emsp;{{ storeUser.fingerprint }}</div>
     <div>clientUid:&emsp;{{ storeUser.clientUid }}</div>
+    <div>API:&emsp;{{ data.messages }}</div>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { StoreUser } from "@/stores/user.store";
-const storeUser = StoreUser();
+import { sysLinkTest } from "~/server/apis";
 
-onMounted(() => {});
+const storeUser = StoreUser();
+const data = reactive({
+  messages: "",
+});
+
+onMounted(() => {
+  test();
+});
+
+function test() {
+  sysLinkTest().then((res) => {
+    console.log(res);
+  });
+}
 </script>
 
 <style scoped>

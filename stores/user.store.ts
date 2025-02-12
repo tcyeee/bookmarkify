@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import type { UserStore } from '~/apis/'
-import { authByFingerprint } from '~/apis'
+import type { UserStore } from '~/server/apis'
+import { authByFingerprint } from '~/server/apis'
 import { nanoid } from 'nanoid'
 
 export const StoreUser = defineStore('user', {

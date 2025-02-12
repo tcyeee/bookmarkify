@@ -1,3 +1,4 @@
+import { Environments } from '~/types/environments';
 import { type FetchConfig, type Result } from './types';
 import { StoreUser } from "@/stores/user.store";
 
@@ -46,10 +47,10 @@ export default class http {
         }
 
         try {
-            const response = await fetch("/api" + path, config);
-            if (!response.ok) {
-                ElMessage.error(`Oops, ${response.status} (${response.statusText})`)
-            }
+            if (process.env.NODE_ENV == Environments.PRO) path = "/api" + path
+
+            const env = useRuntimeConfig()
+            const response = await fetch(env.public.apiBase + path, config);
             const data = await response.json();
             return resultCheck(data as Result<object>);
         } catch (error) {
@@ -58,26 +59,10 @@ export default class http {
     }
 }
 
-
-enum NoticeType {
-    INFO = 'INFO',
-    WARN = 'WARN',
-    ERROR = 'ERROR',
-    SUCCESS = 'SUCCESS',
-    NONE = 'NONE'
-}
-
 // 对返回结果进行检查
 function resultCheck(result: Result<object>): Promise<any> {
-    // 系统正常
-    if (result.status) return Promise.resolve(result.data);
-
-    switch (result.notice) {
-        case NoticeType.NONE:
-        case NoticeType.INFO:
-        case NoticeType.SUCCESS:
-        case NoticeType.WARN: console.log("WARN"); break;
-        case NoticeType.ERROR: ElMessage.error(`Oops, ${result.msg}`); break;
-    }
+    if (result.ok) return Promise.resolve(result.data);
+    // @ts-ignore
+    ElMessage.error(`Oops, ${result.msg}`)
     return Promise.reject(result);
 }
