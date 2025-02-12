@@ -12,7 +12,14 @@ export default defineNuxtConfig({
     '~/plugins/keyListener.ts',
     '~/plugins/contextMenu.ts'
   ],
-
+  runtimeConfig: {
+    public: {
+      apiBase: process.env.NUXT_API_BASE
+    }
+  },
+  build: {
+    transpile: ['dayjs', 'element-plus'], // 让 Nuxt 处理 `dayjs`
+  },
   elementPlus: { /** Options */ },
   css: ['~/assets/css/styles.css'],
   devtools: { enabled: true },
@@ -25,6 +32,4 @@ export default defineNuxtConfig({
   googleSignIn: {
     clientId: process.env.BOOKMARKIFY_GOOGLE_LOGIN_ID
   },
-
-  compatibilityDate: '2025-02-11',
 })
