@@ -22,7 +22,7 @@ onMounted(() => {
 
 function test() {
   sysLinkTest().then((res) => {
-    console.log(res);
+    data.messages = res;
   });
 }
 </script>
