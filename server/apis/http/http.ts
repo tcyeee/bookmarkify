@@ -47,8 +47,6 @@ export default class http {
         }
 
         try {
-            if (process.env.NODE_ENV == Environments.PRO) path = "/api" + path
-
             const env = useRuntimeConfig()
             const response = await fetch(env.public.apiBase + path, config);
             const data = await response.json();
