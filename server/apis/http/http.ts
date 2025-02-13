@@ -60,6 +60,16 @@ export default class http {
 // 对返回结果进行检查
 function resultCheck(result: Result<object>): Promise<any> {
     if (result.ok) return Promise.resolve(result.data);
+
+    // 30007 TOKEN 失效
+    if (result.code === 30007) {
+        StoreUser().logout()
+
+        // @ts-ignore
+        setTimeout(() => window.location.reload(), 500);
+        return Promise.reject(result);
+    }
+
     // @ts-ignore
     ElMessage.error(`Oops, ${result.msg}`)
     return Promise.reject(result);

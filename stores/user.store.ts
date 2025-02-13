@@ -39,7 +39,6 @@ export const StoreUser = defineStore('user', {
         googleId: '',
         token: '',
       }
-      ElNotification.success('注销成功!');
     },
 
     /**

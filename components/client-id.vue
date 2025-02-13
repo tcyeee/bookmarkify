@@ -7,7 +7,11 @@
     <div>token:&emsp;{{ storeUser.auth.token }}</div>
     <div>API:&emsp;{{ data.messages }}</div>
     <div>Login:&emsp;{{storeUser.loginStatus  }}</div>
-    <div class="cy-btn cy-btn-primary mt-5" @click="storeUser.logout">LOGOUT</div>
+
+    <div class="flex mt-10 gap-5">
+      <div class="cy-btn cy-btn-primary " @click="storeUser.logout">LOGOUT</div>
+      <div class="cy-btn cy-btn-primary " @click="storeUser.auth.token='708326e4e40a405994c0cab5f4677835'">ChangeToken</div>
+    </div>
   </div>
 </template>
 
