@@ -1,6 +1,8 @@
 export interface LoginByDeviceParams {
     fingerprint: string
     deviceUid: string
+    googleId?: string
+    token?: string
 }
 
 
