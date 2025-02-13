@@ -5,5 +5,29 @@
   </NuxtLayout>
 </template>
 <script  lang="ts" setup>
-onMounted(() => {});
+// @ts-ignore
+import { useOneTap, type CredentialResponse } from "vue3-google-signin";
+import { Environments } from "~/types/environments";
+import { StoreUser } from "@/stores/user.store";
+const storeUser = StoreUser();
+
+onMounted(() => {
+  googleLogin();
+});
+
+function googleLogin() {
+  if (process.env.NODE_ENV != Environments.PRO) return;
+  if (storeUser.auth.googleId) return;
+
+  useOneTap({
+    onSuccess: (response: CredentialResponse) => {
+      const jwt = response.credential; // 获取 JWT
+      const base64Url = jwt.split(".")[1]; // 获取负载部分
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const decodedData = JSON.parse(window.atob(base64)); // 解码负载
+      console.log(decodedData); // 打印解码后的数据
+    },
+    onError: () => ElNotification.error("谷歌API调用失败!"),
+  });
+}
 </script>
