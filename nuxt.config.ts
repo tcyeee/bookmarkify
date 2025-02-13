@@ -9,6 +9,7 @@ export default defineNuxtConfig({
 
   plugins: [
     '~/plugins/fingerprint.ts',
+    '~/plugins/autoLogin.ts',
     '~/plugins/keyListener.ts',
     '~/plugins/contextMenu.ts'
   ],

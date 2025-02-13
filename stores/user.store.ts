@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import type { UserStore } from '~/server/apis'
-import { authByFingerprint } from '~/server/apis'
+import type { LoginByDeviceParams, UserStore } from '~/server/apis'
+import { authByDeviceId } from '~/server/apis'
 import { nanoid } from 'nanoid'
 
 export const StoreUser = defineStore('user', {
@@ -8,7 +8,8 @@ export const StoreUser = defineStore('user', {
   state: () => ({
     count: 12,
     fingerprint: '',
-    clientUid: '',
+    deviceUid: '',
+    token: '',
     isLoggedIn: false,
     profile: {
       token: ''
@@ -21,32 +22,25 @@ export const StoreUser = defineStore('user', {
     }
   },
   actions: {
-    async login() {
+    async loginByDeviceUid() {
       if (this.isLoggedIn) return
-      await authByFingerprint(this.getFingerprint).then((res: UserStore) => {
-        //     this.isLoggedIn = true
-        //     ElNotification({
-        //       title: 'Success',
-        //       message: '登录成功!',
-        //       type: 'success',
+
+      const params: LoginByDeviceParams = {
+        fingerprint: this.fingerprint,
+        deviceUid: this.deviceUid
+      }
+      await authByDeviceId(params).then((res: UserStore) => {
+        this.isLoggedIn = true
+        this.token = res.token
         return Promise.resolve(res)
+      }).catch((err: any) => {
+        ElNotification.error('会话注册失败')
       })
-      //   }).catch((e: any) => {
-      //     ElNotification({
-      //       title: 'Error',
-      //       message: '登录失败!',
-      //       type: 'error',
-      //     })
-      //   })
     },
+
     logout() {
       this.isLoggedIn = false
-      this.profile = { token: '' }
-      ElNotification({
-        title: 'Success',
-        message: '注销成功!',
-        type: 'success',
-      })
+      ElNotification.success('注销成功!');
     },
 
     /**
@@ -54,7 +48,7 @@ export const StoreUser = defineStore('user', {
      * 2.client id 没有才添加
      */
     updateFingerprint(fingerprintId: string) {
-      if (this.clientUid == '') this.clientUid = nanoid()
+      if (this.deviceUid == '') this.deviceUid = nanoid()
       this.fingerprint = fingerprintId
     }
   }
