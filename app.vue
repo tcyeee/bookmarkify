@@ -16,9 +16,11 @@ onMounted(() => {
 });
 
 function googleLogin() {
+  console.log("== 01" + process.env.NODE_ENV);
   if (process.env.NODE_ENV != Environments.PRO) return;
+  console.log("== 02" + storeUser.auth.googleId);
   if (storeUser.auth.googleId) return;
-
+  console.log("== 03");
   useOneTap({
     onSuccess: (response: CredentialResponse) => {
       const jwt = response.credential; // 获取 JWT
