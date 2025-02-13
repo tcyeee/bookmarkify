@@ -18,6 +18,8 @@ onMounted(() => {
 function googleLogin() {
   if (process.env.NODE_ENV != Environments.PRO) return;
   if (storeUser.auth.googleId) return;
+  console.log("[google]======start");
+
   useOneTap({
     onSuccess: (response: CredentialResponse) => {
       console.log("======================[google]==========");
@@ -25,7 +27,7 @@ function googleLogin() {
       console.log(response.credential);
       console.log("======================[google]==========");
     },
-    onError: () => ElNotification.error("谷歌API调用失败!"),
+    onError: () => console.error("Error with One Tap Login"),
   });
 }
 </script>
