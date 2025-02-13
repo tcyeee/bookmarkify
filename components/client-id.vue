@@ -5,7 +5,7 @@
     <div>clientUid:&emsp;{{ storeUser.auth.deviceUid }}</div>
     <div>googleId:&emsp;{{ storeUser.auth.googleId }}</div>
     <div>API:&emsp;{{ data.messages }}</div>
-
+    <div>Login:&emsp;{{storeUser.loginStatus  }}</div>
     <div class="cy-btn cy-btn-primary mt-5" @click="storeUser.logout">LOGOUT</div>
   </div>
 </template>

@@ -1,4 +1,3 @@
-import { Environments } from '~/types/environments';
 import { type FetchConfig, type Result } from './types';
 import { StoreUser } from "@/stores/user.store";
 
@@ -16,17 +15,23 @@ export default class http {
     }
 
     static async start(path: string, method: string, params?: any): Promise<any> {
-        console.log(`[DEBUG] 产生${method}请求,路径为${path}`);
+        console.log(`[DEBUG] ${method}::${path}`);
         const userStore = StoreUser()
         const config: FetchConfig = {
             headers: { 'Content-Type': 'application/json; charset=utf-8' },
             method,
         }
 
-        // 如果有有效的 token，就添加到请求头
-        if (userStore.auth?.token) config.headers['x-access-token'] = userStore.auth.token;
+        // 只要不是校验接口,都需要提前去登陆
+        const isAuthApi = path.startsWith('/auth/');
+        const hasToken = !!userStore.auth?.token
+        if (!isAuthApi && !hasToken) {
+            await userStore.loginByDeviceUid().then(() => {
+                console.log(`[DEBUG] 重新登陆获取TOKEN:${userStore.auth.token}`);
+            });
+        }
 
-        // 参数处理
+        config.headers['x-access-token'] = userStore.auth.token;
         if (params) {
             // 如果不是GET就格式化参数为JSON
             if (method !== "GET") {
