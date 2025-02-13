@@ -9,8 +9,9 @@
     <div>Login:&emsp;{{storeUser.loginStatus  }}</div>
 
     <div class="flex mt-10 gap-5">
-      <div class="cy-btn cy-btn-primary " @click="storeUser.logout">LOGOUT</div>
-      <div class="cy-btn cy-btn-primary " @click="storeUser.auth.token='708326e4e40a405994c0cab5f4677835'">ChangeToken</div>
+      <div class="cy-btn cy-btn-primary" @click="storeUser.logout">LOGOUT</div>
+      <div class="cy-btn cy-btn-primary" :disabled="!isReady" @click="login()">Google Login</div>
+      <GoogleSignInButton @success="handleLoginSuccess" @error="handleLoginError"></GoogleSignInButton>
     </div>
   </div>
 </template>
@@ -18,6 +19,11 @@
 <script lang="ts" setup>
 import { StoreUser } from "@/stores/user.store";
 import { sysLinkTest } from "~/server/apis";
+
+import {
+  GoogleSignInButton,
+  type CredentialResponse,
+} from "vue3-google-signin";
 
 const storeUser = StoreUser();
 const data = reactive({
@@ -33,6 +39,17 @@ function test() {
     data.messages = res;
   });
 }
+
+// handle success event
+const handleLoginSuccess = (response: CredentialResponse) => {
+  const { credential } = response;
+  console.log("Access Token", credential);
+};
+
+// handle an error event
+const handleLoginError = () => {
+  console.error("Login failed");
+};
 </script>
 
 <style scoped>
