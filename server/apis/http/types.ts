@@ -16,6 +16,6 @@ export interface Result<T> {
 
 export enum DateType {
     NORMAL = 1,  // 普通数据
-    ENCRYPT = 10 // 加密数据
+    ENCRYPT = 10 // 加密
 }
 
