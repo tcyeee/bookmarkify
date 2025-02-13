@@ -19,15 +19,12 @@ export default class http {
         console.log(`[DEBUG] 产生${method}请求,路径为${path}`);
         const userStore = StoreUser()
         const config: FetchConfig = {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
             method,
-            headers: {
-                'Content-Type': 'application/json; charset=utf-8',
-                'Authorization': null,
-            },
         }
 
-        // 如果有TOKEN就加上
-        if (userStore.auth?.token) config.headers.Authorization = `Bearer ${userStore.auth.token}`
+        // 如果有有效的 token，就添加到请求头
+        if (userStore.auth?.token) config.headers['x-access-token'] = userStore.auth.token;
 
         // 参数处理
         if (params) {
