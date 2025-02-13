@@ -7,7 +7,7 @@ export const StoreUser = defineStore('user', {
   persist: true,
   state: () => ({
     count: 12,
-    isLoggedIn: false,
+    loginStatus: false,  // 是否处于登陆状态
     auth: {
       fingerprint: '',
       deviceUid: '',
@@ -19,11 +19,11 @@ export const StoreUser = defineStore('user', {
   },
   actions: {
     async loginByDeviceUid() {
-      if (this.isLoggedIn) return
+      if (this.loginStatus) return
 
       const params: LoginByDeviceParams = this.auth
       await authByDeviceInfo(params).then((res: UserStore) => {
-        this.isLoggedIn = true
+        this.loginStatus = true
         this.auth.token = res.token
         return Promise.resolve(res)
       }).catch((err: any) => {
@@ -32,7 +32,7 @@ export const StoreUser = defineStore('user', {
     },
 
     logout() {
-      this.isLoggedIn = false
+      this.loginStatus = false
       this.auth = {
         fingerprint: '',
         deviceUid: '',
