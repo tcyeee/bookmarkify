@@ -4,6 +4,7 @@
     <div>fingerprint:&emsp;{{ storeUser.auth.fingerprint }}</div>
     <div>clientUid:&emsp;{{ storeUser.auth.deviceUid }}</div>
     <div>googleId:&emsp;{{ storeUser.auth.googleId }}</div>
+    <div>token:&emsp;{{ storeUser.auth.token }}</div>
     <div>API:&emsp;{{ data.messages }}</div>
     <div>Login:&emsp;{{storeUser.loginStatus  }}</div>
     <div class="cy-btn cy-btn-primary mt-5" @click="storeUser.logout">LOGOUT</div>
