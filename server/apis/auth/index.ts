@@ -2,7 +2,7 @@ import http from '../http/http';
 import * as type from './typing';
 export * from './typing'
 
-export const authByDeviceId = (params: type.LoginByDeviceParams) => http.post('/client/loginByClientId', params) as Promise<type.UserStore>;
+export const authByDeviceInfo = (params: type.LoginByDeviceParams) => http.post('/client/login', params) as Promise<type.UserStore>;
 
 export const authLogin = (params: type.LoginParams) => http.post('/auth/login', params) as Promise<type.UserStore>;
 export const authRegister = (params: type.LoginParams) => http.post('/auth/register', params) as Promise<type.UserStore>;

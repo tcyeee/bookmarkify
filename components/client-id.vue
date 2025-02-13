@@ -1,9 +1,12 @@
 <template>
   <div class="bg-green-100 p-10">
     <div class="text-2xl mb-2"> user status</div>
-    <div>fingerprint:&emsp;{{ storeUser.fingerprint }}</div>
-    <div>clientUid:&emsp;{{ storeUser.deviceUid }}</div>
+    <div>fingerprint:&emsp;{{ storeUser.auth.fingerprint }}</div>
+    <div>clientUid:&emsp;{{ storeUser.auth.deviceUid }}</div>
+    <div>googleId:&emsp;{{ storeUser.auth.googleId }}</div>
     <div>API:&emsp;{{ data.messages }}</div>
+
+    <div class="cy-btn cy-btn-primary mt-5" @click="storeUser.logout">LOGOUT</div>
   </div>
 </template>
 

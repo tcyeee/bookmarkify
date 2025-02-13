@@ -27,9 +27,7 @@ export default class http {
         }
 
         // 如果有TOKEN就加上
-        if (userStore.profile?.token != undefined) {
-            config.headers.Authorization = `Bearer ${userStore.profile.token}`
-        }
+        if (userStore.auth?.token) config.headers.Authorization = `Bearer ${userStore.auth.token}`
 
         // 参数处理
         if (params) {
