@@ -17,8 +17,7 @@
     "pinia": "^2.3.0",
     "pinia-plugin-persistedstate": "^4.2.0",
     "vue": "latest",
-    "vue-router": "latest",
-    "vue3-google-oauth2": "^1.0.7"
+    "vue-router": "latest"
   },
   "devDependencies": {
     "@element-plus/nuxt": "^1.1.1",
