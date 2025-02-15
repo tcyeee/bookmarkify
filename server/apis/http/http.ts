@@ -52,6 +52,8 @@ export default class http {
             const data = await response.json();
             return resultCheck(data as Result<object>);
         } catch (error) {
+            // @ts-ignore
+            if (error instanceof TypeError) ElMessage.error(`Oops,网络错误,请重试`)
             return Promise.reject(error);
         }
     }
@@ -61,8 +63,8 @@ export default class http {
 function resultCheck(result: Result<object>): Promise<any> {
     if (result.ok) return Promise.resolve(result.data);
 
-    // 30007 TOKEN 失效
-    if (result.code === 30007) {
+    // 重新登陆
+    if (result.code === 101) {
         StoreUser().logout()
 
         // @ts-ignore
