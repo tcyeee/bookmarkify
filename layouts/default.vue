@@ -1,19 +1,10 @@
 <template>
-  <NuxtPage />
+  <div>
+    <NuxtPage />
+    <LayoutFooter class="fixed bottom-0" />
+  </div>
 </template>
 <script  lang="ts" setup>
-import { Environments } from "~/types/environments";
-import { StoreUser } from "@/stores/user.store";
-const storeUser = StoreUser();
-
-onMounted(() => {
-  googleLogin();
-});
-
-function googleLogin() {
-  if (process.env.NODE_ENV != Environments.PRO) return;
-  if (storeUser.auth.googleId) return;
-}
 </script>
-<style>
+<style scoped>
 </style>
