@@ -5,9 +5,8 @@
 </template>
 
 <script lang="ts" setup>
-import { bookmarksShowAll } from "~/server/apis";
 import { type HomeItem } from "~/server/apis/bookmark/typing";
-const userStore = StoreUser();
+const storeBookmark = StoreBookmark();
 
 defineProps<{
   status: boolean;
@@ -19,19 +18,10 @@ const data = reactive<{
   bookmarkList: [],
 });
 
-onMounted(() => {});
-
-function getPageData() {
-  bookmarksShowAll().then((res) => sortData(res));
-}
-
-function sortData(res: Array<HomeItem>) {
-  console.log(`加载用户书签,共计${res.length}个...`);
-  data.bookmarkList =
-    res == null || res.length == 0
-      ? []
-      : res.slice().sort((a, b) => a.sort - b.sort);
-}
+onMounted(() => {
+  // 加载首页数据
+  storeBookmark.get().then((res) => (data.bookmarkList = res));
+});
 </script>
 
 <style scoped>
