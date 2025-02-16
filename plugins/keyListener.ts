@@ -1,5 +1,6 @@
 export default defineNuxtPlugin(() => {
   if (!import.meta.client) return
+  const sysStore = sysBaseStore();
 
   // 阻止鼠标右键
   window.addEventListener('contextmenu', (event) => {
@@ -8,6 +9,9 @@ export default defineNuxtPlugin(() => {
 
   // 检测键盘
   window.addEventListener('keydown', (event) => {
-    console.log('Key pressed:', event.key)
+    sysStore.triggerKeyEvent(event.code, useRoute().path);
   })
+
+  // 注册基础按键功能
+  sysStore.registerKeyEvent("Escape", "/setting", () => navigateTo("/"));
 })
