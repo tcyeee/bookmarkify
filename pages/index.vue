@@ -1,87 +1,143 @@
 <template>
-  <div>
-    <el-table :data="page.tableData" border style="width: 100%">
-      <el-table-column prop="date" label="名称" width="180" />
-      <el-table-column prop="name" label="描述" width="180" />
-      <el-table-column prop="address" label="Address" />
-    </el-table>
+  <div class="overflow-hidden">
+    <!-- 内容信息 -->
+    <div class="absolute w-screen h-screen z-[99]">
 
-    <el-card class="m-5">
-      <div class="font-1 mb-5">{{ page.list }}</div>
-      <el-input v-model="page.input" style="max-width: 600px" placeholder="Please input">
-        <template #prepend>Http://</template>
-      </el-input>
+      <!-- 时间信息 -->
+      <HomeTimeStr :class="classFadeDate" @click="sceneToggle()" class="text-[5rem] text-white opacity-80 text-center font-bold" />
 
-      <el-button class="ml-2" @click="addOne()">添加</el-button>
-    </el-card>
+      <!-- 内容页面 -->
+      <HomeMain :status="data.fade" class="absolute left-[10%] right-[10%] top-[30%]" />
 
-    <button class="cy-btn" onclick="my_modal_1.showModal()">open modal</button>
-    <dialog id="my_modal_1" class="cy-modal">
-      <div class="cy-modal-box">
-        <h3 class="text-lg font-bold">添加书签!</h3>
-        <p class="py-4">Press ESC key or click the button below to close</p>
+      <!-- 设置按钮 -->
+      <FunctionLayout v-if="!data.fade" class="fixed bottom-0" />
+    </div>
 
-        <div class="cy-modal-action">
-          <button class="cy-btn cy-btn-primary mr-3">添加</button>
-          <form method="dialog">
-            <button class="cy-btn">退出</button>
-          </form>
-        </div>
-      </div>
-    </dialog>
+    <!-- 背景信息 -->
+    <div :class="classFadeBg" class="index-base" />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { bookmarksShowAll, bookmarksAddOne } from "~/server/apis";
-import type { HomeItem } from "~/server/apis/bookmark/typing";
+definePageMeta({ layout: "applications" });
 
-const page = reactive<{
-  tableData: any;
-  list: HomeItem | undefined;
-  input: string;
+const sysStore = sysBaseStore();
+
+const data = reactive<{
+  fade: boolean;
+  duringAnimate: boolean;
 }>({
-  tableData: [],
-  list: undefined,
-  input: "",
+  fade: false,
+  duringAnimate: false,
 });
 
 onMounted(() => {
-  queryData();
+  sysStore.registerKeyEvent("Space", "/", () => sceneToggle());
 });
 
-function addOne() {
-  bookmarksAddOne({ url: page.input });
-}
+const classFadeBg = computed(() => {
+  return {
+    "animate-fade-bg-in": data.fade,
+    "animate-fade-bg-out": !data.fade,
+  };
+});
 
-function queryData() {
-  bookmarksShowAll().then((res) => {
-    page.list = res;
-  });
+const classFadeDate = computed(() => {
+  return {
+    "animate-fade-date-in": data.fade,
+    "animate-fade-date-out": !data.fade,
+  };
+});
 
-  page.tableData = [
-    {
-      date: "2016-05-03",
-      name: "Tom",
-      address: "No. 189, Grove St, Los Angeles",
-    },
-    {
-      date: "2016-05-02",
-      name: "Tom",
-      address: "No. 189, Grove St, Los Angeles",
-    },
-    {
-      date: "2016-05-04",
-      name: "Tom",
-      address: "No. 189, Grove St, Los Angeles",
-    },
-    {
-      date: "2016-05-01",
-      name: "Tom",
-      address: "No. 189, Grove St, Los Angeles",
-    },
-  ];
+// 开关APP显示
+function sceneToggle() {
+  data.fade = !data.fade;
 }
 </script>
-<style>
+
+<style scoped>
+.index-base {
+  height: calc(100vh + 20px);
+  margin: -10px;
+  overflow: hidden;
+
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-image: url("https://i.tcyeee.top/tmp/114548FqPbC.jpg");
+  z-index: -1;
+}
+
+.transition-filter {
+  transition: filter 350ms;
+}
+
+.fade_bg {
+  filter: brightness(0.5) blur(4px);
+}
+.fade_date {
+  font-size: 10rem !important;
+  margin-top: 3rem !important;
+}
+
+/* 定义缩放和移动的动画 */
+@keyframes index-bg-in {
+  0% {
+    transform: scale(1);
+    filter: brightness(0.8);
+  }
+  100% {
+    transform: scale(1.2);
+    filter: brightness(0.4);
+  }
+}
+
+@keyframes index-bg-out {
+  0% {
+    transform: scale(1.2);
+    filter: brightness(0.4);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(0.8);
+  }
+}
+
+@keyframes index-date-in {
+  0% {
+    transform: scale(2.2) translateY(10vh);
+  }
+  100% {
+    transform: scale(1) translateY(8vh);
+  }
+}
+@keyframes index-date-out {
+  0% {
+    transform: scale(1) translateY(8vh);
+  }
+  100% {
+    transform: scale(2.2) translateY(10vh);
+  }
+}
+
+/* 播放APP动画-IN */
+.animate-fade-bg-in {
+  animation: index-bg-in 0.5s forwards;
+}
+
+/* 播放APP动画-OUT */
+.animate-fade-bg-out {
+  animation: index-bg-out 0.5s forwards;
+}
+
+/* 播放APP动画-IN */
+.animate-fade-date-in {
+  animation: index-date-in 0.3s forwards;
+}
+
+/* 播放APP动画-OUT */
+.animate-fade-date-out {
+  animation: index-date-out 0.3s forwards;
+}
 </style>
+
