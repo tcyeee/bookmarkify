@@ -64,7 +64,7 @@ function resultCheck(result: Result<object>): Promise<any> {
     if (result.ok) return Promise.resolve(result.data);
 
     // 重新登陆
-    if (result.code === 101) {
+    if ([101, 107].includes(result.code)) {
         StoreUser().logout()
 
         // @ts-ignore
