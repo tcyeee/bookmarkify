@@ -24,6 +24,7 @@
     "@imengyu/vue3-context-menu": "^1.4.4",
     "@fingerprintjs/fingerprintjs": "^4.5.1",
     "@nuxtjs/tailwindcss": "^6.12.2",
+    "vuedraggable": "4.1.0",
     "daisyui": "^4.12.23",
     "element-plus": "^2.9.3"
   }

@@ -32,7 +32,7 @@ export const StoreUser = defineStore('user', {
     },
 
     logout() {
-      this.loginStatus = false
+      this.loginStatus = false  
       this.auth = {
         fingerprint: '',
         deviceUid: '',
