@@ -21,6 +21,7 @@
 <script lang="ts" setup>
 definePageMeta({ layout: "applications" });
 const sysStore = sysBaseStore();
+const storeBookmark = StoreBookmark();
 
 const data = reactive<{
   fade: boolean;
@@ -32,6 +33,7 @@ const data = reactive<{
 
 onMounted(() => {
   sysStore.registerKeyEvent("Space", "/", () => sceneToggle());
+  storeBookmark.update();
 });
 
 const classFadeBg = computed(() => {
