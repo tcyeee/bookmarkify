@@ -13,7 +13,7 @@ export const StoreBookmark = defineStore('bookmark', {
   },
   actions: {
     async get(): Promise<Array<HomeItem>> {
-      return this.bookmarks == undefined ? await this.update() : this.bookmarks
+      return this.bookmarks == undefined ? await this.update() : Promise.resolve(this.bookmarks)
     },
 
     /**
@@ -21,9 +21,7 @@ export const StoreBookmark = defineStore('bookmark', {
      * @returns 排序后的桌面排布数据
      */
     async update(): Promise<Array<HomeItem>> {
-      await bookmarksShowAll().then((res) => {
-        this.bookmarks = sortData(res)
-      });
+      await bookmarksShowAll().then((res) => this.bookmarks = sortData(res))
       if (this.bookmarks == undefined) throw new Error
       return this.bookmarks;
     }
@@ -39,8 +37,5 @@ export const StoreBookmark = defineStore('bookmark', {
  */
 
 function sortData(res: Array<HomeItem>) {
-  console.log(`加载用户书签,共计${res.length}个...`);
-  return res == null || res.length == 0
-    ? []
-    : res.slice().sort((a, b) => a.sort - b.sort);
+  return res == null || res.length == 0 ? [] : res.slice().sort((a, b) => a.sort - b.sort);
 }
