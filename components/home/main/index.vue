@@ -19,9 +19,9 @@ const data = reactive<{
 });
 
 onMounted(() => {
-  // 加载首页数据
   storeBookmark.get().then((res) => {
     console.log(res);
+    console.log(storeBookmark.bookmarks);
     data.bookmarkList = res;
   });
 });
