@@ -3,9 +3,11 @@ import { defineStore } from 'pinia'
 export const sysBaseStore = defineStore('sys', {
     persist: true,
     state: () => <{
+        preventKeyEventsFlag: boolean,
         sysEvents: Map<string, Map<string, KeyEvent>> | undefined
         dialogLoginManage: Set<DialogStatus> | undefined
     }>({
+        preventKeyEventsFlag: false,
         sysEvents: undefined,
         dialogLoginManage: undefined
     }),
@@ -44,6 +46,7 @@ export const sysBaseStore = defineStore('sys', {
          * @param path 当前页面
          */
         triggerKeyEvent(keyCode: string, path: string) {
+            if (this.preventKeyEventsFlag) return
             if (!this.sysEvents || !this.sysEvents.has(keyCode)) return;
             const events: Map<string, KeyEvent> = this.sysEvents.get(keyCode) || new Map();
             if (!events.has(keyCode + path)) return;

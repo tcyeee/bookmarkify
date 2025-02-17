@@ -36,6 +36,7 @@ import { type HomeItem } from "~/server/apis/bookmark/typing";
 import Draggable from "vuedraggable";
 import ContextMenu from "@imengyu/vue3-context-menu";
 import { bookmarksSort, bookmarksDel } from "~/server/apis";
+const sysStore = sysBaseStore();
 
 const props = defineProps<{
   data: Array<HomeItem>;
@@ -54,6 +55,7 @@ const data = reactive<{
 
 watchEffect(() => {
   data.pageData = props.data;
+  sysStore.preventKeyEventsFlag = data.bookmarkDetailDialog;
 });
 
 const dragOptions = ref({ animation: 300 });
