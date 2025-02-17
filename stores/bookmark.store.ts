@@ -13,7 +13,6 @@ export const StoreBookmark = defineStore('bookmarks', {
   },
   actions: {
     async get(): Promise<Array<HomeItem>> {
-      console.log(`[DEBUG]书签查询:${this.bookmarks?.length}`);
       return this.bookmarks == undefined ? await this.update() : Promise.resolve(this.bookmarks)
     },
 

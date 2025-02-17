@@ -15,15 +15,11 @@ defineProps<{
 const data = reactive<{
   bookmarkList: Array<HomeItem>;
 }>({
-  bookmarkList: [],
+  bookmarkList: storeBookmark.bookmarks || [],
 });
 
 onMounted(() => {
-  storeBookmark.get().then((res) => {
-    console.log(res);
-    console.log(storeBookmark.bookmarks);
-    data.bookmarkList = res;
-  });
+  storeBookmark.get().then((res) => (data.bookmarkList = res));
 });
 </script>
 
