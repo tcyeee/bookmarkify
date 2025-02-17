@@ -20,7 +20,10 @@ const data = reactive<{
 
 onMounted(() => {
   // 加载首页数据
-  storeBookmark.get().then((res) => (data.bookmarkList = res));
+  storeBookmark.get().then((res) => {
+    console.log("书签加载:" + res);
+    data.bookmarkList = res;
+  });
 });
 </script>
 
