@@ -27,10 +27,7 @@
 </template>
 
 <script lang="ts" setup>
-import type {
-  BookmarkUpdateParams,
-  Bookmark,
-} from "~/server/apis/bookmark/typing";
+import type { Bookmark } from "~/server/apis/bookmark/typing";
 
 const props = defineProps<{
   sm?: boolean;
