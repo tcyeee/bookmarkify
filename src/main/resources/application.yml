@@ -1,0 +1,27 @@
+server:
+  port: 7001
+
+logging:
+  level:
+    root: INFO
+
+mybatis-plus:
+  global-config:
+    banner: false
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+    enable-footer: false
+    enable-footer-custom: true
+    footer-custom-content: Apache License 2.0 | Copyright©2024 tcyeee
+    enable-home-custom: true
+    enable-swagger-models: false
+    home-custom-path: classpath:README.md
+
+sa-token:
+  token-name: satoken
+  timeout: 2592000
+  is-log: true
+  is-print: false

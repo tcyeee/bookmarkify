@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${BOOKMARKIFY_POSTGRES_HOST}:5432/postgres?currentSchema=bookmarkify&stringtype=unspecified
+    username: ${BOOKMARKIFY_POSTGRES_USERNAME}
+    password: ${BOOKMARKIFY_POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      database: 1
+      host: ${BOOKMARKIFY_REDIS_HOST}
+      port: ${BOOKMARKIFY_REDIS_PORT}
+      password: ${BOOKMARKIFY_REDIS_PASSWORD}
+      timeout: 1000ms
+
+config:
+  img-path: ${BOOKMARKIFY_FILE_UPLOAD_DIR}
+  img-prefix: 'https://i.bookmarkify.cc'
