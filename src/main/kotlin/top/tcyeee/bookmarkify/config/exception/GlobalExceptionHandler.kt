@@ -17,6 +17,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice
+import org.springframework.web.servlet.resource.NoResourceFoundException
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.config.result.ResultWrapper.Companion.error
 
@@ -65,6 +66,7 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
             is ConstraintViolationException,
             is BindException -> print(ErrorType.E103, e, request)
 
+            is NoResourceFoundException -> print(ErrorType.E202, e, request)
             is NotLoginException -> print(ErrorType.E101, e, request)
 
             else -> print(ErrorType.E999, e, request)
@@ -82,8 +84,7 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
     private fun print(type: ErrorType, e: Exception, request: HttpServletRequest): ResultWrapper<Any> {
         if (type == ErrorType.E999) {
             log.error("Σ(oﾟдﾟoﾉ)  ${request.requestURI} | [${type.name}] ${e.message}")
-            log.error("意料之外的错误: $e")
-            log.error(e.cause?.toString())
+            e.printStackTrace()
         }
         return error(type)
     }

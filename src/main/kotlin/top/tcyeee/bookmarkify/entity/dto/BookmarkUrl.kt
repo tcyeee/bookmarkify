@@ -9,7 +9,7 @@ import top.tcyeee.bookmarkify.config.log
  * @author tcyeee
  * @date 3/11/24 18:29
  */
-class BookmarkUrl(urlStr: String) {
+class BookmarkUrl(urlStrRow: String) {
     var urlScheme: String  // http or https
     var urlHost: String    // sfz.uzuzuz.com.cn
     var urlPath: String
@@ -19,20 +19,18 @@ class BookmarkUrl(urlStr: String) {
     private var urlBase: String? = null    // http://sfz.uzuzuz.com.cn
 
     init {
-        // 如果不是http://,或者htts://开始,则手动补全
-        var processedUrl = urlStr
-        if (!processedUrl.startsWith("https://") && !processedUrl.startsWith("http://"))
-            processedUrl = "https://$processedUrl"
+        var urlStr = urlStrRow // 如果不是http://,或者htts://开始,则手动补全
+        if (!urlStrRow.matches(Regex("^https?://.*"))) urlStr = "https://$urlStr"
         try {
-            val url = URLUtil.toUrlForHttp(processedUrl)
+            val url = URLUtil.toUrlForHttp(urlStr)
             this.urlScheme = url.protocol
             this.urlHost = url.authority
             this.urlQuery = url.query
             this.urlPath = url.path
-            this.urlFull = processedUrl
+            this.urlFull = urlStr
             this.urlBase = "${url.protocol}://${url.host}"
         } catch (e: Exception) {
-            log.info("用户添加了一个非法地址:{}", processedUrl)
+            log.info("用户添加了一个非法地址:{}", urlStr)
             throw CommonException(ErrorType.E303)
         }
     }
