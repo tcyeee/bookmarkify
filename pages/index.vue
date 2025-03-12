@@ -21,7 +21,7 @@
 <script lang="ts" setup>
 definePageMeta({ layout: "applications" });
 const sysStore = sysBaseStore();
-const storeBookmark = StoreBookmark();
+const storeUser = StoreUser();
 
 const data = reactive<{
   fade: boolean;
@@ -33,7 +33,8 @@ const data = reactive<{
 
 onMounted(() => {
   sysStore.registerKeyEvent("Space", "/", () => sceneToggle());
-  storeBookmark.update();
+  // storeBookmark.update();
+  storeUser.loginByDeviceUid();
 });
 
 const classFadeBg = computed(() => {
@@ -65,7 +66,7 @@ function sceneToggle() {
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
-  background-image: url("https://i.tcyeee.top/tmp/114548FqPbC.jpg");
+  background-image: url("https://i.tcyeee.top/bookmarkify/Landscape.jpg");
   z-index: -1;
 }
 

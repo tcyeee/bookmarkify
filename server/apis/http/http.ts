@@ -2,10 +2,6 @@ import { type FetchConfig, type Result } from './types';
 import { StoreUser } from "@/stores/user.store";
 
 export default class http {
-    static put(path: string, params?: any): any {
-        return this.start(path, "PUT", params);
-    }
-
     static get(path: string, params?: any): any {
         return this.start(path, "GET", params);
     }
@@ -15,30 +11,26 @@ export default class http {
     }
 
     static async start(path: string, method: string, params?: any): Promise<any> {
-        console.log(`[DEBUG] ${method}::${path}`);
         const userStore = StoreUser()
-        const config: FetchConfig = {
-            headers: { 'Content-Type': 'application/json; charset=utf-8' },
-            method,
-        }
+        console.log(`[DEBUG] ${method}::${path}`);
 
         // 只要不是校验接口,都需要提前去登陆
         const isAuthApi = path.startsWith('/auth/');
         const hasToken = !!userStore.auth?.token
-        if (!isAuthApi && !hasToken) {
-            await userStore.loginByDeviceUid().then(() => {
-                console.log(`[DEBUG] 重新登陆获取TOKEN:${userStore.auth.token}`);
-            });
-        }
+        if (!isAuthApi && !hasToken) await userStore.loginByDeviceUid();
 
-        config.headers['x-access-token'] = userStore.auth.token;
+
+        // 创建请求
+        const config: FetchConfig = {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+            method,
+        }
+        if (hasToken) config.headers['satoken'] = userStore.auth.token;
+
+        // 格式化参数
         if (params) {
-            // 如果不是GET就格式化参数为JSON
-            if (method !== "GET") {
-                config.body = JSON.stringify(params)
-            }
+            if (method !== "GET") config.body = JSON.stringify(params)
             else {
-                // 将参数拼接到URL后面
                 const queryString = Object.keys(params)
                     .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
                     .join('&');
@@ -64,13 +56,13 @@ function resultCheck(result: Result<object>): Promise<any> {
     if (result.ok) return Promise.resolve(result.data);
 
     // 重新登陆
-    if ([101, 107].includes(result.code)) {
-        StoreUser().logout()
+    // if ([101, 107].includes(result.code)) {
+    //     StoreUser().logout()
 
-        // @ts-ignore
-        setTimeout(() => window.location.reload(), 500);
-        return Promise.reject(result);
-    }
+    //     // @ts-ignore
+    //     setTimeout(() => window.location.reload(), 500);
+    //     return Promise.reject(result);
+    // }
 
     // @ts-ignore
     ElMessage.error(`Oops, ${result.msg}`)

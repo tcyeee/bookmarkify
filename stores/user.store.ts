@@ -20,19 +20,20 @@ export const StoreUser = defineStore('user', {
   actions: {
     async loginByDeviceUid() {
       if (this.loginStatus) return
-
       const params: LoginByDeviceParams = this.auth
       await authByDeviceInfo(params).then((res: UserStore) => {
+        console.log(`[DEBUG] 重新登陆获取TOKEN:${res.token}`);
         this.loginStatus = true
         this.auth.token = res.token
         return Promise.resolve(res)
       }).catch((err: any) => {
+        console.error(err);
         ElNotification.error('会话注册失败')
       })
     },
 
     logout() {
-      this.loginStatus = false  
+      this.loginStatus = false
       this.auth = {
         fingerprint: '',
         deviceUid: '',
