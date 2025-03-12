@@ -1,5 +1,7 @@
 import { type FetchConfig, type Result } from './types';
 import { StoreUser } from "@/stores/user.store";
+import { limitAction } from "~/server/utils/BaseUtils";
+
 
 export default class http {
     static get(path: string, params?: any): any {
@@ -56,15 +58,19 @@ function resultCheck(result: Result<object>): Promise<any> {
     if (result.ok) return Promise.resolve(result.data);
 
     // 重新登陆
-    // if ([101, 107].includes(result.code)) {
-    //     StoreUser().logout()
-
-    //     // @ts-ignore
-    //     setTimeout(() => window.location.reload(), 500);
-    //     return Promise.reject(result);
-    // }
+    if ([101, 107].includes(result.code)) {
+        StoreUser().logout()
+        limitAction(3, restart)
+        return Promise.reject(result);
+    }
 
     // @ts-ignore
     ElMessage.error(`Oops, ${result.msg}`)
     return Promise.reject(result);
+}
+
+// 累计单位时间内系统的重启次数,超出限制则触发报警
+function restart() {
+    // @ts-ignore
+    setTimeout(() => window.location.reload(), 500);
 }

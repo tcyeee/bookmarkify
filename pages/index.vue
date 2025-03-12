@@ -21,6 +21,7 @@
 <script lang="ts" setup>
 definePageMeta({ layout: "applications" });
 const sysStore = sysBaseStore();
+const storeBookmark = StoreBookmark();
 const storeUser = StoreUser();
 
 const data = reactive<{
@@ -33,7 +34,7 @@ const data = reactive<{
 
 onMounted(() => {
   sysStore.registerKeyEvent("Space", "/", () => sceneToggle());
-  // storeBookmark.update();
+  storeBookmark.update();
   storeUser.loginByDeviceUid();
 });
 
