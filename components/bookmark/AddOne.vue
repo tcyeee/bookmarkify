@@ -46,11 +46,13 @@
 import { bookmarksAddOne } from "~/server/apis";
 
 const data = reactive<{
+  status: boolean;
   input?: string;
   urlIsTrue: boolean;
   notice?: string;
 }>({
   urlIsTrue: false,
+  status: false,
 });
 
 function addOne() {
