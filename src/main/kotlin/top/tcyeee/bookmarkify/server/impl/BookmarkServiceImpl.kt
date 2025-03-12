@@ -42,7 +42,7 @@ class BookmarkServiceImpl(
         if (document == null) {
             bookmark.title = bookmark.urlHost
             bookmark.checkActity(false)
-            baseMapper.updateById(bookmark)
+            updateById(bookmark)
             return
         }
 
@@ -51,26 +51,21 @@ class BookmarkServiceImpl(
         bookmark.description = BookmarkUtils.getDescription(document)
         bookmark.addIcon(BookmarkUtils.getLogoUrl(document, projectConfig.imgPath, bookmark))
         log.trace("[CHECK] 书签:{} 解析完成! ${bookmark.fullUrl()}")
-        baseMapper.updateById(bookmark)
+        updateById(bookmark)
     }
 
     override fun checkAll() {
-        val list = ktQuery()
-            .isNull(Bookmark::updateTime)
-            .or()
-            .lt(Bookmark::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
-            .list()
+        val list = ktQuery().isNull(Bookmark::updateTime).or()
+            .lt(Bookmark::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)).list()
         list.forEach(Consumer { bookmark: Bookmark? -> this.checkOne(bookmark) })
     }
 
     override fun addOne(url: String, uid: String) {
         val bookmarkUrl = BookmarkUrl(url)
-        var bookmark = lambdaQuery()
-            .eq(Bookmark::urlHost, bookmarkUrl.urlHost)
-            .one()
+        var bookmark = ktQuery().eq(Bookmark::urlHost, bookmarkUrl.urlHost).one()
         if (bookmark == null) {
             bookmark = Bookmark(bookmarkUrl)
-            baseMapper.insert(bookmark)
+            save(bookmark)
         }
 
         val finalBookmark = bookmark

@@ -17,10 +17,11 @@ import top.tcyeee.bookmarkify.entity.response.HomeItemShow
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IHomeItemService
-import top.tcyeee.bookmarkify.utils.BookmarkUtils
 import top.tcyeee.bookmarkify.utils.BaseUtils
+import top.tcyeee.bookmarkify.utils.BookmarkUtils
 import java.util.function.Consumer
 import java.util.stream.Collectors
+
 
 /**
  * @author tcyeee
@@ -34,12 +35,9 @@ class BookmarksController(
     private val bookmarkService: IBookmarkService,
     private val homeItemService: IHomeItemService,
 ) {
-
-    @GetMapping("/my")
+    @PostMapping("/query")
     @Operation(summary = "我的书签")
-    fun myBookmarks(): List<HomeItemShow> {
-        return homeItemService.findShowByUid(BaseUtils.currentUid())
-    }
+    fun query(): List<HomeItemShow> = homeItemService.findShowByUid(BaseUtils.currentUid())
 
     @PostMapping("/upload")
     @Operation(summary = "书签上传", parameters = [Parameter(name = "file", description = "书签文件.html")])
