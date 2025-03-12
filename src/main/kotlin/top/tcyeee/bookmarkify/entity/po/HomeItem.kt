@@ -1,5 +1,7 @@
 package top.tcyeee.bookmarkify.entity.po
 
+import cn.hutool.core.util.IdUtil
+import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.annotation.TableField
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
@@ -24,12 +26,31 @@ data class HomeItem(
     @Schema(description = "书签类型") var type: HomeItemTypeEnum,
 
     /* 三选一 */
-    @TableField(exist = false) @Schema(description = "单独书签信息") var bookmark: Bookmark,
-    @TableField(exist = false) @Schema(description = "书签组信息") var bookmarkDir: BookmarkDir,
-    @TableField(exist = false) @Schema(description = "系统功能入口") var functionEnum: HomeFunctionEnum,
+    @TableField(exist = false) @Schema(description = "单独书签信息") var bookmark: Bookmark? = null,
+    @TableField(exist = false) @Schema(description = "书签组信息") var bookmarkDir: BookmarkDir? = null,
+    @TableField(exist = false) @Schema(description = "系统功能入口") var functionEnum: HomeFunctionEnum? = null,
 
-    @JsonIgnore @Max(40) @Schema(hidden = true) var bookmarkUserLinkId: String,
-    @JsonIgnore @Schema(hidden = true) var bookmarkDirJson: String,
-    @JsonIgnore @Schema(hidden = true) var functionId: Int,
+    @JsonIgnore @Max(40) @Schema(hidden = true) var bookmarkUserLinkId: String? = null,
+    @JsonIgnore @Schema(hidden = true) var bookmarkDirJson: String? = null,
+    @JsonIgnore @Schema(hidden = true) var functionId: Int? = null,
     @JsonIgnore @Schema(hidden = true) var deleted: Boolean = false,
-)
+) {
+    // 通过书签信息创建
+    constructor(bookmark: Bookmark, uid: String, linkId: String) : this(
+        id = IdUtil.fastUUID(),
+        sort = 99,
+        uid = uid,
+        type = HomeItemTypeEnum.BOOKMARK,
+        bookmark = bookmark,
+        bookmarkUserLinkId = linkId
+    )
+
+    constructor(bookmarkIds: List<String>, dirTitle: String?, uid: String?) : this(
+        id = IdUtil.fastUUID(),
+        sort = 10,
+        uid = uid,
+        type = HomeItemTypeEnum.BOOKMARK_DIR,
+        bookmarkDir = BookmarkDir(dirTitle!!, bookmarkIds),
+        bookmarkDirJson = JSONUtil.toJsonStr(BookmarkDir(dirTitle, bookmarkIds)),
+    )
+}

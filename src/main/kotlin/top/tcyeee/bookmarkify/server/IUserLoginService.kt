@@ -1,7 +1,7 @@
 package top.tcyeee.bookmarkify.server
 
 import top.tcyeee.bookmarkify.entity.request.LoginByClientForm
-import top.tcyeee.bookmarkify.entity.response.UserEntityVo
+import top.tcyeee.bookmarkify.entity.response.UserAuthEntityVo
 
 /**
  * 用户登陆相关
@@ -17,5 +17,5 @@ interface IUserLoginService {
      * @param form 浏览器指纹
      * @return userInfo
      */
-    fun loginByClientInfo(form: LoginByClientForm): UserEntityVo
+    fun loginByClientInfo(form: LoginByClientForm): UserAuthEntityVo
 }

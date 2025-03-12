@@ -39,7 +39,7 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
         if (body == null) return ResultWrapper.ok<Any>()
         if (body is ResultWrapper<*>) return body
 
-        var path = request.uri.path
+        val path = request.uri.path
         if (path.startsWith("/swagger") || path.startsWith("/v3/api-docs")) return body
 
         if (body is String) return body
@@ -56,17 +56,15 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
             is HttpMessageNotReadableException -> print(ErrorType.E102, e, request)
 
             is MethodArgumentNotValidException -> {
-                var fieldError = e.fieldError ?: return print(ErrorType.E999, e, request)
-                var fieldName = fieldError.field
-                var errMsg = fieldError.defaultMessage
-                var msg = "字段 $fieldName 校验错误: $errMsg"
-                error(ErrorType.E102, msg)
+                val fieldError = e.fieldError ?: return print(ErrorType.E999, e, request)
+                error(ErrorType.E102, "字段 ${fieldError.field} 校验错误: ${fieldError.defaultMessage}")
             }
 
             is JSONException,
             is HttpMediaTypeNotSupportedException,
             is ConstraintViolationException,
             is BindException -> print(ErrorType.E103, e, request)
+
             is NotLoginException -> print(ErrorType.E101, e, request)
 
             else -> print(ErrorType.E999, e, request)
@@ -82,8 +80,8 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
      * @return 错误信息
      */
     private fun print(type: ErrorType, e: Exception, request: HttpServletRequest): ResultWrapper<Any> {
-        log.error("Σ(oﾟдﾟoﾉ)  ${request.requestURI} | [${type.name}] ${e.message}")
         if (type == ErrorType.E999) {
+            log.error("Σ(oﾟдﾟoﾉ)  ${request.requestURI} | [${type.name}] ${e.message}")
             log.error("意料之外的错误: $e")
             log.error(e.cause?.toString())
         }
