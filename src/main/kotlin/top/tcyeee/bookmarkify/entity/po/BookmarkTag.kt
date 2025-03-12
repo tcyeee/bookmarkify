@@ -22,6 +22,4 @@ data class BookmarkTag(
     @JsonIgnore @Schema(description = "是否已经被删除") var deleted: Boolean,
     @JsonIgnore @Schema(description = "添加时间") var createTime: LocalDateTime,
     @JsonIgnore @Schema(description = "上次修改时间") var lastModified: LocalDateTime,
-) {
-
-}
+)

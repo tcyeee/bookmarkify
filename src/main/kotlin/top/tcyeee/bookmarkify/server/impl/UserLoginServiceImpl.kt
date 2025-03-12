@@ -4,9 +4,10 @@ import cn.dev33.satoken.stp.StpUtil
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.entity.po.UserEntity
 import top.tcyeee.bookmarkify.entity.request.LoginByClientForm
-import top.tcyeee.bookmarkify.entity.response.UserEntityVo
+import top.tcyeee.bookmarkify.entity.response.UserAuthEntityVo
 import top.tcyeee.bookmarkify.server.IUserLoginService
 import top.tcyeee.bookmarkify.server.IUserService
+import top.tcyeee.bookmarkify.utils.BaseUtils
 
 /**
  * @author tcyeee
@@ -16,8 +17,10 @@ import top.tcyeee.bookmarkify.server.IUserService
 class UserLoginServiceImpl(
     private var userService: IUserService
 ) : IUserLoginService {
+    override fun loginByClientInfo(form: LoginByClientForm): UserAuthEntityVo {
+        // 如果用户已经登录则直接返回
+        if (StpUtil.isLogin()) return UserAuthEntityVo(BaseUtils.user(), StpUtil.getTokenValue())
 
-    override fun loginByClientInfo(form: LoginByClientForm): UserEntityVo {
         var user: UserEntity? = userService.getByDeviceInfo(form)
         if (user == null) user = userService.createUserByDevicInfo(form)
 
@@ -26,6 +29,7 @@ class UserLoginServiceImpl(
 
         // 注册会话
         StpUtil.login(user.uid)
-        return UserEntityVo(user, StpUtil.getTokenValue())
+        StpUtil.getSession().set("user", user)
+        return UserAuthEntityVo(user, StpUtil.getTokenValue())
     }
 }
