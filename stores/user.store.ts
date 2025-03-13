@@ -1,54 +1,29 @@
 import { defineStore } from 'pinia'
-import type { LoginByDeviceParams, UserStore } from '~/server/apis'
-import { authByDeviceInfo } from '~/server/apis'
+import { authByDeviceInfo, type UserAuth, type UserEntity } from '~/server/apis'
 import { nanoid } from 'nanoid'
 
-export const StoreUser = defineStore('user', {
-  persist: true,
-  state: () => ({
-    count: 12,
-    loginStatus: false,  // 是否处于登陆状态
-    auth: {
-      fingerprint: '',
-      deviceUid: '',
-      googleId: '',
-      token: '',
-    }
-  }),
-  getters: {
-  },
-  actions: {
-    async loginByDeviceUid() {
-      if (this.loginStatus) return
-      const params: LoginByDeviceParams = this.auth
-      await authByDeviceInfo(params).then((res: UserStore) => {
-        console.log(`[DEBUG] 重新登陆获取TOKEN:${res.token}`);
-        this.loginStatus = true
-        this.auth.token = res.token
-        return Promise.resolve(res)
-      }).catch((err: any) => {
-        console.error(err);
-        ElNotification.error('会话注册失败')
-      })
-    },
+export const useUserStore = defineStore('user', () => {
+  const loggedIn = ref<Boolean>(false);
+  const auth = reactive<UserAuth>({});
 
-    logout() {
-      this.loginStatus = false
-      this.auth = {
-        fingerprint: '',
-        deviceUid: '',
-        googleId: '',
-        token: '',
-      }
-    },
+  async function loginByDeviceUid(): Promise<UserEntity> {
+    const res: UserEntity = await authByDeviceInfo(auth);
+    console.log(`[DEBUG] 重新登陆获取TOKEN:${res.token}`);
+    loggedIn.value = true;
 
-    /**
-     * 1.fingerprint id 实时更新
-     * 2.client id 没有才添加
-     */
-    updateFingerprint(fingerprintId: string) {
-      if (this.auth.deviceUid == '') this.auth.deviceUid = nanoid()
-      this.auth.fingerprint = fingerprintId
-    }
+    auth.token = res.token;
+    return Promise.resolve(res);
   }
-})
+
+  function logout() {
+    loggedIn.value = false
+    Object.assign(auth, {})
+  }
+
+  function updateFingerprint(fingerprintId: string) {
+    if (auth.deviceUid === '') auth.deviceUid = nanoid();
+    auth.fingerprint = fingerprintId;
+  }
+
+  return { auth, loginByDeviceUid, logout, updateFingerprint };
+}, { persist: true });
