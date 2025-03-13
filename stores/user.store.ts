@@ -21,7 +21,7 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function updateFingerprint(fingerprintId: string) {
-    if (auth.deviceUid === '') auth.deviceUid = nanoid();
+    if (!auth.deviceUid) auth.deviceUid = nanoid();
     auth.fingerprint = fingerprintId;
   }
 
