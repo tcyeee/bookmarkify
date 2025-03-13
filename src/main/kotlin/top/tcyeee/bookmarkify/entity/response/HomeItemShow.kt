@@ -31,7 +31,7 @@ data class HomeItemShow(
         BeanUtil.copyProperties(item, this)
         when (item.type) {
             HomeItemTypeEnum.BOOKMARK_DIR -> this.typeDir = BookmarkDir(database, item.bookmarkDirJson)
-            HomeItemTypeEnum.BOOKMARK -> this.typeApp = database[item.bookmarkUserLinkId]?.init(imgPrefix)
+            HomeItemTypeEnum.BOOKMARK -> this.typeApp = database[item.bookmarkUserLinkId]?.addInfomation(imgPrefix)
             HomeItemTypeEnum.FUNCTION -> this.typeFuc =
                 EnumUtil.getEnumAt(HomeFunctionEnum::class.java, item.functionId ?: 0)
         }

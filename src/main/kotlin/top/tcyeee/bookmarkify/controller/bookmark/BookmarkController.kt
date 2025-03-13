@@ -92,7 +92,7 @@ class BookmarksController(
         })
 
         // 找到数据库已经有的,移出掉,只留下所有需要新增的数据
-        val hasSave: List<Bookmark> = bookmarkService.lambdaQuery().`in`(Bookmark::urlHost, allBookmark.keys).list()
+        val hasSave: List<Bookmark> = bookmarkService.ktQuery().`in`(Bookmark::urlHost, allBookmark.keys).list()
         val hasSaveHost = hasSave.stream().map<Any>(Bookmark::urlHost).collect(Collectors.toSet())
         allBookmark.keys.removeIf { o: String -> hasSaveHost.contains(o) }
 
