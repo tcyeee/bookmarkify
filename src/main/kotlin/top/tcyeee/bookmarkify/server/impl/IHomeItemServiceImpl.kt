@@ -56,7 +56,7 @@ class IHomeItemServiceImpl(
     @Transactional(rollbackFor = [Exception::class])
     override fun copy(sourceUid: String, targetUid: String) {
         val source: List<HomeItem> =
-            lambdaQuery().eq(HomeItem::uid, sourceUid).eq(HomeItem::deleted, java.lang.Boolean.FALSE).list()
+            ktQuery().eq(HomeItem::uid, sourceUid).eq(HomeItem::deleted, java.lang.Boolean.FALSE).list()
         source.forEach(Consumer { item: HomeItem -> item.uid = targetUid })
         this.saveBatch(source)
     }

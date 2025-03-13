@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.controller
 
+import cn.dev33.satoken.annotation.SaIgnore
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -15,8 +16,12 @@ import org.springframework.web.bind.annotation.RestController
 @Tag(name = "测试相关")
 @RequestMapping("/test")
 class TestController {
+
+    @SaIgnore
     @GetMapping("/link")
     fun linkTest(type: Int?, params: Array<String>?): Boolean {
+
+
         return true
     }
 }
