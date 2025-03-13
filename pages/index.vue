@@ -22,7 +22,7 @@
 definePageMeta({ layout: "applications" });
 const sysStore = sysBaseStore();
 const storeBookmark = StoreBookmark();
-const storeUser = StoreUser();
+const storeUser = useUserStore();
 
 const data = reactive<{
   fade: boolean;

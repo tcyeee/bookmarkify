@@ -1,7 +1,6 @@
-import { type FetchConfig, type Result } from './types';
-import { StoreUser } from "@/stores/user.store";
-import { limitAction } from "~/server/utils/BaseUtils";
-
+import { Result } from './types';
+import { useUserStore } from "@/stores/user.store";
+import { UserAuth } from '../auth';
 
 export default class http {
     static get(path: string, params?: any): any {
@@ -13,38 +12,21 @@ export default class http {
     }
 
     static async start(path: string, method: string, params?: any): Promise<any> {
-        const userStore = StoreUser()
-        console.log(`[DEBUG] ${method}::${path}`);
-
-        // 只要不是校验接口,都需要提前去登陆
-        const isAuthApi = path.startsWith('/auth/');
-        const hasToken = !!userStore.auth?.token
-        if (!isAuthApi && !hasToken) await userStore.loginByDeviceUid();
-
+        const userStore = useUserStore()
 
         // 创建请求
-        const config: FetchConfig = {
-            headers: { 'Content-Type': 'application/json; charset=utf-8' },
-            method,
-        }
-        if (hasToken) config.headers['satoken'] = userStore.auth.token;
-
-        // 格式化参数
-        if (params) {
-            if (method !== "GET") config.body = JSON.stringify(params)
-            else {
-                const queryString = Object.keys(params)
-                    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
-                    .join('&');
-                path += `?${queryString}`;
-            }
-        }
+        console.log(`[DEBUG] ${method}::${path}`);
+        if (method == "GET") path += `?${new URLSearchParams(params).toString()}`;
+        const request: Request = new Request(useRuntimeConfig().public.apiBase + path, {
+            headers: { 'Content-Type': 'application/json', 'satoken': userStore.auth.token },
+            body: JSON.stringify(params),
+            method: method,
+        });
 
         try {
-            const env = useRuntimeConfig()
-            const response = await fetch(env.public.apiBase + path, config);
+            const response = await fetch(request);
             const data = await response.json();
-            return resultCheck(data as Result<object>);
+            return resultCheck(data as Result<object>, request);
         } catch (error) {
             // @ts-ignore
             if (error instanceof TypeError) ElMessage.error(`Oops,网络错误,请重试`)
@@ -54,23 +36,21 @@ export default class http {
 }
 
 // 对返回结果进行检查
-function resultCheck(result: Result<object>): Promise<any> {
+async function resultCheck(result: Result<object>, request: Request): Promise<any> {
     if (result.ok) return Promise.resolve(result.data);
 
-    // 重新登陆
+    // 如果遇到token失效,则重新登录
     if ([101, 107].includes(result.code)) {
-        StoreUser().logout()
-        limitAction(3, restart)
-        return Promise.reject(result);
+        const userStore = useUserStore()
+        const userAuth: UserAuth = await userStore.loginByDeviceUid();
+        // todo 添加token后重新请求
+        if (userAuth.token) {
+            request.headers.set("satoken", userAuth.token)
+            return await fetch(request);
+        }
     }
 
     // @ts-ignore
     ElMessage.error(`Oops, ${result.msg}`)
     return Promise.reject(result);
-}
-
-// 累计单位时间内系统的重启次数,超出限制则触发报警
-function restart() {
-    // @ts-ignore
-    setTimeout(() => window.location.reload(), 500);
 }
