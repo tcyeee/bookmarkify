@@ -4,8 +4,6 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.jsoup.nodes.Document
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
-import top.tcyeee.bookmarkify.config.exception.CommonException
-import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
 import top.tcyeee.bookmarkify.entity.po.Bookmark
 import top.tcyeee.bookmarkify.entity.po.BookmarkUserLink
@@ -29,25 +27,22 @@ class BookmarkServiceImpl(
     private val projectConfig: ProjectConfig
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, Bookmark>() {
 
+    override fun checkOne(bookmark: Bookmark) {
+        log.trace("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
 
-    override fun checkOne(bookmark: Bookmark?) {
-        if (bookmark == null) throw CommonException(ErrorType.E105)
-        log.trace("[CHECK] 开始解析域名:{}...${bookmark.fullUrl()}")
+        /* 检查网站活性 */
+        val document: Document? = BookmarkUtils.getDocument(bookmark.rawUrl)
+        document ?: return offline(bookmark)
+        /* 设置标题,描述,LOGO */
+        bookmark.setTitle(document)
+        BookmarkUtils.getLogoUrl(document, projectConfig.imgPath, bookmark)
+        bookmark.setLogo()
+        updateById(bookmark)
+    }
 
-        // 检查网站活性
-        val document: Document? = BookmarkUtils.getDocument(bookmark.fullUrl())
-        if (document == null) {
-            bookmark.title = bookmark.urlHost
-            bookmark.checkActity(false)
-            updateById(bookmark)
-            return
-        }
-
-        // 设置标题,描述,LOGO
-        bookmark.title = BookmarkUtils.getTitle(document)
-        bookmark.description = BookmarkUtils.getDescription(document)
-        bookmark.addIcon(BookmarkUtils.getLogoUrl(document, projectConfig.imgPath, bookmark))
-        log.trace("[CHECK] 书签:{} 解析完成! ${bookmark.fullUrl()}")
+    override fun offline(bookmark: Bookmark) {
+        bookmark.title = bookmark.urlHost
+        bookmark.checkActity(false)
         updateById(bookmark)
     }
 

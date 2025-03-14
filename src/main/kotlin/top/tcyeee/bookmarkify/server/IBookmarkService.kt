@@ -13,10 +13,13 @@ interface IBookmarkService : IService<Bookmark> {
      *
      * @param bookmark 检查的书签
      */
-    fun checkOne(bookmark: Bookmark?)
+    fun checkOne(bookmark: Bookmark)
 
     /* 每天检查数据库所有书签活性 */
     fun checkAll()
 
     fun addOne(url: String, uid: String)
+
+    /* 将网站标记为为离线 */
+    fun offline(bookmark: Bookmark)
 }

@@ -1,7 +1,6 @@
 package top.tcyeee.bookmarkify.entity.po
 
 import cn.hutool.core.date.LocalDateTimeUtil
-import cn.hutool.core.io.FileUtil
 import cn.hutool.core.util.IdUtil
 import cn.hutool.core.util.StrUtil
 import com.baomidou.mybatisplus.annotation.TableId
@@ -9,8 +8,10 @@ import com.baomidou.mybatisplus.annotation.TableName
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Max
+import org.jsoup.nodes.Document
+import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
-import java.io.File
+import top.tcyeee.bookmarkify.utils.BookmarkUtils
 import java.time.LocalDateTime
 
 /**
@@ -38,19 +39,9 @@ data class Bookmark(
     @JsonIgnore @Schema(description = "最近更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @Schema(description = "是否已经被删除") var deleted: Boolean = false,
 ) {
-    fun fullUrl() = "${urlScheme}//${urlHost}"
-
-    fun addIcon(logo: File?) {
-        val filePath = String.format("/favicon/%s.%s", this.id, FileUtil.extName(logo))
-        this.iconActivity = logo != null
-        this.updateTime = LocalDateTime.now()
-        this.iconUrl = if (logo != null) null else filePath
-    }
-
-    fun checkActity(isActivity: Boolean) {
-        this.isActivity = isActivity
-        this.updateTime = LocalDateTime.now()
-    }
+    val httpCommonIcoUrl = "${this.urlScheme}://${this.urlHost}/favicon.ico"
+    val fileName = "/favicon/${this.id}.ico"
+    val rawUrl = "${this.urlScheme}//${this.urlHost}"
 
     constructor(url: BookmarkUrl) : this(
         id = IdUtil.fastUUID(),
@@ -67,4 +58,21 @@ data class Bookmark(
         title = name,
         createTime = if (StrUtil.isNotBlank(addDate)) LocalDateTimeUtil.of(addDate.toLong() * 1000) else LocalDateTime.now()
     )
+
+    fun setLogo() {
+        this.iconActivity = true
+        this.updateTime = LocalDateTime.now()
+    }
+
+    fun checkActity(isActivity: Boolean) {
+        this.isActivity = isActivity
+        this.updateTime = LocalDateTime.now()
+    }
+
+    /* 根据网站解析文件,添加title,description */
+    fun setTitle(document: Document) {
+        this.title = BookmarkUtils.getTitle(document)
+        this.description = BookmarkUtils.getDescription(document)
+        log.trace("[CHECK] 书签: ${this.rawUrl} 解析完成!")
+    }
 }
