@@ -31,7 +31,7 @@ object BookmarkUtils {
      * @return info
      */
     fun initChromeBookmark(multipartFile: MultipartFile): List<BookmarkDetail> {
-        val file = MultipartFileToFile(multipartFile)
+        val file = mulFileToFile(multipartFile)
         var content = FileUtil.readString(file, StandardCharsets.UTF_8)
         content = HtmlUtil.removeHtmlTag(content, "META", "TITLE", "!DOCTYPE", "!--", "H1")
         content = HtmlUtil.removeHtmlAttr(content, "PERSONAL_TOOLBAR_FOLDER")
@@ -102,7 +102,7 @@ object BookmarkUtils {
      * @param multiFile 源文件
      * @return file
      */
-    private fun MultipartFileToFile(multiFile: MultipartFile): File {
+    private fun mulFileToFile(multiFile: MultipartFile): File {
         try {
             val tempFile = FileUtil.createTempFile()
             multiFile.transferTo(tempFile)
@@ -115,34 +115,17 @@ object BookmarkUtils {
     /**
      * 获取用户LOGO文件,同时下载到本地
      *
-     * @param document 原始文件
+     * @param document 解析后的网页文件
      * @return url的相对路径
      */
-    fun getLogoUrl(document: Document, urlPre: String, bookmark: Bookmark): File? {
-        // 使用常规URL拼接方式获取
-        val onlineUrl = java.lang.String.format("%s://%s/favicon.ico", bookmark.urlScheme, bookmark.urlHost)
-        val tmpFileName = java.lang.String.format("/favicon/%s.%s", bookmark.id, FileUtil.extName(onlineUrl))
-        val downloaded = downloadLogo(onlineUrl, urlPre + tmpFileName)
-        if (downloaded != null) return downloaded
+    fun getLogoUrl(document: Document, urlPre: String, bookmark: Bookmark): Boolean {
+        // 尝试从 httpCommonIcoUrl 下载 logo，如果成功返回 true
+        if (downloadLogo(bookmark.httpCommonIcoUrl, urlPre + bookmark.fileName)) return true
 
-        // 在文档中获取特殊地址进行下载
-        var logoUrl = getLogoUrlFromDocument(document)
-
-        // 如果是相对路径,则修改
-        val relative = StrUtil.startWithAny(logoUrl, ".", "/")
-        if (relative) logoUrl = bookmark.fullUrl() + logoUrl
-
-        // 对URL进行清洗(去除后面可能携带的参数)
-        val urlForHttp = URLUtil.toUrlForHttp(logoUrl)
-        logoUrl = urlForHttp.host + urlForHttp.path
-
-        // 下载书签图标到本地
-        val fileName = java.lang.String.format("/favicon/%s.%s", bookmark.id, FileUtil.extName(logoUrl))
-        val storeUrl = urlPre + fileName
-        val file = downloadLogo(logoUrl, storeUrl)
-
-        log.info("[CHECK] 获取到了书签LOGO:{}", storeUrl)
-        return file
+        // 获取文档中的 logo URL 下载 logo，如果成功返回 true
+        val logoUrl = this.checkLogoUrl(document) ?: return false
+        val storeUrl = "${urlPre}/favicon/${bookmark.id}.${FileUtil.extName(logoUrl)}"
+        return downloadLogo(logoUrl, storeUrl)
     }
 
     /**
@@ -151,15 +134,12 @@ object BookmarkUtils {
      * @param logoUrl  LOGO的线上地址
      * @param storeUrl 存储地址
      */
-    private fun downloadLogo(logoUrl: String?, storeUrl: String): File? {
-        try {
-            log.info("[CHECK] 书签图标下载路径为:{}", logoUrl)
-            return HttpUtil.downloadFileFromUrl(logoUrl, File(storeUrl))
-        } catch (e: Exception) {
-            log.warn("[CHECK] 书签LOGO下载失败,请检查!")
-        }
-        return null
-    }
+    private fun downloadLogo(logoUrl: String, storeUrl: String): Boolean =
+        runCatching {
+            HttpUtil.downloadFileFromUrl(logoUrl, File(storeUrl))
+            log.info("[CHECK] 获取到了书签LOGO:{}", storeUrl)
+        }.isSuccess
+
 
     /**
      * 从节点中解析图标LOGO
@@ -167,18 +147,17 @@ object BookmarkUtils {
      * @param document 网站解析后信息
      * @return 可能为绝对路径, 可能为相对路径, 可能为空
      */
-    private fun getLogoUrlFromDocument(document: Document): String? {
-        val linkTags = document.select("link")
-        for (link in linkTags) {
-            val relList = arrayOf("icon", "shortcut icon")
-            val isInArray = listOf(*relList).contains(link.attr("rel"))
-            if (isInArray) {
-                val url = link.attr("href")
-                log.info("[CHECK] 书签图标原始路径为:{}", url)
-                return url
-            }
-        }
-        return null
+    private fun checkLogoUrl(document: Document): String? {
+        // 在标签中找到icon标签的href属性
+        val url = document.select("link")
+            .firstOrNull { listOf("icon", "shortcut icon").contains(it.attr("rel")) }
+            ?.attr("href")
+            ?: return null
+
+        // 这里可能是相对路径,遇到了再说
+        // 对URL进行清洗(去除后面可能携带的参数)
+        val tmpUrl = URLUtil.toUrlForHttp(url)
+        return "${tmpUrl.protocol}://${tmpUrl.host}${tmpUrl.path}"
     }
 
     /**
@@ -231,13 +210,11 @@ object BookmarkUtils {
      * @return 网站数据
      */
     fun getDocument(url: String): Document? {
-        var document: Document? = null
-        try {
-            document = Jsoup.connect(url).timeout(10000).get()
+        return try {
+            Jsoup.connect(url).timeout(10000).get()
         } catch (e: IOException) {
-            log.info("[CHECK] 该无法正常解析,标记此网站为离线:{}", url)
+            log.info("[CHECK] 该网址无法正常解析, 标记此网站为离线: {}", url)
+            null
         }
-        if (document == null) log.info("[CHECK] 书签解析失败,获取到页面数据为空...")
-        return document
     }
 }
