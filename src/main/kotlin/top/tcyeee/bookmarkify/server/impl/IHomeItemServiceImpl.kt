@@ -1,7 +1,6 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
-import org.springframework.context.annotation.Description
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
@@ -47,12 +46,11 @@ class IHomeItemServiceImpl(
         return true
     }
 
-    override fun delete(params: List<HomeItem>): Boolean {
-        params.forEach(Consumer { item: HomeItem ->
-            ktUpdate().set(HomeItem::deleted, java.lang.Boolean.TRUE).eq(HomeItem::id, item.id).update()
-        })
-        return true
-    }
+    override fun delete(params: List<String>) =
+        params.forEach { ktUpdate().set(HomeItem::deleted, true).eq(HomeItem::id, it).update() }
+
+    override fun deleteOne(id: String): Boolean =
+        ktUpdate().eq(HomeItem::id, id).set(HomeItem::deleted, true).update()
 
     @Transactional(rollbackFor = [Exception::class])
     override fun copy(sourceUid: String, targetUid: String) {

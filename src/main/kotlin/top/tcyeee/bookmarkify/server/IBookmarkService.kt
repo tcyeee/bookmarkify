@@ -18,6 +18,8 @@ interface IBookmarkService : IService<Bookmark> {
     /* 每天检查数据库所有书签活性 */
     fun checkAll()
 
+    fun findByHost(host: String): Bookmark?
+
     fun addOne(url: String, uid: String)
 
     /* 将网站标记为为离线 */

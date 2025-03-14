@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server
 
+import com.baomidou.mybatisplus.extension.kotlin.KtUpdateChainWrapper
 import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.entity.po.HomeItem
 import top.tcyeee.bookmarkify.entity.response.BookmarkShow
@@ -32,7 +33,9 @@ interface IHomeItemService : IService<HomeItem> {
      */
     fun sort(params: List<HomeItem>): Boolean
 
-    fun delete(params: List<HomeItem>): Boolean
+    fun delete(params: List<String>)
 
     fun copy(sourceUid: String, targetUid: String)
+
+    fun deleteOne(id: String): Boolean
 }
