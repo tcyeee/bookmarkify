@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
+
 /**
  * 测试类
  *
@@ -20,8 +21,6 @@ class TestController {
     @SaIgnore
     @GetMapping("/link")
     fun linkTest(type: Int?, params: Array<String>?): Boolean {
-
-
         return true
     }
 }
