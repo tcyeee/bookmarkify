@@ -3,7 +3,7 @@ package top.tcyeee.bookmarkify.entity.response
 import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.EnumUtil
 import io.swagger.v3.oas.annotations.media.Schema
-import top.tcyeee.bookmarkify.entity.enums.HomeFunctionEnum
+import top.tcyeee.bookmarkify.entity.enums.FunctionType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 import top.tcyeee.bookmarkify.entity.po.HomeItem
@@ -21,9 +21,9 @@ data class HomeItemShow(
     @Schema(description = "序号") var sort: Int = 99,
     @Schema(description = "书签类型") var type: HomeItemType = HomeItemType.BOOKMARK,
 
-    var typeApp: BookmarkShow? = null, // 书签信息
-    var typeDir: BookmarkDir? = null, // 书签组信息
-    var typeFuc: HomeFunctionEnum? = null, // 系统功能入口
+    var typeApp: BookmarkShow? = null,  // 书签信息
+    var typeDir: BookmarkDir? = null,   // 书签组信息
+    var typeFuc: FunctionType? = null,  // 系统功能入口
 ) {
 
     constructor(item: HomeItem, database: Map<String, BookmarkShow>, imgPrefix: String) : this(
@@ -32,9 +32,8 @@ data class HomeItemShow(
         BeanUtil.copyProperties(item, this)
         when (item.type) {
             HomeItemType.BOOKMARK_DIR -> this.typeDir = BookmarkDir(database, item.bookmarkDirJson)
-            HomeItemType.BOOKMARK -> this.typeApp = database[item.bookmarkUserLinkId]?.addInfomation(imgPrefix)
-            HomeItemType.FUNCTION -> this.typeFuc =
-                EnumUtil.getEnumAt(HomeFunctionEnum::class.java, item.functionId ?: 0)
+            HomeItemType.BOOKMARK -> this.typeApp = database[item.bookmarkUserLinkId]?.setPrefix(imgPrefix)
+            HomeItemType.FUNCTION -> this.typeFuc = EnumUtil.getEnumAt(FunctionType::class.java, item.functionId ?: 0)
         }
     }
 }

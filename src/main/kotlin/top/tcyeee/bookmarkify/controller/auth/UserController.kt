@@ -18,7 +18,5 @@ class UserController {
 
     @GetMapping("info")
     @Operation(summary = "获取用户信息")
-    fun login() {
-        println(BaseUtils.user())
-    }
+    fun login() = println(BaseUtils.user())
 }

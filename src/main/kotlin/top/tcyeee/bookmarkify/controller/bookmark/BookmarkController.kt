@@ -148,7 +148,7 @@ class BookmarksController(
         })
 
         // 向目录中存放书签
-        dirList.forEach { (dirStr: String?, bookmarkIds: MutableList<String>) ->
+        dirList.forEach { (dirStr: String, bookmarkIds: MutableList<String>) ->
             rootBookmarks.add(HomeItem(bookmarkIds, dirStr, uid))
         }
         return rootBookmarks
