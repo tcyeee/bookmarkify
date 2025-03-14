@@ -39,9 +39,9 @@ data class Bookmark(
     @JsonIgnore @Schema(description = "最近更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @Schema(description = "是否已经被删除") var deleted: Boolean = false,
 ) {
-    val httpCommonIcoUrl = "${this.urlScheme}://${this.urlHost}/favicon.ico"
-    val fileName = "/favicon/${this.id}.ico"
-    val rawUrl = "${this.urlScheme}//${this.urlHost}"
+    val httpCommonIcoUrl get() = "${this.urlScheme}://${this.urlHost}/favicon.ico"
+    val fileName get() = "/favicon/${this.id}.ico"
+    val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
 
     constructor(url: BookmarkUrl) : this(
         id = IdUtil.fastUUID(),
