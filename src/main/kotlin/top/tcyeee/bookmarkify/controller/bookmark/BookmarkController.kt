@@ -43,15 +43,15 @@ class BookmarksController(
     @Operation(summary = "书签上传", parameters = [Parameter(name = "file", description = "书签文件.html")])
     fun upload(file: MultipartFile): List<BookmarkDetail> = updateBookmark(file, BaseUtils.currentUid())
 
-    @PutMapping("/sort")
+    @PostMapping("/sort")
     @Operation(summary = "排序")
     fun sort(@RequestBody params: List<HomeItem>): Boolean = homeItemService.sort(params)
 
-    @PutMapping("/delete")
-    @Operation(summary = "删除")
-    fun delete(@RequestBody params: List<HomeItem>): Boolean = homeItemService.delete(params)
+    @PostMapping("/delete")
+    @Operation(summary = "删除(仅删除桌面排序)")
+    fun delete(@RequestBody params: List<String>) = params.forEach(homeItemService::deleteOne)
 
-    @PutMapping("/update")
+    @PostMapping("/update")
     @Operation(summary = "修改")
     fun update(@RequestBody params: BookmarkUpdataPrams): Boolean = bookmarkUserLinkService.updateOne(params)
 
@@ -63,9 +63,8 @@ class BookmarksController(
      */
     @PostMapping("/addOne")
     @Operation(summary = "添加书签")
-    fun addOne(@RequestBody params: BookmarkAddOneParams): List<HomeItemShow> {
+    fun addOne(@RequestBody params: BookmarkAddOneParams) {
         bookmarkService.addOne(params.url, BaseUtils.currentUid())
-        return homeItemService.findShowByUid(BaseUtils.currentUid())
     }
 
     /**

@@ -16,21 +16,18 @@ import java.util.function.Consumer
 @Service
 class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<BookmarkUserLinkMapper, BookmarkUserLink>() {
     override fun updateOne(params: BookmarkUpdataPrams): Boolean {
-        ktUpdate()
-            .eq(BookmarkUserLink::id, params.linkId)
-            .set(BookmarkUserLink::title, params.title)
-            .set(BookmarkUserLink::description, params.description)
-            .update()
+        ktUpdate().eq(BookmarkUserLink::id, params.linkId).set(BookmarkUserLink::title, params.title)
+            .set(BookmarkUserLink::description, params.description).update()
         return false
     }
 
     @Transactional(rollbackFor = [Exception::class])
     override fun copy(sourceUid: String, targetUid: String) {
-        val source: List<BookmarkUserLink> = ktQuery()
-            .eq(BookmarkUserLink::uid, sourceUid)
-            .eq(BookmarkUserLink::deleted, java.lang.Boolean.FALSE)
-            .list()
+        val source: List<BookmarkUserLink> =
+            ktQuery().eq(BookmarkUserLink::uid, sourceUid).eq(BookmarkUserLink::deleted, java.lang.Boolean.FALSE).list()
         source.forEach(Consumer { item: BookmarkUserLink -> item.uid = targetUid })
         this.saveBatch(source)
     }
+
+    override fun deleteOne(id: String): Boolean = ktUpdate().eq(BookmarkUserLink::id, id).update()
 }

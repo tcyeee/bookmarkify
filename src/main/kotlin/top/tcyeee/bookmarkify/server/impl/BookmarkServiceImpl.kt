@@ -54,18 +54,16 @@ class BookmarkServiceImpl(
 
     override fun addOne(url: String, uid: String) {
         val bookmarkUrl = BookmarkUrl(url)
-        var bookmark = ktQuery().eq(Bookmark::urlHost, bookmarkUrl.urlHost).one()
-        if (bookmark == null) {
-            bookmark = Bookmark(bookmarkUrl)
-            save(bookmark)
-        }
+        val bookmark = findByHost(bookmarkUrl.urlHost)
+            ?: Bookmark(bookmarkUrl).also { save(it) }
 
-        val finalBookmark = bookmark
-        CompletableFuture.runAsync { this.checkOne(finalBookmark) }
+        CompletableFuture.runAsync { this.checkOne(bookmark) }
 
         // 添加用户关联和桌面布局
         val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark)
         bookmarkUserLinkMapper.insert(userLink)
         homeItemMapper.insert(HomeItem(bookmark, uid, userLink.id))
     }
+
+    override fun findByHost(host: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, host).one()
 }

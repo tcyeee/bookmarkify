@@ -11,4 +11,5 @@ import top.tcyeee.bookmarkify.entity.po.BookmarkUserLink
 interface IBookmarkUserLinkService : IService<BookmarkUserLink> {
     fun updateOne(params: BookmarkUpdataPrams): Boolean
     fun copy(sourceUid: String, targetUid: String)
+    fun deleteOne(id: String): Boolean
 }
