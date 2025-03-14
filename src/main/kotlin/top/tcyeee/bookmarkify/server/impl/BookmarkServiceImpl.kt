@@ -1,6 +1,5 @@
 package top.tcyeee.bookmarkify.server.impl
 
-import cn.hutool.core.date.LocalDateTimeUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.jsoup.nodes.Document
 import org.springframework.stereotype.Service
@@ -15,11 +14,9 @@ import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.utils.BaseUtils
 import top.tcyeee.bookmarkify.utils.BookmarkUtils
-import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
 import java.util.concurrent.CompletableFuture
-import java.util.function.Consumer
 
 /**
  * @author tcyeee
@@ -55,9 +52,8 @@ class BookmarkServiceImpl(
     }
 
     override fun checkAll() {
-        val list = ktQuery().isNull(Bookmark::updateTime).or()
-            .lt(Bookmark::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)).list()
-        list.forEach(Consumer { bookmark: Bookmark? -> this.checkOne(bookmark) })
+        ktQuery().lt(Bookmark::updateTime, BaseUtils.yesterday()).list()
+            .forEach(this::checkOne)
     }
 
     override fun addOne(url: String, uid: String) {
