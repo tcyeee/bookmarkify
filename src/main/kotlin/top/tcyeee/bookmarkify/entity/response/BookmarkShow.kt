@@ -37,7 +37,7 @@ data class BookmarkShow(
      * @param imgPrefix 图标前缀
      * @return 书签数据
      */
-    fun addInfomation(imgPrefix: String): BookmarkShow {
+    fun setPrefix(imgPrefix: String): BookmarkShow {
         this.iconUrl = if (StrUtil.isBlank(this.iconUrl)) null else imgPrefix + this.iconUrl
         this.title = if (StrUtil.isBlank(this.userTitle)) this.baseTitle else this.userTitle
         this.description = if (StrUtil.isBlank(this.userDescription)) this.baseDescription else this.userDescription

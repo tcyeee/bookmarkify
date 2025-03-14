@@ -16,7 +16,7 @@ import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 @TableName("home_item")
 data class HomeItem(
     @TableId var id: String,
-    @Schema(description = "用户ID") var uid: String?,
+    @Schema(description = "用户ID") var uid: String,
     @Schema(description = "序号") var sort: Int,
     @Schema(description = "书签类型") var type: HomeItemType,
 
@@ -26,29 +26,16 @@ data class HomeItem(
     @JsonIgnore @Schema(hidden = true) var deleted: Boolean = false
 ) {
 
-//    @Schema(description = "单独书签信息")
-//    var bookmark: Bookmark? = null
-//
-//    @Schema(description = "书签组信息")
-//    var bookmarkDir: BookmarkDir? = null
-//
-//    @Schema(description = "系统功能入口")
-//    var functionEnum: HomeFunctionEnum? = null
-
-
     // 通过书签信息创建
     constructor(bookmark: Bookmark, uid: String, linkId: String) : this(
         id = IdUtil.fastUUID(), sort = 99, uid = uid, type = HomeItemType.BOOKMARK,
-//        bookmark = bookmark,
         bookmarkUserLinkId = linkId
     )
 
-    constructor(bookmarkIds: List<String>, dirTitle: String?, uid: String?) : this(
+    constructor(bookmarkIds: List<String>, dirTitle: String, uid: String) : this(
         id = IdUtil.fastUUID(),
         sort = 10,
         uid = uid,
         type = HomeItemType.BOOKMARK_DIR,
-//        bookmarkDir = BookmarkDir(dirTitle!!, bookmarkIds),
-//        bookmarkDirJson = JSONUtil.toJsonStr(BookmarkDir(dirTitle, bookmarkIds)),
     )
 }

@@ -13,9 +13,9 @@ interface IHomeItemService : IService<HomeItem> {
     fun findShowByUid(uid: String): List<HomeItemShow>
 
     /**
-     * 创建用户数据库
-     * key   :bookmarkId
-     * value :bookmarkShow
+     * 临时数据库
+     * key   :bookmarkUserLinkId
+     * value :BookmarkShow
      *
      * @param uid 用户ID
      * @return database
