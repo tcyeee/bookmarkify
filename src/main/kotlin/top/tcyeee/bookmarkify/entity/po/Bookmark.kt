@@ -59,8 +59,8 @@ data class Bookmark(
         createTime = if (StrUtil.isNotBlank(addDate)) LocalDateTimeUtil.of(addDate.toLong() * 1000) else LocalDateTime.now()
     )
 
-    fun setLogo() {
-        this.iconActivity = true
+    fun setLogo(status: Boolean) {
+        this.iconActivity = status
         this.updateTime = LocalDateTime.now()
     }
 
@@ -71,6 +71,7 @@ data class Bookmark(
 
     /* 根据网站解析文件,添加title,description */
     fun setTitle(document: Document) {
+        this.isActivity = true
         this.title = BookmarkUtils.getTitle(document)
         this.description = BookmarkUtils.getDescription(document)
         log.trace("[CHECK] 书签: ${this.rawUrl} 解析完成!")

@@ -33,10 +33,11 @@ class BookmarkServiceImpl(
         /* 检查网站活性 */
         val document: Document? = BookmarkUtils.getDocument(bookmark.rawUrl)
         document ?: return offline(bookmark)
+
         /* 设置标题,描述,LOGO */
         bookmark.setTitle(document)
-        BookmarkUtils.getLogoUrl(document, projectConfig.imgPath, bookmark)
-        bookmark.setLogo()
+        val hasIcon = BookmarkUtils.getLogoUrl(document, projectConfig.imgPath, bookmark)
+        bookmark.setLogo(hasIcon)
         updateById(bookmark)
     }
 
