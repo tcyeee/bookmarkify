@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server.impl
 
 import cn.dev33.satoken.stp.StpUtil
 import org.springframework.stereotype.Service
+import top.tcyeee.bookmarkify.entity.dto.UserInfo
 import top.tcyeee.bookmarkify.entity.po.UserEntity
 import top.tcyeee.bookmarkify.entity.request.LoginByClientForm
 import top.tcyeee.bookmarkify.entity.response.UserAuthEntityVo
@@ -29,7 +30,7 @@ class UserLoginServiceImpl(
 
         // 注册会话
         StpUtil.login(user.uid)
-        StpUtil.getSession().set("user", user)
+        StpUtil.getSession().set("user", UserInfo(user))
         return UserAuthEntityVo(user, StpUtil.getTokenValue())
     }
 }

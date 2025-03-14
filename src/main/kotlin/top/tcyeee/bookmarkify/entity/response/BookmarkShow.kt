@@ -11,13 +11,13 @@ import io.swagger.v3.oas.annotations.media.Schema
  * @date 3/11/24 22:44
  */
 data class BookmarkShow(
-    var uid: String = "",
-    var bookmarkId: String = "",
-    var bookmarkUserLinkId: String = "",
+    var uid: String? = null,
+    var bookmarkId: String? = null,
+    var bookmarkUserLinkId: String? = null,
 
-    @Schema(description = "书签标题") var userTitle: String = "",
-    @Schema(description = "书签备注") var description: String = "",
-    @Schema(description = "完整链接路径") var urlFull: String = "",
+    @Schema(description = "书签标题") var userTitle: String? = null,
+    @Schema(description = "书签备注") var description: String? = null,
+    @Schema(description = "完整链接路径") var urlFull: String? = null,
 
     @Schema(description = "是否失效") var isActivity: Boolean = false,
     @Schema(description = "图标是否存在") var iconActivity: Boolean = false,
@@ -25,10 +25,10 @@ data class BookmarkShow(
     @Schema(description = "需要特别指定的图标地址") var iconUrl: String? = null,
 
     /* 计算属性 */
-    @JsonIgnore var title: String = "",
-    @JsonIgnore var userDescription: String = "",
-    @JsonIgnore var baseTitle: String = "",
-    @JsonIgnore var baseDescription: String = "",
+    @JsonIgnore var title: String? = null,
+    @JsonIgnore var userDescription: String? = null,
+    @JsonIgnore var baseTitle: String? = null,
+    @JsonIgnore var baseDescription: String? = null,
 ) {
 
     /**

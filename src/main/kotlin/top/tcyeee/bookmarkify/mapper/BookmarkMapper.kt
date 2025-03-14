@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.mapper
 import com.baomidou.mybatisplus.core.mapper.BaseMapper
 import org.apache.ibatis.annotations.Mapper
 import org.apache.ibatis.annotations.Select
+import org.springframework.context.annotation.Description
 import top.tcyeee.bookmarkify.entity.po.Bookmark
 import top.tcyeee.bookmarkify.entity.response.BookmarkShow
 
@@ -12,6 +13,7 @@ import top.tcyeee.bookmarkify.entity.response.BookmarkShow
  */
 @Mapper
 interface BookmarkMapper : BaseMapper<Bookmark> {
+
     @Select(
         """
             select a.uid           as uid,
@@ -26,10 +28,11 @@ interface BookmarkMapper : BaseMapper<Bookmark> {
                    b.icon_hd       as iconHd,
                    b.icon_url      as iconUrl,
                    a.url_full      as urlFull
-            from bookmark_user_link a
-                     left join bookmark b on a.bookmark_id = b.id
+            from bookmarkify.bookmark_user_link a
+                     left join bookmarkify.bookmark b on a.bookmark_id = b.id
             where a.uid = #{uid}
             """
     )
-    fun findShowByUid(uid: String): List<BookmarkShow>
+    @Description("查看用户的全部书签信息")
+    fun allBookmarkByUid(uid: String): List<BookmarkShow>
 }
