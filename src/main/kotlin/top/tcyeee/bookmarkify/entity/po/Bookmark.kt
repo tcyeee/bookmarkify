@@ -30,10 +30,9 @@ data class Bookmark(
     @JsonIgnore @Schema(description = "书签评分0~10") var score: Int? = null,
     @Max(1000) @JsonIgnore @Schema(description = "书签备注") var description: String? = null,
     @Max(10) @Schema(description = "书签基础HTTP协议") var urlScheme: String? = null, // http or https
-    @Schema(description = "需要特别指定的图标地址") var iconUrl: String? = null,
 
     @JsonIgnore @Schema(description = "是否失效") var isActivity: Boolean = false,
-    @Schema(description = "图标是否存在") var iconActivity: Boolean = false,
+    @Schema(description = "图标是否存在") var iconActivity: Boolean = false,  // 如果存在,则位于${this.fileName}中
     @Schema(description = "是否可以启用大图标") var iconHd: Boolean = false,
     @JsonIgnore @Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @Schema(description = "最近更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
