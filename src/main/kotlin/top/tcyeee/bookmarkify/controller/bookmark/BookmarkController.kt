@@ -41,27 +41,19 @@ class BookmarksController(
 
     @PostMapping("/upload")
     @Operation(summary = "书签上传", parameters = [Parameter(name = "file", description = "书签文件.html")])
-    fun upload(file: MultipartFile): List<BookmarkDetail> {
-        return updateBookmark(file, BaseUtils.currentUid())
-    }
+    fun upload(file: MultipartFile): List<BookmarkDetail> = updateBookmark(file, BaseUtils.currentUid())
 
     @PutMapping("/sort")
     @Operation(summary = "排序")
-    fun sort(@RequestBody params: List<HomeItem>): Boolean {
-        return homeItemService.sort(params)
-    }
+    fun sort(@RequestBody params: List<HomeItem>): Boolean = homeItemService.sort(params)
 
     @PutMapping("/delete")
     @Operation(summary = "删除")
-    fun delete(@RequestBody params: List<HomeItem>): Boolean {
-        return homeItemService.delete(params)
-    }
+    fun delete(@RequestBody params: List<HomeItem>): Boolean = homeItemService.delete(params)
 
     @PutMapping("/update")
     @Operation(summary = "修改")
-    fun update(@RequestBody params: BookmarkUpdataPrams): Boolean {
-        return bookmarkUserLinkService.updateOne(params)
-    }
+    fun update(@RequestBody params: BookmarkUpdataPrams): Boolean = bookmarkUserLinkService.updateOne(params)
 
     /**
      * 手动添加一个书签,每次添加都需要检查一次网站的信息

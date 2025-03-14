@@ -15,7 +15,7 @@ data class BookmarkShow(
     var bookmarkId: String? = null,
     var bookmarkUserLinkId: String? = null,
 
-    @Schema(description = "书签标题") var userTitle: String? = null,
+    @Schema(description = "书签标题") var title: String? = null,
     @Schema(description = "书签备注") var description: String? = null,
     @Schema(description = "完整链接路径") var urlFull: String? = null,
 
@@ -25,19 +25,19 @@ data class BookmarkShow(
     @Schema(description = "需要特别指定的图标地址") var iconUrl: String? = null,
 
     /* 计算属性 */
-    @JsonIgnore var title: String? = null,
+    @JsonIgnore var userTitle: String? = null,
     @JsonIgnore var userDescription: String? = null,
     @JsonIgnore var baseTitle: String? = null,
     @JsonIgnore var baseDescription: String? = null,
 ) {
 
     /**
-     * 初始化书签展示数据
+     * 数据清洗初始化
      *
      * @param imgPrefix 图标前缀
      * @return 书签数据
      */
-    fun setPrefix(imgPrefix: String): BookmarkShow {
+    fun clean(imgPrefix: String): BookmarkShow {
         this.iconUrl = if (StrUtil.isBlank(this.iconUrl)) null else imgPrefix + this.iconUrl
         this.title = if (StrUtil.isBlank(this.userTitle)) this.baseTitle else this.userTitle
         this.description = if (StrUtil.isBlank(this.userDescription)) this.baseDescription else this.userDescription
