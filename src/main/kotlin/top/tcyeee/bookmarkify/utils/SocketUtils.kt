@@ -10,6 +10,6 @@ import top.tcyeee.bookmarkify.entity.response.BookmarkShow
  */
 object SocketUtils {
     fun updateMarkbook(uid: String, bookmark: BookmarkShow) {
-        SessionManager.send(SocketMsgType.MARKBOOK_UPDATE_ONE, uid, bookmark)
+        SessionManager.send(SocketMsgType.BOOKMARK_UPDATE_ONE, uid, bookmark)
     }
 }
