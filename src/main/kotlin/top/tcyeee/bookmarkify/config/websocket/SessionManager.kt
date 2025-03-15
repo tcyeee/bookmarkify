@@ -25,6 +25,6 @@ object SessionManager {
         log.info("[WEBSOCKET] ${type.name} :Session has been sent to $uid]")
     }
 
-    private fun uid(session: WebSocketSession) = session.attributes.getValue("uid").toString()
+    fun uid(session: WebSocketSession) = session.attributes.getValue("uid").toString()
     private fun session(uid: String) = sessions[uid]
 }
