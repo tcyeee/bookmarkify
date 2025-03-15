@@ -55,17 +55,9 @@ class BookmarksController(
     @Operation(summary = "修改")
     fun update(@RequestBody params: BookmarkUpdataPrams): Boolean = bookmarkUserLinkService.updateOne(params)
 
-    /**
-     * 手动添加一个书签,每次添加都需要检查一次网站的信息
-     *
-     * @param params 更新参数
-     * @return 用户全部网站信息
-     */
     @PostMapping("/addOne")
     @Operation(summary = "添加书签")
-    fun addOne(@RequestBody params: BookmarkAddOneParams) {
-        bookmarkService.addOne(params.url, BaseUtils.uid())
-    }
+    fun addOne(@RequestBody params: BookmarkAddOneParams) = bookmarkService.addOne(params.url, BaseUtils.uid())
 
     /**
      * 整理上传的全部书签
