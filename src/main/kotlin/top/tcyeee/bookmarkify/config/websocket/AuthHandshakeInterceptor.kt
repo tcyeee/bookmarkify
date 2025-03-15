@@ -23,8 +23,10 @@ class AuthHandshakeInterceptor : HandshakeInterceptor {
         val queryParams = request.uri.query
         val token = queryParams?.substringAfter("token=")?.takeWhile { it != '&' }
         if (token == null) throw CommonException(ErrorType.E201)
-        attributes["uid"] = BaseUtils.getUidByToken(token)
-        return true
+
+        val uid = BaseUtils.getUidByToken(token)
+        if (uid != null) attributes["uid"] = uid
+        return uid != null
     }
 
     override fun afterHandshake(

@@ -11,9 +11,6 @@ spring:
       port: ${BOOKMARKIFY_REDIS_PORT}
       password: ${BOOKMARKIFY_REDIS_PASSWORD}
       timeout: 1000ms
-  devtools:
-    restart:
-      enabled: false
 
 config:
   img-path: ${BOOKMARKIFY_FILE_UPLOAD_DIR}

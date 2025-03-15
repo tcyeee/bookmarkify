@@ -23,8 +23,9 @@ class PreRequestFilter : Filter {
     @Throws(ServletException::class, IOException::class)
     override fun doFilter(request: ServletRequest, response: ServletResponse, filterChain: FilterChain) {
         val http = request as HttpServletRequest
-        if (!http.method.equals("OPTIONS", ignoreCase = true))
-            log.info(String.format("⛱ send ${http.method} request to ${http.requestURI}"))
+        val isWebSocket = "/ws".equals(http.requestURI, ignoreCase = true)
+        val isOptions = http.method.equals("OPTIONS", ignoreCase = true)
+        if (!isOptions && !isWebSocket) log.info("⛱ send ${http.method} request to ${http.requestURI}")
         filterChain.doFilter(request, response)
     }
 }
