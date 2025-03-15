@@ -22,8 +22,9 @@ class PreRequestFilter : Filter {
 
     @Throws(ServletException::class, IOException::class)
     override fun doFilter(request: ServletRequest, response: ServletResponse, filterChain: FilterChain) {
-        val httpRequest = request as HttpServletRequest
-        log.info(String.format("⛱ send %s request to %s", httpRequest.method, httpRequest.requestURI))
+        val http = request as HttpServletRequest
+        if (!http.method.equals("OPTIONS", ignoreCase = true))
+            log.info(String.format("⛱ send ${http.method} request to ${http.requestURI}"))
         filterChain.doFilter(request, response)
     }
 }

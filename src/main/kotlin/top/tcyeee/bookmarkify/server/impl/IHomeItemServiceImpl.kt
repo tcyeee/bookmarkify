@@ -8,6 +8,7 @@ import top.tcyeee.bookmarkify.entity.po.HomeItem
 import top.tcyeee.bookmarkify.entity.response.BookmarkShow
 import top.tcyeee.bookmarkify.entity.response.HomeItemShow
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
+import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IHomeItemService
 import java.util.function.Consumer
@@ -19,7 +20,7 @@ import java.util.function.Consumer
 @Service
 class IHomeItemServiceImpl(
     private val projectConfig: ProjectConfig,
-    private val bookmarkMapper: BookmarkMapper
+    private val bookmarkUserLinkMapper: BookmarkUserLinkMapper
 ) : IHomeItemService, ServiceImpl<HomeItemMapper, HomeItem>() {
 
     override fun findShowByUid(uid: String): List<HomeItemShow> {
@@ -29,7 +30,7 @@ class IHomeItemServiceImpl(
     }
 
     override fun createDataBaseByUid(uid: String): Map<String, BookmarkShow> {
-        val bookmarks: List<BookmarkShow> = bookmarkMapper.allBookmarkByUid(uid)
+        val bookmarks: List<BookmarkShow> = bookmarkUserLinkMapper.allBookmarkByUid(uid)
         return bookmarks.associateBy { it.bookmarkUserLinkId.toString() }
     }
 
