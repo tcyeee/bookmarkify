@@ -106,9 +106,7 @@ function clickDetail(item: HomeItem) {
 
 // 删除书签
 function delOne(item: HomeItem) {
-  let params: Array<BookmarkSortParams> = [];
-  params.push({ id: item.id, sort: params.length });
-  bookmarksDel(params);
+  bookmarksDel([item.id]);
 
   const index: number = data.pageData?.findIndex((a) => a.id == item.id) || -1;
   if (index !== -1) data.pageData?.splice(index, 1);
