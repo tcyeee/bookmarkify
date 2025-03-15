@@ -37,11 +37,11 @@ class BookmarksController(
 ) {
     @PostMapping("/query")
     @Operation(summary = "我的书签")
-    fun query(): List<HomeItemShow> = homeItemService.findShowByUid(BaseUtils.currentUid())
+    fun query(): List<HomeItemShow> = homeItemService.findShowByUid(BaseUtils.uid())
 
     @PostMapping("/upload")
     @Operation(summary = "书签上传", parameters = [Parameter(name = "file", description = "书签文件.html")])
-    fun upload(file: MultipartFile): List<BookmarkDetail> = updateBookmark(file, BaseUtils.currentUid())
+    fun upload(file: MultipartFile): List<BookmarkDetail> = updateBookmark(file, BaseUtils.uid())
 
     @PostMapping("/sort")
     @Operation(summary = "排序")
@@ -64,7 +64,7 @@ class BookmarksController(
     @PostMapping("/addOne")
     @Operation(summary = "添加书签")
     fun addOne(@RequestBody params: BookmarkAddOneParams) {
-        bookmarkService.addOne(params.url, BaseUtils.currentUid())
+        bookmarkService.addOne(params.url, BaseUtils.uid())
     }
 
     /**
