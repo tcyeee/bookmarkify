@@ -11,11 +11,12 @@ import top.tcyeee.bookmarkify.entity.po.UserEntity
  * @date 3/14/25 19:35
  */
 data class UserInfo(
-    var uid: String,
-    var nickName: String? = null,
-    var email: String? = null,
-    var phone: String? = null,
-    var role: RoleEnum = RoleEnum.NONE
+    val uid: String,
+    val nickName: String? = null,
+    val email: String? = null,
+    val phone: String? = null,
+    var socketId: String? = null,
+    val role: RoleEnum = RoleEnum.NONE,
 ) {
     constructor(user: UserEntity) : this(user.uid) {
         BeanUtil.copyProperties(user, this)
