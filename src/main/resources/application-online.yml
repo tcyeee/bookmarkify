@@ -6,7 +6,7 @@ spring:
     driver-class-name: org.postgresql.Driver
   data:
     redis:
-      database: 1
+      database: 0
       host: ${SPRING_DATA_REDIS_HOST}
       port: ${SPRING_DATA_REDIS_PORT}
       password: ${SPRING_DATA_REDIS_PASSWORD}
