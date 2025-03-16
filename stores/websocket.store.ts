@@ -17,7 +17,7 @@ export const useWebSocketStore = defineStore('socket', {
       if (this.socket) return;
 
       const userStore = useUserStore()
-      this.socket = new WebSocket(`ws://localhost:7001/ws?token=${userStore.auth.token}`)
+      this.socket = new WebSocket(`${useRuntimeConfig().public.apiBase}/ws?token=${userStore.auth.token}`)
 
       this.socket.onerror = (error) => {
         console.error("[WebSocket] 发生错误:", error);
