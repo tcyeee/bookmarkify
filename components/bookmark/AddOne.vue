@@ -44,7 +44,9 @@
 
 <script lang="ts" setup>
 import { bookmarksAddOne } from "~/server/apis";
+import type { HomeItem } from "~/server/apis/bookmark/typing";
 
+const emit = defineEmits(["success"]);
 const data = reactive<{
   status: boolean;
   input?: string;
@@ -60,11 +62,16 @@ function addOne() {
   if (!isUrl(data.input)) {
     data.notice = "你输入的网址看起来有点怪...";
   }
-  bookmarksAddOne({ url: data.input }).then((res) => {
+
+  console.log("添加成功!");
+  bookmarksAddOne({ url: data.input }).then((res: HomeItem) => {
+    emit("success", res);
     data.notice = "添加成功!";
     data.input = undefined;
     setTimeout(() => {
       data.notice = undefined;
+      // @ts-ignore
+      document.getElementById("dialog_add")?.close();
     }, 500);
   });
 }

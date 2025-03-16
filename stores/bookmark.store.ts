@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { HomeItem } from '~/server/apis/bookmark/typing'
+import { HomeItemType, type HomeItem } from '~/server/apis/bookmark/typing'
 import { bookmarksShowAll } from "~/server/apis";
 
 export const StoreBookmark = defineStore('bookmarks', {
@@ -20,13 +20,24 @@ export const StoreBookmark = defineStore('bookmarks', {
       await bookmarksShowAll().then((res) => this.bookmarks = sortData(res))
       console.log(`[DEBUG]书签更新:${this.bookmarks?.length}`);
       if (this.bookmarks == undefined) throw new Error
-      Object.values(this.actions).forEach(action => { action() });
+
+      this.trigger()
       return this.bookmarks;
+    },
+
+    trigger() {
+      Object.values(this.actions).forEach(action => { action() });
     },
 
     addAction(action: Function) {
       this.actions[action.name] = action
     },
+
+    addEmpty(item: HomeItem) {
+      item.type = HomeItemType.LOADING
+      this.bookmarks?.push(item)
+      this.trigger()
+    }
   }
 })
 
