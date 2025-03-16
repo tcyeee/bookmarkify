@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.entity.po.Bookmark
+import top.tcyeee.bookmarkify.entity.po.HomeItem
 
 /**
  * @author tcyeee
@@ -21,7 +22,7 @@ interface IBookmarkService : IService<Bookmark> {
 
     fun findByHost(host: String): Bookmark?
 
-    fun addOne(url: String, uid: String)
+    fun addOne(url: String, uid: String): HomeItem
 
     /* 将网站标记为为离线 */
     fun offline(bookmark: Bookmark)
