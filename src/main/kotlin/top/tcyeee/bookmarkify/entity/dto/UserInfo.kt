@@ -1,6 +1,5 @@
 package top.tcyeee.bookmarkify.entity.dto
 
-import cn.hutool.core.bean.BeanUtil
 import cn.hutool.json.JSONUtil
 import top.tcyeee.bookmarkify.entity.po.UserEntity
 
@@ -18,7 +17,10 @@ data class UserInfo(
     var socketId: String? = null,
 ) {
     constructor(user: UserEntity) : this(user.uid) {
-        BeanUtil.copyProperties(user, this)
+        this.uid = user.uid
+        this.nickName = user.nickName
+        this.email = user.email
+        this.phone = user.phone
     }
 
     constructor(json: String) : this(uid = "") {
