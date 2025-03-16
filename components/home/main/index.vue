@@ -19,8 +19,12 @@ const data = reactive<{
 });
 
 onMounted(() => {
-  storeBookmark.get().then((res) => (data.bookmarkList = res));
+  storeBookmark.addAction(updateAllBookmark);
 });
+
+function updateAllBookmark() {
+  storeBookmark.get().then((res) => (data.bookmarkList = res));
+}
 </script>
 
 <style scoped>
