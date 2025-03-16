@@ -15,7 +15,3 @@ config:
   img-path: ${FILE_UPLOAD_DIR}
   img-prefix: ${FILE_UPLOAD_PREFIX}
 
-logging:
-  level:
-    root: WARN
-
