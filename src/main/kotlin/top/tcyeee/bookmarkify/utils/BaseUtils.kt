@@ -3,7 +3,6 @@ package top.tcyeee.bookmarkify.utils
 import cn.dev33.satoken.session.SaSession
 import cn.dev33.satoken.stp.StpUtil
 import cn.hutool.core.date.LocalDateTimeUtil
-import cn.hutool.json.JSONUtil
 import top.tcyeee.bookmarkify.entity.dto.UserInfo
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
@@ -28,7 +27,6 @@ object BaseUtils {
         val session = StpUtil.getSessionByLoginId(loginId) ?: return null
         return user(session).uid
     }
-
 
     /* 工具类方法 */
     fun yesterday(): LocalDateTime = LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)
