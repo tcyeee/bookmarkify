@@ -24,7 +24,7 @@ class LoginController(
 ) {
     @SaIgnore
     @PostMapping("/login")
-    @Operation(summary = "通过客户端ID登陆 @author tcyeee")
+    @Operation(summary = "通过客户端ID登陆")
     fun login(@RequestBody loginForm: @Valid LoginByClientForm): UserAuthEntityVo {
         return loginService.loginByClientInfo(loginForm)
     }

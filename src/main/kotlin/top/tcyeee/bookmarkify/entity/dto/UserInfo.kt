@@ -10,38 +10,35 @@ import top.tcyeee.bookmarkify.entity.po.UserEntity
  * @date 3/14/25 19:35
  */
 data class UserInfo(
-    var uid: String,
+    var uid: String? = null,
     var nickName: String? = null,
     var email: String? = null,
     var phone: String? = null,
     var socketId: String? = null,
 ) {
-    constructor(user: UserEntity) : this(user.uid) {
+    constructor(user: UserEntity) : this() {
         this.uid = user.uid
         this.nickName = user.nickName
         this.email = user.email
         this.phone = user.phone
     }
 
-    constructor(json: String) : this(uid = "") {
-        println("=======================")
-        println(json)
-        println("=======================")
-        val parseObj = JSONUtil.parseObj(json)
-        this.uid = parseObj["uid"].toString()
-        this.nickName = parseObj["nickName"].toString()
-        this.email = parseObj["email"].toString()
-        this.phone = parseObj["phone"].toString()
-        this.socketId = parseObj["socketId"].toString()
+    constructor(json: String) : this() {
+        val res = JSONUtil.parseObj(json)
+        this.uid = res["uid"].toString()
+        this.nickName = res["nickName"].toString()
+        this.email = res["email"].toString()
+        this.phone = res["phone"].toString()
+        this.socketId = res["socketId"].toString()
     }
 
     fun json(): String {
-        val result = JSONUtil.createObj()
-        result["uid"] = uid
-        result["nickName"] = nickName
-        result["email"] = email
-        result["phone"] = phone
-        result["socketId"] = socketId
-        return JSONUtil.toJsonStr(result)
+        val res = JSONUtil.createObj()
+        res["uid"] = uid
+        res["nickName"] = nickName
+        res["email"] = email
+        res["phone"] = phone
+        res["socketId"] = socketId
+        return JSONUtil.toJsonStr(res)
     }
 }
