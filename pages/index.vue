@@ -31,6 +31,10 @@ const data = reactive<{
   duringAnimate: false,
 });
 
+watchEffect(() => {
+  if (data.fade) storeBookmark.update();
+});
+
 onMounted(() => {
   sysStore.registerKeyEvent("Space", "/", () => sceneToggle());
   storeBookmark.update();
