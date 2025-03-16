@@ -9,6 +9,7 @@ import top.tcyeee.bookmarkify.entity.po.Bookmark
 import top.tcyeee.bookmarkify.entity.po.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.po.HomeItem
 import top.tcyeee.bookmarkify.entity.response.BookmarkShow
+import top.tcyeee.bookmarkify.entity.response.HomeItemShow
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
@@ -32,6 +33,7 @@ class BookmarkServiceImpl(
     override fun checkOne(bookmark: Bookmark, id: String) {
         checkOne(bookmark)
         val bookmarkShow: BookmarkShow = bookmarkUserLinkMapper.findOne(id)
+        bookmarkShow.clean(projectConfig.imgPath)
         SocketUtils.updateMarkbook(bookmarkShow.uid!!, bookmarkShow)
     }
 
@@ -58,19 +60,19 @@ class BookmarkServiceImpl(
     override fun checkAll() =
         ktQuery().lt(Bookmark::updateTime, BaseUtils.yesterday()).list().forEach(this::checkOne)
 
-    override fun addOne(url: String, uid: String): HomeItem {
+    override fun addOne(url: String, uid: String): HomeItemShow {
         val bookmarkUrl = BookmarkUrl(url)
         val bookmark = findByHost(bookmarkUrl.urlHost) ?: Bookmark(bookmarkUrl).also { save(it) }
 
         // 添加用户关联和桌面布局
         val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark)
         bookmarkUserLinkMapper.insert(userLink)
-        val result = HomeItem(bookmark, uid, userLink.id)
-        homeItemMapper.insert(result)
+        val homeItem = HomeItem(uid, userLink.id)
+        homeItemMapper.insert(homeItem)
 
         // 异步检查
         CompletableFuture.runAsync { this.checkOne(bookmark, userLink.id) }
-        return result
+        return HomeItemShow(homeItem.id, uid, bookmark.id)
     }
 
     override fun findByHost(host: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, host).one()

@@ -25,17 +25,8 @@ data class HomeItem(
     @JsonIgnore @Schema(hidden = true) var functionId: Int? = null,
     @JsonIgnore @Schema(hidden = true) var deleted: Boolean = false
 ) {
-
-    // 通过书签信息创建
-    constructor(bookmark: Bookmark, uid: String, linkId: String) : this(
+    constructor( uid: String, linkId: String) : this(
         id = IdUtil.fastUUID(), sort = 99, uid = uid, type = HomeItemType.BOOKMARK,
         bookmarkUserLinkId = linkId
-    )
-
-    constructor(bookmarkIds: List<String>, dirTitle: String, uid: String) : this(
-        id = IdUtil.fastUUID(),
-        sort = 10,
-        uid = uid,
-        type = HomeItemType.BOOKMARK_DIR,
     )
 }

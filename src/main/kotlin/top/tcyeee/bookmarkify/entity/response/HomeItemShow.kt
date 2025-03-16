@@ -21,13 +21,14 @@ data class HomeItemShow(
     @Schema(description = "序号") var sort: Int = 99,
     @Schema(description = "书签类型") var type: HomeItemType = HomeItemType.BOOKMARK,
 
+    var bookmarkId: String? = null,     // 用于新建书签时定位
     var typeApp: BookmarkShow? = null,  // 书签信息
     var typeDir: BookmarkDir? = null,   // 书签组信息
     var typeFuc: FunctionType? = null,  // 系统功能入口
 ) {
 
     constructor(item: HomeItem, database: Map<String, BookmarkShow>, imgPrefix: String) : this(
-        id = "", uid = ""
+        id = item.id, uid = item.uid
     ) {
         BeanUtil.copyProperties(item, this)
         when (item.type) {
@@ -36,4 +37,8 @@ data class HomeItemShow(
             HomeItemType.FUNCTION -> this.typeFuc = EnumUtil.getEnumAt(FunctionType::class.java, item.functionId ?: 0)
         }
     }
+
+    constructor(id: String, uid: String, bookmarkId: String) : this(
+        id, uid, bookmarkId = bookmarkId, type = HomeItemType.BOOKMARK
+    )
 }
