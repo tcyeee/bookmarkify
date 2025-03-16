@@ -5,9 +5,11 @@ import { nanoid } from 'nanoid'
 export const useUserStore = defineStore('user', () => {
   const loggedIn = ref<Boolean>(false);
   const auth = reactive<UserAuth>({});
+  const Loading = ref<Boolean>(false);
 
   async function loginByDeviceUid(): Promise<UserEntity> {
-    const res: UserEntity = await authByDeviceInfo(auth);
+    Loading.value = true;
+    const res = await authByDeviceInfo(auth).finally(() => { Loading.value = false })
     console.log(`[DEBUG] 重新登陆获取TOKEN:${res.token}`);
     loggedIn.value = true;
     auth.token = res.token;
