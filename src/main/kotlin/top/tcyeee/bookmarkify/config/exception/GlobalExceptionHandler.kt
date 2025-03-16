@@ -1,10 +1,8 @@
 package top.tcyeee.bookmarkify.config.exception
 
 import cn.dev33.satoken.exception.NotLoginException
-import cn.hutool.json.JSONException
 import io.lettuce.core.RedisCommandTimeoutException
 import jakarta.servlet.http.HttpServletRequest
-import jakarta.validation.ConstraintViolationException
 import org.slf4j.LoggerFactory
 import org.springframework.core.MethodParameter
 import org.springframework.http.MediaType
@@ -12,8 +10,6 @@ import org.springframework.http.converter.HttpMessageConverter
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.http.server.ServerHttpRequest
 import org.springframework.http.server.ServerHttpResponse
-import org.springframework.validation.BindException
-import org.springframework.web.HttpMediaTypeNotSupportedException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
@@ -50,24 +46,15 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
     fun handleException(e: Exception, request: HttpServletRequest): ResultWrapper {
         return when (e) {
             is CommonException -> error(e.errorType)
-
             is NullPointerException, is HttpMessageNotReadableException -> print(ErrorType.E102, e, request)
-
             is MethodArgumentNotValidException -> {
                 val fieldError = e.fieldError ?: return print(ErrorType.E999, e, request)
                 error(ErrorType.E102, "字段 ${fieldError.field} 校验错误: ${fieldError.defaultMessage}")
             }
 
             is RedisCommandTimeoutException -> print(ErrorType.E203, e, request)
-            is JSONException, is HttpMediaTypeNotSupportedException, is ConstraintViolationException, is BindException -> print(
-                ErrorType.E103,
-                e,
-                request
-            )
-
             is NoResourceFoundException -> print(ErrorType.E202, e, request)
             is NotLoginException -> print(ErrorType.E101, e, request)
-
             else -> print(ErrorType.E999, e, request)
         }
     }
