@@ -3,14 +3,10 @@ import type { HomeItem } from '~/server/apis/bookmark/typing'
 import { bookmarksShowAll } from "~/server/apis";
 
 export const StoreBookmark = defineStore('bookmarks', {
-  persist: true,
-  state: () => (<{
-    bookmarks: Array<HomeItem> | undefined,
-  }>{
-      bookmarks: undefined
-    }),
-  getters: {
-  },
+  state: () => ({
+    bookmarks: undefined as Array<HomeItem> | undefined,
+    actions: {} as Record<string, Function>
+  }),
   actions: {
     async get(): Promise<Array<HomeItem>> {
       return this.bookmarks == undefined ? await this.update() : Promise.resolve(this.bookmarks)
@@ -24,8 +20,13 @@ export const StoreBookmark = defineStore('bookmarks', {
       await bookmarksShowAll().then((res) => this.bookmarks = sortData(res))
       console.log(`[DEBUG]书签更新:${this.bookmarks?.length}`);
       if (this.bookmarks == undefined) throw new Error
+      Object.values(this.actions).forEach(action => { action() });
       return this.bookmarks;
-    }
+    },
+
+    addAction(action: Function) {
+      this.actions[action.name] = action
+    },
   }
 })
 
