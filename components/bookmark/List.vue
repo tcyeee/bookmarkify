@@ -16,7 +16,7 @@
 
     <!-- 二级菜单 -->
     <div v-if="data.subItemId" v-for="bookmark in data.subApps" :key="bookmark.bookmarkId">
-      <BookmarkItem :value="bookmark" @click="openPage(bookmark)" />
+      <BookmarkCellItem :value="bookmark" @click="openPage(bookmark)" />
     </div>
 
     <!-- 一级菜单的添加 -->

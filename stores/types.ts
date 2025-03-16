@@ -9,5 +9,10 @@ export enum DialogStatus {
 }
 
 export enum SocketTypes {
-    BOOKMARK_UPDATE_ONE
+    BOOKMARK_UPDATE_ONE = 'BOOKMARK_UPDATE_ONE'
+}
+
+export interface SocketMessage {
+    type: SocketTypes,
+    data: any
 }
