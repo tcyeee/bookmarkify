@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.config.exception
 
 import cn.dev33.satoken.exception.NotLoginException
 import cn.hutool.json.JSONException
+import io.lettuce.core.RedisCommandTimeoutException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.ConstraintViolationException
 import org.slf4j.LoggerFactory
@@ -37,34 +38,32 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
         request: ServerHttpRequest,
         response: ServerHttpResponse
     ): Any? {
-        if (body == null) return ResultWrapper.ok<Any>()
-        if (body is ResultWrapper<*>) return body
-
-        val path = request.uri.path
-        if (path.startsWith("/swagger") || path.startsWith("/v3/api-docs")) return body
-
+        if (body == null) return ResultWrapper.ok()
+        if (body is ResultWrapper) return body
         if (body is String) return body
+        if (isSwagger(request)) return body
         return ResultWrapper.ok(body)
     }
 
 
     @ExceptionHandler(Exception::class)
-    fun handleException(e: Exception, request: HttpServletRequest): ResultWrapper<*> {
+    fun handleException(e: Exception, request: HttpServletRequest): ResultWrapper {
         return when (e) {
             is CommonException -> error(e.errorType)
 
-            is NullPointerException,
-            is HttpMessageNotReadableException -> print(ErrorType.E102, e, request)
+            is NullPointerException, is HttpMessageNotReadableException -> print(ErrorType.E102, e, request)
 
             is MethodArgumentNotValidException -> {
                 val fieldError = e.fieldError ?: return print(ErrorType.E999, e, request)
                 error(ErrorType.E102, "字段 ${fieldError.field} 校验错误: ${fieldError.defaultMessage}")
             }
 
-            is JSONException,
-            is HttpMediaTypeNotSupportedException,
-            is ConstraintViolationException,
-            is BindException -> print(ErrorType.E103, e, request)
+            is RedisCommandTimeoutException -> print(ErrorType.E203, e, request)
+            is JSONException, is HttpMediaTypeNotSupportedException, is ConstraintViolationException, is BindException -> print(
+                ErrorType.E103,
+                e,
+                request
+            )
 
             is NoResourceFoundException -> print(ErrorType.E202, e, request)
             is NotLoginException -> print(ErrorType.E101, e, request)
@@ -81,11 +80,16 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
      * @param request 请求详情
      * @return 错误信息
      */
-    private fun print(type: ErrorType, e: Exception, request: HttpServletRequest): ResultWrapper<Any> {
+    private fun print(type: ErrorType, e: Exception, request: HttpServletRequest): ResultWrapper {
         if (type == ErrorType.E999) {
             log.error("Σ(oﾟдﾟoﾉ)  ${request.requestURI} | [${type.name}] ${e.message}")
             e.printStackTrace()
         }
         return error(type)
+    }
+
+    private fun isSwagger(request: ServerHttpRequest): Boolean {
+        val path = request.uri.path
+        return (path.startsWith("/swagger") || path.startsWith("/v3/api-docs"))
     }
 }

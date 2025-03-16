@@ -57,7 +57,8 @@ class BookmarksController(
 
     @PostMapping("/addOne")
     @Operation(summary = "添加书签")
-    fun addOne(@RequestBody params: BookmarkAddOneParams) = bookmarkService.addOne(params.url, BaseUtils.uid())
+    fun addOne(@RequestBody params: BookmarkAddOneParams): HomeItem =
+        bookmarkService.addOne(params.url, BaseUtils.uid())
 
     /**
      * 整理上传的全部书签

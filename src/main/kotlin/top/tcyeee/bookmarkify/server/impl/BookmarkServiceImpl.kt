@@ -58,17 +58,19 @@ class BookmarkServiceImpl(
     override fun checkAll() =
         ktQuery().lt(Bookmark::updateTime, BaseUtils.yesterday()).list().forEach(this::checkOne)
 
-    override fun addOne(url: String, uid: String) {
+    override fun addOne(url: String, uid: String): HomeItem {
         val bookmarkUrl = BookmarkUrl(url)
         val bookmark = findByHost(bookmarkUrl.urlHost) ?: Bookmark(bookmarkUrl).also { save(it) }
 
         // 添加用户关联和桌面布局
         val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark)
         bookmarkUserLinkMapper.insert(userLink)
-        homeItemMapper.insert(HomeItem(bookmark, uid, userLink.id))
+        val result = HomeItem(bookmark, uid, userLink.id)
+        homeItemMapper.insert(result)
 
         // 异步检查
         CompletableFuture.runAsync { this.checkOne(bookmark, userLink.id) }
+        return result
     }
 
     override fun findByHost(host: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, host).one()
