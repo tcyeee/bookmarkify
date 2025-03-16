@@ -8,6 +8,7 @@ export const useUserStore = defineStore('user', () => {
   const Loading = ref<Boolean>(false);
 
   async function loginByDeviceUid(): Promise<UserEntity> {
+    if (Loading.value) return Promise.reject('loading..');
     Loading.value = true;
     const res = await authByDeviceInfo(auth).finally(() => { Loading.value = false })
     console.log(`[DEBUG] 重新登陆获取TOKEN:${res.token}`);
