@@ -7,7 +7,6 @@ import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.po.HomeItem
 import top.tcyeee.bookmarkify.entity.response.BookmarkShow
 import top.tcyeee.bookmarkify.entity.response.HomeItemShow
-import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IHomeItemService
@@ -26,7 +25,7 @@ class IHomeItemServiceImpl(
     override fun findShowByUid(uid: String): List<HomeItemShow> {
         val dataMap = createDataBaseByUid(uid)
         val byUid = findByUid(uid) ?: return emptyList()
-        return byUid.map { item -> HomeItemShow(item, dataMap, projectConfig.imgPath) }
+        return byUid.map { item -> HomeItemShow(item, dataMap, projectConfig.imgPrefix) }
     }
 
     override fun createDataBaseByUid(uid: String): Map<String, BookmarkShow> {
