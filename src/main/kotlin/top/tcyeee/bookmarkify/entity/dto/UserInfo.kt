@@ -24,6 +24,9 @@ data class UserInfo(
     }
 
     constructor(json: String) : this(uid = "") {
+        println("=======================")
+        println(json)
+        println("=======================")
         val parseObj = JSONUtil.parseObj(json)
         this.uid = parseObj["uid"].toString()
         this.nickName = parseObj["nickName"].toString()
