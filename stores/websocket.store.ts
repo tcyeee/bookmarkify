@@ -46,10 +46,7 @@ export const useWebSocketStore = defineStore('socket', {
     startHeartbeat() {
       this.stopHeartbeat(); // 先清除之前的心跳
       this.pingInterval = window.setInterval(() => {
-        if (this.socket?.readyState === WebSocket.OPEN) {
-          console.log("[WebSocket] 发送心跳 ping");
-          this.socket.send('ping');
-        }
+        if (this.socket?.readyState === WebSocket.OPEN) this.socket.send('ping');
       }, this.pingIntervalValue * 1000);
     },
 
