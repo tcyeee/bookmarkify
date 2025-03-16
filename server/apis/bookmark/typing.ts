@@ -51,10 +51,17 @@ export interface HomeItem {
     id: string;
     uid: string;
     sort: number;
-    type: string; // 书签类型,可用值:BOOKMARK,BOOKMARK_DIR,SETTING
+    type: HomeItemType; // 书签类型,可用值:
     typeApp: Bookmark;
     typeDir: BookmarkDir;
     typeFuc: string; // 方法枚举 USER_INFO BOOKMARK_MANAGE
+}
+
+export enum HomeItemType {
+    BOOKMARK = "BOOKMARK",
+    BOOKMARK_DIR = "BOOKMARK_DIR",
+    SETTING = "SETTING",
+    LOADING = "LOADING"
 }
 
 export interface BookmarkDir {

@@ -38,5 +38,5 @@ function isLocalhostOrIP(url: string): boolean {
 }
 </script>
 
-<style>
+<style lang="scss" scoped>
 </style>

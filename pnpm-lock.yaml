@@ -37,6 +37,9 @@ devDependencies:
   '@fingerprintjs/fingerprintjs':
     specifier: ^4.5.1
     version: 4.6.0
+  '@iconify/vue':
+    specifier: ^4.3.0
+    version: 4.3.0(vue@3.5.13)
   '@imengyu/vue3-context-menu':
     specifier: ^1.4.4
     version: 1.4.4
@@ -657,6 +660,19 @@ packages:
 
   /@floating-ui/utils@0.2.9:
     resolution: {integrity: sha512-MDWhGtE+eHw5JW7lq4qhc5yRLS11ERl1c7Z6Xd0a58DozHES6EnNNwUWbMiG4J9Cgj053Bhk8zvlhFYKVhULwg==}
+    dev: true
+
+  /@iconify/types@2.0.0:
+    resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
+    dev: true
+
+  /@iconify/vue@4.3.0(vue@3.5.13):
+    resolution: {integrity: sha512-Xq0h6zMrHBbrW8jXJ9fISi+x8oDQllg5hTDkDuxnWiskJ63rpJu9CvJshj8VniHVTbsxCg9fVoPAaNp3RQI5OQ==}
+    peerDependencies:
+      vue: '>=3'
+    dependencies:
+      '@iconify/types': 2.0.0
+      vue: 3.5.13(typescript@5.7.3)
     dev: true
 
   /@imengyu/vue3-context-menu@1.4.4:
@@ -4213,7 +4229,7 @@ packages:
     dependencies:
       '@nuxt/kit': 3.15.4(magicast@0.3.5)
       unimport: 3.14.6(rollup@4.34.6)
-      vue3-google-signin: 2.0.1(vue@3.5.13)
+      vue3-google-signin: 2.1.1(vue@3.5.13)
     transitivePeerDependencies:
       - magicast
       - rollup
@@ -6257,8 +6273,8 @@ packages:
       vue: 3.5.13(typescript@5.7.3)
     dev: false
 
-  /vue3-google-signin@2.0.1(vue@3.5.13):
-    resolution: {integrity: sha512-vZTlVrG56JERtqQ+6YI8e92wqfhAMDyNONCsLgKKXxzCNCWEfSkZcAvz7COm9V4bvzmGsebZ8KC3ljol2qsIcg==}
+  /vue3-google-signin@2.1.1(vue@3.5.13):
+    resolution: {integrity: sha512-RwlwyeCv8+PZjK35C/UyJN4/9MH+Fsz4bJDO7IjtmRuOaTMrvmMmI6SP5qkJgD7w9MIKOCj5rYVFMAL7+NCM0A==}
     peerDependencies:
       vue: ^3
     dependencies:

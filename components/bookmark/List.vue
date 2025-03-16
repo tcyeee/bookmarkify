@@ -8,7 +8,8 @@
       <template #item="item">
         <div @contextmenu="onContextMenu($event,item.element)">
           <BookmarkDir v-if="item.element.type == 'BOOKMARK_DIR'" :value="item.element.typeDir" @click="openDir(item.element)" />
-          <BookmarkItem v-if="item.element.type == 'BOOKMARK'" :value="item.element.typeApp" @click="openPage(item.element.typeApp)" />
+          <BookmarkCellItem v-if="item.element.type == 'BOOKMARK'" :value="item.element.typeApp" @click="openPage(item.element.typeApp)" />
+          <BookmarkCellLoading v-if="item.element.type == 'LOADING'" />
         </div>
       </template>
     </draggable>
@@ -19,7 +20,7 @@
     </div>
 
     <!-- 一级菜单的添加 -->
-    <BookmarkAddOne v-show="!data.subItemId" />
+    <BookmarkAddOne v-show="!data.subItemId" @success="addOne" />
 
     <!-- 书签详情 -->
     <el-dialog v-model="data.bookmarkDetailDialog" class="bookmark-dialog-box" :show-close="false" width="600" top="25vh">
@@ -28,15 +29,17 @@
   </div>
 </template>
 <script lang="ts" setup>
-import type {
-  Bookmark,
-  BookmarkSortParams,
-} from "~/server/apis/bookmark/typing";
-import { type HomeItem } from "~/server/apis/bookmark/typing";
 import Draggable from "vuedraggable";
 import ContextMenu from "@imengyu/vue3-context-menu";
 import { bookmarksSort, bookmarksDel } from "~/server/apis";
+import type {
+  HomeItem,
+  Bookmark,
+  BookmarkSortParams,
+} from "~/server/apis/bookmark/typing";
+
 const sysStore = sysBaseStore();
+const bookmarkStore = StoreBookmark();
 
 const props = defineProps<{
   data: Array<HomeItem>;
@@ -59,6 +62,10 @@ watchEffect(() => {
 });
 
 const dragOptions = ref({ animation: 300 });
+
+function addOne(item: HomeItem) {
+  bookmarkStore.addEmpty(item);
+}
 
 function openDir(item: HomeItem) {
   data.subItemId = item.id;
