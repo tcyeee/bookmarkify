@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import type { SocketMessage } from './types';
 
 export const useWebSocketStore = defineStore('socket', {
   persist: false,
@@ -39,7 +40,12 @@ export const useWebSocketStore = defineStore('socket', {
       };
 
       this.socket.onmessage = (event) => {
-        console.log("[WebSocket] Received message:", event.data);
+        const message = JSON.parse(event.data) as SocketMessage;
+        if (message.type === SocketTypes.BOOKMARK_UPDATE_ONE) {
+          const bookmarkStore = StoreBookmark()
+          console.log("[WebSocket] 收到书签更新消息:", message.data);
+          bookmarkStore.updateOne(message.data);
+        }
       }
     },
 

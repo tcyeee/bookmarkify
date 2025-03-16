@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { HomeItemType, type HomeItem } from '~/server/apis/bookmark/typing'
+import { HomeItemType, type Bookmark, type HomeItem } from '~/server/apis/bookmark/typing'
 import { bookmarksShowAll } from "~/server/apis";
 
 export const StoreBookmark = defineStore('bookmarks', {
@@ -37,6 +37,15 @@ export const StoreBookmark = defineStore('bookmarks', {
       item.type = HomeItemType.LOADING
       this.bookmarks?.push(item)
       this.trigger()
+    },
+
+    updateOne(item: Bookmark) {
+      this.bookmarks?.forEach(it => {
+        if (it.bookmarkId === item.bookmarkId) {
+          it.type = HomeItemType.BOOKMARK
+          it.typeApp = item
+        }
+      })
     }
   }
 })

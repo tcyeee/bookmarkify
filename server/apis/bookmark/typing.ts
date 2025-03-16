@@ -55,6 +55,7 @@ export interface HomeItem {
     typeApp: Bookmark;
     typeDir: BookmarkDir;
     typeFuc: string; // 方法枚举 USER_INFO BOOKMARK_MANAGE
+    bookmarkId?: string  // 用于新建书签时定位
 }
 
 export enum HomeItemType {
