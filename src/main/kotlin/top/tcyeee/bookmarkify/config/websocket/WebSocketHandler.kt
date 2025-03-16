@@ -21,7 +21,5 @@ class WebSocketHandler : TextWebSocketHandler() {
     }
 
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
-        val uid = SessionManager.uid(session)
-        println("[WebSocket] Received message: ${message.payload} from $uid")
     }
 }
