@@ -10,8 +10,11 @@ export const useUserStore = defineStore('user', () => {
     const res: UserEntity = await authByDeviceInfo(auth);
     console.log(`[DEBUG] 重新登陆获取TOKEN:${res.token}`);
     loggedIn.value = true;
-
     auth.token = res.token;
+
+    // 重连 websocket
+    const socketStore = useWebSocketStore()
+    socketStore.connect(res.token)
     return Promise.resolve(res);
   }
 
