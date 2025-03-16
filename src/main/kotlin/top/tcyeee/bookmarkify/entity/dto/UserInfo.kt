@@ -30,5 +30,13 @@ data class UserInfo(
         this.socketId = parseObj["socketId"].toString()
     }
 
-    fun json(): String = JSONUtil.toJsonStr(this)
+    fun json(): String {
+        val result = JSONUtil.createObj()
+        result["uid"] = uid
+        result["nickName"] = nickName
+        result["email"] = email
+        result["phone"] = phone
+        result["socketId"] = socketId
+        return JSONUtil.toJsonStr(result)
+    }
 }
