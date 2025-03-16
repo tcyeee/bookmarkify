@@ -33,7 +33,7 @@ class BookmarkServiceImpl(
     override fun checkOne(bookmark: Bookmark, id: String) {
         checkOne(bookmark)
         val bookmarkShow: BookmarkShow = bookmarkUserLinkMapper.findOne(id)
-        bookmarkShow.clean(projectConfig.imgPath)
+        bookmarkShow.clean(projectConfig.imgPrefix)
         SocketUtils.updateMarkbook(bookmarkShow.uid!!, bookmarkShow)
     }
 
