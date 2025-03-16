@@ -8,9 +8,7 @@
 const socketStore = useWebSocketStore();
 const userStore = useUserStore();
 
-function testLing() {
-  socketStore.connect(userStore.auth.token!);
-}
+function testLing() {}
 </script>
 
 <style>
