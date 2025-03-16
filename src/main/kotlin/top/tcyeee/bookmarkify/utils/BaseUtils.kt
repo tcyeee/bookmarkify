@@ -3,7 +3,9 @@ package top.tcyeee.bookmarkify.utils
 import cn.dev33.satoken.session.SaSession
 import cn.dev33.satoken.stp.StpUtil
 import cn.hutool.core.date.LocalDateTimeUtil
+import cn.hutool.json.JSONUtil
 import top.tcyeee.bookmarkify.entity.dto.UserInfo
+import top.tcyeee.bookmarkify.entity.po.UserEntity
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 
@@ -18,8 +20,7 @@ object BaseUtils {
     fun uid(): String = user().uid
     fun user(): UserInfo = user(StpUtil.getSession())
     private fun user(session: SaSession): UserInfo {
-        val json: String = session.get("user").toString()
-        return UserInfo(json)
+        return UserInfo(session)
     }
 
     fun getUidByToken(token: String): String? {
@@ -30,4 +31,13 @@ object BaseUtils {
 
     /* 工具类方法 */
     fun yesterday(): LocalDateTime = LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)
+
+    fun userToJson(user: UserEntity): String {
+        val res = JSONUtil.createObj()
+        res["uid"] = user.uid
+        res["nickName"] = user.nickName
+        res["email"] = user.email
+        res["phone"] = user.phone
+        return JSONUtil.toJsonStr(res)
+    }
 }
