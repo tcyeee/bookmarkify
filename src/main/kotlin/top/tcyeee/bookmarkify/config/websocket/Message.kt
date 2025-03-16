@@ -11,5 +11,5 @@ data class Message(
     val type: SocketMsgType,
     val data: Any,
 ) {
-    fun msg(): TextMessage = TextMessage(JSONUtil.toJsonStr(data))
+    fun msg(): TextMessage = TextMessage(JSONUtil.toJsonStr(this))
 }
