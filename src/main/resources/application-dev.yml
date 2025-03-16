@@ -10,7 +10,6 @@ spring:
       host: ${BOOKMARKIFY_REDIS_HOST}
       port: ${BOOKMARKIFY_REDIS_PORT}
       password: ${BOOKMARKIFY_REDIS_PASSWORD}
-      timeout: 1000ms
 
 config:
   img-path: ${BOOKMARKIFY_FILE_UPLOAD_DIR}

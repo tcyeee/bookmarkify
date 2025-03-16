@@ -57,7 +57,7 @@ class BookmarksController(
 
     @PostMapping("/addOne")
     @Operation(summary = "添加书签")
-    fun addOne(@RequestBody params: BookmarkAddOneParams): HomeItem =
+    fun addOne(@RequestBody params: BookmarkAddOneParams): HomeItemShow =
         bookmarkService.addOne(params.url, BaseUtils.uid())
 
     /**
@@ -124,7 +124,7 @@ class BookmarksController(
         allBookmark.forEach(Consumer { item: BookmarkDetail ->
             /* 添加书签 */
             if (item.paths.isEmpty()) {
-                rootBookmarks.add(HomeItem(item.bookmark, uid, item.bookmarkUserLinkId))
+                rootBookmarks.add(HomeItem(uid, item.bookmarkUserLinkId))
             } else {
                 val dirStr: String = item.paths.last()
                 dirList.computeIfAbsent(dirStr) { ArrayList() }.add(item.bookmarkUserLinkId)
@@ -133,7 +133,7 @@ class BookmarksController(
 
         // 向目录中存放书签
         dirList.forEach { (dirStr: String, bookmarkIds: MutableList<String>) ->
-            rootBookmarks.add(HomeItem(bookmarkIds, dirStr, uid))
+            rootBookmarks.add(HomeItem(dirStr, uid))
         }
         return rootBookmarks
     }
