@@ -60,7 +60,7 @@ data class Bookmark(
     )
 
     fun setLogo(iconStore: String?) {
-        this.iconActivity = iconStore == null
+        this.iconActivity = iconStore != null
         this.iconUrl = iconStore
         this.updateTime = LocalDateTime.now()
     }
