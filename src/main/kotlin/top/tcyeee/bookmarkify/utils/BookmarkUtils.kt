@@ -121,12 +121,12 @@ object BookmarkUtils {
     fun getLogoUrl(document: Document, urlPre: String, bookmark: Bookmark): String? {
         // 尝试从 httpCommonIcoUrl 下载 logo，如果成功返回 true
         val rawIconUrl = urlPre + bookmark.defaultIconUrl
-        if (downloadLogo(bookmark.httpCommonIcoUrl, rawIconUrl)) return rawIconUrl
+        if (downloadLogo(bookmark.httpCommonIcoUrl, rawIconUrl)) return bookmark.defaultIconUrl
 
         // 获取文档中的 logo URL 下载 logo，如果成功返回 true
         val logoUrl = this.checkLogoUrl(document) ?: return null
-        val storeUrl = "${urlPre}/favicon/${bookmark.id}.${FileUtil.extName(logoUrl)}"
-        if (downloadLogo(logoUrl, storeUrl)) return storeUrl
+        val storeUrl = "/favicon/${bookmark.id}.${FileUtil.extName(logoUrl)}"
+        if (downloadLogo(logoUrl, urlPre + storeUrl)) return storeUrl
 
         return null
     }
