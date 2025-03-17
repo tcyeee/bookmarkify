@@ -21,7 +21,7 @@ export interface Bookmark {
 
     iconActivity: boolean;
     iconHd: boolean;
-    iconUrl: string;
+    iconUrlFull: string;
 }
 
 export interface BookmarkUpdateParams {
