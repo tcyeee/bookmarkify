@@ -30,16 +30,17 @@ data class Bookmark(
     @JsonIgnore @Schema(description = "书签评分0~10") var score: Int? = null,
     @Max(1000) @JsonIgnore @Schema(description = "书签备注") var description: String? = null,
     @Max(10) @Schema(description = "书签基础HTTP协议") var urlScheme: String? = null, // http or https
+    @Max(100) @Schema(description = "图标链接") var iconUrl: String? = null,
 
     @JsonIgnore @Schema(description = "是否失效") var isActivity: Boolean = false,
-    @Schema(description = "图标是否存在") var iconActivity: Boolean = false,  // 如果存在,则位于${this.fileName}中
+    @Schema(description = "图标是否存在") var iconActivity: Boolean = false,
     @Schema(description = "是否可以启用大图标") var iconHd: Boolean = false,
     @JsonIgnore @Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @Schema(description = "最近更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @Schema(description = "是否已经被删除") var deleted: Boolean = false,
 ) {
     val httpCommonIcoUrl get() = "${this.urlScheme}://${this.urlHost}/favicon.ico"
-    val fileName get() = "/favicon/${this.id}.ico"
+    val defaultIconUrl get() = "/favicon/${this.id}.ico"
     val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
 
     constructor(url: BookmarkUrl) : this(
@@ -58,8 +59,9 @@ data class Bookmark(
         createTime = if (StrUtil.isNotBlank(addDate)) LocalDateTimeUtil.of(addDate.toLong() * 1000) else LocalDateTime.now()
     )
 
-    fun setLogo(status: Boolean) {
-        this.iconActivity = status
+    fun setLogo(iconStore: String?) {
+        this.iconActivity = iconStore == null
+        this.iconUrl = iconStore
         this.updateTime = LocalDateTime.now()
     }
 
