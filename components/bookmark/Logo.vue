@@ -1,7 +1,7 @@
 <template>
   <div class="flex">
     <!-- 如果网站有LOGO -->
-    <el-image v-if="bookmark.iconActivity" :src="bookmark.iconUrl" @error="imageLoadFailed" :class="sm?'w-ico-dir h-ico-dir':bookmark.iconHd?'w-app h-app':'w-ico h-ico'">
+    <el-image v-if="bookmark.iconActivity" :src="bookmark.iconUrlFull" @error="imageLoadFailed" :class="sm?'w-ico-dir h-ico-dir':bookmark.iconHd?'w-app h-app':'w-ico h-ico'">
       <template #placeholder>
         <svg :class="sm?'w-ico-dir h-ico-dir':'w-ico h-ico'" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M24 40C32.8366 40 40 32.8366 40 24C40 15.1634 32.8366 8 24 8C15.1634 8 8 15.1634 8 24C8 32.8366 15.1634 40 24 40Z" fill="none" stroke="#4b5563" stroke-width="4" stroke-linejoin="round" />
@@ -41,8 +41,8 @@ onMounted(() => {
 function dataInit() {
   const item = props.bookmark;
   if (!item.iconActivity) return;
-  props.bookmark.iconUrl = item.iconUrl
-    ? item.iconUrl
+  props.bookmark.iconUrlFull = item.iconUrlFull
+    ? item.iconUrlFull
     : getBaseAvatarUrl(item.urlFull);
 }
 
