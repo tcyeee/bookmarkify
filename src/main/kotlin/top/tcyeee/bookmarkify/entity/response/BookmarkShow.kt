@@ -22,9 +22,10 @@ data class BookmarkShow(
     @Schema(description = "是否失效") var isActivity: Boolean = false,
     @Schema(description = "图标是否存在") var iconActivity: Boolean = false,
     @Schema(description = "是否可以启用大图标") var iconHd: Boolean = false,
-    @Schema(description = "需要特别指定的图标地址") var iconUrl: String? = null,
+    @Schema(description = "图标地址") var iconUrlFull: String? = null,
 
     /* 计算属性 */
+    @JsonIgnore var iconUrl: String? = null,
     @JsonIgnore var userTitle: String? = null,
     @JsonIgnore var userDescription: String? = null,
     @JsonIgnore var baseTitle: String? = null,
@@ -38,7 +39,7 @@ data class BookmarkShow(
      * @return 书签数据
      */
     fun clean(imgPrefix: String): BookmarkShow {
-        this.iconUrl = if (StrUtil.isBlank(this.iconUrl)) "$imgPrefix/icon/$bookmarkId.ico" else this.iconUrl
+        this.iconUrlFull = if (this.iconActivity) imgPrefix + iconUrl else null
         this.title = if (StrUtil.isBlank(this.userTitle)) this.baseTitle else this.userTitle
         this.description = if (StrUtil.isBlank(this.userDescription)) this.baseDescription else this.userDescription
         return this
