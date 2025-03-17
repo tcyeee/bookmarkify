@@ -13,4 +13,4 @@ spring:
 
 config:
   img-path: ${BOOKMARKIFY_FILE_UPLOAD_DIR}
-  img-prefix: 'https://i.bookmarkify.cc'
+  img-prefix: 'https://file.bookmarkify.cc'
