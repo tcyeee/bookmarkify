@@ -41,9 +41,9 @@ export const useWebSocketStore = defineStore('socket', {
 
       this.socket.onmessage = (event) => {
         const message = JSON.parse(event.data) as SocketMessage;
+        console.log("[WebSocket] 收到消息:", message.type);
         if (message.type === SocketTypes.BOOKMARK_UPDATE_ONE) {
           const bookmarkStore = StoreBookmark()
-          console.log("[WebSocket] 收到书签更新消息:", message.data);
           bookmarkStore.updateOne(message.data);
         }
       }
