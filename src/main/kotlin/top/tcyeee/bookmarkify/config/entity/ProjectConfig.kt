@@ -10,6 +10,6 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 @ConfigurationProperties(prefix = "config")
 data class ProjectConfig(
-    var imgPath: String = "",            // 图片本地地址
-    var imgPrefix: String = "",          // 图片前缀
+    var imgPath: String = "",                              // 图片本地存储地址
+    var imgPrefix: String = "https://file.bookmarkify.cc", // 图片前缀
 )
