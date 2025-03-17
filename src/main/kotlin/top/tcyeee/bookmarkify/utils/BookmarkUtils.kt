@@ -116,16 +116,19 @@ object BookmarkUtils {
      * 获取用户LOGO文件,同时下载到本地
      *
      * @param document 解析后的网页文件
-     * @return url的相对路径
+     * @return url的存储地址
      */
-    fun getLogoUrl(document: Document, urlPre: String, bookmark: Bookmark): Boolean {
+    fun getLogoUrl(document: Document, urlPre: String, bookmark: Bookmark): String? {
         // 尝试从 httpCommonIcoUrl 下载 logo，如果成功返回 true
-        if (downloadLogo(bookmark.httpCommonIcoUrl, urlPre + bookmark.fileName)) return true
+        val rawIconUrl = urlPre + bookmark.defaultIconUrl
+        if (downloadLogo(bookmark.httpCommonIcoUrl, rawIconUrl)) return rawIconUrl
 
         // 获取文档中的 logo URL 下载 logo，如果成功返回 true
-        val logoUrl = this.checkLogoUrl(document) ?: return false
+        val logoUrl = this.checkLogoUrl(document) ?: return null
         val storeUrl = "${urlPre}/favicon/${bookmark.id}.${FileUtil.extName(logoUrl)}"
-        return downloadLogo(logoUrl, storeUrl)
+        if (downloadLogo(logoUrl, storeUrl)) return storeUrl
+
+        return null
     }
 
     /**

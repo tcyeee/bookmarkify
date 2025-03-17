@@ -46,8 +46,8 @@ class BookmarkServiceImpl(
 
         /* 设置标题,描述,LOGO */
         bookmark.setTitle(document)
-        val hasIcon = BookmarkUtils.getLogoUrl(document, projectConfig.imgPath, bookmark)
-        bookmark.setLogo(hasIcon)
+        val iconStorePath = BookmarkUtils.getLogoUrl(document, projectConfig.imgPath, bookmark)
+        bookmark.setLogo(iconStorePath)
         updateById(bookmark)
     }
 

@@ -38,7 +38,7 @@ data class BookmarkShow(
      * @return 书签数据
      */
     fun clean(imgPrefix: String): BookmarkShow {
-        this.iconUrl = if (StrUtil.isBlank(this.iconUrl)) imgPrefix + this.iconUrl else null
+        this.iconUrl = if (StrUtil.isBlank(this.iconUrl)) "$imgPrefix/icon/$bookmarkId.ico" else this.iconUrl
         this.title = if (StrUtil.isBlank(this.userTitle)) this.baseTitle else this.userTitle
         this.description = if (StrUtil.isBlank(this.userDescription)) this.baseDescription else this.userDescription
         return this
