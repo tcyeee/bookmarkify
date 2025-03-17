@@ -16,9 +16,6 @@ java {
 
 bootJar {
     archiveFileName = 'bookmarkify-api.jar' // 可选，定义输出jar名称
-    manifest {
-        attributes 'Main-Class': 'top.tcyeee.bookmarkify.Bookmarkify' // 确保这里正确
-    }
 }
 
 configurations {
