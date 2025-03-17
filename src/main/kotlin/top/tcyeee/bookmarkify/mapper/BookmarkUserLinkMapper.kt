@@ -48,7 +48,8 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink>{
                    b.is_activity   as isActivity,
                    b.icon_activity as iconActivity,
                    b.icon_hd       as iconHd,
-                   a.url_full      as urlFull
+                   a.url_full      as urlFull,
+                   b.icon_url      as iconUrl
             from bookmarkify.bookmark_user_link a
                      left join bookmarkify.bookmark b on a.bookmark_id = b.id
             where a.id = #{id}
