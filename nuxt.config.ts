@@ -11,7 +11,6 @@ export default defineNuxtConfig({
     '@element-plus/nuxt',
     'nuxt-vue3-google-signin'
   ],
-
   plugins: [
     '~/plugins/fingerprint.ts',
     '~/plugins/keyListener.ts',
@@ -24,11 +23,9 @@ export default defineNuxtConfig({
       wsBase: process.env.NUXT_WS_BASE
     }
   },
-
   build: {
     transpile: ['dayjs', 'element-plus'], // 让 Nuxt 处理 `dayjs`
   },
-
   elementPlus: { /** Options */ },
   css: ['~/assets/css/styles.css'],
   devtools: { enabled: true },
