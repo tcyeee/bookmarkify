@@ -7,7 +7,7 @@
     <draggable class="flex flex-wrap flex-start gap-[3rem]" v-show="!data.subItemId" v-model="data.pageData" v-bind="dragOptions" group="people" @sort="sort" item-key="id">
       <template #item="item">
         <div @contextmenu="onContextMenu($event,item.element)">
-          <BookmarkDir v-if="item.element.type == 'BOOKMARK_DIR'" :value="item.element.typeDir" @click="openDir(item.element)" />
+          <BookmarkCellDir v-if="item.element.type == 'BOOKMARK_DIR'" :value="item.element.typeDir" @click="openDir(item.element)" />
           <BookmarkCellItem v-if="item.element.type == 'BOOKMARK'" :value="item.element.typeApp" @click="openPage(item.element.typeApp)" />
           <BookmarkCellLoading v-if="item.element.type == 'LOADING'" />
         </div>
