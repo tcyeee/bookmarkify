@@ -1,5 +1,5 @@
 <template>
-  <div class="flex">
+  <div class="bookmark-icon">
     <!-- 如果网站有LOGO -->
     <el-image v-if="bookmark.iconActivity" :src="bookmark.iconUrlFull" @error="imageLoadFailed" :class="sm?'w-ico-dir h-ico-dir':bookmark.iconHd?'w-app h-app':'w-ico h-ico'">
       <template #placeholder>
