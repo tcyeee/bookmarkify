@@ -1,5 +1,5 @@
 <template>
-  <div class="bookmark-card  w-[5rem] flex flex-col items-center">
+  <div class="w-[5rem] flex flex-col items-center">
     <div class="w-app h-app rounded-xl bg-gray-100 center shadow overflow-hidden" :class="data.isDev?'border-[4px] border-dashed border-red-200':''">
       <BookmarkLogo :bookmark="props.value" />
     </div>

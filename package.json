@@ -27,6 +27,7 @@
     "@fingerprintjs/fingerprintjs": "^4.5.1",
     "@imengyu/vue3-context-menu": "^1.4.4",
     "element-plus": "^2.9.3",
+    "sass": "^1.86.0",
     "vuedraggable": "4.1.0"
   }
 }

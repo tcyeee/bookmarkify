@@ -31,7 +31,7 @@ export default defineNuxtConfig({
     transpile: ['dayjs', 'element-plus'],
   },
   elementPlus: { /** Options */ },
-  css: ['~/assets/css/main.css'],
+  css: ['~/assets/css/app.css', '~/assets/css/common.scss',],
   devtools: { enabled: true },
   pinia: {
     storesDirs: ['./stores/**'],

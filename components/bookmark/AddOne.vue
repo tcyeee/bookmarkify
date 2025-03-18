@@ -1,16 +1,15 @@
 <template>
   <div onclick="dialog_add.showModal()">
-    <div class="w-[5rem] flex flex-col items-center bg-red-300">
-      <div class="w-app h-app rounded-xl bg-gray-200 center">
-        <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M25 40H7C5.34315 40 4 38.6569 4 37V11C4 9.34315 5.34315 8 7 8H41C42.6569 8 44 9.34315 44 11V24.9412" stroke="#333" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M4 11C4 9.34315 5.34315 8 7 8H41C42.6569 8 44 9.34315 44 11V20H4V11Z" fill="none" stroke="#333" stroke-width="4" />
-          <path d="M32 35H44" stroke="#333" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M38 29V41" stroke="#333" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
-          <circle r="2" transform="matrix(-1.31134e-07 -1 -1 1.31134e-07 10 14)" fill="#333" />
-          <circle r="2" transform="matrix(-1.31134e-07 -1 -1 1.31134e-07 16 14)" fill="#333" />
-        </svg>
-      </div>
+
+    <div class="bookmark-icon">
+      <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M25 40H7C5.34315 40 4 38.6569 4 37V11C4 9.34315 5.34315 8 7 8H41C42.6569 8 44 9.34315 44 11V24.9412" stroke="#333" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M4 11C4 9.34315 5.34315 8 7 8H41C42.6569 8 44 9.34315 44 11V20H4V11Z" fill="none" stroke="#333" stroke-width="4" />
+        <path d="M32 35H44" stroke="#333" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M38 29V41" stroke="#333" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+        <circle r="2" transform="matrix(-1.31134e-07 -1 -1 1.31134e-07 10 14)" fill="#333" />
+        <circle r="2" transform="matrix(-1.31134e-07 -1 -1 1.31134e-07 16 14)" fill="#333" />
+      </svg>
     </div>
 
     <dialog id="dialog_add" class="cy-modal">
@@ -95,5 +94,5 @@ function isUrl(url: string): boolean {
 }
 </script>
 
-<style>
+<style lang="scss" scoped>
 </style>
