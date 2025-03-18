@@ -1,9 +1,8 @@
 <template>
-  <div class="bg-white p-[1.5rem]">
-    <SettingUserProfile v-show="sysStore.settingTabIndex === 0" />
-    <SettingAccount v-show="sysStore.settingTabIndex === 1" />
-    <SettingBookmarkManage v-show="sysStore.settingTabIndex === 2" />
-    <SettingSettings v-show="sysStore.settingTabIndex === 3" />
+  <div class="bg-white p-[2rem]">
+    <SettingAccount v-show="sysStore.settingTabIndex === 0" />
+    <SettingBookmarkManage v-show="sysStore.settingTabIndex === 1" />
+    <SettingSettings v-show="sysStore.settingTabIndex === 2" />
   </div>
 </template>
 

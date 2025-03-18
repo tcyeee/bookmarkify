@@ -1,6 +1,6 @@
 <template>
   <div>
-    偏好设置
+    <div class="text-2xl font-bold text-gray-500">偏好设置</div>
   </div>
 </template>
 
