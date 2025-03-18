@@ -1,6 +1,6 @@
 <template>
   <div onclick="dialog_add.showModal()">
-    <div class="w-[5rem] flex flex-col items-center">
+    <div class="w-[5rem] flex flex-col items-center bg-red-300">
       <div class="w-app h-app rounded-xl bg-gray-200 center">
         <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M25 40H7C5.34315 40 4 38.6569 4 37V11C4 9.34315 5.34315 8 7 8H41C42.6569 8 44 9.34315 44 11V24.9412" stroke="#333" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
@@ -24,7 +24,7 @@
             </div>
           </transition>
 
-          <label class="cy-input cy-input-bordered flex items-center gap-2" :class="data.urlIsTrue?'cy-input-success':''">
+          <label class="cy-input flex items-center gap-2" :class="data.urlIsTrue?'cy-input-success':''">
             <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M24 44.0002C35.0457 44.0002 44 35.0459 44 24.0002C44 12.9545 35.0457 4.00024 24 4.00024C12.9543 4.00024 4 12.9545 4 24.0002C4 35.0459 12.9543 44.0002 24 44.0002Z" stroke="#333" stroke-width="4" />
               <path d="M6 30.9856C8.63192 32.041 10.5266 32.041 11.6839 30.9856C13.4199 29.4025 11.9219 24.5978 14.3532 23.2727C16.7844 21.9476 20.4886 27.8214 23.9508 25.8887C27.4129 23.9559 23.6246 18.8023 26.0272 16.713C28.4298 14.6237 31.554 16.98 32.1001 13.4865C32.6462 9.99304 29.5521 11.5082 28.9584 8.20693C28.5625 6.00611 28.5625 4.84884 28.9584 4.73511" stroke="#333" stroke-width="4" stroke-linecap="round" />
