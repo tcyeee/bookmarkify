@@ -20,8 +20,8 @@
 
 <script lang="ts" setup>
 definePageMeta({ layout: "applications" });
-const sysStore = sysBaseStore();
-const storeBookmark = StoreBookmark();
+const sysStore = useSysStore();
+const storeBookmark = useBookmarkStore();
 
 const data = reactive<{
   fade: boolean;

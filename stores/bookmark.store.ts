@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { HomeItemType, type Bookmark, type HomeItem } from '~/server/apis/bookmark/typing'
 import { bookmarksShowAll } from "~/server/apis";
 
-export const StoreBookmark = defineStore('bookmarks', {
+export const useBookmarkStore = defineStore('bookmarks', {
   state: () => ({
     bookmarks: undefined as Array<HomeItem> | undefined,
     actions: {} as Record<string, Function>

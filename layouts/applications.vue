@@ -10,7 +10,7 @@
 <script lang="ts" setup>
 import { DialogStatus } from "~/stores/types";
 
-const sysStore = sysBaseStore();
+const sysStore = useSysStore();
 const dialogLogin = ref(false);
 
 watch(dialogLogin, (newValue: any) => {

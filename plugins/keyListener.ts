@@ -1,6 +1,6 @@
 export default defineNuxtPlugin(() => {
   if (!import.meta.client) return
-  const sysStore = sysBaseStore();
+  const sysStore = useSysStore();
 
   // 阻止鼠标右键
   window.addEventListener('contextmenu', (event) => {
