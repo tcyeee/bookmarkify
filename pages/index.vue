@@ -37,6 +37,7 @@ watchEffect(() => {
 
 onMounted(() => {
   sysStore.registerKeyEvent("Space", "/", () => sceneToggle());
+  sysStore.registerKeyEvent("Escape", "/", () => sceneToggle());
   storeBookmark.update();
 });
 

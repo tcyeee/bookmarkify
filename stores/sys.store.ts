@@ -47,6 +47,7 @@ export const sysBaseStore = defineStore('sys', {
         triggerKeyEvent(keyCode: string, path: string) {
             if (this.preventKeyEventsFlag) return
             if (!this.sysEvents || !this.sysEvents.has(keyCode)) return;
+            console.log(`[DEBUG]: 触发按键: ${keyCode}`);
             const events: Map<string, KeyEvent> = this.sysEvents.get(keyCode) || new Map();
             if (!events.has(keyCode + path)) return;
             const info: KeyEvent | undefined = events.get(keyCode + path) || undefined;
