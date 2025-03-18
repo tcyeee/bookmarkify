@@ -1,11 +1,19 @@
 <template>
   <div class="bg-gray-200 h-screen pt-[4rem]">
-    <div class="flex gap-5 px-[10rem]">
+    <div class="flex gap-5 px-[20vw]">
       <div>
         <NuxtLink to="/">
           <div class="cy-btn cy-btn-wide cy-btn-lg rounded-xl mb-[2rem]">返回</div>
         </NuxtLink>
-        <SettingSideBar class="w-[10rem]" />
+
+        <!-- 侧边栏 -->
+        <ul class="cy-menu bg-white rounded-xl w-[10rem]">
+          <li v-for="(item,index) in pages">
+            <a class="text-gray-400 text-lg font-medium" @click="selectOne(index)" :class="sysStore.settingTabIndex==index?'cy-menu-active':''">
+              <span>{{item}}</span>
+            </a>
+          </li>
+        </ul>
       </div>
       <NuxtPage class="flex-1 rounded-xl min-h-screen" />
     </div>
@@ -14,7 +22,10 @@
 </template>
 
 <script lang="ts" setup>
-</script>
+const sysStore = useSysStore();
+const pages = ["个人资料", "书签管理", "偏好设置"];
 
-<style scoped land='scss'>
-</style>
+function selectOne(index: number) {
+  sysStore.settingTabIndex = index;
+}
+</script>
