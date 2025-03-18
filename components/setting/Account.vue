@@ -9,7 +9,8 @@
     </div>
 
     <div class="setting-subtitle">昵称</div>
-    <input type="text" placeholder="昵称" class="cy-input" />
+    <input type="text" placeholder="请输入昵称" :value="data.userInfo?.nickName" class="cy-input" />
+    <button class="cy-btn cy-btn-soft ml-2">修改</button>
 
     <!-- 账户绑定 -->
     <div class="setting-title mt-25">账户绑定</div>
@@ -35,6 +36,23 @@
 </template>
 
 <script lang="ts" setup>
+import { queryUserInfo } from "~/server/apis/user";
+import type { UserInfoShow } from "~/server/apis/user/typing";
+
+const data = reactive({
+  userInfoRow: null as UserInfoShow | null,
+  userInfo: null as UserInfoShow | null,
+});
+
+onMounted(() => {
+  getUserInfo();
+});
+
+function getUserInfo() {
+  queryUserInfo().then((res) => {
+    data.userInfo = res;
+  });
+}
 </script>
 
 <style>
