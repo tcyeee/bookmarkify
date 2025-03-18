@@ -90,22 +90,22 @@ function sceneToggle() {
 @keyframes index-bg-in {
   0% {
     transform: scale(1);
-    filter: brightness(0.8);
+    filter: brightness(0.8) blur(0px);
   }
   100% {
     transform: scale(1.2);
-    filter: brightness(0.4);
+    filter: brightness(0.4) blur(5px);
   }
 }
 
 @keyframes index-bg-out {
   0% {
     transform: scale(1.2);
-    filter: brightness(0.4);
+    filter: brightness(0.4) blur(5px);
   }
   100% {
     transform: scale(1);
-    filter: brightness(0.8);
+    filter: brightness(0.8) blur(0px);
   }
 }
 
