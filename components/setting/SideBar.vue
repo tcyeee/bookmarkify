@@ -1,8 +1,8 @@
 <template>
-  <ul class="cy-menu bg-white">
+  <ul class="cy-menu bg-white rounded-xl">
     <li v-for="(item,index) in pages">
-      <a @click="selectOne(index)" :class="sysStore.settingTabIndex==index?'cy-menu-active':''">
-        <span class="font-red-900">{{item}}</span>
+      <a class="text-gray-400 text-lg font-medium" @click="selectOne(index)" :class="sysStore.settingTabIndex==index?'cy-menu-active':''">
+        <span>{{item}}</span>
       </a>
     </li>
   </ul>

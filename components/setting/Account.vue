@@ -1,6 +1,6 @@
 <template>
   <div>
-    账户管理
+    <h1>账户管理</h1>
   </div>
 </template>
 
