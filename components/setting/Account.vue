@@ -2,14 +2,10 @@
   <div>
     <!-- 个人资料 -->
     <div class="setting-title">个人资料</div>
-    <div>
-      <div class="cy-avatar my-10">
-        <div class="ring-primary ring-offset-base-100 w-24 rounded-full ring ring-offset-2">
-          <img src="~/assets/avatar/default.png" />
-        </div>
+    <div class="cy-avatar my-10">
+      <div class="ring-primary ring-offset-base-100 w-24 rounded-full ring ring-offset-2">
+        <img src="~/assets/avatar/default.png" />
       </div>
-
-      <button class="cy-btn ml-5 text-gray-500">修改头像</button>
     </div>
 
     <div class="setting-subtitle">昵称</div>
@@ -20,7 +16,7 @@
     <div class="setting-subtitle">手机号</div>
     <label class="cy-input cy-validator">
       <span class="icon--phone" />
-      <input type="tel" class="tabular-nums" required placeholder="Phone" pattern="[0-9]*" minlength="10" maxlength="10" title="Must be 10 digits" />
+      <input type="tel" class="tabular-nums" required placeholder="phone" pattern="[0-9]*" minlength="10" maxlength="10" title="Must be 10 digits" />
     </label>
     <p class="cy-validator-hint">Must be 10 digits</p>
 
