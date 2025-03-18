@@ -1,18 +1,16 @@
 <template>
-  <div class="bg-gray-200">
+  <div class="bg-gray-200 h-screen">
     <div class="h-[7rem]">
       <NuxtLink to="/">
-        <div class="cy-btn mt-5 ml-5">返回</div>
+        <div class="cy-btn cy-btn-primary mt-5 ml-5">返回</div>
       </NuxtLink>
     </div>
-    <el-row>
-      <el-col :span="6" :offset="2">
-        <SettingSideBar />
-      </el-col>
-      <el-col :span="15">
-        <NuxtPage class="rounded-box mb-[6rem] min-h-screen" />
-      </el-col>
-    </el-row>
+    <div class="flex gap-5 px-[10rem]">
+      <div>
+        <SettingSideBar class="w-[10rem]" />
+      </div>
+      <NuxtPage class="flex-1 rounded-box min-h-screen" />
+    </div>
     <LayoutFooter class="fixed bottom-0" />
   </div>
 </template>

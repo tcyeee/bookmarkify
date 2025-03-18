@@ -4,11 +4,13 @@ export const useSysStore = defineStore('sys', {
     state: () => <{
         preventKeyEventsFlag: boolean,
         sysEvents: Map<string, Map<string, KeyEvent>> | undefined
-        dialogLoginManage: Set<DialogStatus> | undefined
+        dialogLoginManage: Set<DialogStatus> | undefined,
+        settingTabIndex: number,  // 设置页中,左侧tab栏选项
     }>({
         preventKeyEventsFlag: false,
         sysEvents: undefined,
-        dialogLoginManage: undefined
+        dialogLoginManage: undefined,
+        settingTabIndex: 0
     }),
     actions: {
 
