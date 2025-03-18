@@ -7,7 +7,7 @@
     </div>
     <div class="flex gap-5 px-[10rem]">
       <div>
-        <SettingSideBar class="w-[10rem]" />
+        <SettingSideBar class="w-[10rem] rounded-box" />
       </div>
       <NuxtPage class="flex-1 rounded-box min-h-screen" />
     </div>

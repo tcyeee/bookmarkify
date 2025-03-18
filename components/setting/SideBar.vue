@@ -1,5 +1,5 @@
 <template>
-  <ul class="cy-menu bg-white rounded-box w-56">
+  <ul class="cy-menu bg-white">
     <li>
       <a @click="selectOne(0)" :class="sysStore.settingTabIndex==0?'cy-menu-active':''">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 " fill="none" viewBox="0 0 24 24" stroke="currentColor">
