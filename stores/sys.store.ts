@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-export const sysBaseStore = defineStore('sys', {
+export const useSysStore = defineStore('sys', {
     state: () => <{
         preventKeyEventsFlag: boolean,
         sysEvents: Map<string, Map<string, KeyEvent>> | undefined

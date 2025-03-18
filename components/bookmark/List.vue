@@ -38,8 +38,8 @@ import type {
   BookmarkSortParams,
 } from "~/server/apis/bookmark/typing";
 
-const sysStore = sysBaseStore();
-const bookmarkStore = StoreBookmark();
+const sysStore = useSysStore();
+const bookmarkStore = useBookmarkStore();
 
 const props = defineProps<{
   data: Array<HomeItem>;

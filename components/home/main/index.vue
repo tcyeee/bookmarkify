@@ -6,7 +6,7 @@
 
 <script lang="ts" setup>
 import { type HomeItem } from "~/server/apis/bookmark/typing";
-const storeBookmark = StoreBookmark();
+const storeBookmark = useBookmarkStore();
 
 defineProps<{
   status: boolean;
