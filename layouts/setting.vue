@@ -1,12 +1,10 @@
 <template>
-  <div class="bg-gray-200 h-screen">
-    <div class="h-[7rem]">
-      <NuxtLink to="/">
-        <div class="cy-btn cy-btn-primary mt-5 ml-5">返回</div>
-      </NuxtLink>
-    </div>
+  <div class="bg-gray-200 h-screen pt-[4rem]">
     <div class="flex gap-5 px-[10rem]">
       <div>
+        <NuxtLink to="/">
+          <div class="cy-btn cy-btn-wide cy-btn-lg rounded-xl mb-[2rem]">返回</div>
+        </NuxtLink>
         <SettingSideBar class="w-[10rem] rounded-box" />
       </div>
       <NuxtPage class="flex-1 rounded-box min-h-screen" />
@@ -19,7 +17,4 @@
 </script>
 
 <style scoped land='scss'>
-.min-h-screen {
-  min-height: calc(100vh - 13rem);
-}
 </style>
