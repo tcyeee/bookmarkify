@@ -16,7 +16,7 @@
     <input type="text" placeholder="昵称" class="cy-input" />
 
     <!-- 账户绑定 -->
-    <div class="setting-title mt-20">账户绑定</div>
+    <div class="setting-title mt-25">账户绑定</div>
     <div class="setting-subtitle">手机号</div>
     <label class="cy-input cy-validator">
       <span class="icon--phone" />
@@ -32,7 +32,7 @@
     <div class="cy-validator-hint hidden">Enter valid email address</div>
 
     <!-- 注销账户 -->
-    <div class="setting-title mt-20">注销账户</div>
+    <div class="setting-title mt-25">注销账户</div>
     <div class="setting-subtitle">注销后账号所有数据将被销毁并不可找回，请谨慎操作。</div>
     <button class="cy-btn cy-btn-error rounded-2xl mt-2">注销账户</button>
   </div>
