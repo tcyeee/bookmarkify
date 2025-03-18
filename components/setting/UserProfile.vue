@@ -1,6 +1,6 @@
 <template>
   <div>
-    <h1>user</h1>
+    个人资料
   </div>
 </template>
 
