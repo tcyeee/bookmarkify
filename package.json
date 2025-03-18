@@ -8,7 +8,7 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare"
-  },
+  },  
   "dependencies": {
     "@pinia/nuxt": "0.9.0",
     "nanoid": "^5.0.9",
@@ -24,7 +24,7 @@
     "@fingerprintjs/fingerprintjs": "^4.5.1",
     "@imengyu/vue3-context-menu": "^1.4.4",
     "@nuxtjs/tailwindcss": "^6.13.2",
-    "daisyui": "^4.12.23",
+    "daisyui": "^5.0.6",
     "element-plus": "^2.9.3",
     "vuedraggable": "4.1.0"
   }
