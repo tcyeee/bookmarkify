@@ -3,7 +3,7 @@
     <div class="text-[1.4rem] mb-[1rem]">书签信息</div>
     <div class="mb-[2rem]">{{ data.detail.urlFull }}</div>
 
-    <img :src="data.detail.iconUrl" class="w-[5rem] h-[5rem] rounded-[1rem] shadow-lg mb-[2rem]">
+    <img :src="data.detail.iconUrlFull" class="w-[5rem] h-[5rem] rounded-[1rem] shadow-lg mb-[2rem]">
 
     <div class="mb-[1rem]">
       <span class="cy-label-text">书签名称</span>
