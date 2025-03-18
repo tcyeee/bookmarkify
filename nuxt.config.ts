@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 export default defineNuxtConfig({
   app: {
     head: {
@@ -5,7 +6,6 @@ export default defineNuxtConfig({
     },
   },
   modules: [
-    '@nuxtjs/tailwindcss',
     '@pinia/nuxt',
     'pinia-plugin-persistedstate/nuxt',
     '@element-plus/nuxt',
@@ -16,7 +16,11 @@ export default defineNuxtConfig({
     '~/plugins/keyListener.ts',
     '~/plugins/contextMenu.ts'
   ],
-
+  vite: {
+    plugins: [
+      tailwindcss(),
+    ],
+  },
   runtimeConfig: {
     public: {
       apiBase: process.env.NUXT_API_BASE,
@@ -24,13 +28,11 @@ export default defineNuxtConfig({
     }
   },
   build: {
-    transpile: ['dayjs', 'element-plus'], // 让 Nuxt 处理 `dayjs`
+    transpile: ['dayjs', 'element-plus'],
   },
   elementPlus: { /** Options */ },
-  css: ['~/assets/css/styles.css'],
+  css: ['~/assets/css/main.css'],
   devtools: { enabled: true },
-  tailwindcss: {},
-
   pinia: {
     storesDirs: ['./stores/**'],
   },
