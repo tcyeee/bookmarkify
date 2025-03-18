@@ -9,8 +9,14 @@
       <!-- 内容页面 -->
       <HomeMain :status="data.fade" class="absolute left-[10%] right-[10%] top-[30%]" />
 
-      <!-- 设置按钮 -->
-      <FunctionLayout v-if="!data.fade" class="fixed bottom-0" />
+      <!-- 去设置 -->
+      <div v-if="!data.fade" class="fixed bottom-0">
+        <NuxtLink to="/setting">
+          <div class="cy-btn cy-btn-ghost  mb-5 ml-5">
+            <span class="icon--setting" />
+          </div>
+        </NuxtLink>
+      </div>
     </div>
 
     <!-- 背景信息 -->
