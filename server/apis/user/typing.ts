@@ -5,3 +5,8 @@ export interface UserInfoShow {
     email?: String
     avatarPath?: String
 }
+
+export interface UserInfoUpdate {
+    nickName?: String
+    phone?: String
+}

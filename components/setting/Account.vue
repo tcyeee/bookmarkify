@@ -49,7 +49,11 @@ onMounted(() => {
 });
 
 function update() {
-  updateUserInfo(data.userInfo);
+  const params = {
+    nickName: data.userInfo.nickName,
+    phone: data.userInfo.phone,
+  };
+  updateUserInfo(params);
 }
 
 function getUserInfo() {
