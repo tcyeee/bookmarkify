@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server
 import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.entity.po.UserEntity
 import top.tcyeee.bookmarkify.entity.request.LoginByClientForm
+import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
 import top.tcyeee.bookmarkify.entity.response.UserInfoShow
 
@@ -30,5 +31,5 @@ interface IUserService : IService<UserEntity> {
     fun changePhone(phone: String): Boolean
     fun checkPhone(code: Int): Boolean
     fun changeMail(mail: String): Boolean
-    fun del(): Boolean
+    fun del(params: UserDelParams): Boolean
 }

@@ -1,11 +1,13 @@
 package top.tcyeee.bookmarkify.server.impl
 
+import cn.hutool.core.codec.Base64
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.po.UserEntity
 import top.tcyeee.bookmarkify.entity.request.LoginByClientForm
+import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
 import top.tcyeee.bookmarkify.entity.response.UserInfoShow
 import top.tcyeee.bookmarkify.mapper.UserMapper
@@ -67,7 +69,9 @@ class UserServiceImpl : IUserService, ServiceImpl<UserMapper, UserEntity>() {
         return ktUpdate().eq(UserEntity::uid, BaseUtils.uid()).set(UserEntity::email, mail).update()
     }
 
-    override fun del(): Boolean {
-        return ktUpdate().eq(UserEntity::uid, BaseUtils.uid()).set(UserEntity::deleted, true).update()
+    override fun del(params: UserDelParams): Boolean {
+        return ktUpdate().eq(UserEntity::uid, BaseUtils.uid())
+            .eq(UserEntity::password, BaseUtils.pwd(params.password))
+            .set(UserEntity::deleted, true).update()
     }
 }

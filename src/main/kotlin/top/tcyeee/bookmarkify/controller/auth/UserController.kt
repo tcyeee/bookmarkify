@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.controller.auth
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
+import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
 import top.tcyeee.bookmarkify.entity.response.UserInfoShow
 import top.tcyeee.bookmarkify.server.IUserService
@@ -38,7 +39,7 @@ class UserController(
     @Operation(summary = "修改手机号-发送邮箱")
     fun changeMail(params: String) = userService.changeMail(params)
 
-    @GetMapping("del")
+    @PostMapping("del")
     @Operation(summary = "账户注销")
-    fun del() = userService.del()
+    fun del(@RequestBody params: UserDelParams): Boolean = userService.del(params)
 }
