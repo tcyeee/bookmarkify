@@ -2,7 +2,10 @@ package top.tcyeee.bookmarkify.utils
 
 import cn.dev33.satoken.session.SaSession
 import cn.dev33.satoken.stp.StpUtil
+import cn.hutool.core.codec.Base64
 import cn.hutool.core.date.LocalDateTimeUtil
+import cn.hutool.crypto.SecureUtil
+import cn.hutool.crypto.digest.MD5
 import cn.hutool.json.JSONUtil
 import top.tcyeee.bookmarkify.entity.dto.UserInfo
 import top.tcyeee.bookmarkify.entity.po.UserEntity
@@ -40,4 +43,7 @@ object BaseUtils {
         res["phone"] = user.phone
         return JSONUtil.toJsonStr(res)
     }
+
+    /* base64 to Md5 */
+    fun pwd(password64: String): String = SecureUtil.md5(Base64.decodeStr(password64))
 }
