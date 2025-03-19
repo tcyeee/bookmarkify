@@ -1,4 +1,5 @@
 @import "tailwindcss";
 @plugin "daisyui" {
   prefix:"cy-" ;
+  themes: light --default, dark --prefersdark, cupcake;
 }
