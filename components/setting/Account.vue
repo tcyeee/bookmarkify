@@ -53,7 +53,11 @@ function update() {
     nickName: data.userInfo.nickName,
     phone: data.userInfo.phone,
   };
-  updateUserInfo(params);
+  updateUserInfo(params).then((res) => {
+    if (!res) return;
+    data.userInfoRaw = data.userInfo;
+    ElNotification.success({ message: "个人资料修改成功" });
+  });
 }
 
 function getUserInfo() {
