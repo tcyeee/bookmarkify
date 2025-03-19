@@ -1,7 +1,7 @@
 <template>
   <div>
     <NuxtPage />
-    <LayoutFooter class="fixed bottom-0" />
+    <CommonFooter class="fixed bottom-0" />
   </div>
 </template>
 <script  lang="ts" setup>
