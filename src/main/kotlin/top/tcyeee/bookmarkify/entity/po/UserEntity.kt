@@ -19,7 +19,6 @@ data class UserEntity(
     @TableId var uid: String,
     @Size(max = 200) @Schema(description = "昵称") var nickName: String,
     @Size(max = 200) @Schema(description = "设备UID") var deviceUid: String,
-    @Size(max = 200) @Schema(description = "浏览器指纹") var fingerPrint: String,
 
     @Size(max = 200) @Schema(description = "邮箱") var email: String? = null,
     @Size(max = 20) @Schema(description = "手机号") var phone: String? = null,
@@ -36,11 +35,10 @@ data class UserEntity(
         uid = IdUtil.fastUUID(),
         nickName = "用户_" + RandomUtil.randomString(5),
         deviceUid = form.deviceUid,
-        fingerPrint = form.fingerprint,
     )
 
     // 判断设备信息是否变动
     fun checkDeviceInfo(form: LoginByClientForm): Boolean {
-        return deviceUid != form.deviceUid || fingerPrint != form.fingerprint
+        return deviceUid != form.deviceUid
     }
 }

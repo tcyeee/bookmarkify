@@ -2,10 +2,7 @@ package top.tcyeee.bookmarkify.controller.auth
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
 import top.tcyeee.bookmarkify.entity.response.UserInfoShow
 import top.tcyeee.bookmarkify.server.IUserService
@@ -27,7 +24,7 @@ class UserController(
 
     @PostMapping("updateInfo")
     @Operation(summary = "修改用户信息")
-    fun updateUsername(params: UserInfoUptateParams) = userService.updateInfo(params)
+    fun updateUsername(@RequestBody params: UserInfoUptateParams) = userService.updateInfo(params)
 
     @PostMapping("changePhone")
     @Operation(summary = "修改手机号-发送短信")

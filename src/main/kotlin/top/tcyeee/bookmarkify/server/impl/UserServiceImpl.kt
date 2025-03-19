@@ -21,8 +21,7 @@ import java.time.LocalDateTime
 class UserServiceImpl : IUserService, ServiceImpl<UserMapper, UserEntity>() {
 
     override fun getByDeviceInfo(form: LoginByClientForm): UserEntity? {
-        return ktQuery().eq(UserEntity::deviceUid, form.deviceUid).or().eq(UserEntity::fingerPrint, form.fingerprint)
-            .one()
+        return ktQuery().eq(UserEntity::deviceUid, form.deviceUid).or().one()
     }
 
     override fun createUserByDevicInfo(form: LoginByClientForm): UserEntity {
@@ -35,8 +34,9 @@ class UserServiceImpl : IUserService, ServiceImpl<UserMapper, UserEntity>() {
     }
 
     override fun updateDeviceUidOrFingerprint(uid: String, form: LoginByClientForm) {
-        ktUpdate().eq(UserEntity::uid, uid).set(UserEntity::fingerPrint, form.fingerprint)
-            .set(UserEntity::deviceUid, form.deviceUid).set(UserEntity::updateTime, LocalDateTime.now()).update()
+        ktUpdate().eq(UserEntity::uid, uid)
+            .set(UserEntity::deviceUid, form.deviceUid)
+            .set(UserEntity::updateTime, LocalDateTime.now()).update()
     }
 
     override fun userInfo(): UserInfoShow {
@@ -44,7 +44,9 @@ class UserServiceImpl : IUserService, ServiceImpl<UserMapper, UserEntity>() {
     }
 
     override fun updateInfo(params: UserInfoUptateParams): Boolean {
-        return ktUpdate().eq(UserEntity::uid, BaseUtils.uid())
+        if (params.nickName.isBlank()) return false
+        return ktUpdate()
+            .eq(UserEntity::uid, BaseUtils.uid())
             .set(UserEntity::nickName, params.nickName)
             .update()
     }
