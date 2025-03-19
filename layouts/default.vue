@@ -1,10 +1,3 @@
 <template>
-  <div>
-    <NuxtPage />
-    <CommonFooter class="fixed bottom-0" />
-  </div>
+  <NuxtPage />
 </template>
-<script  lang="ts" setup>
-</script>
-<style scoped>
-</style>

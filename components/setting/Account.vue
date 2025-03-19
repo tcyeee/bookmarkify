@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- 个人资料 -->
-    <div class="setting-title">个人资料</div>
+    <div class="setting-title">基础信息</div>
     <div class="cy-avatar my-10">
       <div class="ring-primary ring-offset-base-100 w-24 rounded-full ring ring-offset-2">
         <img src="~/assets/avatar/default.png" />
@@ -31,13 +31,26 @@
     <!-- 注销账户 -->
     <div class="setting-title mt-25">注销账户</div>
     <div class="setting-subtitle">注销后账号所有数据将被销毁并不可找回，请谨慎操作。</div>
-    <button class="cy-btn cy-btn-error rounded-2xl mt-2">注销账户</button>
+    <label class="cy-btn cy-btn-error rounded-2xl mt-2" @click="openDelDialog()">注销账户</label>
+  </div>
+
+  <!-- 注销账户 -->
+  <input type="checkbox" id="userDelDialog" class="cy-modal-toggle" />
+  <div class="cy-modal" role="dialog">
+    <div class="cy-modal-box">
+      <h3 class="text-lg font-bold text-red-500">警告</h3>
+      <p class="py-4">This modal works with a hidden checkbox!</p>
+      <div class="cy-modal-action">
+        <label for="userDelDialog" class="cy-btn">Close!</label>
+      </div>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { queryUserInfo, updateUserInfo } from "~/server/apis/user";
 import type { UserInfoShow } from "~/server/apis/user/typing";
+const sysStore = useSysStore();
 
 var data = reactive({
   userInfoRaw: {} as UserInfoShow,
@@ -47,6 +60,11 @@ var data = reactive({
 onMounted(() => {
   getUserInfo();
 });
+
+function openDelDialog() {
+  document.getElementById("userDelDialog")?.click();
+  sysStore.preventKeyEventsFlag = true;
+}
 
 function update() {
   const params = {

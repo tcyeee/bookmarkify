@@ -1,6 +1,7 @@
 <template>
   <div>
-    <div class="text-2xl font-bold text-gray-500">偏好设置</div>
+    <div class="setting-title">偏好设置</div>
+
   </div>
 </template>
 
