@@ -1,5 +1,5 @@
 <template>
-  <div class="overflow-hidden">
+  <div class="overflow-hidden select-none">
     <!-- 内容信息 -->
     <div class="absolute w-screen h-screen z-[99]">
 
@@ -25,7 +25,6 @@
 </template>
 
 <script lang="ts" setup>
-definePageMeta({ layout: "applications" });
 const sysStore = useSysStore();
 const storeBookmark = useBookmarkStore();
 
