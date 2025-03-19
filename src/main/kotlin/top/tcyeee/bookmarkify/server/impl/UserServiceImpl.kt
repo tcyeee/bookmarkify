@@ -1,6 +1,5 @@
 package top.tcyeee.bookmarkify.server.impl
 
-import cn.hutool.core.codec.Base64
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.exception.CommonException
