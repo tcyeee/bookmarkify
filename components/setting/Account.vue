@@ -9,8 +9,8 @@
     </div>
 
     <div class="setting-subtitle">昵称</div>
-    <input type="text" placeholder="请输入昵称" :value="data.userInfo?.nickName" class="cy-input" />
-    <button class="cy-btn cy-btn-soft ml-2">修改</button>
+    <input :disabled="data.userInfo.nickName == undefined" type="text" placeholder="请输入昵称" v-model="data.userInfo.nickName" class="cy-input" />
+    <button v-if="data.userInfo.nickName != data.userInfoRaw?.nickName" @click="update()" class="cy-btn cy-btn-soft ml-2">修改</button>
 
     <!-- 账户绑定 -->
     <div class="setting-title mt-25">账户绑定</div>
@@ -36,21 +36,26 @@
 </template>
 
 <script lang="ts" setup>
-import { queryUserInfo } from "~/server/apis/user";
+import { queryUserInfo, updateUserInfo } from "~/server/apis/user";
 import type { UserInfoShow } from "~/server/apis/user/typing";
 
-const data = reactive({
-  userInfoRow: null as UserInfoShow | null,
-  userInfo: null as UserInfoShow | null,
+var data = reactive({
+  userInfoRaw: {} as UserInfoShow,
+  userInfo: {} as UserInfoShow,
 });
 
 onMounted(() => {
   getUserInfo();
 });
 
+function update() {
+  updateUserInfo(data.userInfo);
+}
+
 function getUserInfo() {
   queryUserInfo().then((res) => {
-    data.userInfo = res;
+    data.userInfo = structuredClone(res);
+    data.userInfoRaw = structuredClone(res);
   });
 }
 </script>
