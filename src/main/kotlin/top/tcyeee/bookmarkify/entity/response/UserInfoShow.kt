@@ -1,16 +1,16 @@
 package top.tcyeee.bookmarkify.entity.response
 
-import top.tcyeee.bookmarkify.config.entity.RoleEnum
+import cn.hutool.core.bean.BeanUtil
 import top.tcyeee.bookmarkify.entity.po.UserEntity
 
-/**
- * @see UserEntity
- */
-data class UserEntityVo(
+data class UserInfoShow(
     var uid: String,
     var nickName: String,
-    var email: String? = null,
     var phone: String? = null,
+    var email: String? = null,
     var avatarPath: String? = null,
-    var role: RoleEnum = RoleEnum.NONE,
-)
+) {
+    constructor(user: UserEntity) : this("", "") {
+        BeanUtil.copyProperties(user, this)
+    }
+}
