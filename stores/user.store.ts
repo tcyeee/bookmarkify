@@ -4,7 +4,9 @@ import { nanoid } from 'nanoid'
 
 export const useUserStore = defineStore('user', () => {
   const loggedIn = ref<Boolean>(false);
-  const auth = reactive<UserAuth>({});
+  const auth = reactive<UserAuth>({
+    deviceUid: queryDeviceUid()
+  });
   const Loading = ref<Boolean>(false);
 
   async function loginByDeviceUid(): Promise<UserEntity> {
@@ -26,10 +28,13 @@ export const useUserStore = defineStore('user', () => {
     Object.assign(auth, {})
   }
 
-  function updateFingerprint(fingerprintId: string) {
-    if (!auth.deviceUid) auth.deviceUid = nanoid();
-    auth.fingerprint = fingerprintId;
-  }
+  function queryDeviceUid(): string {
+    var deviceUid = localStorage.getItem("deviceUid")
+    if (deviceUid !== null) return deviceUid
 
-  return { auth, loginByDeviceUid, logout, updateFingerprint };
+    deviceUid = nanoid()
+    localStorage.setItem("deviceUid", deviceUid)
+    return deviceUid
+  }
+  return { auth, loginByDeviceUid, logout };
 }, { persist: true });

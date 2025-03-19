@@ -12,7 +12,6 @@ export default defineNuxtConfig({
     'nuxt-vue3-google-signin'
   ],
   plugins: [
-    '~/plugins/fingerprint.ts',
     '~/plugins/keyListener.ts',
     '~/plugins/contextMenu.ts'
   ],

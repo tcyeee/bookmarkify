@@ -10,7 +10,6 @@ export interface UserEntity {
 }
 
 export interface UserAuth {
-    fingerprint?: string
-    deviceUid?: string
+    deviceUid: string
     token?: string
 }
