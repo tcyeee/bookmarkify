@@ -2,13 +2,9 @@ package top.tcyeee.bookmarkify.controller
 
 import cn.dev33.satoken.annotation.SaIgnore
 import io.swagger.v3.oas.annotations.tags.Tag
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import top.tcyeee.bookmarkify.entity.po.Bookmark
-import top.tcyeee.bookmarkify.server.IBookmarkService
 
 
 /**
@@ -20,20 +16,11 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 @RestController
 @Tag(name = "测试相关")
 @RequestMapping("/test")
-class TestController(
-    private val ibookmarkService: IBookmarkService
-) {
+class TestController {
 
     @SaIgnore
     @GetMapping("/link")
     fun linkTest(type: Int, param: String?): Boolean {
-        val bookmark = ibookmarkService.getById(param)
-        val json = Json.encodeToString(bookmark)
-        val result = Json.decodeFromString<Bookmark>(json)
-        println(result)
-
-
-//        ibookmarkService.checkOne(bookmark)
         return true
     }
 }
