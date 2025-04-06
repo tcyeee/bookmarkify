@@ -3,14 +3,10 @@ package top.tcyeee.bookmarkify.utils
 import cn.dev33.satoken.session.SaSession
 import cn.dev33.satoken.stp.StpUtil
 import cn.hutool.core.codec.Base64
-import cn.hutool.core.date.LocalDateTimeUtil
 import cn.hutool.crypto.SecureUtil
-import cn.hutool.crypto.digest.MD5
 import cn.hutool.json.JSONUtil
 import top.tcyeee.bookmarkify.entity.dto.UserInfo
 import top.tcyeee.bookmarkify.entity.po.UserEntity
-import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
 
 /**
  * 系统基础方法
@@ -32,8 +28,6 @@ object BaseUtils {
         return user(session).uid
     }
 
-    /* 工具类方法 */
-    fun yesterday(): LocalDateTime = LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)
 
     fun userToJson(user: UserEntity): String {
         val res = JSONUtil.createObj()

@@ -29,7 +29,6 @@ class UserLoginServiceImpl(
 
         // 注册会话
         StpUtil.login(user.uid)
-
         StpUtil.getSession().set("user",BaseUtils.userToJson(user))
         return UserAuthEntityVo(user, StpUtil.getTokenValue())
     }
