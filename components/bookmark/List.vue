@@ -31,12 +31,8 @@
 <script lang="ts" setup>
 import Draggable from "vuedraggable";
 import ContextMenu from "@imengyu/vue3-context-menu";
-import { bookmarksSort, bookmarksDel } from "~/server/apis";
-import type {
-  HomeItem,
-  Bookmark,
-  BookmarkSortParams,
-} from "~/server/apis/bookmark/typing";
+import { bookmarksSort, bookmarksDel } from "@api";
+import type { HomeItem, Bookmark, BookmarkSortParams } from "@api/typing";
 
 const sysStore = useSysStore();
 const bookmarkStore = useBookmarkStore();

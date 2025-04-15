@@ -18,7 +18,7 @@
 </template>
 
 <script lang="ts" setup>
-import { type Bookmark, type BookmarkDir } from "~/server/apis/bookmark/typing";
+import { type Bookmark, type BookmarkDir } from "@api/typing";
 
 defineProps<{
   value: BookmarkDir;

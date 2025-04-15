@@ -32,8 +32,8 @@
 </template>
 
 <script lang="ts" setup>
-import { bookmarksAddOne } from "~/server/apis";
-import type { HomeItem } from "~/server/apis/bookmark/typing";
+import { bookmarksAddOne } from "@api";
+import type { HomeItem } from "@api/typing";
 
 const emit = defineEmits(["success"]);
 const data = reactive<{

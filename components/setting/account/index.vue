@@ -12,8 +12,8 @@
 </template>
 
 <script lang="ts" setup>
-import { queryUserInfo } from "~/server/apis";
-import type { UserInfoShow } from "~/server/apis/user/typing";
+import { queryUserInfo } from "@api";
+import type { UserInfoShow } from "@api/typing";
 
 var userInfo = reactive({} as UserInfoShow);
 

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import { authByDeviceInfo, type UserAuth, type UserEntity } from '~/server/apis'
+import { authByDeviceInfo } from '@api/auth'
+import type { UserAuth, UserEntity } from '@api/auth/typing'
 import { nanoid } from 'nanoid'
 
 export const useUserStore = defineStore('user', () => {

@@ -5,7 +5,7 @@
 </template>
 
 <script lang="ts" setup>
-import { type HomeItem } from "~/server/apis/bookmark/typing";
+import { type HomeItem } from "@api/typing";
 const storeBookmark = useBookmarkStore();
 
 defineProps<{
