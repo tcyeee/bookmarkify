@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.enums.FunctionType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
-import top.tcyeee.bookmarkify.entity.po.HomeItem
+import top.tcyeee.bookmarkify.entity.entity.HomeItem
 
 /**
  * 桌面排列中单个item,可能是是书签/书签文件夹/功能入口

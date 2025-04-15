@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
-import top.tcyeee.bookmarkify.entity.po.UserEntity
+import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import top.tcyeee.bookmarkify.entity.request.LoginByClientForm
 import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams

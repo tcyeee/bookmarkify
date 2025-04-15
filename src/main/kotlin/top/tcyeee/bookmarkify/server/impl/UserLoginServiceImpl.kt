@@ -2,7 +2,7 @@ package top.tcyeee.bookmarkify.server.impl
 
 import cn.dev33.satoken.stp.StpUtil
 import org.springframework.stereotype.Service
-import top.tcyeee.bookmarkify.entity.po.UserEntity
+import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import top.tcyeee.bookmarkify.entity.request.LoginByClientForm
 import top.tcyeee.bookmarkify.entity.response.UserAuthEntityVo
 import top.tcyeee.bookmarkify.server.IUserLoginService

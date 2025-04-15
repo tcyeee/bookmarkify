@@ -1,4 +1,4 @@
-package top.tcyeee.bookmarkify.entity.po
+package top.tcyeee.bookmarkify.entity.entity
 
 import cn.hutool.core.date.LocalDateTimeUtil
 import cn.hutool.core.util.IdUtil

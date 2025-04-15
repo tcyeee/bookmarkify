@@ -1,4 +1,4 @@
-package top.tcyeee.bookmarkify.entity.po
+package top.tcyeee.bookmarkify.entity.entity
 
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName

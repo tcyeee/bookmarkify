@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper
 import org.apache.ibatis.annotations.Mapper
 import org.apache.ibatis.annotations.Select
 import org.springframework.context.annotation.Description
-import top.tcyeee.bookmarkify.entity.po.BookmarkUserLink
+import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.response.BookmarkShow
 
 /**

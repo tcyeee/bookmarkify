@@ -8,9 +8,9 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUpdataPrams
-import top.tcyeee.bookmarkify.entity.po.Bookmark
-import top.tcyeee.bookmarkify.entity.po.BookmarkUserLink
-import top.tcyeee.bookmarkify.entity.po.HomeItem
+import top.tcyeee.bookmarkify.entity.entity.Bookmark
+import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
+import top.tcyeee.bookmarkify.entity.entity.HomeItem
 import top.tcyeee.bookmarkify.entity.response.BookmarkAddOneParams
 import top.tcyeee.bookmarkify.entity.response.BookmarkDetail
 import top.tcyeee.bookmarkify.entity.response.HomeItemShow

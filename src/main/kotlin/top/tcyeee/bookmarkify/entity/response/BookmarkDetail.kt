@@ -1,7 +1,7 @@
 package top.tcyeee.bookmarkify.entity.response
 
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
-import top.tcyeee.bookmarkify.entity.po.Bookmark
+import top.tcyeee.bookmarkify.entity.entity.Bookmark
 
 /**
  * @author tcyeee

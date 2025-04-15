@@ -2,7 +2,7 @@ package top.tcyeee.bookmarkify.mapper
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper
 import org.apache.ibatis.annotations.Mapper
-import top.tcyeee.bookmarkify.entity.po.UserEntity
+import top.tcyeee.bookmarkify.entity.entity.UserEntity
 
 /**
  * @author tcyeee
