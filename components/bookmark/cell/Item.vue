@@ -8,7 +8,7 @@
 </template>
 
 <script lang="ts" setup>
-import type { Bookmark } from "~/server/apis/bookmark/typing";
+import type { Bookmark } from "@api/typing";
 const props = defineProps<{
   value: Bookmark;
 }>();

@@ -16,7 +16,7 @@
 
 <script lang="ts" setup>
 import { updateUserInfo } from "@api";
-import type { UserInfoShow } from "@api/user/typing";
+import type { UserInfoShow } from "@api/typing";
 
 const props = defineProps<{
   info: UserInfoShow;

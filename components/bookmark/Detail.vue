@@ -19,11 +19,8 @@
 </template>
 
 <script lang="ts" setup>
-import type {
-  Bookmark,
-  BookmarkUpdatePrams,
-} from "~/server/apis/bookmark/typing";
-import { bookmarksUpdate } from "~/server/apis";
+import type { Bookmark, BookmarkUpdatePrams } from "@api/typing";
+import { bookmarksUpdate } from "@api";
 
 const props = defineProps<{ data: Bookmark }>();
 

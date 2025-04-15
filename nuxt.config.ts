@@ -1,4 +1,5 @@
 import tailwindcss from "@tailwindcss/vite";
+import { resolve } from 'path'
 export default defineNuxtConfig({
   app: {
     head: {
@@ -6,7 +7,7 @@ export default defineNuxtConfig({
     },
   },
   alias: {
-    '@api': '~/server/apis'
+    '@api': resolve(__dirname, 'server/apis')
   },
   modules: [
     '@pinia/nuxt',
