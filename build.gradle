@@ -38,9 +38,10 @@ dependencies {
     implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'cn.dev33:sa-token-spring-boot3-starter:1.40.0'
-    implementation 'cn.dev33:sa-token-redis:1.40.0'
     implementation 'org.jetbrains.kotlin:kotlin-reflect'
+    implementation 'com.aliyun:dysmsapi20170525:3.1.2'
     implementation 'org.postgresql:postgresql:42.7.2'
+    implementation 'cn.dev33:sa-token-redis:1.40.0'
     implementation 'cn.hutool:hutool-all:5.8.25'
     implementation 'org.jsoup:jsoup:1.17.2'
 
