@@ -1,4 +1,4 @@
-package top.tcyeee.bookmarkify.entity.po
+package top.tcyeee.bookmarkify.entity.entity
 
 import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId

@@ -1,7 +1,7 @@
 package top.tcyeee.bookmarkify.entity.response
 
 import cn.hutool.core.bean.BeanUtil
-import top.tcyeee.bookmarkify.entity.po.UserEntity
+import top.tcyeee.bookmarkify.entity.entity.UserEntity
 
 data class UserInfoShow(
     var uid: String,

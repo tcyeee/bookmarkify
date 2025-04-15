@@ -1,7 +1,7 @@
 package top.tcyeee.bookmarkify.entity.response
 
 import top.tcyeee.bookmarkify.entity.dto.UserInfo
-import top.tcyeee.bookmarkify.entity.po.UserEntity
+import top.tcyeee.bookmarkify.entity.entity.UserEntity
 
 /**
  * 登录返回的用户个人信息

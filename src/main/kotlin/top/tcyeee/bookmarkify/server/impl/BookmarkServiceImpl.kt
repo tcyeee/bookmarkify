@@ -5,9 +5,9 @@ import org.jsoup.nodes.Document
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
-import top.tcyeee.bookmarkify.entity.po.Bookmark
-import top.tcyeee.bookmarkify.entity.po.BookmarkUserLink
-import top.tcyeee.bookmarkify.entity.po.HomeItem
+import top.tcyeee.bookmarkify.entity.entity.Bookmark
+import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
+import top.tcyeee.bookmarkify.entity.entity.HomeItem
 import top.tcyeee.bookmarkify.entity.response.BookmarkShow
 import top.tcyeee.bookmarkify.entity.response.HomeItemShow
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper

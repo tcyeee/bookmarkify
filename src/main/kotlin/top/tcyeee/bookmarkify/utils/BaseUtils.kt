@@ -7,7 +7,7 @@ import cn.hutool.core.date.LocalDateTimeUtil
 import cn.hutool.crypto.SecureUtil
 import cn.hutool.json.JSONUtil
 import top.tcyeee.bookmarkify.entity.dto.UserInfo
-import top.tcyeee.bookmarkify.entity.po.UserEntity
+import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 

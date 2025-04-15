@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
-import top.tcyeee.bookmarkify.entity.po.HomeItem
+import top.tcyeee.bookmarkify.entity.entity.HomeItem
 import top.tcyeee.bookmarkify.entity.response.BookmarkShow
 import top.tcyeee.bookmarkify.entity.response.HomeItemShow
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
