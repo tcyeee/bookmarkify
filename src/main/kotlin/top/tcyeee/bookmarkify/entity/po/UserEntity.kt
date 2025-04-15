@@ -30,6 +30,7 @@ data class UserEntity(
     @Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @Schema(description = "是否已经被删除") var deleted: Boolean = false,
     @Schema(description = "是否禁用") var disabled: Boolean = false,
+    @Schema(description = "是否有过任何形式的验证") var verified: Boolean = false,
 ) {
     constructor(form: LoginByClientForm) : this(
         uid = IdUtil.fastUUID(),

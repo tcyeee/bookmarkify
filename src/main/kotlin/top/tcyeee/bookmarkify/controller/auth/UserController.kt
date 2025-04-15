@@ -15,9 +15,7 @@ import top.tcyeee.bookmarkify.server.IUserService
 @RestController
 @Tag(name = "用户相关")
 @RequestMapping("/user")
-class UserController(
-    private val userService: IUserService
-) {
+class UserController(private val userService: IUserService) {
 
     @GetMapping("info")
     @Operation(summary = "获取用户信息")
