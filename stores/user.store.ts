@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
 import { authByDeviceInfo } from '@api/auth'
-import type { UserAuth, UserEntity } from '@api/auth/typing'
+import type { UserAuthParams, UserEntity } from '@api/auth/typing'
 import { nanoid } from 'nanoid'
 
 export const useUserStore = defineStore('user', () => {
   const loggedIn = ref<Boolean>(false);
-  const auth = reactive<UserAuth>({
+  const auth = reactive<UserAuthParams>({
     deviceUid: queryDeviceUid()
   });
   const Loading = ref<Boolean>(false);
