@@ -4,16 +4,16 @@
     <div class="setting-subtitle">手机号</div>
     <label class="cy-input cy-validator">
       <span class="icon--phone" />
-      <input type="tel" class="tabular-nums" required placeholder="phone" pattern="[0-9]*" minlength="10" maxlength="10" title="Must be 10 digits" />
+      <input type="tel" class="tabular-nums" required placeholder="phone" pattern="[0-9]*" minlength="11" maxlength="11" />
     </label>
-    <p class="cy-validator-hint">Must be 10 digits</p>
+    <p class="text-xs cy-validator-hint">手机号格式错误</p>
 
     <div class="setting-subtitle">邮箱</div>
     <label class="cy-input cy-validator">
       <span class="icon--mail" />
       <input type="email" placeholder="mail@site.com" required />
     </label>
-    <div class="cy-validator-hint hidden">Enter valid email address</div>
+    <p class="text-xs cy-validator-hint">邮箱格式错误</p>
   </div>
 </template>
 
