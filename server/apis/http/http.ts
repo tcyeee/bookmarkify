@@ -1,6 +1,6 @@
-import { Result } from './types';
-import { useUserStore } from "@/stores/user.store";
-import { UserAuth } from '../auth';
+import type { Result } from './types';
+import { useUserStore } from "@stores/user.store";
+import type { UserEntity } from '../auth';
 
 export default class http {
     static get(path: string, params?: any): any {
@@ -18,7 +18,7 @@ export default class http {
         console.log(`[DEBUG] ${method}::${path}`);
         if (method == "GET") path += `?${new URLSearchParams(params).toString()}`;
         const request: Request = new Request(useRuntimeConfig().public.apiBase + path, {
-            headers: { 'Content-Type': 'application/json', 'satoken': userStore.auth.token },
+            headers: { 'Content-Type': 'application/json', 'satoken': userStore.auth.token ? userStore.auth.token : "" },
             body: JSON.stringify(params),
             method: method,
         });
@@ -42,7 +42,7 @@ async function resultCheck(result: Result<object>, request: Request): Promise<an
     // 如果遇到token失效,则重新登录
     if ([101, 107].includes(result.code)) {
         const userStore = useUserStore()
-        const userAuth: UserAuth = await userStore.loginByDeviceUid();
+        const userAuth: UserEntity = await userStore.loginByDeviceUid();
         // todo 添加token后重新请求
         if (userAuth.token) {
             request.headers.set("satoken", userAuth.token)

@@ -4,12 +4,13 @@ export interface LoginParams {
 }
 
 export interface UserEntity {
+    uid: string,
     token: string
     nickName?: string
     mail?: string
 }
 
-export interface UserAuth {
+export interface UserAuthParams {
     deviceUid: string
     token?: string
 }
