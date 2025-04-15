@@ -4,6 +4,7 @@ export interface UserInfoShow {
     phone?: String
     email?: String
     avatarPath?: String
+    verified: boolean
 }
 
 export interface UserInfoUpdate {

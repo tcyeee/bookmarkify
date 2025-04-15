@@ -8,9 +8,10 @@
     </div>
 
     <div class="setting-subtitle">昵称</div>
-    <input :disabled="props.info.nickName == undefined" type="text" placeholder="请输入昵称" v-model="props.info.nickName" class="cy-input" />
+    <div class="cy-tooltip" data-tip="先绑定手机号或者邮箱才能修改昵称哦~">
+      <input :disabled="!props.info.verified" type="text" placeholder="请输入昵称" v-model="props.info.nickName" class="cy-input" />
+    </div>
     <button v-if="props.info.nickName != props.info.nickName" @click="update()" class="cy-btn cy-btn-soft ml-2">修改</button>
-
   </div>
 </template>
 
@@ -21,10 +22,6 @@ import type { UserInfoShow } from "@api/typing";
 const props = defineProps<{
   info: UserInfoShow;
 }>();
-
-onMounted(() => {
-  console.log(props.info);
-});
 
 function update() {
   const params = {

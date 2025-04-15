@@ -4,7 +4,7 @@
     <SettingAccountProfile v-if="userInfo" :info="userInfo" />
 
     <!-- 账户绑定 -->
-    <!-- <SettingAccountVerify /> -->
+    <SettingAccountVerify />
 
     <!-- 注销账户 -->
     <!-- <SettingAccountCancel /> -->
