@@ -1,7 +1,6 @@
 <template>
   <div>
-    <div class="setting-title">书签管理</div>
-    导入书签
+    <div class="setting-title">导入书签</div>
   </div>
 </template>
 

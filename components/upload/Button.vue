@@ -1,4 +1,4 @@
-<template>
+<!-- <template>
   <div>
     <el-upload :headers="pageData.headers" :action="pageData.uploadUrl" :show-file-list="false" list-type="text">
       <button class="cy-btn cy-btn-accent">
@@ -27,4 +27,4 @@ const pageData = reactive<{
   uploadUrl: "/api/bookmark/upload",
   headers: { Authorization: `Bearer ${userStore.profile?.token}` },
 });
-</script>
+</script> -->

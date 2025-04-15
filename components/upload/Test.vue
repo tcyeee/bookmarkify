@@ -1,4 +1,4 @@
-<template>
+<!-- <template>
   <div>
     <el-button @click="sysLinkTest()">test</el-button>
   </div>
@@ -9,4 +9,4 @@ import { sysLinkTest } from "~/apis";
 </script>
 
 <style>
-</style>
+</style> -->

@@ -5,6 +5,9 @@ export default defineNuxtConfig({
       title: 'bookmarkify', // 默认标题
     },
   },
+  alias: {
+    '@api': '~/server/apis'
+  },
   modules: [
     '@pinia/nuxt',
     'pinia-plugin-persistedstate/nuxt',
