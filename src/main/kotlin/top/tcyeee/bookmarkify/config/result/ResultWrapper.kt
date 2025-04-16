@@ -35,7 +35,7 @@ data class ResultWrapper(
         fun error(type: ErrorType): ResultWrapper {
             return ResultWrapper(
                 code = type.code(),
-                msg = type.msg(),
+                msg = type.msg,
                 ok = false
             )
         }

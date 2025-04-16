@@ -7,6 +7,12 @@ package top.tcyeee.bookmarkify.config.exception
  * @author tcyeee
  * @date 2020/6/19 09:42
  */
-class CommonException(var errorType: ErrorType) : RuntimeException() {
-    override var message: String = errorType.msg()
+class CommonException(
+    val errorType: ErrorType, message: String? = null
+) : RuntimeException(buildMessage(errorType, message)) {
+    companion object {
+        private fun buildMessage(errorType: ErrorType, customMessage: String?): String =
+            if (customMessage.isNullOrBlank()) errorType.msg
+            else "${errorType.msg} :: $customMessage"
+    }
 }
