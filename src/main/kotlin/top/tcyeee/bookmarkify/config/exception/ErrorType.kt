@@ -8,41 +8,24 @@ package top.tcyeee.bookmarkify.config.exception
  * @author tcyeee
  * @date 2022/10/12 11:12
  */
-enum class ErrorType(
-    private var msg: String
-) {
+enum class ErrorType(var msg: String) {
     S0("success"),
 
     /* 会在前端提示的部分 */
     E101("请先登录!"),
     E102("请求参数错误!"),
-    E103("请求方式错误!"),
-    E104("您操作的太快了，请稍等下再操作~"),
-    E105("对不起，您没有权限访问此内容哦~"),
-    E106("登录连续失败已经被锁定，无法登录"),
-    E107("您还未登录或登录失效，请重新登录！"),
-    E108("业务繁忙,请稍后重试~"),
 
     /* 不提示的部分 */
     E201("Websocket认证失败"),
     E202("数据丢失"),
     E203("REDIS断开连接"),
-    E205("断言校验错误"),
-    E206("数据格式存在问题，无法读取"),
-    E207("账户创建时设备ID或者指纹冲突"),
-    E208("存在SQL注入风险，请联系技术工作人员！"),
-    E209("生成验证码错误"),
-    E210("SerialNumber 尝试5次，未能生成单号"),
-    E211("请求接口不存在"),
-
-    E301("书签校验失败"),
+    E212("阿里云短信回执查询时候SmsStatus枚举解析异常"),
+    E213("阿里云短信回执查询时候SmsType枚举解析异常"),
+    E214("阿里云短信发送失败"),
     E303("域名解析错误"),
 
+    /* 极端错误 */
     E999("服务器繁忙");
 
-    // 错误信息
-    fun msg(): String = msg
-
-    // 错误代码
     fun code(): Int = this.name.substring(1).toInt()
 }

@@ -34,6 +34,7 @@ repositories {
 dependencies {
     implementation 'com.github.xiaoymin:knife4j-openapi3-jakarta-spring-boot-starter:4.5.0'
     implementation 'com.baomidou:mybatis-plus-spring-boot3-starter:3.5.10.1'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -44,6 +45,7 @@ dependencies {
     implementation 'cn.dev33:sa-token-redis:1.40.0'
     implementation 'cn.hutool:hutool-all:5.8.25'
     implementation 'org.jsoup:jsoup:1.17.2'
+
 
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
