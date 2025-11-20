@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      database: 0
+      host: ${SPRING_DATA_REDIS_HOST}
+      port: ${SPRING_DATA_REDIS_PORT}
+      password: ${SPRING_DATA_REDIS_PASSWORD}
+
+config:
+  img-path: ${FILE_UPLOAD_DIR}
+  img-prefix: ${FILE_UPLOAD_PREFIX}
+
