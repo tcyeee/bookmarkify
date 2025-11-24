@@ -1,17 +1,16 @@
 <template>
-  <div onclick="dialog_add.showModal()">
-
-    <div class="bookmark-icon">
+  <div>
+    <div class="bookmark-icon" @click="sysStore.addBookmarkDialogVisible=true">
       <span class="icon--add" />
     </div>
 
     <dialog id="dialog_add" class="cy-modal">
-      <div class="cy-modal-box min-h-[25rem]">
+      <div class="cy-modal-box min-h-100">
 
         <!-- Button for create bookmark -->
-        <div class="fixed bottom-[2rem] left-[2rem] right-[2rem]">
+        <div class="fixed bottom-8 left-8 right-8">
           <transition name="el-fade-in">
-            <div v-if="data.notice" class="cy-chat cy-chat-start mb-[1rem]">
+            <div v-if="data.notice" class="cy-chat cy-chat-start mb-4">
               <div class="cy-chat-bubble">{{ data.notice }}</div>
             </div>
           </transition>
@@ -25,7 +24,7 @@
         </div>
       </div>
       <form method="dialog" class="cy-modal-backdrop">
-        <button>close</button>
+        <button @click="sysStore.addBookmarkDialogVisible=false">close</button>
       </form>
     </dialog>
   </div>
@@ -34,6 +33,25 @@
 <script lang="ts" setup>
 import { bookmarksAddOne } from "@api";
 import type { HomeItem } from "@api/typing";
+
+const sysStore = useSysStore();
+
+// 监测到添加书签窗口的显示与否
+watchEffect(() => {
+  toggleAddDialog(sysStore.addBookmarkDialogVisible);
+});
+
+// 根据标志位显示或关闭添加书签对话框
+function toggleAddDialog(flag: boolean) {
+  if (!import.meta.client) return;
+  const element = document.getElementById("dialog_add") as HTMLDialogElement;
+  if (!element) return;
+  if (flag) {
+    element.showModal();
+  } else {
+    element.close();
+  }
+}
 
 const emit = defineEmits(["success"]);
 const data = reactive<{
@@ -58,8 +76,7 @@ function addOne() {
     data.input = undefined;
     setTimeout(() => {
       data.notice = undefined;
-      // @ts-ignore
-      document.getElementById("dialog_add")?.close();
+      sysStore.addBookmarkDialogVisible = false;
     }, 500);
   });
 }
@@ -83,6 +100,3 @@ function isUrl(url: string): boolean {
   return pattern.test(url);
 }
 </script>
-
-<style lang="scss" scoped>
-</style>

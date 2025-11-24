@@ -37,8 +37,6 @@ const data = reactive<{
 });
 
 // watchEffect(() => {
-console.log("======");
-
 // if (data.fade) storeBookmark.update();
 // });
 
@@ -62,8 +60,13 @@ const classFadeDate = computed(() => {
   };
 });
 
-// 开关APP显示
+// [ESC] 开关APP显示
 function sceneToggle() {
+  // 如果正好处于添加书签窗口，则仅关闭添加窗口
+  if (sysStore.addBookmarkDialogVisible) {
+    sysStore.addBookmarkDialogVisible = false;
+    return;
+  }
   data.fade = !data.fade;
 }
 </script>

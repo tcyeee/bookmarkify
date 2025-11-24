@@ -22,8 +22,6 @@ onMounted(() => {
   // storeBookmark.addAction(updateAllBookmark);
 });
 
-const test = localStorage.getItem("test");
-
 function updateAllBookmark() {
   // storeBookmark.get().then((res) => (data.bookmarkList = res));
 }
