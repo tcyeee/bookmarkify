@@ -1,0 +1,13 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "dev",
+			"path": "bookmarkify-web",
+			"problemMatcher": [],
+			"label": "npm: dev - bookmarkify-web",
+			"detail": "nuxt dev"
+		}
+	]
+}

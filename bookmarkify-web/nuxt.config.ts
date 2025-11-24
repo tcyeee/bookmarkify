@@ -37,13 +37,13 @@ export default defineNuxtConfig({
   elementPlus: { /** Options */ },
   css: ['~/assets/css/app.css', '~/assets/css/common.scss', '~/assets/css/icon.scss'],
   devtools: { enabled: true },
-  pinia: {
-    storesDirs: ['./stores/**'],
-  },
+  // pinia: {
+  //   storesDirs: ['./stores/**'],
+  // },
 
-  googleSignIn: {
-    clientId: process.env.BOOKMARKIFY_GOOGLE_LOGIN_ID
-  },
+  // googleSignIn: {
+  //   clientId: process.env.BOOKMARKIFY_GOOGLE_LOGIN_ID
+  // },
 
   compatibilityDate: '2025-02-12',
 })
