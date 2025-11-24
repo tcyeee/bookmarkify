@@ -52,8 +52,6 @@ export const useBookmarkStore = defineStore('bookmarks', () => {
   return {
     bookmarks,
     actions,
-    get,
-    update,
     trigger,
     addAction,
     addEmpty,
