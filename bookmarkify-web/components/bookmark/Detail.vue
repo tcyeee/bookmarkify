@@ -1,11 +1,11 @@
 <template>
   <div v-if="data.detail">
-    <div class="text-[1.4rem] mb-[1rem]">书签信息</div>
-    <div class="mb-[2rem]">{{ data.detail.urlFull }}</div>
+    <div class="text-[1.4rem] mb-4">书签信息</div>
+    <div class="mb-8">{{ data.detail.urlFull }}</div>
 
-    <img :src="data.detail.iconUrlFull" class="w-[5rem] h-[5rem] rounded-[1rem] shadow-lg mb-[2rem]">
+    <img :src="data.detail.iconUrlFull" class="w-20 h-20 rounded-2xl shadow-lg mb-8">
 
-    <div class="mb-[1rem]">
+    <div class="mb-4">
       <span class="cy-label-text">书签名称</span>
       <el-input @change="update" v-model="data.detail.title" maxlength="150" show-word-limit type="text" />
     </div>
