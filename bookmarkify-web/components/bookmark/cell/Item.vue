@@ -1,9 +1,9 @@
 <template>
-  <div class="w-[5rem] flex flex-col items-center">
-    <div class="w-app h-app rounded-xl bg-gray-100 center shadow overflow-hidden" :class="data.isDev?'border-[4px] border-dashed border-red-200':''">
+  <div class="w-20 flex flex-col items-center">
+    <div class="w-app h-app rounded-xl bg-gray-100 center shadow overflow-hidden" :class="data.isDev?'border-4 border-dashed border-red-200':''">
       <BookmarkLogo :bookmark="props.value" />
     </div>
-    <div class="w-[4.5rem] text-sm mt-[0.3rem] text-white opacity-90  truncate text-center">{{ value.title }}</div>
+    <div class="w-18 text-sm mt-[0.3rem] text-white opacity-90  truncate text-center">{{ value.title }}</div>
   </div>
 </template>
 

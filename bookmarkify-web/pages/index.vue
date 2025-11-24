@@ -72,10 +72,10 @@ function sceneToggle() {
   margin: -10px;
   overflow: hidden;
 
+  background-image: linear-gradient(135deg, #a69f9f, #c1baba, #8f9ea6);
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
-  /* background-image: url("https://i.tcyeee.top/bookmarkify/Landscape.jpg"); */
   z-index: -1;
 }
 
