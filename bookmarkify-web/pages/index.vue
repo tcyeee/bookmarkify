@@ -1,7 +1,7 @@
 <template>
   <div class="overflow-hidden select-none">
     <!-- 内容信息 -->
-    <div class="absolute w-screen h-screen z-[99]">
+    <div class="absolute w-screen h-screen z-99">
 
       <!-- 时间信息 -->
       <HomeTimeStr :class="classFadeDate" @click="sceneToggle()" class="text-[5rem] text-white opacity-80 text-center font-bold" />
@@ -75,7 +75,7 @@ function sceneToggle() {
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
-  background-image: url("https://i.tcyeee.top/bookmarkify/Landscape.jpg");
+  /* background-image: url("https://i.tcyeee.top/bookmarkify/Landscape.jpg"); */
   z-index: -1;
 }
 
