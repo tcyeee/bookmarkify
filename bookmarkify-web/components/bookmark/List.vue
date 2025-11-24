@@ -1,10 +1,10 @@
 <template>
-  <div class="flex flex-wrap flex-start gap-[3rem]">
+  <div class="flex flex-wrap flex-start gap-12">
     <!-- 二级菜单的返回 -->
-    <BookmarkReturn v-show="data.subItemId" @click="backTopLayer()" />
+    <!-- <BookmarkReturn v-show="data.subItemId" @click="backTopLayer()" /> -->
 
     <!-- 一级菜单 -->
-    <draggable class="flex flex-wrap flex-start gap-[3rem]" v-show="!data.subItemId" v-model="data.pageData" v-bind="dragOptions" group="people" @sort="sort" item-key="id">
+    <draggable class="flex flex-wrap flex-start gap-12" v-show="!data.subItemId" v-model="data.pageData" v-bind="dragOptions" group="people" @sort="sort" item-key="id">
       <template #item="item">
         <div @contextmenu="onContextMenu($event,item.element)">
           <BookmarkCellDir v-if="item.element.type == 'BOOKMARK_DIR'" :value="item.element.typeDir" @click="openDir(item.element)" />

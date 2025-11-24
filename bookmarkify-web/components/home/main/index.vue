@@ -1,6 +1,9 @@
 <template>
+  <div>{{ test }}</div>
+  <div>{{ storeBookmark.bookmarks }}</div>
+
   <Transition name="fade-main">
-    <BookmarkList v-if="status" :data="data.bookmarkList" class="mx-[5rem] sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-[70rem]" />
+    <BookmarkList v-if="status" :data="data.bookmarkList" class="mx-20 sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-280" />
   </Transition>
 </template>
 
@@ -19,11 +22,14 @@ const data = reactive<{
 });
 
 onMounted(() => {
-  storeBookmark.addAction(updateAllBookmark);
+  // localStorage.setItem("test", "=====TEST====");
+  // storeBookmark.addAction(updateAllBookmark);
 });
 
+const test = localStorage.getItem("test");
+
 function updateAllBookmark() {
-  storeBookmark.get().then((res) => (data.bookmarkList = res));
+  // storeBookmark.get().then((res) => (data.bookmarkList = res));
 }
 </script>
 

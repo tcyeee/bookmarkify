@@ -1,63 +1,62 @@
 import { defineStore } from 'pinia'
+import { ref, reactive } from 'vue'
 import { HomeItemType, type Bookmark, type HomeItem } from '@api/typing'
-import { bookmarksShowAll } from "@api";
+import { bookmarksShowAll } from '@api'
 
-export const useBookmarkStore = defineStore('bookmarks', {
-  state: () => ({
-    bookmarks: undefined as Array<HomeItem> | undefined,
-    actions: {} as Record<string, Function>
-  }),
-  actions: {
-    async get(): Promise<Array<HomeItem>> {
-      return this.bookmarks == undefined ? await this.update() : Promise.resolve(this.bookmarks)
-    },
+export const useBookmarkStore = defineStore('bookmarks', () => {
+  const bookmarks = ref<Array<HomeItem> | undefined>(undefined)
+  const actions = reactive<Record<string, Function>>({})
 
-    /**
-     * 查询桌面排布数据
-     * @returns 排序后的桌面排布数据
-     */
-    async update(): Promise<Array<HomeItem>> {
-      await bookmarksShowAll().then((res) => this.bookmarks = sortData(res))
-      console.log(`[DEBUG]书签更新:${this.bookmarks?.length}`);
-      if (this.bookmarks == undefined) throw new Error
-
-      this.trigger()
-      return this.bookmarks;
-    },
-
-    trigger() {
-      Object.values(this.actions).forEach(action => { action() });
-    },
-
-    addAction(action: Function) {
-      this.actions[action.name] = action
-    },
-
-    addEmpty(item: HomeItem) {
-      item.type = HomeItemType.LOADING
-      this.bookmarks?.push(item)
-      this.trigger()
-    },
-
-    updateOne(item: Bookmark) {
-      this.bookmarks?.forEach(it => {
-        if (it.bookmarkId === item.bookmarkId) {
-          it.type = HomeItemType.BOOKMARK
-          it.typeApp = item
-        }
-      })
-    }
+  function sortData(res: Array<HomeItem>) {
+    return !res || res.length === 0 ? [] : res.slice().sort((a, b) => a.sort - b.sort)
   }
-})
 
+  async function get(): Promise<Array<HomeItem>> {
+    if (bookmarks.value === undefined) return await update()
+    return bookmarks.value
+  }
 
-/**
- * 数据排序
- * 
- * @param res 原始桌面数据
- * @returns 排序后的桌面数据
- */
+  async function update(): Promise<Array<HomeItem>> {
+    const res = await bookmarksShowAll()
+    bookmarks.value = sortData(res)
+    console.log(`[DEBUG]书签更新:${bookmarks.value?.length}`)
+    if (bookmarks.value === undefined) throw new Error('Bookmarks is undefined')
 
-function sortData(res: Array<HomeItem>) {
-  return res == null || res.length == 0 ? [] : res.slice().sort((a, b) => a.sort - b.sort);
-}
+    trigger()
+    return bookmarks.value
+  }
+
+  function trigger() {
+    Object.values(actions).forEach(action => action())
+  }
+
+  function addAction(action: Function) {
+    actions[action.name] = action
+  }
+
+  function addEmpty(item: HomeItem) {
+    item.type = HomeItemType.LOADING
+    bookmarks.value?.push(item)
+    trigger()
+  }
+
+  function updateOne(item: Bookmark) {
+    bookmarks.value?.forEach(it => {
+      if (it.bookmarkId === item.bookmarkId) {
+        it.type = HomeItemType.BOOKMARK
+        it.typeApp = item
+      }
+    })
+  }
+
+  return {
+    bookmarks,
+    actions,
+    get,
+    update,
+    trigger,
+    addAction,
+    addEmpty,
+    updateOne,
+  }
+}, { persist: true });

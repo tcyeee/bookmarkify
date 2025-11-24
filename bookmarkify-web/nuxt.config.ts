@@ -12,9 +12,9 @@ export default defineNuxtConfig({
   },
   modules: [
     '@pinia/nuxt',
-    'pinia-plugin-persistedstate/nuxt',
     '@element-plus/nuxt',
-    'nuxt-vue3-google-signin'
+    'pinia-plugin-persistedstate/nuxt',
+    // 'nuxt-vue3-google-signin'
   ],
   plugins: [
     '~/plugins/keyListener.ts',

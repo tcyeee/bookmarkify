@@ -9,6 +9,8 @@
       <!-- 内容页面 -->
       <HomeMain :status="data.fade" class="absolute left-[10%] right-[10%] top-[30%]" />
 
+      <el-button type="primary">data load</el-button>
+
       <!-- 去设置 -->
       <div v-if="!data.fade" class="fixed bottom-0">
         <NuxtLink to="/setting">
@@ -32,7 +34,7 @@ const data = reactive<{
   fade: boolean;
   duringAnimate: boolean;
 }>({
-  fade: false,
+  fade: true,
   duringAnimate: false,
 });
 

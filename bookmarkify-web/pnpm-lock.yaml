@@ -23,9 +23,6 @@ importers:
       nuxt:
         specifier: ^4.2.1
         version: 4.2.1(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.24)(db0@0.3.4)(ioredis@5.8.2)(lightningcss@1.30.2)(magicast@0.5.1)(rollup@4.53.3)(sass@1.94.2)(terser@5.44.1)(vite@7.2.4(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.94.2)(terser@5.44.1)(yaml@2.8.1))(yaml@2.8.1)
-      nuxt-vue3-google-signin:
-        specifier: ^0.0.13
-        version: 0.0.13(magicast@0.5.1)(vue@3.5.24)
       pinia:
         specifier: ^3.0.4
         version: 3.0.4(vue@3.5.24)
@@ -2413,10 +2410,6 @@ packages:
   nth-check@2.1.1:
     resolution: {integrity: sha512-lqjrjmaOoAnWfMmBPL+XNnynZh2+swxiX3WUE0s4yEHI6m+AwrK2UZOimIRl3X/4QctVqS8AiZjFqyOGrMXb/w==}
 
-  nuxt-vue3-google-signin@0.0.13:
-    resolution: {integrity: sha512-D1X3XLzyRjEexgndHiOsM21K7jdK3Ypuz6aIGLAQwxxh9TWM197C19keAd0ZknlhRYMLsTfq7erwkM7GtRoUBA==}
-    engines: {node: '>=20.0.0'}
-
   nuxt@4.2.1:
     resolution: {integrity: sha512-OE5ONizgwkKhjTGlUYB3ksE+2q2/I30QIYFl3N1yYz1r2rwhunGA3puUvqkzXwgLQ3AdsNcigPDmyQsqjbSdoQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -3368,11 +3361,6 @@ packages:
     resolution: {integrity: sha512-ARBedLm9YlbvQomnmq91Os7ck6efydTSpRP3nuOKCvgJOHNrhRoJDSKtee8kcL1Vf7nz6U+PMBL+hTvR3bTVQg==}
     peerDependencies:
       vue: ^3.5.0
-
-  vue3-google-signin@2.1.1:
-    resolution: {integrity: sha512-RwlwyeCv8+PZjK35C/UyJN4/9MH+Fsz4bJDO7IjtmRuOaTMrvmMmI6SP5qkJgD7w9MIKOCj5rYVFMAL7+NCM0A==}
-    peerDependencies:
-      vue: ^3
 
   vue@3.5.24:
     resolution: {integrity: sha512-uTHDOpVQTMjcGgrqFPSb8iO2m1DUvo+WbGqoXQz8Y1CeBYQ0FXf2z1gLRaBtHjlRz7zZUBHxjVB5VTLzYkvftg==}
@@ -5939,16 +5927,6 @@ snapshots:
     dependencies:
       boolbase: 1.0.0
 
-  nuxt-vue3-google-signin@0.0.13(magicast@0.5.1)(vue@3.5.24):
-    dependencies:
-      '@nuxt/kit': 4.2.1(magicast@0.5.1)
-      defu: 6.1.4
-      unimport: 5.5.0
-      vue3-google-signin: 2.1.1(vue@3.5.24)
-    transitivePeerDependencies:
-      - magicast
-      - vue
-
   nuxt@4.2.1(@parcel/watcher@2.5.1)(@types/node@24.10.1)(@vue/compiler-sfc@3.5.24)(db0@0.3.4)(ioredis@5.8.2)(lightningcss@1.30.2)(magicast@0.5.1)(rollup@4.53.3)(sass@1.94.2)(terser@5.44.1)(vite@7.2.4(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.94.2)(terser@5.44.1)(yaml@2.8.1))(yaml@2.8.1):
     dependencies:
       '@dxup/nuxt': 0.2.2(magicast@0.5.1)
@@ -7007,10 +6985,6 @@ snapshots:
   vue-router@4.6.3(vue@3.5.24):
     dependencies:
       '@vue/devtools-api': 6.6.4
-      vue: 3.5.24
-
-  vue3-google-signin@2.1.1(vue@3.5.24):
-    dependencies:
       vue: 3.5.24
 
   vue@3.5.24:

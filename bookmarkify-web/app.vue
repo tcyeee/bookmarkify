@@ -8,7 +8,7 @@
 onMounted(() => webSocketInit());
 
 function webSocketInit() {
-  const webSocketStore = useWebSocketStore();
-  webSocketStore.connect();
+  // const webSocketStore = useWebSocketStore();
+  // webSocketStore.connect();
 }
 </script>
