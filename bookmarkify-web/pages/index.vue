@@ -41,8 +41,8 @@ const data = reactive<{
 // });
 
 onMounted(() => {
-  sysStore.registerKeyEvent("Space", "/", () => sceneToggle());
-  sysStore.registerKeyEvent("Escape", "/", () => sceneToggle());
+  sysStore.registerKeyEvent("Space", "/", () => sceneToggle("Space"));
+  sysStore.registerKeyEvent("Escape", "/", () => sceneToggle("Escape"));
   // storeBookmark.update();
 });
 
@@ -61,9 +61,11 @@ const classFadeDate = computed(() => {
 });
 
 // [ESC] 开关APP显示
-function sceneToggle() {
+function sceneToggle(key?: string) {
   // 如果正好处于添加书签窗口，则仅关闭添加窗口
   if (sysStore.addBookmarkDialogVisible) {
+    // 如果是按下空格，则不管
+    if (key === "Space") return;
     sysStore.addBookmarkDialogVisible = false;
     return;
   }
