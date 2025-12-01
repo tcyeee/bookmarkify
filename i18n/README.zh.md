@@ -1,3 +1,7 @@
+![](../assets/banner.png)
+
+<div align="center">中文 ｜ <a href="../README.md">English</a></div>
+
 # Bookmarkify
 
 Bookmarkify 是一个现代化的书签管理平台，帮助用户轻松保存、组织、分享和探索优质网页书签。通过简洁直观的界面和强大的功能，让书签管理变得简单高效。
