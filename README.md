@@ -1,3 +1,7 @@
+![](assets/banner.png)
+
+<div align="center"><a href="i18n/README.zh.md">中文</a> ｜ English</div>
+
 # Bookmarkify
 
 Bookmarkify is a modern web application for saving, organizing, sharing, and exploring web bookmarks. With an intuitive interface and powerful features, it makes bookmark management simple and efficient.
