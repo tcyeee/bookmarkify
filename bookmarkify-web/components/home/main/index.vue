@@ -19,7 +19,7 @@ const data = reactive<{
 });
 
 onMounted(() => {
-  // storeBookmark.addAction(updateAllBookmark);
+  storeBookmark.addAction(updateAllBookmark);
 });
 
 function updateAllBookmark() {

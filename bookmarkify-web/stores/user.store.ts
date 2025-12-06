@@ -62,7 +62,6 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-
   // async function loginByDeviceUid(): Promise<UserEntity> {
   //   if (Loading.value) return Promise.reject('loading..');
   //   Loading.value = true;
