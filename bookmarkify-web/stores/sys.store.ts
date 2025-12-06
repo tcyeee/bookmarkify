@@ -1,17 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-
-// 类型声明
-interface KeyEvent {
-    currentPath: string
-    triggerFunc: Function
-}
-
-export enum DialogStatus {
-    Login = 'Login',
-    Register = 'Register',
-    // 根据业务补充更多状态
-}
+import { DialogStatus, type KeyEvent } from './types'
 
 export const useSysStore = defineStore('sys', () => {
     // state
