@@ -28,18 +28,16 @@ export const useUserStore = defineStore('user', () => {
    */
   async function getUserInfo(): Promise<UserInfoEntity> {
     Loading.value = true;
-    await queryUserInfo()
-      .then((res: UserInfoEntity) => {
-        account.value = res
-        return Promise.resolve(res);
-      })
-      .catch((err) => {
-        if (err.code == 202) logout()
-        return Promise.reject(err);
-      })
-      .finally(() => { Loading.value = false })
-
-    return Promise.reject(new Error('Unexpected auth status'));
+    try {
+      const result = await queryUserInfo();
+      account.value = result;
+      return result;
+    } catch (err: any) {
+      if (err.code == 202) logout();
+      throw err;
+    } finally {
+      Loading.value = false;
+    }
   }
 
 
@@ -50,23 +48,18 @@ export const useUserStore = defineStore('user', () => {
    */
   async function login(): Promise<UserInfoEntity> {
     console.log("DEBUG: login");
-    if (authStatus.value === AuthStatus.Login) return account.value as UserInfoEntity;
-    if (authStatus.value === AuthStatus.NotLogin) {
-      const deviceId = getDeviceUid();
+    if (authStatus.value != AuthStatus.NotLogin) return account.value as UserInfoEntity;
 
-      // 使用DeviceID临时登录
-      Loading.value = true;
-      try {
-        const res = await authByDeviceInfo(deviceId);
-        account.value = res;
-        return res;
-      } catch (err) {
-        return Promise.reject(err);
-      } finally {
-        Loading.value = false;
-      }
+    /* 即没有登录，也没有认证，则进行临时登录 */
+    Loading.value = true;
+    try {
+      const deviceId = getDeviceUid();
+      const res = await authByDeviceInfo(deviceId);
+      account.value = res;
+      return res;
+    } finally {
+      Loading.value = false;
     }
-    return Promise.reject(new Error('Unexpected auth status'));
   }
 
 
