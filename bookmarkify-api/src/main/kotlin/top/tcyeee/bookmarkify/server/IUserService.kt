@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
+import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
@@ -27,4 +28,12 @@ interface IUserService : IService<UserEntity> {
     fun checkPhone(code: Int): Boolean
     fun changeMail(mail: String): Boolean
     fun del(params: UserDelParams): Boolean
+
+    /**
+     * 上传头像
+     * @param uid 用户ID
+     * @param file 头像文件
+     * @return 头像路径
+     */
+    fun updateAvatar(uid: String, file: MultipartFile):String
 }

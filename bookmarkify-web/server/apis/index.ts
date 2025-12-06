@@ -10,3 +10,4 @@ export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post("/bo
 export const updateUserInfo = (param: t.UserInfoUpdate) => http.post("/user/updateInfo", param) as Promise<boolean>;
 export const queryUserInfo = () => http.get("/user/info") as Promise<t.UserInfoEntity>;
 export const accountDelete = (pwd: string) => http.post("/user/del", { password: btoa(pwd) }) as Promise<boolean>;
+export const uploadAvatar = (file: File) => http.upload("/user/uploadAvatar", file) as Promise<string>;

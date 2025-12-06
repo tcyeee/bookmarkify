@@ -8,7 +8,8 @@ export default defineNuxtConfig({
   },
   alias: {
     '@api': resolve(__dirname, 'server/apis'),
-    '@stores': resolve(__dirname, 'stores')
+    '@stores': resolve(__dirname, 'stores'),
+    '@config': resolve(__dirname, 'server/config')
   },
   modules: [
     '@pinia/nuxt',

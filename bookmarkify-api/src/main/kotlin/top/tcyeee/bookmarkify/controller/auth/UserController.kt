@@ -1,12 +1,15 @@
 package top.tcyeee.bookmarkify.controller.auth
 
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
 import top.tcyeee.bookmarkify.entity.response.UserInfoShow
 import top.tcyeee.bookmarkify.server.IUserService
+import top.tcyeee.bookmarkify.utils.BaseUtils
 
 /**
  * @author tcyeee
@@ -15,7 +18,9 @@ import top.tcyeee.bookmarkify.server.IUserService
 @RestController
 @Tag(name = "用户相关")
 @RequestMapping("/user")
-class UserController(private val userService: IUserService) {
+class UserController(
+    private val userService: IUserService,
+) {
 
     @GetMapping("info")
     @Operation(summary = "获取用户信息")
@@ -40,4 +45,9 @@ class UserController(private val userService: IUserService) {
     @PostMapping("del")
     @Operation(summary = "账户注销")
     fun del(@RequestBody params: UserDelParams): Boolean = userService.del(params)
+
+    @PostMapping("uploadAvatar")
+    @Operation(summary = "上传头像", parameters = [Parameter(name = "file", description = "头像图片文件")])
+    fun uploadAvatar(@RequestParam("file") file: MultipartFile): String =
+        userService.updateAvatar(BaseUtils.uid(), file)
 }

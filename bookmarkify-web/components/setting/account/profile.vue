@@ -10,11 +10,7 @@
 
     <div class="setting-title">基础信息</div>
 
-    <div class="cy-avatar my-10">
-      <div class="ring-primary ring-offset-base-100 w-24 rounded-full ring ring-offset-2">
-        <img src="~/assets/avatar/default.png" />
-      </div>
-    </div>
+    <AvatarUpload :avatar-path="account.avatarPath" @update="handleAvatarUpdate" />
 
     <div class="setting-subtitle">昵称</div>
     <div class="cy-tooltip" data-tip="先绑定手机号或者邮箱才能修改昵称哦~">
@@ -27,6 +23,7 @@
 <script lang="ts" setup>
 import { updateUserInfo } from "@api";
 import type { UserInfoEntity } from "@api/typing";
+import AvatarUpload from "./AvatarUpload.vue";
 
 import { useUserStore } from "@stores/user.store";
 const userStore = useUserStore();
@@ -42,5 +39,10 @@ function update() {
     if (!res) return;
     ElNotification.success({ message: "个人资料修改成功" });
   });
+}
+
+async function handleAvatarUpdate(avatarPath: string) {
+  // 头像上传成功后，更新用户信息中的头像路径
+  await userStore.getUserInfo();
 }
 </script>

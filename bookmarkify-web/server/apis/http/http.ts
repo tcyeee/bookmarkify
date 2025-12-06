@@ -1,6 +1,6 @@
+import type { UserInfoEntity } from '@api/typing';
 import type { Result } from './types';
 import { useUserStore } from "@stores/user.store";
-import type { UserEntity } from '../auth';
 
 export default class http {
     static get(path: string, params?: any): any {
@@ -9,6 +9,39 @@ export default class http {
 
     static post(path: string, params?: any): any {
         return this.start(path, "POST", params);
+    }
+
+    static async upload(path: string, file: File): Promise<any> {
+        return this.uploadFile(path, file);
+    }
+
+    static async uploadFile(path: string, file: File): Promise<any> {
+        const userStore = useUserStore()
+
+        // 除了Login，其他都需要token
+        if (!path.startsWith("/auth/") && !userStore.account?.token) await userStore.login()
+
+        // 创建 FormData
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // 创建请求
+        console.log(`[API] UPLOAD::${path}`);
+        const request: Request = new Request(useRuntimeConfig().public.apiBase + path, {
+            headers: { 'satoken': userStore.account?.token ?? "" },
+            body: formData,
+            method: 'POST',
+        });
+
+        try {
+            const response = await fetch(request);
+            const data = await response.json();
+            return resultCheck(data as Result<object>, request);
+        } catch (error) {
+            // @ts-ignore
+            if (error instanceof TypeError) ElMessage.error(`Oops,网络错误,请重试`)
+            return Promise.reject(error);
+        }
     }
 
     static async start(path: string, method: string, params?: any): Promise<any> {
@@ -46,7 +79,7 @@ async function resultCheck(result: Result<object>, request: Request): Promise<an
     // 如果遇到token失效,则重新登录
     if ([101].includes(result.code)) {
         const userStore = useUserStore()
-        const account: UserEntity = await userStore.login();
+        const account: UserInfoEntity = await userStore.login();
         if (account.token) {
             request.headers.set("satoken", account.token)
             return await fetch(request);
