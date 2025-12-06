@@ -41,13 +41,12 @@ export default class http {
 
 // 对返回结果进行检查
 async function resultCheck(result: Result<object>, request: Request): Promise<any> {
-    if (result.ok) return Promise.resolve(result);
+    if (result.ok) return Promise.resolve(result.data);
 
     // 如果遇到token失效,则重新登录
     if ([101].includes(result.code)) {
         const userStore = useUserStore()
         const account: UserEntity = await userStore.login();
-        console.log("DEBUG: account = ", account);
         if (account.token) {
             request.headers.set("satoken", account.token)
             return await fetch(request);

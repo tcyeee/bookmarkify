@@ -12,11 +12,10 @@
 </template>
 
 <script lang="ts" setup>
-import { queryUserInfo } from "@api";
-import type { UserInfoShow } from "@api/typing";
 const userStore = useUserStore();
+
 onMounted(() => {
-  userStore.userInfo();
+  userStore.getUserInfo();
 });
 
 </script>

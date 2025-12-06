@@ -28,7 +28,7 @@ data class UserSessionInfo(
     }
 
     constructor(user: UserEntity) : this(
-        uid = user.id!!,
+        uid = user.id,
         nickName = user.nickName,
         email = user.email,
         phone = user.phone,

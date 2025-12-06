@@ -17,10 +17,10 @@
 
 <script lang="ts" setup>
 import { updateUserInfo } from "@api";
-import type { UserInfoShow } from "@api/typing";
+import type { UserInfo } from "@api/typing";
 
 const props = defineProps<{
-  info: UserInfoShow;
+  info: UserInfo;
 }>();
 
 function update() {

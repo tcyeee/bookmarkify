@@ -1,12 +1,12 @@
 import { defineStore } from 'pinia'
 import { authByDeviceInfo } from '@api/auth'
-import type { UserEntity } from '@api/auth/typing'
 import { nanoid } from 'nanoid'
 import { AuthStatus } from '../domain'
 import { queryUserInfo } from '@api'
+import type { UserInfoEntity } from '@api/typing'
 
 export const useUserStore = defineStore('user', () => {
-  const account = ref<UserEntity>()
+  const account = ref<UserInfoEntity>()
   const Loading = ref<Boolean>(false);
 
   /**
@@ -18,7 +18,7 @@ export const useUserStore = defineStore('user', () => {
   const authStatus = computed<AuthStatus>(() => {
     if (!account.value) return AuthStatus.NotLogin;
     if (account.value.token) return AuthStatus.Login;
-    if (account.value.mail) return AuthStatus.Auth;
+    if (account.value.email) return AuthStatus.Auth;
     return AuthStatus.NotLogin;
   });
 
@@ -26,20 +26,20 @@ export const useUserStore = defineStore('user', () => {
   /**
    * 获取用户信息（同时刷新存储中的用户信息）
    */
-  async function userInfo() {
-    // Loading.value = true;
-    // await queryUserInfo()
-    //   .then((res) => {
-    //     console.log(res);
-    //   })
-    //   .catch((err) => {
-    //     console.log("==E");
+  async function getUserInfo(): Promise<UserInfoEntity> {
+    Loading.value = true;
+    await queryUserInfo()
+      .then((res: UserInfoEntity) => {
+        account.value = res
+        return Promise.resolve(res);
+      })
+      .catch((err) => {
+        if (err.code == 202) logout()
+        return Promise.reject(err);
+      })
+      .finally(() => { Loading.value = false })
 
-    //     console.log(err);
-    //     if (err.code == 202) logout()
-    //     return Promise.reject(err);
-    //   })
-    //   .finally(() => { Loading.value = false })
+    return Promise.reject(new Error('Unexpected auth status'));
   }
 
 
@@ -48,9 +48,9 @@ export const useUserStore = defineStore('user', () => {
    * 1.检查是否已经登录，如果已经被登录，则直接返回
    * 2.如果没有登录，那么先找到临时帐户（使用DeviceID生成）
    */
-  async function login(): Promise<UserEntity> {
+  async function login(): Promise<UserInfoEntity> {
     console.log("DEBUG: login");
-    if (authStatus.value === AuthStatus.Login) return account.value as UserEntity;
+    if (authStatus.value === AuthStatus.Login) return account.value as UserInfoEntity;
     if (authStatus.value === AuthStatus.NotLogin) {
       const deviceId = getDeviceUid();
 
@@ -96,9 +96,8 @@ export const useUserStore = defineStore('user', () => {
     if (deviceUid !== null) return deviceUid
 
     deviceUid = nanoid()
-    console.log("DEBUG: deviceUid = ", deviceUid);
     localStorage.setItem("deviceUid", deviceUid)
     return deviceUid
   }
-  return { login, logout, authStatus, account, userInfo };
+  return { login, logout, authStatus, account, getUserInfo };
 }, { persist: true });
