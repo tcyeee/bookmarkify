@@ -6,7 +6,7 @@ import cn.hutool.core.codec.Base64
 import cn.hutool.core.date.LocalDateTimeUtil
 import cn.hutool.crypto.SecureUtil
 import cn.hutool.json.JSONUtil
-import top.tcyeee.bookmarkify.entity.dto.UserInfo
+import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
@@ -20,9 +20,9 @@ import java.time.temporal.ChronoUnit
 object BaseUtils {
     /* 用户相关方法 */
     fun uid(): String = user().uid
-    fun user(): UserInfo = user(StpUtil.getSession())
-    private fun user(session: SaSession): UserInfo {
-        return UserInfo(session)
+    fun user(): UserSessionInfo = user(StpUtil.getSession())
+    private fun user(session: SaSession): UserSessionInfo {
+        return UserSessionInfo(session)
     }
 
     fun getUidByToken(token: String): String? {
@@ -34,7 +34,7 @@ object BaseUtils {
     /* 工具类方法 */
     fun yesterday(): LocalDateTime = LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)
 
-    fun userToJson(user: UserEntity): String {
+    fun userToJson(user: UserSessionInfo): String {
         val res = JSONUtil.createObj()
         res["uid"] = user.uid
         res["nickName"] = user.nickName

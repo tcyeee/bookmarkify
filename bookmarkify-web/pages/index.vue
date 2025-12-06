@@ -1,7 +1,4 @@
 <template>
-  <div>
-    <div>用户登录状态:{{ userStore.authStatus }}</div>
-  </div>
   <div class="overflow-hidden select-none">
     <!-- 内容信息 -->
     <div class="absolute w-screen h-screen z-99">
@@ -29,7 +26,6 @@
 
 <script lang="ts" setup>
 const sysStore = useSysStore();
-const storeBookmark = useBookmarkStore();
 const userStore = useUserStore();
 
 const data = reactive<{
@@ -40,14 +36,9 @@ const data = reactive<{
   duringAnimate: false,
 });
 
-// watchEffect(() => {
-// if (data.fade) storeBookmark.update();
-// });
-
 onMounted(() => {
   sysStore.registerKeyEvent("Space", "/", () => sceneToggle("Space"));
   sysStore.registerKeyEvent("Escape", "/", () => sceneToggle("Escape"));
-  // storeBookmark.update();
 });
 
 const classFadeBg = computed(() => {

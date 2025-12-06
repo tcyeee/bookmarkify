@@ -1,6 +1,6 @@
 package top.tcyeee.bookmarkify.entity.response
 
-import top.tcyeee.bookmarkify.entity.dto.UserInfo
+import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
 
 /**
@@ -15,11 +15,11 @@ data class UserAuthEntityVo(
     val nickName: String? = null,
     val mail: String? = null,
 ) {
-    constructor(user: UserInfo, token: String) : this(
+    constructor(user: UserSessionInfo, token: String) : this(
         uid = user.uid, token = token, nickName = user.nickName, mail = user.email
     )
 
     constructor(user: UserEntity, token: String) : this(
-        uid = user.uid, token = token, nickName = user.nickName, mail = user.email
+        uid = user.id, token = token, nickName = user.nickName, mail = user.email
     )
 }
