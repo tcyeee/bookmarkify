@@ -10,48 +10,52 @@ export const useWebSocketStore = defineStore('socket', {
         reconnectTimeout: undefined as number | undefined,
         isConnected: false,   // WebSocket 是否在线
         reconnectAttempts: 0, // 重连次数
-        pingIntervalValue: 5  // 心跳间隔(秒)
+        pingIntervalValue: 5,  // 心跳间隔(秒)
+        debug: false,
     }),
     actions: {
         connect(token: string) {
             if (this.socket) return;
 
             const userStore = useUserStore()
-            this.socket = new WebSocket(`${useRuntimeConfig().public.wsBase}/ws?token=${userStore.account?.token ?? ""}`)
+            const url: string = `${useRuntimeConfig().public.wsBase}/ws?token=${userStore.account?.token ?? ""}`;
+            console.log(`[WebSocket] 连接: ${url}`);
+            this.socket = new WebSocket(url);
 
-            this.socket.onerror = (error) => {
-                console.error("[WebSocket] 发生错误:", error);
-                this.isConnected = false;
-            };
+            // this.socket.onerror = (error) => {
+            //     console.error("[WebSocket] 发生错误:", error);
+            //     this.isConnected = false;
+            // };
 
-            this.socket.onclose = () => {
-                console.log("[WebSocket] 连接关闭");
-                this.socket = undefined;
-                this.isConnected = false;
-                this.stopHeartbeat(); // 停止心跳
-                this.reconnect(); // 触发自动重连
-            };
+            // this.socket.onclose = () => {
+            //     console.log("[WebSocket] 连接关闭");
+            //     this.socket = undefined;
+            //     this.isConnected = false;
+            //     this.stopHeartbeat(); // 停止心跳
+            //     this.reconnect(); // 触发自动重连
+            // };
 
-            this.socket.onopen = () => {
-                console.log('[WebSocket] 已连接..');
-                this.isConnected = true;
-                this.reconnectAttempts = 0; // 重置重连次数
-                this.startHeartbeat(); // 开启心跳检测
-            };
+            // this.socket.onopen = () => {
+            //     console.log('[WebSocket] 已连接..');
+            //     this.isConnected = true;
+            //     this.reconnectAttempts = 0; // 重置重连次数
+            //     this.startHeartbeat(); // 开启心跳检测
+            // };
 
-            this.socket.onmessage = (event) => {
-                const message = JSON.parse(event.data) as SocketMessage;
-                console.log("[WebSocket] 收到消息:", message.type);
-                if (message.type === SocketTypes.BOOKMARK_UPDATE_ONE) {
-                    const bookmarkStore = useBookmarkStore()
-                    bookmarkStore.updateOne(message.data);
-                }
-            }
+            // this.socket.onmessage = (event) => {
+            //     const message = JSON.parse(event.data) as SocketMessage;
+            //     console.log("[WebSocket] 收到消息:", message.type);
+            //     if (message.type === SocketTypes.BOOKMARK_UPDATE_ONE) {
+            //         const bookmarkStore = useBookmarkStore()
+            //         bookmarkStore.updateOne(message.data);
+            //     }
+            // }
         },
 
         startHeartbeat() {
             this.stopHeartbeat(); // 先清除之前的心跳
             this.pingInterval = window.setInterval(() => {
+                if (this.debug) console.log('[WebSocket] 发送心跳');
                 if (this.socket?.readyState === WebSocket.OPEN) this.socket.send('ping');
             }, this.pingIntervalValue * 1000);
         },
