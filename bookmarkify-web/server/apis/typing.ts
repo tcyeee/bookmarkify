@@ -1,5 +1,6 @@
-export interface UserInfoShow {
+export interface UserInfoEntity {
     uid: String
+    token: String
     nickName: String
     phone?: String
     email?: String

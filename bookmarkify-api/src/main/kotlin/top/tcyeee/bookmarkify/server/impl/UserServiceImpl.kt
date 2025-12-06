@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server.impl
 
+import cn.dev33.satoken.stp.StpUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.exception.CommonException
@@ -33,7 +34,7 @@ class UserServiceImpl : IUserService, ServiceImpl<UserMapper, UserEntity>() {
 
     override fun userInfo(): UserInfoShow {
         val userEntity = getById(BaseUtils.uid()) ?: throw CommonException(ErrorType.E202)
-        return UserInfoShow(userEntity)
+        return UserInfoShow(userEntity, StpUtil.getTokenValue())
     }
 
     override fun updateInfo(params: UserInfoUptateParams): Boolean {

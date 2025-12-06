@@ -8,5 +8,5 @@ export const bookmarksDel = (params: Array<string>) => http.post("/bookmark/dele
 export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post("/bookmark/update", params) as Promise<t.Bookmark>;
 
 export const updateUserInfo = (param: t.UserInfoUpdate) => http.post("/user/updateInfo", param) as Promise<boolean>;
-export const queryUserInfo = () => http.get("/user/info") as Promise<t.UserInfoShow>;
+export const queryUserInfo = () => http.get("/user/info") as Promise<t.UserInfoEntity>;
 export const accountDelete = (pwd: string) => http.post("/user/del", { password: btoa(pwd) }) as Promise<boolean>;
