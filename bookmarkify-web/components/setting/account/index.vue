@@ -1,13 +1,13 @@
 <template>
   <div>
     <!-- 个人资料 -->
-    <!-- <SettingAccountProfile v-if="userInfo" :info="userInfo" /> -->
+    <SettingAccountProfile v-if="userStore.account" :info="userStore.account" />
 
     <!-- 账户绑定 -->
     <SettingAccountVerify />
 
     <!-- 注销账户 -->
-    <!-- <SettingAccountCancel /> -->
+    <SettingAccountCancel />
   </div>
 </template>
 
@@ -15,7 +15,7 @@
 const userStore = useUserStore();
 
 onMounted(() => {
-  userStore.getUserInfo();
+  userStore.getUserInfo()
 });
 
 </script>
