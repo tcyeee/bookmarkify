@@ -3,6 +3,7 @@ import { authByDeviceInfo } from '@api/auth'
 import type { UserEntity } from '@api/auth/typing'
 import { nanoid } from 'nanoid'
 import { AuthStatus } from '../domain'
+import { queryUserInfo } from '@api'
 
 export const useUserStore = defineStore('user', () => {
   const account = ref<UserEntity>()
@@ -21,40 +22,57 @@ export const useUserStore = defineStore('user', () => {
     return AuthStatus.NotLogin;
   });
 
+
+  /**
+   * 获取用户信息（同时刷新存储中的用户信息）
+   */
+  async function userInfo() {
+    // Loading.value = true;
+    // await queryUserInfo()
+    //   .then((res) => {
+    //     console.log(res);
+    //   })
+    //   .catch((err) => {
+    //     console.log("==E");
+
+    //     console.log(err);
+    //     if (err.code == 202) logout()
+    //     return Promise.reject(err);
+    //   })
+    //   .finally(() => { Loading.value = false })
+  }
+
+
   /**
    * 登录方法
    * 1.检查是否已经登录，如果已经被登录，则直接返回
    * 2.如果没有登录，那么先找到临时帐户（使用DeviceID生成）
    */
-  async function login() {
-    console.log("=======开始检查用户登录状态=======");
-    if (authStatus.value === AuthStatus.Login) return
-
+  async function login(): Promise<UserEntity> {
+    console.log("DEBUG: login");
+    if (authStatus.value === AuthStatus.Login) return account.value as UserEntity;
     if (authStatus.value === AuthStatus.NotLogin) {
       const deviceId = getDeviceUid();
 
       // 使用DeviceID临时登录
       Loading.value = true;
-      authByDeviceInfo(deviceId)
-        .then((res) => {
-          console.log("---");
-          account.value = res;
-          console.log(account.value);
-          console.log("---");
-          return Promise.resolve(res);
-        })
-        .finally(() => { Loading.value = false })
-        .catch((err) => {
-          return Promise.reject(err);
-        });
+      try {
+        const res = await authByDeviceInfo(deviceId);
+        account.value = res;
+        return res;
+      } catch (err) {
+        return Promise.reject(err);
+      } finally {
+        Loading.value = false;
+      }
     }
+    return Promise.reject(new Error('Unexpected auth status'));
   }
 
 
   // async function loginByDeviceUid(): Promise<UserEntity> {
   //   if (Loading.value) return Promise.reject('loading..');
   //   Loading.value = true;
-  //   const res = await authByDeviceInfo(auth).finally(() => { Loading.value = false })
   //   console.log(`[DEBUG] 重新登陆获取TOKEN:${res.token}`);
   //   authStatus.value = AuthStatus.Login;
   //   auth.token = res.token;
@@ -66,7 +84,9 @@ export const useUserStore = defineStore('user', () => {
   // }
 
   function logout() {
+    console.log("DEBUG: logout");
     account.value = undefined;
+    localStorage.removeItem("deviceUid")
   }
 
   function getDeviceUid(): string {
@@ -76,8 +96,9 @@ export const useUserStore = defineStore('user', () => {
     if (deviceUid !== null) return deviceUid
 
     deviceUid = nanoid()
+    console.log("DEBUG: deviceUid = ", deviceUid);
     localStorage.setItem("deviceUid", deviceUid)
     return deviceUid
   }
-  return { login, logout, authStatus, account };
+  return { login, logout, authStatus, account, userInfo };
 }, { persist: true });

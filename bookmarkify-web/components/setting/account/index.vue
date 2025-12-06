@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- 个人资料 -->
-    <SettingAccountProfile v-if="userInfo" :info="userInfo" />
+    <!-- <SettingAccountProfile v-if="userInfo" :info="userInfo" /> -->
 
     <!-- 账户绑定 -->
     <SettingAccountVerify />
@@ -14,18 +14,11 @@
 <script lang="ts" setup>
 import { queryUserInfo } from "@api";
 import type { UserInfoShow } from "@api/typing";
-
-var userInfo = reactive({} as UserInfoShow);
-
+const userStore = useUserStore();
 onMounted(() => {
-  getUserInfo();
+  userStore.userInfo();
 });
 
-function getUserInfo() {
-  queryUserInfo().then((res) => {
-    Object.assign(userInfo, res);
-  });
-}
 </script>
 
 <style lang="scss" scoped>

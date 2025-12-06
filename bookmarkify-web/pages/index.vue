@@ -32,7 +32,7 @@ const data = reactive<{
   fade: boolean;
   duringAnimate: boolean;
 }>({
-  fade: true,
+  fade: false,
   duringAnimate: false,
 });
 

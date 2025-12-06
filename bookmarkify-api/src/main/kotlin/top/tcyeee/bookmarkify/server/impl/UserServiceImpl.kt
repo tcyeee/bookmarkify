@@ -2,6 +2,8 @@ package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
+import top.tcyeee.bookmarkify.config.exception.CommonException
+import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
@@ -30,7 +32,8 @@ class UserServiceImpl : IUserService, ServiceImpl<UserMapper, UserEntity>() {
     }
 
     override fun userInfo(): UserInfoShow {
-        return UserInfoShow(getById(BaseUtils.uid()))
+        val userEntity = getById(BaseUtils.uid()) ?: throw CommonException(ErrorType.E202)
+        return UserInfoShow(userEntity)
     }
 
     override fun updateInfo(params: UserInfoUptateParams): Boolean {
