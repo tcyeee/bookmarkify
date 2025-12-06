@@ -2,20 +2,21 @@ import { defineStore } from 'pinia'
 import { authByDeviceInfo } from '@api/auth'
 import type { UserAuthParams, UserEntity } from '@api/auth/typing'
 import { nanoid } from 'nanoid'
+import { AuthStatus } from '../domain'
 
 export const useUserStore = defineStore('user', () => {
-  const loggedIn = ref<Boolean>(false);
+  const authStatus = ref<AuthStatus>(AuthStatus.NotLogin);
   const auth = reactive<UserAuthParams>({
     deviceUid: queryDeviceUid()
   });
-  const Loading = ref<Boolean>(false);
 
+  const Loading = ref<Boolean>(false);
   async function loginByDeviceUid(): Promise<UserEntity> {
     if (Loading.value) return Promise.reject('loading..');
     Loading.value = true;
     const res = await authByDeviceInfo(auth).finally(() => { Loading.value = false })
     console.log(`[DEBUG] 重新登陆获取TOKEN:${res.token}`);
-    loggedIn.value = true;
+    authStatus.value = AuthStatus.Login;
     auth.token = res.token;
 
     // 重连 websocket
@@ -25,7 +26,7 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function logout() {
-    loggedIn.value = false
+    authStatus.value = AuthStatus.NotLogin;
     Object.assign(auth, {})
   }
 
@@ -39,5 +40,5 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem("deviceUid", deviceUid)
     return deviceUid
   }
-  return { auth, loginByDeviceUid, logout };
+  return { auth, loginByDeviceUid, logout, authStatus };
 }, { persist: true });
