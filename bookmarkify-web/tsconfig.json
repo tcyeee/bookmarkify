@@ -6,6 +6,8 @@
       "@api": ["server/apis"],
       "@api/*": ["server/apis/*"],
       "@stores/*": ["stores/*"],
+      "@config": ["server/config"],
+      "@config/*": ["server/config/*"]
     }
   },
   "extends": "./.nuxt/tsconfig.json"
