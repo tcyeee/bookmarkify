@@ -11,10 +11,10 @@ export const useBookmarkStore = defineStore('bookmarks', () => {
     return !res || res.length === 0 ? [] : res.slice().sort((a, b) => a.sort - b.sort)
   }
 
-  async function get(): Promise<Array<HomeItem>> {
-    if (bookmarks.value === undefined) return await update()
-    return bookmarks.value
-  }
+  // async function get(): Promise<Array<HomeItem>> {
+  //   if (bookmarks.value === undefined) return await update()
+  //   return bookmarks.value
+  // }
 
   async function update(): Promise<Array<HomeItem>> {
     const res = await bookmarksShowAll()
@@ -56,5 +56,6 @@ export const useBookmarkStore = defineStore('bookmarks', () => {
     addAction,
     addEmpty,
     updateOne,
+    update
   }
 }, { persist: true });

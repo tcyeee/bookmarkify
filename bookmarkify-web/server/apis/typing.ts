@@ -1,16 +1,16 @@
 export interface UserInfoEntity {
-    uid: String
-    token: String
-    nickName: String
-    phone?: String
-    email?: String
-    avatarPath?: String
+    uid: string
+    token: string
+    nickName: string
+    phone?: string
+    email?: string
+    avatarPath?: string
     verified: boolean
 }
 
 export interface UserInfoUpdate {
-    nickName?: String
-    phone?: String
+    nickName?: string
+    phone?: string
 }
 
 export interface BookmarkUpdatePrams {
@@ -83,5 +83,5 @@ export enum HomeItemType {
 export interface BookmarkDir {
     name: string;
     bookmarkList: Array<Bookmark>;
-    bookmarkUserLinkIds: Array<String>;
+    bookmarkUserLinkIds: Array<string>;
 };
