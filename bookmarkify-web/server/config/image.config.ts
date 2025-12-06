@@ -28,6 +28,11 @@ export function getImageUrl(path: string | null | undefined): string {
         return imageConfig.defaultAvatarPath
     }
 
+    // 如果是 data URL（base64 编码的图片），直接返回
+    if (path.startsWith('data:')) {
+        return path
+    }
+
     // 如果已经是完整 URL，直接返回
     if (path.startsWith('http://') || path.startsWith('https://')) {
         return path
