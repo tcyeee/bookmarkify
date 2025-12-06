@@ -18,11 +18,12 @@ export default class http {
         if (method != "GET" && !path.startsWith("/auth/") && !userStore.account?.token) userStore.login()
 
         // 创建请求
-        console.log(`[DEBUG] ${method}::${path}`);
+        console.log(`[API] ${method}::${path}`);
         if (method == "GET") path += `?${new URLSearchParams(params).toString()}`;
+        const body = method == "POST" ? JSON.stringify(params) : undefined;
         const request: Request = new Request(useRuntimeConfig().public.apiBase + path, {
             headers: { 'Content-Type': 'application/json', 'satoken': userStore.account?.token ?? "" },
-            body: JSON.stringify(params),
+            body: body,
             method: method,
         });
 
@@ -40,20 +41,20 @@ export default class http {
 
 // 对返回结果进行检查
 async function resultCheck(result: Result<object>, request: Request): Promise<any> {
-    if (result.ok) return Promise.resolve(result.data);
+    if (result.ok) return Promise.resolve(result);
 
-    // // 如果遇到token失效,则重新登录
-    // if ([101, 107].includes(result.code)) {
-    //     const userStore = useUserStore()
-    //     const userAuth: UserEntity = await userStore.login();
-    //     // todo 添加token后重新请求
-    //     if (userAuth.token) {
-    //         request.headers.set("satoken", userAuth.token)
-    //         return await fetch(request);
-    //     }
-    // }
+    // 如果遇到token失效,则重新登录
+    if ([101].includes(result.code)) {
+        const userStore = useUserStore()
+        const account: UserEntity = await userStore.login();
+        console.log("DEBUG: account = ", account);
+        if (account.token) {
+            request.headers.set("satoken", account.token)
+            return await fetch(request);
+        }
+    }
 
-    // @ts-ignore
-    ElMessage.error(`Oops, ${result.msg}`)
+    // 如果result.code是“1”开头，则需要提示
+    if (result.code.toString().startsWith("1")) ElMessage.error(`Oops, ${result.msg}`)
     return Promise.reject(result);
 }
