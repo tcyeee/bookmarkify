@@ -1,10 +1,3 @@
-/**
- * 图片相关配置
- */
-
-/**
- * 图片文件服务配置
- */
 export const imageConfig = {
     /**
      * 文件服务基础 URL
@@ -17,6 +10,12 @@ export const imageConfig = {
      * 当用户未设置头像时使用
      */
     defaultAvatarPath: '/avatar/default.png',
+
+    /**
+     * 图片大小限制（字节）
+     * 默认限制为 5MB
+     */
+    maxImageSize: 5 * 1024 * 1024, // 5MB
 } as const
 
 /**

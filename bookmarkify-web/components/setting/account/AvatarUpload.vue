@@ -39,6 +39,7 @@
 <script lang="ts" setup>
 import { uploadAvatar } from '@api'
 import { useUserStore } from '@stores/user.store'
+import { imageConfig } from '@config/image.config'
 import AvatarPreview from './AvatarPreview.vue'
 
 interface Props {
@@ -70,9 +71,10 @@ function handleFileChange(event: Event) {
     return
   }
   
-  // 验证文件大小（限制为 5MB）
-  if (file.size > 5 * 1024 * 1024) {
-    ElMessage.error('图片大小不能超过 5MB')
+  // 验证文件大小
+  if (file.size > imageConfig.maxImageSize) {
+    const maxSizeMB = imageConfig.maxImageSize / (1024 * 1024)
+    ElMessage.error(`图片大小不能超过 ${maxSizeMB}MB`)
     return
   }
   
