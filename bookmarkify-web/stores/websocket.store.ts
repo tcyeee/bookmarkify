@@ -16,9 +16,7 @@ export const useWebSocketStore = defineStore('socket', {
     actions: {
         connect(token: string) {
             if (this.socket) return;
-
-            const userStore = useUserStore()
-            const url: string = `${useRuntimeConfig().public.wsBase}/ws?token=${userStore.account?.token ?? ""}`;
+            const url: string = `${useRuntimeConfig().public.wsBase}/ws?token=${token}`;
             console.log(`[WebSocket] 连接: ${url}`);
             this.socket = new WebSocket(url);
 
