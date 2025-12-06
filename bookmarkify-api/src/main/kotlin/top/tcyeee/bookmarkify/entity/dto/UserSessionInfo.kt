@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.entity.dto
 
 import cn.dev33.satoken.session.SaSession
 import cn.hutool.json.JSONUtil
+import top.tcyeee.bookmarkify.entity.entity.UserEntity
 
 /**
  * 存储在Session中的用户信息
@@ -9,7 +10,7 @@ import cn.hutool.json.JSONUtil
  * @author tcyeee
  * @date 3/14/25 19:35
  */
-data class UserInfo(
+data class UserSessionInfo(
     var uid: String,
     var nickName: String? = null,
     var email: String? = null,
@@ -25,4 +26,11 @@ data class UserInfo(
         this.phone = res["phone"].toString()
         this.socketId = res["socketId"].toString()
     }
+
+    constructor(user: UserEntity) : this(
+        uid = user.id!!,
+        nickName = user.nickName,
+        email = user.email,
+        phone = user.phone,
+    )
 }

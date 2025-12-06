@@ -18,7 +18,8 @@ export default defineNuxtConfig({
   ],
   plugins: [
     '~/plugins/keyListener.ts',
-    '~/plugins/contextMenu.ts'
+    '~/plugins/contextMenu.ts',
+    '~/plugins/auth.ts'
   ],
   vite: {
     plugins: [
@@ -40,10 +41,5 @@ export default defineNuxtConfig({
   // pinia: {
   //   storesDirs: ['./stores/**'],
   // },
-
-  // googleSignIn: {
-  //   clientId: process.env.BOOKMARKIFY_GOOGLE_LOGIN_ID
-  // },
-
   compatibilityDate: '2025-02-12',
 })

@@ -2,7 +2,6 @@ package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
-import top.tcyeee.bookmarkify.entity.request.LoginByClientForm
 import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
 import top.tcyeee.bookmarkify.entity.response.UserInfoShow
@@ -19,12 +18,8 @@ interface IUserService : IService<UserEntity> {
      *
      * @return 用户信息
      */
-    fun getByDeviceInfo(form: LoginByClientForm): UserEntity?
-
-    fun createUserByDevicInfo(form: LoginByClientForm): UserEntity
-
-    fun updateDeviceUidOrFingerprint(uid: String, form: LoginByClientForm)
-
+    fun getByDeviceId(deviceId: String): UserEntity?
+    fun createUserByDeviceId(deviceId: String): UserEntity
     fun userInfo(): UserInfoShow
     fun updateInfo(params: UserInfoUptateParams): Boolean
     fun updateUsername(username: String): Boolean

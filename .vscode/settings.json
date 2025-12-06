@@ -5,7 +5,10 @@
     "files.autoSaveWhenNoErrors": true,
     "files.autoSaveWorkspaceFilesOnly": true,
     "cSpell.words": [
+        "baomidou",
+        "hutool",
         "maki",
+        "mybatisplus",
         "nums",
         "satoken",
         "Uptate"

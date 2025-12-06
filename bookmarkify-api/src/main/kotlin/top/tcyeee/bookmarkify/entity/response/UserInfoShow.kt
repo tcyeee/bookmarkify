@@ -12,7 +12,7 @@ data class UserInfoShow(
     var verified: Boolean? = null,       // 是否为验证过的账户(例如绑定手机号,绑定邮箱等)
 ) {
     constructor(user: UserEntity) : this(
-        uid = user.uid,
+        uid = user.id,
         nickName = user.nickName,
     ) {
         BeanUtil.copyProperties(user, this)
