@@ -1,11 +1,11 @@
 <template>
   <div class="background-preview-container">
     <div class="background-preview" :style="previewStyle">
-      <img v-if="backgroundConfig?.type === 'IMAGE' && backgroundUrl" 
-        :src="backgroundUrl" 
-        alt="主页背景" 
-        class="preview-image" 
-      />
+      <img
+        v-if="backgroundConfig?.type === 'IMAGE' && backgroundUrl"
+        :src="backgroundUrl"
+        alt="主页背景"
+        class="preview-image" />
       <div v-else-if="backgroundConfig?.type === 'GRADIENT' && backgroundConfig.gradient" class="preview-gradient">
         <span>渐变背景</span>
       </div>
