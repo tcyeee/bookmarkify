@@ -29,7 +29,8 @@ export const imageConfig = {
  *   "id": "7bfde455-1310-4e5b-a520-f93157f61f3f",
  *   "uid": "1bf153c2-08e2-4200-b605-8a40af8ab586",
  *   "environment": "LOCAL",
- *   "name": "IMG_7210.jpg",
+ *   "originName": "IMG_7210.jpg",
+ *   "currentName": "avatar/c100782c-de9c-4c58-a72e-b47dba08bf36.jpg",
  *   "type": "AVATAR_IMAGE",
  *   "size": 27915,
  *   "createTime": "2025-12-07T17:11:23.666985",
@@ -37,7 +38,7 @@ export const imageConfig = {
  * @returns 图片的完整 URL
  */
 export function getImageUrlByUserFile(userFile: UserFile): string {
-    return `${getFileServiceBaseUrl(userFile.environment)}/${userFile.name}`
+    return `${getFileServiceBaseUrl(userFile.environment)}/${userFile.currentName}`
 }
 
 /**

@@ -23,41 +23,28 @@ enum class FileType(val limit: Int, val prefix: String, val defaultSuffix: Strin
 /**
  * 上传头像
  * @param file 文件
- * @param uid 用户ID
  * @param fileBasePath 文件存储路径
  * @return 文件名
  */
-fun uploadAvatar(file: MultipartFile, uid: String, fileBasePath: String): String {
-    return uploadFile(file, uid, fileBasePath, FileType.AVATAR)
-}
-
-/**
- * 上传背景
- * @param file 文件
- * @param uid 用户ID
- * @param fileBasePath 文件存储路径
- * @return 文件名
- */
-fun uploadBackground(file: MultipartFile, uid: String, fileBasePath: String): String {
-    return uploadFile(file, uid, fileBasePath, FileType.BACKGROUND)
+fun uploadAvatar(file: MultipartFile, fileBasePath: String): String {
+    return uploadFile(file, fileBasePath, FileType.AVATAR)
 }
 
 /**
  * 上传文件
  * @param file 文件
- * @param uid 用户ID
  * @param fileBasePath 文件存储路径
  * @param fileType 文件类型
  * @return 文件名
  */
-private fun uploadFile(file: MultipartFile, uid: String, fileBasePath: String, fileType: FileType): String {
+fun uploadFile(file: MultipartFile, fileBasePath: String, fileType: FileType): String {
     // 验证文件类型
     file.contentType?.startsWith(fileType.prefix)?.let { if (!it) throw CommonException(ErrorType.E103) }
 
     // 验证文件大小
     if (file.size > fileType.limit) throw CommonException(ErrorType.E104)
 
-    val (dest, fileName) = getFileName(file, fileType, uid, fileBasePath)
+    val (dest, fileName) = getFileName(file, fileType, fileBasePath)
 
     saveFile(file, dest)
 
@@ -68,14 +55,12 @@ private fun uploadFile(file: MultipartFile, uid: String, fileBasePath: String, f
  * 生成文件名
  * @param file 文件
  * @param fileType 文件类型
- * @param uid 用户ID
  * @param fileBasePath 文件存储路径
  * @return 文件名
  */
 private fun getFileName(
     file: MultipartFile,
     fileType: FileType,
-    uid: String,
     fileBasePath: String
 ): Pair<File, String> {
     // 从原始文件名提取扩展名

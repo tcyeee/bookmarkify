@@ -25,7 +25,6 @@
 </template>
 
 <script lang="ts" setup>
-import { getImageUrl } from '@config'
 
 const sysStore = useSysStore();
 const userStore = useUserStore();
@@ -75,22 +74,14 @@ const backgroundStyle = computed(() => {
         backgroundImage: `linear-gradient(${direction}deg, ${colors})`,
       };
     } else if (backgroundConfig.type === 'IMAGE' && backgroundConfig.imagePath) {
-      const backgroundUrl = getImageUrl(backgroundConfig.imagePath);
-      return {
-        backgroundImage: `url(${backgroundUrl})`,
-      };
+      // const backgroundUrl = getImageUrl(backgroundConfig.imagePath);
+      // return {
+      //   backgroundImage: `url(${backgroundUrl})`,
+      // };
+      return ""
     }
   }
-  
-  // 兼容旧版本的 backgroundPath
-  const backgroundPath = account?.backgroundPath;
-  if (backgroundPath) {
-    const backgroundUrl = getImageUrl(backgroundPath);
-    return {
-      backgroundImage: `url(${backgroundUrl})`,
-    };
-  }
-  
+
   // 默认渐变背景
   return {
     backgroundImage: 'linear-gradient(135deg, #a69f9f, #c1baba, #8f9ea6)',

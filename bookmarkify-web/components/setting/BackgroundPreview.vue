@@ -17,7 +17,6 @@
 </template>
 
 <script lang="ts" setup>
-import { getImageUrl } from '@config'
 import type { BackgroundConfig } from '@api/typing'
 
 const props = defineProps<{
@@ -26,13 +25,13 @@ const props = defineProps<{
 }>()
 
 const backgroundUrl = computed(() => {
-  if (props.backgroundConfig?.type === 'IMAGE' && props.backgroundConfig.imagePath) {
-    return getImageUrl(props.backgroundConfig.imagePath)
-  }
-  if (props.backgroundPath) {
-    return getImageUrl(props.backgroundPath)
-  }
-  return null
+  // if (props.backgroundConfig?.type === 'IMAGE' && props.backgroundConfig.imagePath) {
+  //   return getImageUrl(props.backgroundConfig.imagePath)
+  // }
+  // if (props.backgroundPath) {
+  //   return getImageUrl(props.backgroundPath)
+  // }
+  // return null
 })
 
 const previewStyle = computed(() => {

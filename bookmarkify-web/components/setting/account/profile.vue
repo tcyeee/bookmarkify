@@ -10,7 +10,7 @@
 
     <div class="setting-title">基础信息</div>
 
-    <AvatarUpload :avatar-path="account.avatar.name" @update="handleAvatarUpdate" />
+    <AvatarUpload :avatar-path="avatarUrl" @update="handleAvatarUpdate" />
 
     <div class="setting-subtitle">昵称</div>
     <div class="cy-tooltip" data-tip="先绑定手机号或者邮箱才能修改昵称哦~">
@@ -24,11 +24,12 @@
 import { updateUserInfo } from "@api";
 import type { UserInfoEntity } from "@api/typing";
 import AvatarUpload from "./AvatarUpload.vue";
-
+import {getImageUrlByUserFile} from '@config'
 import { useUserStore } from "@stores/user.store";
 const userStore = useUserStore();
 
 const account = computed<UserInfoEntity | undefined>(() => userStore.account);
+const avatarUrl: Ref<string | undefined> = computed(() => userStore.avatarUrl);
 
 function update() {
   const params = {

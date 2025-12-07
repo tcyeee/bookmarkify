@@ -13,8 +13,9 @@ import top.tcyeee.bookmarkify.entity.entity.UserFileType
 import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.server.IFileService
 import top.tcyeee.bookmarkify.server.IImageBackgroundService
+import top.tcyeee.bookmarkify.utils.FileType
 import top.tcyeee.bookmarkify.utils.uploadAvatar
-import top.tcyeee.bookmarkify.utils.uploadBackground
+import top.tcyeee.bookmarkify.utils.uploadFile
 
 /**
  * 文件记录 Service 实现
@@ -31,12 +32,13 @@ class FileServiceImpl(
 ) : IFileService, ServiceImpl<FileMapper, UserFile>() {
 
     override fun updateAvatar(uid: String, file: MultipartFile): String {
-        val fileName = uploadAvatar(file, uid, projectConfig.imgPath)
+        val fileName = uploadAvatar(file, projectConfig.imgPath)
 
         val userFileEntity = UserFile(
             uid = uid,
-            name = file.originalFilename ?: "",
+            originName = file.originalFilename ?: "",
             type = UserFileType.AVATAR_IMAGE,
+            currentName = fileName,
             size = file.size,
         ).also { save(it) }
 
@@ -49,12 +51,13 @@ class FileServiceImpl(
     }
 
     override fun uploadBackground(uid: String, file: MultipartFile): String {
-        val fileName = uploadBackground(file, uid, projectConfig.imgPath)
+        val fileName = uploadFile(file, projectConfig.imgPath, FileType.BACKGROUND)
 
         val userFileEntity = UserFile(
             uid = uid,
-            name = file.originalFilename ?: "",
+            originName = file.originalFilename ?: "",
             type = UserFileType.AVATAR_IMAGE,
+            currentName = fileName,
             size = file.size,
         ).also { save(it) }
 

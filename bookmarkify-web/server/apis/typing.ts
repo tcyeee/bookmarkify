@@ -29,13 +29,14 @@ export interface UserInfoEntity {
 }
 
 export interface UserFile {
-    id: string              /* 文件ID */
-    uid: string              /* 文件所属用户ID */
+    id: string             /* 文件ID */
+    uid: string            /* 文件所属用户ID */
     environment: CurrentEnvironment
-    name: string              /* 文件名称 */
+    originName: string
+    currentName: string
     type: UserFileType
-    size: number              /* 文件大小(单位:字节) */
-    createTime: string              /* 文件创建时间 */
+    size: number            /* 文件大小(单位:字节) */
+    createTime: string      /* 文件创建时间 */
     deleted: boolean
 }
 export enum CurrentEnvironment {
