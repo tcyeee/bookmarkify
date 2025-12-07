@@ -37,8 +37,8 @@ class UserBackgroundLinkEntity(
     }
 }
 
-@TableName("image_background")
-class ImageBackgroundEntity(
+@TableName("background_image")
+class BackgroundImageEntity(
     @TableId @field:Schema(description = "背景ID") var id: String = IdUtil.fastUUID(),
     @field:Schema(description = "用户ID") val uid: String,
     @field:Schema(description = "文件ID") val fileId: String,
@@ -46,8 +46,8 @@ class ImageBackgroundEntity(
     @field:Schema(description = "是否是默认展示的背景") val isDefault: Boolean = false,
 )
 
-@TableName("gradient_background")
-class GradientBackgroundEntity(
+@TableName("background_gradient")
+class BackgroundGradientEntity(
     @TableId @field:Schema(description = "背景ID") var id: String,
     @field:Schema(description = "用户ID") val uid: String,
     @field:Schema(description = "背景渐变色(JSON)") val gradient: String,

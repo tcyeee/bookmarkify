@@ -24,7 +24,6 @@
 import { updateUserInfo } from "@api";
 import type { UserInfoEntity } from "@api/typing";
 import AvatarUpload from "./AvatarUpload.vue";
-import {getImageUrlByUserFile} from '@config'
 import { useUserStore } from "@stores/user.store";
 const userStore = useUserStore();
 

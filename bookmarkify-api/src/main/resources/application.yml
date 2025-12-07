@@ -24,3 +24,12 @@ sa-token:
   timeout: 2592000
   is-log: true
   is-print: false
+
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 10MB       # 单个文件最大10MB
+      max-request-size: 50MB    # 单次请求总大小50MB
+      file-size-threshold: 2MB  # 可选：内存缓存阈值
+      enabled: true             # 可选：开启上传支持

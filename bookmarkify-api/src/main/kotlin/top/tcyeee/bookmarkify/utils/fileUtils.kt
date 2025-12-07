@@ -17,7 +17,7 @@ import java.io.File
  */
 enum class FileType(val limit: Int, val prefix: String, val defaultSuffix: String, val folder: String) {
     AVATAR(5 * 1024 * 1024, "image/", "jpg", "avatar"),
-    BACKGROUND(5 * 1024 * 1024, "image/", "jpg", "background"),
+    BACKGROUND(10 * 1024 * 1024, "image/", "jpg", "background"),
 }
 
 /**
