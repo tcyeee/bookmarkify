@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
+import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
 import top.tcyeee.bookmarkify.entity.response.UserInfoShow
@@ -48,6 +49,8 @@ class UserController(
 
     @PostMapping("uploadAvatar")
     @Operation(summary = "上传头像", parameters = [Parameter(name = "file", description = "头像图片文件")])
-    fun uploadAvatar(@RequestParam("file") file: MultipartFile): String =
-        userService.updateAvatar(BaseUtils.uid(), file)
+    fun uploadAvatar(@RequestParam("file") file: MultipartFile): ResultWrapper {
+        val fileName = userService.updateAvatar(BaseUtils.uid(), file)
+        return ResultWrapper.ok(fileName)
+    }
 }

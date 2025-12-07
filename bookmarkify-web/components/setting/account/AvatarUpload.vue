@@ -1,8 +1,6 @@
 <template>
   <div class="avatar-upload-container">
     <AvatarPreview :avatar-path="previewUrl || avatarPath" />
-    <div>previewUrl: {{ previewUrl }}</div>
-    <div>avatarPath: {{ avatarPath }}</div>
     <div class="mt-4 flex gap-2">
       <label class="cy-btn cy-btn-soft cursor-pointer">
         <input
