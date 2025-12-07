@@ -23,3 +23,9 @@ data class UserInfoUptateParams (
     var nickName: String,
     var phone: String?
 )
+
+data class BookmarkUpdataPrams(
+    var linkId: String,
+    var title: String,
+    var description: String,
+)

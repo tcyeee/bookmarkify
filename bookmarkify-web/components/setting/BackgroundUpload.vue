@@ -92,12 +92,12 @@
 </template>
 
 <script lang="ts" setup>
-import { uploadBackground, updateBackgroundConfig } from '@api'
 import { useUserStore } from '@stores/user.store'
 import { imageConfig } from '@config/image.config'
 import BackgroundPreview from './BackgroundPreview.vue'
 import { BackgroundType } from '@api/typing'
 import type { BackgroundConfig, GradientConfig } from '@api/typing'
+import { updateBacColor, uploadBacPic } from '@api'
 
 interface Props {
   backgroundPath?: string | null
@@ -217,7 +217,7 @@ async function saveGradient() {
       },
     }
 
-    await updateBackgroundConfig(config)
+    await updateBacColor(config)
     emit('update', config)
     ElNotification.success({ message: '渐变背景保存成功' })
 
@@ -266,7 +266,7 @@ async function handleUpload() {
 
   uploading.value = true
   try {
-    const imagePath = await uploadBackground(selectedFile.value)
+    const imagePath = await uploadBacPic(selectedFile.value)
     const config: BackgroundConfig = {
       type: BackgroundType.IMAGE,
       imagePath,

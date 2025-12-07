@@ -1,7 +1,7 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
-import top.tcyeee.bookmarkify.entity.dto.BookmarkUpdataPrams
+import top.tcyeee.bookmarkify.entity.BookmarkUpdataPrams
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 
 /**
