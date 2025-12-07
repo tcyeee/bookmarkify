@@ -50,7 +50,7 @@ class ImageBackgroundEntity(
 class GradientBackgroundEntity(
     @TableId @field:Schema(description = "背景ID") var id: String,
     @field:Schema(description = "用户ID") val uid: String,
-    @field:Schema(description = "背景渐变色") val gradient: String,
+    @field:Schema(description = "背景渐变色(JSON)") val gradient: String,
     @field:Schema(description = "背景渐变方向") val direction: Int,
     @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "是否是默认展示的背景") val isDefault: Boolean = false,
