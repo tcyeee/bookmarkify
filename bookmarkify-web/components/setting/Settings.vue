@@ -1,7 +1,5 @@
 <template>
   <div>
-    <div class="setting-title">偏好设置</div>
-
     <!-- 主页背景设置 -->
     <div class="setting-section">
       <h3 class="setting-section-title">主页背景</h3>
@@ -46,13 +44,6 @@ async function handleBackgroundReset() {
   color: #1f2937;
 }
 
-.setting-section {
-  margin-bottom: 3rem;
-  padding: 1.5rem;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
 
 .setting-section-title {
   font-size: 1.25rem;

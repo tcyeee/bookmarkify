@@ -1,8 +1,7 @@
 <template>
   <div class="background-preview-container">
     <div class="background-preview" :style="previewStyle">
-      <img 
-        v-if="backgroundConfig?.type === 'IMAGE' && backgroundUrl" 
+      <img v-if="backgroundConfig?.type === 'IMAGE' && backgroundUrl" 
         :src="backgroundUrl" 
         alt="主页背景" 
         class="preview-image" 

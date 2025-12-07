@@ -53,4 +53,8 @@ class UserController(
         val fileName = userService.updateAvatar(BaseUtils.uid(), file)
         return ResultWrapper.ok(fileName)
     }
+
+    // TODO 选择自定义背景
+    // TODO 上传自定义背景图片
+    // TODO 上传自定义渐变背景
 }
