@@ -57,14 +57,14 @@ class UserController(
     @Operation(summary = "上传头像", parameters = [Parameter(name = "file", description = "头像图片文件")])
     fun uploadAvatar(@RequestParam("file") file: MultipartFile): ResultWrapper {
         val fileName = userService.updateAvatar(BaseUtils.uid(), file)
-        return ResultWrapper.Companion.ok(fileName)
+        return ResultWrapper.ok(fileName)
     }
 
     @PostMapping("uploadBackground")
     @Operation(summary = "上传自定义背景图片", parameters = [Parameter(name = "file", description = "背景图片文件")])
     fun uploadBackground(@RequestParam("file") file: MultipartFile): ResultWrapper {
         val fileName = userService.uploadBackground(BaseUtils.uid(), file)
-        return ResultWrapper.Companion.ok(fileName)
+        return ResultWrapper.ok(fileName)
     }
 
     @PostMapping("updateBackgroundConfig")
