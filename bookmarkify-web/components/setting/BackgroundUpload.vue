@@ -1,28 +1,21 @@
 <template>
   <div class="background-upload-container">
-    <BackgroundPreview 
+    <BackgroundPreview
       :background-path="previewUrl || (currentType === BackgroundType.IMAGE ? backgroundPath : null)"
-      :background-config="previewConfig"
-    />
-    
+      :background-config="previewConfig" />
+
     <!-- 背景类型选择 -->
     <div class="type-selector mb-4">
       <label class="type-label">背景类型：</label>
       <div class="type-buttons">
-        <button
-          :class="['type-btn', { 'type-btn-active': currentType === BackgroundType.GRADIENT }]"
-          @click="switchType(BackgroundType.GRADIENT)"
-        >
+        <button :class="['type-btn', { 'type-btn-active': currentType === BackgroundType.GRADIENT }]" @click="switchType(BackgroundType.GRADIENT)">
           渐变背景
         </button>
-        <button
-          :class="['type-btn', { 'type-btn-active': currentType === BackgroundType.IMAGE }]"
-          @click="switchType(BackgroundType.IMAGE)"
-        >
+        <button :class="['type-btn', { 'type-btn-active': currentType === BackgroundType.IMAGE }]" @click="switchType(BackgroundType.IMAGE)">
           图片背景
         </button>
       </div>
-    </div>
+    </div>P
 
     <!-- 渐变背景配置 -->
     <div v-if="currentType === BackgroundType.GRADIENT" class="gradient-config">
@@ -35,71 +28,35 @@
             class="preset-item"
             :class="{ 'preset-item-active': isPresetActive(preset) }"
             :style="{ backgroundImage: `linear-gradient(135deg, ${preset.colors.join(', ')})` }"
-            @click="selectPreset(preset)"
-          />
+            @click="selectPreset(preset)" />
         </div>
       </div>
-      
+
       <div class="config-section mt-4">
         <label class="config-label">自定义渐变：</label>
         <div class="color-inputs">
           <div v-for="(color, index) in gradientColors" :key="index" class="color-input-group">
             <label class="color-label">颜色 {{ index + 1 }}：</label>
-            <input
-              v-model="gradientColors[index]"
-              type="color"
-              class="color-picker"
-            />
-            <input
-              v-model="gradientColors[index]"
-              type="text"
-              class="color-text"
-              placeholder="#000000"
-            />
-            <button
-              v-if="gradientColors.length > 2"
-              @click="removeColor(index)"
-              class="remove-color-btn"
-            >
-              删除
-            </button>
+            <input v-model="gradientColors[index]" type="color" class="color-picker" />
+            <input v-model="gradientColors[index]" type="text" class="color-text" placeholder="#000000" />
+            <button v-if="gradientColors.length > 2" @click="removeColor(index)" class="remove-color-btn">删除</button>
           </div>
         </div>
-        <button @click="addColor" class="add-color-btn">
-          + 添加颜色
-        </button>
+        <button @click="addColor" class="add-color-btn">+ 添加颜色</button>
       </div>
 
       <div class="config-section mt-4">
         <label class="config-label">渐变方向：</label>
-        <input
-          v-model.number="gradientDirection"
-          type="range"
-          min="0"
-          max="360"
-          step="1"
-          class="direction-slider"
-        />
+        <input v-model.number="gradientDirection" type="range" min="0" max="360" step="1" class="direction-slider" />
         <div class="direction-value">{{ gradientDirection }}°</div>
       </div>
 
       <div class="action-buttons mt-4">
-        <button
-          @click="saveGradient"
-          :disabled="saving"
-          class="cy-btn cy-btn-accent"
-        >
+        <button @click="saveGradient" :disabled="saving" class="cy-btn cy-btn-accent">
           <span v-if="saving">保存中...</span>
           <span v-else>保存渐变背景</span>
         </button>
-        <button
-          v-if="hasBackground"
-          @click="handleReset"
-          :disabled="saving"
-          class="cy-btn cy-btn-ghost"
-        >
-          恢复默认
-        </button>
+        <button v-if="hasBackground" @click="handleReset" :disabled="saving" class="cy-btn cy-btn-ghost">恢复默认</button>
       </div>
     </div>
 
@@ -107,43 +64,22 @@
     <div v-if="currentType === BackgroundType.IMAGE" class="image-config">
       <div class="mt-4 flex gap-2">
         <label class="cy-btn cy-btn-soft cursor-pointer">
-          <input
-            ref="fileInputRef"
-            type="file"
-            accept="image/*"
-            class="hidden"
-            @change="handleFileChange"
-          />
+          <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleFileChange" />
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           <span>选择图片</span>
         </label>
-        <button
-          v-if="previewUrl"
-          @click="handleUpload"
-          :disabled="uploading"
-          class="cy-btn cy-btn-accent"
-        >
+        <button v-if="previewUrl" @click="handleUpload" :disabled="uploading" class="cy-btn cy-btn-accent">
           <span v-if="uploading">上传中...</span>
           <span v-else>确认上传</span>
         </button>
-        <button
-          v-if="previewUrl"
-          @click="handleCancel"
-          :disabled="uploading"
-          class="cy-btn cy-btn-ghost"
-        >
-          取消
-        </button>
-        <button
-          v-if="backgroundPath && !previewUrl"
-          @click="handleReset"
-          :disabled="uploading"
-          class="cy-btn cy-btn-ghost"
-        >
-          恢复默认
-        </button>
+        <button v-if="previewUrl" @click="handleCancel" :disabled="uploading" class="cy-btn cy-btn-ghost">取消</button>
+        <button v-if="backgroundPath && !previewUrl" @click="handleReset" :disabled="uploading" class="cy-btn cy-btn-ghost">恢复默认</button>
       </div>
     </div>
   </div>
@@ -177,9 +113,7 @@ const uploading = ref(false)
 const saving = ref(false)
 
 // 当前选择的背景类型
-const currentType = ref<BackgroundType>(
-  props.backgroundConfig?.type || (props.backgroundPath ? BackgroundType.IMAGE : BackgroundType.GRADIENT)
-)
+const currentType = ref<BackgroundType>(props.backgroundConfig?.type || (props.backgroundPath ? BackgroundType.IMAGE : BackgroundType.GRADIENT))
 
 // 渐变配置
 const gradientColors = ref<string[]>(['#a69f9f', '#c1baba', '#8f9ea6'])
@@ -274,11 +208,11 @@ async function saveGradient() {
         direction: gradientDirection.value,
       },
     }
-    
+
     await updateBackgroundConfig(config)
     emit('update', config)
     ElNotification.success({ message: '渐变背景保存成功' })
-    
+
     // 刷新用户信息
     await userStore.getUserInfo()
   } catch (error: any) {
@@ -292,24 +226,24 @@ async function saveGradient() {
 function handleFileChange(event: Event) {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
-  
+
   if (!file) return
-  
+
   // 验证文件类型
   if (!file.type.startsWith('image/')) {
     ElMessage.error('请选择图片文件')
     return
   }
-  
+
   // 验证文件大小
   if (file.size > imageConfig.maxImageSize) {
     const maxSizeMB = imageConfig.maxImageSize / (1024 * 1024)
     ElMessage.error(`图片大小不能超过 ${maxSizeMB}MB`)
     return
   }
-  
+
   selectedFile.value = file
-  
+
   // 创建预览 URL
   const reader = new FileReader()
   reader.onload = (e) => {
@@ -321,7 +255,7 @@ function handleFileChange(event: Event) {
 // 上传背景图片
 async function handleUpload() {
   if (!selectedFile.value) return
-  
+
   uploading.value = true
   try {
     const imagePath = await uploadBackground(selectedFile.value)
@@ -329,17 +263,17 @@ async function handleUpload() {
       type: BackgroundType.IMAGE,
       imagePath,
     }
-    
+
     emit('update', config)
     ElNotification.success({ message: '背景上传成功' })
-    
+
     // 重置状态
     previewUrl.value = null
     selectedFile.value = null
     if (fileInputRef.value) {
       fileInputRef.value.value = ''
     }
-    
+
     // 刷新用户信息
     await userStore.getUserInfo()
   } catch (error: any) {
