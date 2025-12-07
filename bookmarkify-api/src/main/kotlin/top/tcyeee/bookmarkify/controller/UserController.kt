@@ -72,6 +72,7 @@ class UserController(
     fun updateBackgroundConfig(@RequestBody config: BackgroundConfig): Boolean =
         userService.updateBackgroundConfig(config)
 
-    // TODO 在已有的"渐变色背景"和"图片背景"中，关联作为用户的主界面背景
+    // TODO 在已有的"渐变色背景"和"图片背景"中，选择一个座位用户的主界面背景
+
 
 }

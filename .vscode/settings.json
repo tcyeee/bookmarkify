@@ -8,6 +8,7 @@
         "baomidou",
         "fasterxml",
         "hutool",
+        "ibatis",
         "maki",
         "mybatisplus",
         "nums",
