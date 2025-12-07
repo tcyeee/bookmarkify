@@ -1,3 +1,5 @@
+import type { U } from "node_modules/tailwindcss/dist/types-WlZgYgM8.mjs"
+
 export enum BackgroundType {
     GRADIENT = "GRADIENT",
     IMAGE = "IMAGE"
@@ -20,12 +22,37 @@ export interface UserInfoEntity {
     nickName: string
     phone?: string
     email?: string
-    avatarPath?: string
     backgroundPath?: string  // 兼容旧版本，保留
     backgroundConfig?: BackgroundConfig  // 新的背景配置
     verified: boolean
+    avatar: UserFile
 }
 
+export interface UserFile {
+    id: string              /* 文件ID */
+    uid: string              /* 文件所属用户ID */
+    environment: CurrentEnvironment
+    name: string              /* 文件名称 */
+    type: UserFileType
+    size: number              /* 文件大小(单位:字节) */
+    createTime: string              /* 文件创建时间 */
+    deleted: boolean
+}
+export enum CurrentEnvironment {
+    /* 本地测试环境 */
+    LOCAL = "LOCAL",
+    /* 线上发布环境 */
+    PROD = "PROD"
+}
+
+export enum UserFileType {
+    /* 头像图片 */
+    AVATAR_IMAGE = "AVATAR_IMAGE",
+    /* 背景图片 */
+    BACKGROUND_IMAGE = "BACKGROUND_IMAGE",
+    /* 其他文件 */
+    OTHER_FILE = "OTHER_FILE"
+}
 export interface UserInfoUpdate {
     nickName?: string
     phone?: string
