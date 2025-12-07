@@ -15,15 +15,14 @@ interface IFileService : IService<UserFile> {
      * 上传头像
      * @param uid 用户ID
      * @param file 头像文件
-     * @return 头像路径
      */
-    fun updateAvatar(uid: String, file: MultipartFile): String
+    fun updateAvatar(uid: String, file: MultipartFile): UserFile
 
     /**
      * 上传自定义背景图片
      * @param uid 用户ID
      * @param file 背景图片文件
-     * @return 背景图片相对路径
+     * @return 背景文件
      */
-    fun uploadBackground(uid: String, file: MultipartFile): String
+    fun uploadBackground(uid: String, file: MultipartFile): UserFile
 }

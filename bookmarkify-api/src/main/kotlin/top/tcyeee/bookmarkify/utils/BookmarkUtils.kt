@@ -11,9 +11,9 @@ import org.jsoup.nodes.Document
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.log
+import top.tcyeee.bookmarkify.entity.BookmarkDetail
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
-import top.tcyeee.bookmarkify.entity.response.BookmarkDetail
 import java.io.File
 import java.io.IOException
 import java.nio.charset.StandardCharsets

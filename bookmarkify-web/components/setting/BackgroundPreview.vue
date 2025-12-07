@@ -1,11 +1,7 @@
 <template>
   <div class="background-preview-container">
     <div class="background-preview" :style="previewStyle">
-      <img
-        v-if="backgroundConfig?.type === 'IMAGE' && backgroundUrl"
-        :src="backgroundUrl"
-        alt="主页背景"
-        class="preview-image" />
+      <img v-if="backgroundUrl" :src="backgroundUrl" alt="主页背景" class="preview-image" />
       <div v-else-if="backgroundConfig?.type === 'GRADIENT' && backgroundConfig.gradient" class="preview-gradient">
         <span>渐变背景</span>
       </div>
@@ -25,13 +21,13 @@ const props = defineProps<{
 }>()
 
 const backgroundUrl = computed(() => {
-  // if (props.backgroundConfig?.type === 'IMAGE' && props.backgroundConfig.imagePath) {
-  //   return getImageUrl(props.backgroundConfig.imagePath)
-  // }
-  // if (props.backgroundPath) {
-  //   return getImageUrl(props.backgroundPath)
-  // }
-  // return null
+  if (props.backgroundConfig?.type === 'IMAGE' && props.backgroundConfig.imagePath) {
+    return props.backgroundConfig.imagePath
+  }
+  if (props.backgroundPath) {
+    return props.backgroundPath
+  }
+  return null
 })
 
 const previewStyle = computed(() => {
@@ -54,8 +50,7 @@ const previewStyle = computed(() => {
 }
 
 .background-preview {
-  width: 100%;
-  min-width: 40vw;
+  width: 40vw;
   aspect-ratio: 4 / 3;
   border-radius: 12px;
   overflow: hidden;

@@ -2,7 +2,7 @@ package top.tcyeee.bookmarkify.utils
 
 import top.tcyeee.bookmarkify.config.websocket.SessionManager
 import top.tcyeee.bookmarkify.config.websocket.SocketMsgType
-import top.tcyeee.bookmarkify.entity.response.BookmarkShow
+import top.tcyeee.bookmarkify.entity.BookmarkShow
 
 /**
  * @author tcyeee

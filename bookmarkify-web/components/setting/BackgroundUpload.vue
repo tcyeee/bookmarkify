@@ -8,14 +8,18 @@
     <div class="type-selector mb-4">
       <label class="type-label">背景类型：</label>
       <div class="type-buttons">
-        <button :class="['type-btn', { 'type-btn-active': currentType === BackgroundType.GRADIENT }]" @click="switchType(BackgroundType.GRADIENT)">
+        <button
+          :class="['type-btn', { 'type-btn-active': currentType === BackgroundType.GRADIENT }]"
+          @click="switchType(BackgroundType.GRADIENT)">
           渐变背景
         </button>
-        <button :class="['type-btn', { 'type-btn-active': currentType === BackgroundType.IMAGE }]" @click="switchType(BackgroundType.IMAGE)">
+        <button
+          :class="['type-btn', { 'type-btn-active': currentType === BackgroundType.IMAGE }]"
+          @click="switchType(BackgroundType.IMAGE)">
           图片背景
         </button>
       </div>
-    </div>P
+    </div>
 
     <!-- 渐变背景配置 -->
     <div v-if="currentType === BackgroundType.GRADIENT" class="gradient-config">
@@ -79,7 +83,9 @@
           <span v-else>确认上传</span>
         </button>
         <button v-if="previewUrl" @click="handleCancel" :disabled="uploading" class="cy-btn cy-btn-ghost">取消</button>
-        <button v-if="backgroundPath && !previewUrl" @click="handleReset" :disabled="uploading" class="cy-btn cy-btn-ghost">恢复默认</button>
+        <button v-if="backgroundPath && !previewUrl" @click="handleReset" :disabled="uploading" class="cy-btn cy-btn-ghost">
+          恢复默认
+        </button>
       </div>
     </div>
   </div>
@@ -113,7 +119,9 @@ const uploading = ref(false)
 const saving = ref(false)
 
 // 当前选择的背景类型
-const currentType = ref<BackgroundType>(props.backgroundConfig?.type || (props.backgroundPath ? BackgroundType.IMAGE : BackgroundType.GRADIENT))
+const currentType = ref<BackgroundType>(
+  props.backgroundConfig?.type || (props.backgroundPath ? BackgroundType.IMAGE : BackgroundType.GRADIENT)
+)
 
 // 渐变配置
 const gradientColors = ref<string[]>(['#a69f9f', '#c1baba', '#8f9ea6'])

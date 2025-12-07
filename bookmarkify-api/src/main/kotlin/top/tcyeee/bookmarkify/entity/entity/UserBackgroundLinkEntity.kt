@@ -4,7 +4,7 @@ import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
-import top.tcyeee.bookmarkify.entity.request.UpdateBackgroundParams
+import top.tcyeee.bookmarkify.entity.BackSettingParams
 import java.time.LocalDateTime
 
 /**
@@ -23,14 +23,14 @@ enum class BackgroundType {
 }
 
 @TableName("user_background_link")
-class UserBackgroundLinkEntity(
+data class UserBackgroundLinkEntity(
     @TableId val id: String = IdUtil.fastUUID(),
     @field:Schema(description = "用户ID") var uid: String,
     @field:Schema(description = "背景类型") var type: BackgroundType,
     @field:Schema(description = "背景ID") var backgroundLinkId: String,
     @field:Schema(description = "创建时间") var updateTime: LocalDateTime = LocalDateTime.now(),
 ) {
-    fun updateParams(params: UpdateBackgroundParams) {
+    fun updateParams(params: BackSettingParams) {
         this.type = params.type
         this.backgroundLinkId = params.backgroundId
         this.updateTime = LocalDateTime.now()
@@ -38,7 +38,7 @@ class UserBackgroundLinkEntity(
 }
 
 @TableName("background_image")
-class BackgroundImageEntity(
+data class BackgroundImageEntity(
     @TableId @field:Schema(description = "背景ID") var id: String = IdUtil.fastUUID(),
     @field:Schema(description = "用户ID") val uid: String,
     @field:Schema(description = "文件ID") val fileId: String,
@@ -47,11 +47,11 @@ class BackgroundImageEntity(
 )
 
 @TableName("background_gradient")
-class BackgroundGradientEntity(
-    @TableId @field:Schema(description = "背景ID") var id: String,
-    @field:Schema(description = "用户ID") val uid: String,
-    @field:Schema(description = "背景渐变色(JSON)") val gradient: String,
-    @field:Schema(description = "背景渐变方向") val direction: Int,
+data class BackgroundGradientEntity(
+    @TableId @field:Schema(description = "背景ID") val id: String = IdUtil.fastUUID(),
+    @field:Schema(description = "用户ID") var uid: String,
+    @field:Schema(description = "背景渐变色(JSON)") var gradient: String,
+    @field:Schema(description = "背景渐变方向") var direction: Int,
     @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "是否是默认展示的背景") val isDefault: Boolean = false,
 )

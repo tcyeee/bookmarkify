@@ -2,7 +2,7 @@ package top.tcyeee.bookmarkify.entity.json
 
 import cn.hutool.core.bean.BeanUtil
 import cn.hutool.json.JSONUtil
-import top.tcyeee.bookmarkify.entity.response.BookmarkShow
+import top.tcyeee.bookmarkify.entity.BookmarkShow
 import java.util.function.Consumer
 
 /**
