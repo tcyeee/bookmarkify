@@ -1,9 +1,32 @@
+/**
+ * 根据环境获取文件服务基础 URL
+ * 开发环境：返回项目根目录下的 upload 目录路径
+ * 生产环境：返回生产环境的文件服务 URL
+ */
+function getFileServiceBaseUrl(): string {
+    // 判断是否为开发环境
+    const isDev = process.env.NODE_ENV === 'development' || process.env.NUXT_ENV === 'development'
+
+    if (isDev) {
+        // 开发环境：返回项目根目录下的 upload 目录
+        return '/upload'
+    }
+
+    // 生产环境：返回生产环境的文件服务 URL
+    return 'https://file.bookmarkify.cc'
+}
+
 export const imageConfig = {
     /**
      * 文件服务基础 URL
      * 用于拼接相对路径的图片 URL
+     * 根据环境自动切换：
+     * - 开发环境：/upload（项目根目录下的 upload 目录）
+     * - 生产环境：https://file.bookmarkify.cc
      */
-    fileServiceBaseUrl: 'https://file.bookmarkify.cc',
+    get fileServiceBaseUrl() {
+        return getFileServiceBaseUrl()
+    },
 
     /**
      * 默认头像路径
@@ -16,7 +39,7 @@ export const imageConfig = {
      * 默认限制为 5MB
      */
     maxImageSize: 5 * 1024 * 1024, // 5MB
-} as const
+}
 
 /**
  * 获取完整的图片 URL
@@ -39,7 +62,9 @@ export function getImageUrl(path: string | null | undefined): string {
     }
 
     // 拼接文件服务基础 URL
-    return `${imageConfig.fileServiceBaseUrl}/${path}`
+    // 移除 path 的前导斜杠，避免双斜杠
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path
+    return `${imageConfig.fileServiceBaseUrl}/${cleanPath}`
 }
 
 /**
