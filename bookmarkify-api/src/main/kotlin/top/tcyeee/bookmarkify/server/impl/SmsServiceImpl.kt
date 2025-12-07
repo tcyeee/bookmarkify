@@ -9,7 +9,7 @@ import top.tcyeee.bookmarkify.config.entity.sms.SmsResponse
 import top.tcyeee.bookmarkify.config.entity.sms.SmsType
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
-import top.tcyeee.bookmarkify.controller.DelayTaskScheduler
+import top.tcyeee.bookmarkify.controller.scheduled.DelayTaskScheduler
 import top.tcyeee.bookmarkify.entity.entity.SmsRecord
 import top.tcyeee.bookmarkify.mapper.SmsRecordMapper
 import top.tcyeee.bookmarkify.server.ISmsService

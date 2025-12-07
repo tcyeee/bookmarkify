@@ -54,7 +54,11 @@ class UserServiceImpl(
         // 保存文件
         val fileName = uploadBackground(file, uid, projectConfig.imgPath)
 
-        // 修改用户默认
+        // 修改用户背景类型为图片
+        
+        
+        // 修改用户图片背景为新保存的文件ID
+
 
         // 更新用户背景路径（兼容旧字段 backgroundPath）
         ktUpdate()

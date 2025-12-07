@@ -1,4 +1,4 @@
-package top.tcyeee.bookmarkify.controller
+package top.tcyeee.bookmarkify.controller.scheduled
 
 
 import java.util.concurrent.Executors

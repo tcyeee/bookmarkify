@@ -17,7 +17,7 @@ enum class BackgroundType {
     IMAGE,
 }
 
-@TableName("uer_background_link")
+@TableName("user_background_link")
 class UserBackgroundLinkEntity(
     @TableId var id: String,
     @field:Schema(description = "用户ID") val uid: String,

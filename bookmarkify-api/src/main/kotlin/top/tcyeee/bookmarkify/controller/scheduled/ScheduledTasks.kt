@@ -1,4 +1,4 @@
-package top.tcyeee.bookmarkify.controller
+package top.tcyeee.bookmarkify.controller.scheduled
 
 import org.springframework.context.annotation.Description
 import org.springframework.scheduling.annotation.Scheduled
