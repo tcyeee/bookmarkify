@@ -9,6 +9,9 @@ export const useUserStore = defineStore('user', () => {
   const account = ref<UserInfoEntity>()
   const Loading = ref<Boolean>(false);
 
+  // 用户头像URL  eg：avatar/c100782c-de9c-4c58-a72e-b47dba08bf36.jpg
+  const avatarUrl: Ref<string | undefined> = computed(() => account.value?.avatar?.currentName ?? undefined);
+
   /**
    * 自动跟随 account 状态变化的认证状态
    * 如果account没有任何信息，则返回 NotLogin
@@ -91,5 +94,5 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem("deviceUid", deviceUid)
     return deviceUid
   }
-  return { login, logout, authStatus, account, getUserInfo };
+  return { login, logout, authStatus, account, getUserInfo, avatarUrl };
 }, { persist: true });
