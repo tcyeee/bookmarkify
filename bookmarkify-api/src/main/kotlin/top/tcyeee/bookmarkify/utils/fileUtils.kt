@@ -13,11 +13,18 @@ import java.io.File
  */
 enum class FileType(val limit: Int, val prefix: String, val suffix: String, val folder: String) {
     AVATAR(5 * 1024 * 1024, "image/", "jpg", "avatar"),
+    BACKGROUND(5 * 1024 * 1024, "image/", "jpg", "background"),
 }
 
 fun uploadAvatar(file: MultipartFile, uid: String, fileBasePath: String): String {
-    val fileType = FileType.AVATAR
+    return uploadFile(file, uid, fileBasePath, FileType.AVATAR)
+}
 
+fun uploadBackground(file: MultipartFile, uid: String, fileBasePath: String): String {
+    return uploadFile(file, uid, fileBasePath, FileType.BACKGROUND)
+}
+
+private fun uploadFile(file: MultipartFile, uid: String, fileBasePath: String, fileType: FileType): String {
     // 验证文件类型
     file.contentType?.startsWith(fileType.prefix)?.let { if (!it) throw CommonException(ErrorType.E103) }
 
