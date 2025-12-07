@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Size
+import org.springframework.data.annotation.Id
 import top.tcyeee.bookmarkify.config.entity.RoleEnum
 import java.time.LocalDateTime
 
@@ -22,10 +23,7 @@ data class UserEntity(
     @field:Size(max = 200) @field:Schema(description = "邮箱") var email: String? = null,
     @field:Size(max = 20) @field:Schema(description = "手机号") var phone: String? = null,
     @field:Size(max = 200) @field:Schema(description = "用户密码MD5") var password: String? = null,
-    @field:Schema(description = "头像相对地址") var avatarPath: String? = null,
-    @field:Schema(description = "背景图片相对地址（兼容旧版本）") var backgroundPath: String? = null,
-    @field:Schema(description = "背景配置 JSON") var backgroundConfigJson: String? = null,
-
+    @field:Schema(description = "头像文件地址") var avatarFileId: String? = null,
     @field:Schema(description = "用户角色 默认'NONE'") var role: RoleEnum = RoleEnum.NONE,
     @field:Schema(description = "创建时间") var updateTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
