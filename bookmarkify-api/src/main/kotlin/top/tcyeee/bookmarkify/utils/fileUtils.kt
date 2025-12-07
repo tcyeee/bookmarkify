@@ -33,7 +33,18 @@ fun uploadAvatar(file: MultipartFile, uid: String, fileBasePath: String): String
 
 // 生成文件名：avatar/{uid}/{uuid}.{ext}
 private fun getFileName(file: MultipartFile, fileType: FileType, uid: String, fileBasePath: String): File {
-    val ext = FileUtil.extName(file.originalFilename ?: fileType.suffix)
+    // 从原始文件名提取扩展名
+    var ext = FileUtil.extName(file.originalFilename ?: fileType.suffix)
+
+    // 安全验证：只允许字母、数字和部分安全字符，移除所有路径分隔符和特殊字符
+    ext = ext.replace(Regex("[^a-zA-Z0-9]"), "").lowercase()
+
+    // 如果清理后扩展名为空，使用默认扩展名
+    if (ext.isEmpty()) ext = fileType.suffix
+
+    // 验证扩展名长度（防止过长）
+    if (ext.length > 10) ext = fileType.suffix
+
     val fileName = "${fileType.folder}/$uid/${IdUtil.fastUUID()}.$ext"
     val dest = File(fileBasePath, fileName)
 
