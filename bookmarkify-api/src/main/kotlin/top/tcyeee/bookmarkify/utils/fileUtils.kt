@@ -24,15 +24,15 @@ fun uploadAvatar(file: MultipartFile, uid: String, fileBasePath: String): String
     // 验证文件大小（限制为 5MB）
     if (file.size > fileType.limit) throw CommonException(ErrorType.E104)
 
-    val dest = getFileName(file, fileType, uid, fileBasePath)
+    val (dest, fileName) = getFileName(file, fileType, uid, fileBasePath)
 
     saveFile(file, dest);
 
-    return dest.name
+    return fileName
 }
 
 // 生成文件名：avatar/{uid}/{uuid}.{ext}
-private fun getFileName(file: MultipartFile, fileType: FileType, uid: String, fileBasePath: String): File {
+private fun getFileName(file: MultipartFile, fileType: FileType, uid: String, fileBasePath: String): Pair<File, String> {
     // 从原始文件名提取扩展名
     var ext = FileUtil.extName(file.originalFilename ?: fileType.suffix)
 
@@ -50,7 +50,7 @@ private fun getFileName(file: MultipartFile, fileType: FileType, uid: String, fi
 
     // 确保目录存在
     FileUtil.mkdir(dest.parentFile)
-    return dest
+    return Pair(dest, fileName)
 }
 
 // 保存文件
