@@ -46,7 +46,7 @@ fun pwd(password64: String): String = SecureUtil.md5(Base64.decodeStr(password64
 /* 工具类方法 */
 fun yesterday(): LocalDateTime = LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)
 
-// TODO 获取当前的系统环境
+// 获取当前的系统环境
 fun currentEnvironment(): CurrentEnvironment {
     return when (System.getenv("ENV")) {
         "local" -> CurrentEnvironment.LOCAL

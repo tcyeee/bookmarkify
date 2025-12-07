@@ -1,3 +1,4 @@
+import type { UserFile } from "@api/typing";
 
 /**
  * 单位时间内触发事件
