@@ -12,9 +12,14 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.common.BackgroundConfig
+import top.tcyeee.bookmarkify.entity.common.BackgroundType
+import top.tcyeee.bookmarkify.entity.common.GradientConfig
 import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
+import top.tcyeee.bookmarkify.entity.request.UserBackgroundSelectParams
 import top.tcyeee.bookmarkify.entity.response.UserInfoShow
+import top.tcyeee.bookmarkify.server.IGradientBackgroundService
+import top.tcyeee.bookmarkify.server.IImageBackgroundService
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
 
@@ -27,6 +32,8 @@ import top.tcyeee.bookmarkify.utils.BaseUtils
 @RequestMapping("/user")
 class UserController(
     private val userService: IUserService,
+    private val gradientBackgroundService: IGradientBackgroundService,
+    private val imageBackgroundService: IImageBackgroundService,
 ) {
 
     @GetMapping("info")
@@ -72,7 +79,32 @@ class UserController(
     fun updateBackgroundConfig(@RequestBody config: BackgroundConfig): Boolean =
         userService.updateBackgroundConfig(config)
 
-    // TODO 在已有的"渐变色背景"和"图片背景"中，选择一个座位用户的主界面背景
+    @PostMapping("selectBackground")
+    @Operation(summary = "在已有的渐变色背景和图片背景中选择主页背景")
+    fun selectBackground(@RequestBody params: UserBackgroundSelectParams): Boolean {
+        val config = when (params.type) {
+            BackgroundType.GRADIENT -> {
+                val bg = gradientBackgroundService.getById(params.backgroundId) ?: return false
+                BackgroundConfig(
+                    type = BackgroundType.GRADIENT,
+                    gradient = GradientConfig(
+                        colors = listOf(bg.gradient),
+                        direction = bg.direction,
+                    ),
+                )
+            }
+
+            BackgroundType.IMAGE -> {
+                val bg = imageBackgroundService.getById(params.backgroundId) ?: return false
+                BackgroundConfig(
+                    type = BackgroundType.IMAGE,
+                    imagePath = bg.imagePath,
+                )
+            }
+        }
+
+        return userService.updateBackgroundConfig(config)
+    }
 
 
 }
