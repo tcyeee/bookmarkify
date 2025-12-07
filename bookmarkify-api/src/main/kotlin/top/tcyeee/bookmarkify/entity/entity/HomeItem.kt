@@ -16,14 +16,14 @@ import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 @TableName("home_item")
 data class HomeItem(
     @TableId var id: String,
-    @Schema(description = "用户ID") var uid: String,
-    @Schema(description = "序号") var sort: Int,
-    @Schema(description = "书签类型") var type: HomeItemType,
+    @field:Schema(description = "用户ID") var uid: String,
+    @field:Schema(description = "序号") var sort: Int,
+    @field:Schema(description = "书签类型") var type: HomeItemType,
 
-    @JsonIgnore @Schema(hidden = true) var bookmarkUserLinkId: String? = null,
-    @JsonIgnore @Schema(hidden = true) var bookmarkDirJson: String? = null,
-    @JsonIgnore @Schema(hidden = true) var functionId: Int? = null,
-    @JsonIgnore @Schema(hidden = true) var deleted: Boolean = false
+    @JsonIgnore @field:Schema(hidden = true) var bookmarkUserLinkId: String? = null,
+    @JsonIgnore @field:Schema(hidden = true) var bookmarkDirJson: String? = null,
+    @JsonIgnore @field:Schema(hidden = true) var functionId: Int? = null,
+    @JsonIgnore @field:Schema(hidden = true) var deleted: Boolean = false
 ) {
     constructor( uid: String, linkId: String) : this(
         id = IdUtil.fastUUID(), sort = 99, uid = uid, type = HomeItemType.BOOKMARK,

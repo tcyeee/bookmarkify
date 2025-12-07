@@ -27,7 +27,7 @@ class SmsServiceImpl : ISmsService, ServiceImpl<SmsRecordMapper, SmsRecord>() {
         val res: SmsResponse = SmsUtils.send(SmsType.CODE, phoneNumber, SmsParams(code))
         /* 存入DATABASE */
         val entity = SmsRecord(BaseUtils.uid())
-        val save = save(entity.intFirt(res))
+        val save = save(entity.intFirst(res))
         /* 存入REDIS */
         if (!res.sendStatus()) throw CommonException(ErrorType.E214)
         RedisUtils.set(RedisType.CODE_PHONE, code)

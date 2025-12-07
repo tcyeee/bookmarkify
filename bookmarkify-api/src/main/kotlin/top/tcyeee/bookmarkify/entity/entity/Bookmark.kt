@@ -23,21 +23,21 @@ import java.time.LocalDateTime
 @TableName("bookmark")
 data class Bookmark(
     @TableId var id: String,
-    @Max(200) @Schema(description = "书签URL主体") var urlHost: String, // sfz.uzuzuz.com.cn
-    @JsonIgnore @Schema(description = "书签完整URL(不带参数)") var urlPath: String, // /test/info
+    @field:Max(200) @field:Schema(description = "书签URL主体") var urlHost: String, // sfz.uzuzuz.com.cn
+    @JsonIgnore @field:Schema(description = "书签完整URL(不带参数)") var urlPath: String, // /test/info
 
-    @Max(200) @Schema(description = "书签标题") var title: String? = null,
-    @JsonIgnore @Schema(description = "书签评分0~10") var score: Int? = null,
-    @Max(1000) @JsonIgnore @Schema(description = "书签备注") var description: String? = null,
-    @Max(10) @Schema(description = "书签基础HTTP协议") var urlScheme: String? = null, // http or https
-    @Max(100) @Schema(description = "图标链接") var iconUrl: String? = null,
+    @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
+    @JsonIgnore @field:Schema(description = "书签评分0~10") var score: Int? = null,
+    @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
+    @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String? = null, // http or https
+    @field:Max(100) @field:Schema(description = "图标链接") var iconUrl: String? = null,
 
-    @JsonIgnore @Schema(description = "是否失效") var isActivity: Boolean = false,
-    @Schema(description = "图标是否存在") var iconActivity: Boolean = false,
-    @Schema(description = "是否可以启用大图标") var iconHd: Boolean = false,
-    @JsonIgnore @Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
-    @JsonIgnore @Schema(description = "最近更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
-    @JsonIgnore @Schema(description = "是否已经被删除") var deleted: Boolean = false,
+    @JsonIgnore @field:Schema(description = "是否失效") var isActivity: Boolean = false,
+    @field:Schema(description = "图标是否存在") var iconActivity: Boolean = false,
+    @field:Schema(description = "是否可以启用大图标") var iconHd: Boolean = false,
+    @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
+    @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
+    @JsonIgnore @field:Schema(description = "是否已经被删除") var deleted: Boolean = false,
 ) {
     val httpCommonIcoUrl get() = "${this.urlScheme}://${this.urlHost}/favicon.ico"
     val defaultIconUrl get() = "/favicon/${this.id}.ico"
