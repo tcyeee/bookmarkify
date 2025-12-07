@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-white p-8 min-w-140">
+  <div class="bg-white p-8 w-full">
     <SettingAccount v-show="sysStore.settingTabIndex === 0" />
     <SettingBookmarkManage v-show="sysStore.settingTabIndex === 1" />
     <SettingSettings v-show="sysStore.settingTabIndex === 2" />

@@ -55,8 +55,8 @@ const previewStyle = computed(() => {
 
 .background-preview {
   width: 100%;
-  max-width: 600px;
-  height: 300px;
+  min-width: 40vw;
+  aspect-ratio: 4 / 3;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
