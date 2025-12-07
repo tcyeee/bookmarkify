@@ -21,7 +21,6 @@ class UserFile(
     @field:Schema(description = "文件类型") val type: UserFileType,
     @field:Schema(description = "文件大小(单位:字节)") val size: Long,
     @field:Schema(description = "文件创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
-    @field:Schema(description = "文件更新时间") val updateTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "文件是否被删除") val deleted: Boolean = false,
 )
 

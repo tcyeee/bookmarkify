@@ -13,6 +13,7 @@ import top.tcyeee.bookmarkify.entity.request.UpdateBackgroundParams
 import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
 import top.tcyeee.bookmarkify.entity.response.UserInfoShow
+import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
@@ -25,6 +26,7 @@ import top.tcyeee.bookmarkify.utils.pwd
 @Service
 class UserServiceImpl(
     private val userBackgroundLinkService: UserBackgroundLinkServiceImpl,
+    private val fileMapper: FileMapper
 ) : IUserService, ServiceImpl<UserMapper, UserEntity>() {
 
     override fun getByDeviceId(deviceId: String): UserEntity? {
@@ -43,7 +45,7 @@ class UserServiceImpl(
             .one()
             // 如果查询到了，则修改其中的参数
             ?.also { it.updateParams(params) }
-            // 如果没有查询到，则创建对象
+        // 如果没有查询到，则创建对象
             ?: UserBackgroundLinkEntity(uid = uid, type = params.type, backgroundLinkId = params.backgroundId)
         userBackgroundLinkService.saveOrUpdate(entity)
 
@@ -53,6 +55,7 @@ class UserServiceImpl(
     override fun userInfo(): UserInfoShow {
         val userEntity = getById(BaseUtils.uid()) ?: throw CommonException(ErrorType.E202)
         return UserInfoShow(userEntity, StpUtil.getTokenValue())
+            .apply { avatar = fileMapper.selectById((userEntity.avatarFileId)) }
     }
 
     override fun updateInfo(params: UserInfoUptateParams): Boolean {
