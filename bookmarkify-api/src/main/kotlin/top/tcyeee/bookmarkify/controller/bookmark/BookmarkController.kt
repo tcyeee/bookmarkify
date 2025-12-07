@@ -112,7 +112,7 @@ class BookmarksController(
     }
 
     /**
-     * 整理出所有的桌面Itmes
+     * 整理出所有的桌面Items
      *
      * @param allBookmark 待整理
      * @return 整理完成

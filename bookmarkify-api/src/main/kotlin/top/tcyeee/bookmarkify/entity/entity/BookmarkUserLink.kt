@@ -17,14 +17,14 @@ import java.time.LocalDateTime
 @TableName("bookmark_user_link")
 data class BookmarkUserLink(
     @TableId var id: String,
-    @Max(40) @Schema(description = "用户ID") var uid: String,
-    @Max(40) @Schema(description = "书签ID") var bookmarkId: String,
-    @Max(200) @Schema(description = "书签标题(用户写的)") var title: String?,
-    @Max(1000) @Schema(description = "书签备注(用户写的)") var description: String?,
-    @Max(1000) @Schema(description = "书签完整URL(带参数)") var urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
+    @field:Max(40) @field:Schema(description = "用户ID") var uid: String,
+    @field:Max(40) @field:Schema(description = "书签ID") var bookmarkId: String,
+    @field:Max(200) @field:Schema(description = "书签标题(用户写的)") var title: String?,
+    @field:Max(1000) @field:Schema(description = "书签备注(用户写的)") var description: String?,
+    @field:Max(1000) @field:Schema(description = "书签完整URL(带参数)") var urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
 
-    @JsonIgnore @Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
-    @JsonIgnore @Schema(description = "是否删除") var deleted: Boolean = false,
+    @JsonIgnore @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
+    @JsonIgnore @field:Schema(description = "是否删除") var deleted: Boolean = false,
 ) {
 
     constructor(item: BookmarkDetail, uid: String) : this(

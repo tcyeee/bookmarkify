@@ -14,12 +14,12 @@ import java.time.LocalDateTime
 @TableName("bookmark_tag")
 data class BookmarkTag(
     @TableId var id: String,
-    @Max(200) @Schema(description = "标签名称") var name: String,
-    @Schema(description = "所属用户ID") var uid: String,
-    @Max(1000) @Schema(description = "标签备注") var description: String,
-    @Max(10) @Schema(description = "标签颜色") var color: String,
+    @field:Max(200) @field:Schema(description = "标签名称") var name: String,
+    @field:Schema(description = "所属用户ID") var uid: String,
+    @field:Max(1000) @field:Schema(description = "标签备注") var description: String,
+    @field:Max(10) @field:Schema(description = "标签颜色") var color: String,
 
-    @JsonIgnore @Schema(description = "是否已经被删除") var deleted: Boolean,
-    @JsonIgnore @Schema(description = "添加时间") var createTime: LocalDateTime,
-    @JsonIgnore @Schema(description = "上次修改时间") var lastModified: LocalDateTime,
+    @JsonIgnore @field:Schema(description = "是否已经被删除") var deleted: Boolean,
+    @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime,
+    @JsonIgnore @field:Schema(description = "上次修改时间") var lastModified: LocalDateTime,
 )

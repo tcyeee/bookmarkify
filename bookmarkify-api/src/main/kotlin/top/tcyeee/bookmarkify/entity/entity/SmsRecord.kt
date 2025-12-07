@@ -15,30 +15,30 @@ import java.time.LocalDateTime
 @TableName("sms_record")
 data class SmsRecord(
     @TableId var id: String,
-    @Schema(description = "关联的用户") var uid: String,
+    @field:Schema(description = "关联的用户") var uid: String,
 
     /* 初次请求时候回执 */
-    @Schema(description = "阿里云业务ID") var bizId: String? = null,
-    @Schema(description = "发送状态(code)") var code: String? = null,
-    @Schema(description = "发送状态(信息)") var message: String? = null,
-    @Schema(description = "请求ID") var requestId: String? = null,
+    @field:Schema(description = "阿里云业务ID") var bizId: String? = null,
+    @field:Schema(description = "发送状态(code)") var code: String? = null,
+    @field:Schema(description = "发送状态(信息)") var message: String? = null,
+    @field:Schema(description = "请求ID") var requestId: String? = null,
 
     /* 查询时回执 */
-    @Schema(description = "短信内容") var content: String? = null,
-    @Schema(description = "错误代码") var errCode: String? = null,
-    @Schema(description = "目标手机号") var phoneNum: String? = null,
-    @Schema(description = "创建时间") var createTime: LocalDateTime? = null,
-    @Schema(description = "发送时间") var sendDate: LocalDateTime? = null,
-    @Schema(description = "收到时间") var receiveDate: LocalDateTime? = null,
-    @Schema(description = "发送状态") var smsStatusStr: String? = null,
-    @Schema(description = "短信模板") var smsTypeStr: String? = null,
+    @field:Schema(description = "短信内容") var content: String? = null,
+    @field:Schema(description = "错误代码") var errCode: String? = null,
+    @field:Schema(description = "目标手机号") var phoneNum: String? = null,
+    @field:Schema(description = "创建时间") var createTime: LocalDateTime? = null,
+    @field:Schema(description = "发送时间") var sendDate: LocalDateTime? = null,
+    @field:Schema(description = "收到时间") var receiveDate: LocalDateTime? = null,
+    @field:Schema(description = "发送状态") var smsStatusStr: String? = null,
+    @field:Schema(description = "短信模板") var smsTypeStr: String? = null,
 ) {
     constructor(uid: String) : this(
         id = IdUtil.fastUUID(), uid = uid, createTime = LocalDateTime.now()
     )
 
     /* 初次请求时候回执 */
-    fun intFirt(res: SmsResponse): SmsRecord {
+    fun intFirst(res: SmsResponse): SmsRecord {
         BeanUtil.copyProperties(res, this)
         return this
     }

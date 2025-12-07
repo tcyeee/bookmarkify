@@ -1,12 +1,14 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import cn.dev33.satoken.stp.StpUtil
+import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.entity.common.BackgroundConfig
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
@@ -15,6 +17,7 @@ import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
 import top.tcyeee.bookmarkify.utils.uploadAvatar
+import top.tcyeee.bookmarkify.utils.uploadBackground
 
 /**
  * @author tcyeee
@@ -47,6 +50,22 @@ class UserServiceImpl(
         return fileName
     }
 
+    override fun uploadBackground(uid: String, file: MultipartFile): String {
+        // 保存文件
+        val fileName = uploadBackground(file, uid, projectConfig.imgPath)
+
+        // 修改用户默认
+
+        // 更新用户背景路径（兼容旧字段 backgroundPath）
+        ktUpdate()
+            .eq(UserEntity::id, uid)
+            .set(UserEntity::backgroundPath, fileName)
+            .update()
+
+        // 返回相对路径
+        return fileName
+    }
+
     override fun userInfo(): UserInfoShow {
         val userEntity = getById(BaseUtils.uid()) ?: throw CommonException(ErrorType.E202)
         return UserInfoShow(userEntity, StpUtil.getTokenValue())
@@ -74,6 +93,14 @@ class UserServiceImpl(
 
     override fun changeMail(mail: String): Boolean {
         return ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::email, mail).update()
+    }
+
+    override fun updateBackgroundConfig(config: BackgroundConfig): Boolean {
+        val json = JSONUtil.toJsonStr(config)
+        return ktUpdate()
+            .eq(UserEntity::id, BaseUtils.uid())
+            .set(UserEntity::backgroundConfigJson, json)
+            .update()
     }
 
     override fun del(params: UserDelParams): Boolean {
