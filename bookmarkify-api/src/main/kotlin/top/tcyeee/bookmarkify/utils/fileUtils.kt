@@ -90,7 +90,7 @@ private fun getFileName(
     // 验证扩展名长度（防止过长）
     if (ext.length > 10) ext = fileType.defaultSuffix
 
-    val fileName = "${fileType.folder}/$uid/${IdUtil.fastUUID()}.$ext"
+    val fileName = "${fileType.folder}/${IdUtil.fastUUID()}.$ext"
     val dest = File(fileBasePath, fileName)
 
     // 确保目录存在
