@@ -7,7 +7,6 @@ import cn.hutool.core.date.LocalDateTimeUtil
 import cn.hutool.crypto.SecureUtil
 import cn.hutool.json.JSONUtil
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
-import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 
@@ -31,9 +30,6 @@ object BaseUtils {
         return user(session).uid
     }
 
-    /* 工具类方法 */
-    fun yesterday(): LocalDateTime = LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)
-
     fun userToJson(user: UserSessionInfo): String {
         val res = JSONUtil.createObj()
         res["uid"] = user.uid
@@ -42,7 +38,26 @@ object BaseUtils {
         res["phone"] = user.phone
         return JSONUtil.toJsonStr(res)
     }
+}
 
-    /* base64 to Md5 */
-    fun pwd(password64: String): String = SecureUtil.md5(Base64.decodeStr(password64))
+/* base64 to Md5 */
+fun pwd(password64: String): String = SecureUtil.md5(Base64.decodeStr(password64))
+
+/* 工具类方法 */
+fun yesterday(): LocalDateTime = LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)
+
+// TODO 获取当前的系统环境
+fun currentEnvironment(): CurrentEnvironment {
+    return when (System.getenv("ENV")) {
+        "local" -> CurrentEnvironment.LOCAL
+        "prod" -> CurrentEnvironment.PROD
+        else -> CurrentEnvironment.LOCAL
+    }
+}
+
+enum class CurrentEnvironment {
+    /* 本地测试环境 */
+    LOCAL,
+    /* 线上发布环境 */
+    PROD,
 }

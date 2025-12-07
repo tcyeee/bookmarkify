@@ -14,9 +14,9 @@ import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
-import top.tcyeee.bookmarkify.utils.BaseUtils
 import top.tcyeee.bookmarkify.utils.BookmarkUtils
 import top.tcyeee.bookmarkify.utils.SocketUtils
+import top.tcyeee.bookmarkify.utils.yesterday
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -58,7 +58,7 @@ class BookmarkServiceImpl(
     }
 
     override fun checkAll() =
-        ktQuery().lt(Bookmark::updateTime, BaseUtils.yesterday()).list().forEach(this::checkOne)
+        ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
 
     override fun addOne(url: String, uid: String): HomeItemShow {
         val bookmarkUrl = BookmarkUrl(url)

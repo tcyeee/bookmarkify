@@ -4,20 +4,19 @@ import cn.dev33.satoken.stp.StpUtil
 import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
-import org.springframework.web.multipart.MultipartFile
-import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.common.BackgroundConfig
+import top.tcyeee.bookmarkify.entity.entity.UserBackgroundLinkEntity
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
+import top.tcyeee.bookmarkify.entity.request.UpdateBackgroundParams
 import top.tcyeee.bookmarkify.entity.request.UserDelParams
 import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
 import top.tcyeee.bookmarkify.entity.response.UserInfoShow
 import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
-import top.tcyeee.bookmarkify.utils.uploadAvatar
-import top.tcyeee.bookmarkify.utils.uploadBackground
+import top.tcyeee.bookmarkify.utils.pwd
 
 /**
  * @author tcyeee
@@ -25,9 +24,7 @@ import top.tcyeee.bookmarkify.utils.uploadBackground
  */
 @Service
 class UserServiceImpl(
-    private val projectConfig: ProjectConfig,
     private val userBackgroundLinkService: UserBackgroundLinkServiceImpl,
-    private val imageBackgroundService: ImageBackgroundServiceImpl,
 ) : IUserService, ServiceImpl<UserMapper, UserEntity>() {
 
     override fun getByDeviceId(deviceId: String): UserEntity? {
@@ -40,37 +37,17 @@ class UserServiceImpl(
         return userEntity
     }
 
-    override fun updateAvatar(uid: String, file: MultipartFile): String {
+    override fun updateBackground(params: UpdateBackgroundParams, uid: String): Boolean {
+        val entity = userBackgroundLinkService.ktQuery()
+            .eq(UserBackgroundLinkEntity::uid, uid)
+            .one()
+            // 如果查询到了，则修改其中的参数
+            ?.also { it.updateParams(params) }
+            // 如果没有查询到，则创建对象
+            ?: UserBackgroundLinkEntity(uid = uid, type = params.type, backgroundLinkId = params.backgroundId)
+        userBackgroundLinkService.saveOrUpdate(entity)
 
-        // 保存文件
-        val fileName = uploadAvatar(file, uid, projectConfig.imgPath)
-
-        // 更新用户头像路径
-        ktUpdate().eq(UserEntity::id, uid).set(UserEntity::avatarPath, fileName).update()
-
-        // 返回相对路径
-        return fileName
-    }
-
-    override fun uploadBackground(uid: String, file: MultipartFile): String {
-        // 保存文件
-        val fileName = uploadBackground(file, uid, projectConfig.imgPath)
-
-        // 添加背景图片信息
-//        imageBackgroundService.add()
-
-        // 修改用户背景类型/ID
-        userBackgroundLinkService.update()
-
-
-        // 更新用户背景路径（兼容旧字段 backgroundPath）
-        ktUpdate()
-            .eq(UserEntity::id, uid)
-            .set(UserEntity::backgroundPath, fileName)
-            .update()
-
-        // 返回相对路径
-        return fileName
+        return true
     }
 
     override fun userInfo(): UserInfoShow {
@@ -106,12 +83,12 @@ class UserServiceImpl(
         val json = JSONUtil.toJsonStr(config)
         return ktUpdate()
             .eq(UserEntity::id, BaseUtils.uid())
-            .set(UserEntity::backgroundConfigJson, json)
+//            .set(UserEntity::backgroundConfigJson, json)
             .update()
     }
 
     override fun del(params: UserDelParams): Boolean {
-        return ktUpdate().eq(UserEntity::id, BaseUtils.uid()).eq(UserEntity::password, BaseUtils.pwd(params.password))
+        return ktUpdate().eq(UserEntity::id, BaseUtils.uid()).eq(UserEntity::password, pwd(params.password))
             .set(UserEntity::deleted, true).update()
     }
 }

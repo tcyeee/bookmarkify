@@ -1,14 +1,7 @@
 package top.tcyeee.bookmarkify.entity.common
 
 import io.swagger.v3.oas.annotations.media.Schema
-
-/**
- * 主页背景相关配置
- */
-enum class BackgroundType {
-    GRADIENT,
-    IMAGE,
-}
+import top.tcyeee.bookmarkify.entity.entity.BackgroundType
 
 data class GradientConfig(
     @field:Schema(description = "渐变色数组，至少2个颜色")
