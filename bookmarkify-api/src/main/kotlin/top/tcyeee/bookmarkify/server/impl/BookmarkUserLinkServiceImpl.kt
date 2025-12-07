@@ -3,7 +3,7 @@ package top.tcyeee.bookmarkify.server.impl
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import top.tcyeee.bookmarkify.entity.dto.BookmarkUpdataPrams
+import top.tcyeee.bookmarkify.entity.BookmarkUpdataPrams
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService

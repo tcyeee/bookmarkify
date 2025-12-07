@@ -10,6 +10,10 @@ export interface GradientConfig {
     direction?: number  // 渐变方向角度，默认135
 }
 
+export interface UserSetting {
+    backgroundSetting: BackgroundConfig
+}
+
 export interface BackgroundConfig {
     type: BackgroundType
     gradient?: GradientConfig  // 当type为GRADIENT时使用

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.common.GradientConfig
 import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
 import top.tcyeee.bookmarkify.entity.entity.BackgroundImageEntity
@@ -40,6 +41,12 @@ class UserServiceImpl(
         val userEntity = UserEntity(deviceId)
         this.save(userEntity)
         return userEntity
+    }
+
+    override fun queryUserBacSetting(uid: String): BacSettingVO {
+        backSettingService.queryByUid(uid)
+
+        TODO("Not yet implemented")
     }
 
     override fun bacSetting(params: BackSettingParams, uid: String): Boolean {

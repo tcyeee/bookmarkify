@@ -9,8 +9,8 @@ import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.BookmarkAddOneParams
 import top.tcyeee.bookmarkify.entity.BookmarkDetail
+import top.tcyeee.bookmarkify.entity.BookmarkUpdataPrams
 import top.tcyeee.bookmarkify.entity.HomeItemShow
-import top.tcyeee.bookmarkify.entity.dto.BookmarkUpdataPrams
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.entity.HomeItem

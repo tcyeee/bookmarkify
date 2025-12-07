@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
 import org.springframework.web.multipart.MultipartFile
+import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.common.GradientConfig
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import top.tcyeee.bookmarkify.entity.BackSettingParams
@@ -14,13 +15,6 @@ import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
  * @date 3/11/25 20:01
  */
 interface IUserService : IService<UserEntity> {
-
-    /**
-     * 通过谷歌ID/浏览器缓存ID/浏览器指纹ID 来寻找用户
-     * 这三个根据变动概率来进行优先级排序
-     *
-     * @return 用户信息
-     */
     fun getByDeviceId(deviceId: String): UserEntity?
     fun createUserByDeviceId(deviceId: String): UserEntity
     fun userInfo(): UserInfoShow
@@ -62,4 +56,6 @@ interface IUserService : IService<UserEntity> {
      * @return 是否成功
      */
     fun bacSetting(params: BackSettingParams, uid: String): Boolean
+
+    fun queryUserBacSetting(uid: String): BacSettingVO
 }

@@ -2,11 +2,15 @@ package top.tcyeee.bookmarkify.entity
 
 import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.EnumUtil
+import cn.hutool.core.util.IdUtil
 import cn.hutool.core.util.StrUtil
+import com.baomidou.mybatisplus.annotation.TableId
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
+import top.tcyeee.bookmarkify.entity.dto.UserSetting
+import top.tcyeee.bookmarkify.entity.entity.BackgroundType
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
@@ -26,10 +30,7 @@ data class BookmarkDetail(
     var bookmarkUserLinkId: String // 用户关联ID
 ) {
     constructor(paths: List<String>, url: BookmarkUrl, addDate: String, name: String) : this(
-        bookmarkUserLinkId = "",
-        bookmark = Bookmark(url, addDate, name),
-        paths = paths,
-        url = url
+        bookmarkUserLinkId = "", bookmark = Bookmark(url, addDate, name), paths = paths, url = url
     )
 }
 
@@ -118,6 +119,9 @@ data class UserInfoShow(
     var avatarFileId: String? = null,
     var verified: Boolean? = null,       // 是否为验证过的账户(例如绑定手机号,绑定邮箱等)
     var avatar: UserFile? = null,
+
+    // 用户设置信息
+    var userSetting: UserSetting? = null,
 ) {
     constructor(user: UserEntity, token: String) : this(
         uid = user.id,
@@ -127,3 +131,15 @@ data class UserInfoShow(
         BeanUtil.copyProperties(user, this)
     }
 }
+
+data class BacSettingVO(
+    @field:Schema(description = "用户ID") var uid: String,
+    @field:Schema(description = "背景类型") var type: BackgroundType,
+
+    /* 如果是图片背景 */
+    @field:Schema(description = "图片背景") var bacImgFile: UserFile? = null,
+
+    /* 如果是渐变色背景 */
+    @field:Schema(description = "背景渐变色(JSON)") var bacColorGradient: String,
+    @field:Schema(description = "背景渐变方向") var bacColorDirection: Int,
+)

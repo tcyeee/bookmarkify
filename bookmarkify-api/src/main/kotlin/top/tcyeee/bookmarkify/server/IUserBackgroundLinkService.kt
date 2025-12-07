@@ -9,4 +9,6 @@ import top.tcyeee.bookmarkify.entity.entity.UserBackgroundLinkEntity
  * @author tcyeee
  * @date 12/7/25 15:00
  */
-interface IUserBackgroundLinkService : IService<UserBackgroundLinkEntity>
+interface IUserBackgroundLinkService : IService<UserBackgroundLinkEntity> {
+    fun queryByUid(uid: String): UserBackgroundLinkEntity
+}
