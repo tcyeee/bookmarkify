@@ -21,16 +21,6 @@ enum class FileType(val limit: Int, val prefix: String, val defaultSuffix: Strin
 }
 
 /**
- * 上传头像
- * @param file 文件
- * @param fileBasePath 文件存储路径
- * @return 文件名
- */
-fun uploadAvatar(file: MultipartFile, fileBasePath: String): String {
-    return uploadFile(file, fileBasePath, FileType.AVATAR)
-}
-
-/**
  * 上传文件
  * @param file 文件
  * @param fileBasePath 文件存储路径

@@ -1,6 +1,6 @@
 package top.tcyeee.bookmarkify.server
 
-import top.tcyeee.bookmarkify.entity.response.UserAuthEntityVo
+import top.tcyeee.bookmarkify.entity.UserAuthEntityVo
 
 /**
  * 用户登陆相关

@@ -4,15 +4,15 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper
 import org.apache.ibatis.annotations.Mapper
 import org.apache.ibatis.annotations.Select
 import org.springframework.context.annotation.Description
+import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
-import top.tcyeee.bookmarkify.entity.response.BookmarkShow
 
 /**
  * @author tcyeee
  * @date 3/10/24 22:19
  */
 @Mapper
-interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink>{
+interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
 
     @Select(
         """

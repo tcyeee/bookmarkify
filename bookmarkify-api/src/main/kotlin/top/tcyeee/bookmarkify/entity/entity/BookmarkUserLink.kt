@@ -6,8 +6,8 @@ import com.baomidou.mybatisplus.annotation.TableName
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Max
+import top.tcyeee.bookmarkify.entity.BookmarkDetail
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
-import top.tcyeee.bookmarkify.entity.response.BookmarkDetail
 import java.time.LocalDateTime
 
 /**

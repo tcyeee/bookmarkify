@@ -6,13 +6,10 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
-import top.tcyeee.bookmarkify.entity.common.BackgroundConfig
-import top.tcyeee.bookmarkify.entity.request.UpdateBackgroundParams
-import top.tcyeee.bookmarkify.entity.request.UserDelParams
-import top.tcyeee.bookmarkify.entity.request.UserInfoUptateParams
-import top.tcyeee.bookmarkify.entity.response.UserInfoShow
+import top.tcyeee.bookmarkify.entity.UserDelParams
+import top.tcyeee.bookmarkify.entity.UserInfoShow
+import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
 import top.tcyeee.bookmarkify.server.IUserService
-import top.tcyeee.bookmarkify.server.impl.FileServiceImpl
 import top.tcyeee.bookmarkify.utils.BaseUtils
 
 /**
@@ -24,7 +21,6 @@ import top.tcyeee.bookmarkify.utils.BaseUtils
 @RequestMapping("/user")
 class UserController(
     private val userService: IUserService,
-    private val fileService: FileServiceImpl,
 ) {
 
     @GetMapping("info")
@@ -54,25 +50,7 @@ class UserController(
     @PostMapping("uploadAvatar")
     @Operation(summary = "上传头像", parameters = [Parameter(name = "file", description = "头像图片文件")])
     fun uploadAvatar(@RequestParam("file") file: MultipartFile): ResultWrapper {
-        val fileName = fileService.updateAvatar(BaseUtils.uid(), file)
-        return ResultWrapper.ok(fileName)
+        val fileUrl = userService.updateAvatar(file, BaseUtils.uid())
+        return ResultWrapper.ok(fileUrl)
     }
-
-    @PostMapping("uploadBackground")
-    @Operation(summary = "上传自定义背景图片", parameters = [Parameter(name = "file", description = "背景图片文件")])
-    fun uploadBackground(@RequestParam("file") file: MultipartFile): ResultWrapper {
-        val fileName = fileService.uploadBackground(BaseUtils.uid(), file)
-        return ResultWrapper.ok(fileName)
-    }
-
-    @PostMapping("updateBackgroundConfig")
-    @Operation(summary = "上传渐变色背景图片")
-    fun updateBackgroundConfig(@RequestBody config: BackgroundConfig): Boolean =
-        userService.updateBackgroundConfig(config)
-
-    @PostMapping("selectBackground")
-    @Operation(summary = "在已有的渐变色背景和图片背景中选择主页背景")
-    fun selectBackground(@RequestBody params: UpdateBackgroundParams): Boolean =
-        userService.updateBackground(params, BaseUtils.uid())
-
 }
