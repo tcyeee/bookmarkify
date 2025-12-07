@@ -1,7 +1,7 @@
 <template>
   <div class="background-upload-container">
     <BackgroundPreview 
-      :background-path="previewUrl || (currentType === 'IMAGE' ? backgroundPath : null)"
+      :background-path="previewUrl || (currentType === BackgroundType.IMAGE ? backgroundPath : null)"
       :background-config="previewConfig"
     />
     
@@ -10,14 +10,14 @@
       <label class="type-label">背景类型：</label>
       <div class="type-buttons">
         <button
-          :class="['type-btn', { 'type-btn-active': currentType === 'GRADIENT' }]"
-          @click="switchType('GRADIENT')"
+          :class="['type-btn', { 'type-btn-active': currentType === BackgroundType.GRADIENT }]"
+          @click="switchType(BackgroundType.GRADIENT)"
         >
           渐变背景
         </button>
         <button
-          :class="['type-btn', { 'type-btn-active': currentType === 'IMAGE' }]"
-          @click="switchType('IMAGE')"
+          :class="['type-btn', { 'type-btn-active': currentType === BackgroundType.IMAGE }]"
+          @click="switchType(BackgroundType.IMAGE)"
         >
           图片背景
         </button>
@@ -25,7 +25,7 @@
     </div>
 
     <!-- 渐变背景配置 -->
-    <div v-if="currentType === 'GRADIENT'" class="gradient-config">
+    <div v-if="currentType === BackgroundType.GRADIENT" class="gradient-config">
       <div class="config-section">
         <label class="config-label">预设渐变：</label>
         <div class="preset-gradients">
@@ -104,7 +104,7 @@
     </div>
 
     <!-- 图片背景配置 -->
-    <div v-if="currentType === 'IMAGE'" class="image-config">
+    <div v-if="currentType === BackgroundType.IMAGE" class="image-config">
       <div class="mt-4 flex gap-2">
         <label class="cy-btn cy-btn-soft cursor-pointer">
           <input
@@ -154,7 +154,8 @@ import { uploadBackground, updateBackgroundConfig } from '@api'
 import { useUserStore } from '@stores/user.store'
 import { imageConfig } from '@config/image.config'
 import BackgroundPreview from './BackgroundPreview.vue'
-import type { BackgroundType, BackgroundConfig, GradientConfig } from '@api/typing'
+import { BackgroundType } from '@api/typing'
+import type { BackgroundConfig, GradientConfig } from '@api/typing'
 
 interface Props {
   backgroundPath?: string | null
@@ -177,7 +178,7 @@ const saving = ref(false)
 
 // 当前选择的背景类型
 const currentType = ref<BackgroundType>(
-  props.backgroundConfig?.type || (props.backgroundPath ? 'IMAGE' : 'GRADIENT')
+  props.backgroundConfig?.type || (props.backgroundPath ? BackgroundType.IMAGE : BackgroundType.GRADIENT)
 )
 
 // 渐变配置
@@ -200,7 +201,7 @@ const presetGradients: GradientConfig[] = [
 
 // 初始化渐变配置
 onMounted(() => {
-  if (props.backgroundConfig?.type === 'GRADIENT' && props.backgroundConfig.gradient) {
+  if (props.backgroundConfig?.type === BackgroundType.GRADIENT && props.backgroundConfig.gradient) {
     gradientColors.value = [...props.backgroundConfig.gradient.colors]
     gradientDirection.value = props.backgroundConfig.gradient.direction || 135
   }
@@ -208,9 +209,9 @@ onMounted(() => {
 
 // 预览配置
 const previewConfig = computed<BackgroundConfig | null>(() => {
-  if (currentType.value === 'GRADIENT') {
+  if (currentType.value === BackgroundType.GRADIENT) {
     return {
-      type: 'GRADIENT',
+      type: BackgroundType.GRADIENT,
       gradient: {
         colors: gradientColors.value,
         direction: gradientDirection.value,
@@ -229,7 +230,7 @@ const hasBackground = computed(() => {
 function switchType(type: BackgroundType) {
   currentType.value = type
   // 如果切换到图片类型，清除预览
-  if (type === 'IMAGE') {
+  if (type === BackgroundType.IMAGE) {
     previewUrl.value = null
     selectedFile.value = null
   }
@@ -267,7 +268,7 @@ async function saveGradient() {
   saving.value = true
   try {
     const config: BackgroundConfig = {
-      type: 'GRADIENT',
+      type: BackgroundType.GRADIENT,
       gradient: {
         colors: gradientColors.value,
         direction: gradientDirection.value,
@@ -325,7 +326,7 @@ async function handleUpload() {
   try {
     const imagePath = await uploadBackground(selectedFile.value)
     const config: BackgroundConfig = {
-      type: 'IMAGE',
+      type: BackgroundType.IMAGE,
       imagePath,
     }
     
