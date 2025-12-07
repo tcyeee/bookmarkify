@@ -1,7 +1,7 @@
 <template>
     <CommonHeader class="fixed top-0 z-1" />
     <div class="bg-gray-200 h-screen pt-[7rem]">
-    <div class="flex gap-10 sm:px-[1vw]  md:px-[5vw]  lg:px-[10vw] xl:px-[20vw] pb-[20vh] bg-gray-200">
+    <div class="flex gap-10 sm:px-[1vw]  md:px-[2vw]  lg:px-[4vw] xl:px-[6vw] pb-[10vh] bg-gray-200">
       <div>
         <NuxtLink to="/">
           <div class="cy-btn cy-btn-wide cy-btn-lg rounded-xl mb-[2rem]">返回</div>

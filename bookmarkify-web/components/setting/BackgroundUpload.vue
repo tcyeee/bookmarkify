@@ -343,7 +343,6 @@ async function handleUpload() {
     // 刷新用户信息
     await userStore.getUserInfo()
   } catch (error: any) {
-    console.log(error);
     ElMessage.error(error.message || '背景上传失败，请重试')
   } finally {
     uploading.value = false
