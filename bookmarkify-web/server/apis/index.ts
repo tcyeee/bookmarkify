@@ -11,3 +11,5 @@ export const updateUserInfo = (param: t.UserInfoUpdate) => http.post("/user/upda
 export const queryUserInfo = () => http.get("/user/info") as Promise<t.UserInfoEntity>;
 export const accountDelete = (pwd: string) => http.post("/user/del", { password: btoa(pwd) }) as Promise<boolean>;
 export const uploadAvatar = (file: File) => http.upload("/user/uploadAvatar", file) as Promise<string>;
+export const uploadBackground = (file: File) => http.upload("/user/uploadBackground", file) as Promise<string>;
+export const updateBackgroundConfig = (config: t.BackgroundConfig) => http.post("/user/updateBackgroundConfig", config) as Promise<boolean>;

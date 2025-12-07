@@ -20,11 +20,13 @@
     </div>
 
     <!-- 背景信息 -->
-    <div :class="classFadeBg" class="index-base" />
+    <div :class="classFadeBg" class="index-base" :style="backgroundStyle" />
   </div>
 </template>
 
 <script lang="ts" setup>
+import { getImageUrl } from '@config'
+
 const sysStore = useSysStore();
 const userStore = useUserStore();
 
@@ -36,9 +38,13 @@ const data = reactive<{
   duringAnimate: false,
 });
 
-onMounted(() => {
+onMounted(async () => {
   sysStore.registerKeyEvent("Space", "/", () => sceneToggle("Space"));
   sysStore.registerKeyEvent("Escape", "/", () => sceneToggle("Escape"));
+  // 获取用户信息以加载背景
+  if (!userStore.account) {
+    await userStore.getUserInfo();
+  }
 });
 
 const classFadeBg = computed(() => {
@@ -52,6 +58,42 @@ const classFadeDate = computed(() => {
   return {
     "animate-fade-date-in": data.fade,
     "animate-fade-date-out": !data.fade,
+  };
+});
+
+// 背景样式
+const backgroundStyle = computed(() => {
+  const account = userStore.account;
+  const backgroundConfig = account?.backgroundConfig;
+  
+  // 优先使用新的背景配置
+  if (backgroundConfig) {
+    if (backgroundConfig.type === 'GRADIENT' && backgroundConfig.gradient) {
+      const colors = backgroundConfig.gradient.colors.join(', ');
+      const direction = backgroundConfig.gradient.direction || 135;
+      return {
+        backgroundImage: `linear-gradient(${direction}deg, ${colors})`,
+      };
+    } else if (backgroundConfig.type === 'IMAGE' && backgroundConfig.imagePath) {
+      const backgroundUrl = getImageUrl(backgroundConfig.imagePath);
+      return {
+        backgroundImage: `url(${backgroundUrl})`,
+      };
+    }
+  }
+  
+  // 兼容旧版本的 backgroundPath
+  const backgroundPath = account?.backgroundPath;
+  if (backgroundPath) {
+    const backgroundUrl = getImageUrl(backgroundPath);
+    return {
+      backgroundImage: `url(${backgroundUrl})`,
+    };
+  }
+  
+  // 默认渐变背景
+  return {
+    backgroundImage: 'linear-gradient(135deg, #a69f9f, #c1baba, #8f9ea6)',
   };
 });
 
@@ -73,8 +115,6 @@ function sceneToggle(key?: string) {
   height: calc(100vh + 20px);
   margin: -10px;
   overflow: hidden;
-
-  background-image: linear-gradient(135deg, #a69f9f, #c1baba, #8f9ea6);
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
