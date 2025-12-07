@@ -1,3 +1,19 @@
+export enum BackgroundType {
+    GRADIENT = "GRADIENT",
+    IMAGE = "IMAGE"
+}
+
+export interface GradientConfig {
+    colors: string[]  // 渐变色数组，至少2个颜色
+    direction?: number  // 渐变方向角度，默认135
+}
+
+export interface BackgroundConfig {
+    type: BackgroundType
+    gradient?: GradientConfig  // 当type为GRADIENT时使用
+    imagePath?: string  // 当type为IMAGE时使用
+}
+
 export interface UserInfoEntity {
     uid: string
     token: string
@@ -5,6 +21,8 @@ export interface UserInfoEntity {
     phone?: string
     email?: string
     avatarPath?: string
+    backgroundPath?: string  // 兼容旧版本，保留
+    backgroundConfig?: BackgroundConfig  // 新的背景配置
     verified: boolean
 }
 
