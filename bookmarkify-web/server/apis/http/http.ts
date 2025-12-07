@@ -39,6 +39,9 @@ export default class http {
             const data = await response.json();
             return resultCheck(data as Result<object>, request);
         } catch (error) {
+            console.log("===================");
+            console.log(error);
+            console.log("================");
             // @ts-ignore
             if (error instanceof TypeError) ElMessage.error(`Oops,网络错误,请重试`)
             return Promise.reject(error);
