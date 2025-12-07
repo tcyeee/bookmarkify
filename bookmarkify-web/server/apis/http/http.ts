@@ -27,8 +27,9 @@ export default class http {
 
         // 创建请求
         console.log(`[API] UPLOAD::${path}`);
+        const token = userStore.account?.token ?? ""
         const request: Request = new Request(useRuntimeConfig().public.apiBase + path, {
-            headers: { 'satoken': userStore.account?.token ?? "" },
+            headers: { 'satoken': token },
             body: formData,
             method: 'POST',
         });

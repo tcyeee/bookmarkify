@@ -59,7 +59,7 @@ class UserServiceImpl(
         file.transferTo(storePath)
 
         // 更新用户头像路径
-        ktUpdate().eq(UserEntity::id, uid).set(UserEntity::avatarPath, fileName)
+        ktUpdate().eq(UserEntity::id, uid).set(UserEntity::avatarPath, fileName).update()
 
         // 返回相对路径
         return fileName
