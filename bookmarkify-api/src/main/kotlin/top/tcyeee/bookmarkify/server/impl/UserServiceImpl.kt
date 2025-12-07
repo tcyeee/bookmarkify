@@ -1,8 +1,6 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import cn.dev33.satoken.stp.StpUtil
-import cn.hutool.core.io.FileUtil
-import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
@@ -16,7 +14,7 @@ import top.tcyeee.bookmarkify.entity.response.UserInfoShow
 import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
-import java.io.File
+import top.tcyeee.bookmarkify.utils.uploadAvatar
 
 /**
  * @author tcyeee
@@ -38,25 +36,9 @@ class UserServiceImpl(
     }
 
     override fun updateAvatar(uid: String, file: MultipartFile): String {
-        // 验证文件类型
-        file.contentType?.startsWith("image/")?.let {
-            if (!it) throw CommonException(ErrorType.E103)
-        }
-
-        // 验证文件大小（限制为 5MB）
-        if (file.size > 5 * 1024 * 1024) throw CommonException(ErrorType.E104)
-
-        // 生成文件名：avatar/{uid}/{uuid}.{ext}
-        val uid = BaseUtils.uid()
-        val ext = FileUtil.extName(file.originalFilename ?: "jpg")
-        val fileName = "avatar/$uid/${IdUtil.fastUUID()}.$ext"
-        val storePath = File(projectConfig.imgPath, fileName)
-
-        // 确保目录存在
-        FileUtil.mkdir(storePath.parentFile)
 
         // 保存文件
-        file.transferTo(storePath)
+        val fileName = uploadAvatar(file, uid, projectConfig.imgPath)
 
         // 更新用户头像路径
         ktUpdate().eq(UserEntity::id, uid).set(UserEntity::avatarPath, fileName).update()
