@@ -217,7 +217,7 @@ async function saveGradient() {
       },
     }
 
-    await updateBacColor(config)
+    await updateBacColor(config.gradient!)
     emit('update', config)
     ElNotification.success({ message: '渐变背景保存成功' })
 
