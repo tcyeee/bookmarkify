@@ -9,7 +9,11 @@ export const useSysStore = defineStore(
     /* 阻止键盘事件开关 */
     const preventKeyEventsFlag = ref(false)
     /* 键盘事件 */
-    const keyEvents = ref<Map<string, Set<Function>>>()
+    const keyEvents = ref<Map<string, Function>>()
+    /* 键盘事件上次触发时间(统一节流) */
+    const keyEventLastTriggered = ref(0)
+    /* 键盘事件触发间隔时间(毫秒) */
+    const keyEventInterval = 150
     /* 设置标签页索引 */
     const settingTabIndex = ref(0)
     /* 添加书签对话框可见性 */
@@ -39,9 +43,11 @@ export const useSysStore = defineStore(
       if (preventKeyEventsFlag.value) return
       if (!keyEvents.value || !keyEvents.value.has(eventKey)) return
 
-      const eventList = keyEvents.value.get(eventKey)
-      console.log(`[KEYBOARD]: '${keyCode}'键按下，注册名:${eventKey},事件数:${eventList?.size}`)
-      eventList?.forEach((event) => event.call(null))
+      const now = Date.now()
+      if (now - keyEventLastTriggered.value < keyEventInterval) return
+
+      keyEventLastTriggered.value = now
+      keyEvents.value.get(eventKey)?.call(null)
     }
 
     /**
@@ -54,19 +60,7 @@ export const useSysStore = defineStore(
       const eventKey = eventName(keyCode, triggerPath)
 
       if (!keyEvents.value) keyEvents.value = new Map()
-      if (!keyEvents.value.has(eventKey)) keyEvents.value.set(eventKey, new Set())
-
-      const events = keyEvents.value.get(eventKey)!
-      events.add(triggerFunc)
-
-      console.log(
-        `[KEYBOARD] 在${triggerPath}页面为'${keyCode}'键绑定事件,注册名:${eventKey},
-        同注册名下事件数:${keyEvents.value.get(eventKey)?.size}
-        分别是:${Array.from(keyEvents.value.get(eventKey)!)}
-        ------------------------------
-        当前总事件数:${keyEvents.value.size},
-        分别是:${Array.from(keyEvents.value.keys())}`
-      )
+      keyEvents.value.set(eventKey, triggerFunc)
     }
 
     function eventName(keyCode: string, triggerPath: string) {
@@ -82,6 +76,7 @@ export const useSysStore = defineStore(
       triggerKeyEvent,
       registerKeyEvent,
       refreshSystemConfig,
+      keyEventLastTriggered,
     }
   },
   { persist: false }
