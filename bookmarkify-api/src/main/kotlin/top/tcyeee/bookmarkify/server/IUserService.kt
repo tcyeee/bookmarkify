@@ -3,9 +3,9 @@ package top.tcyeee.bookmarkify.server
 import com.baomidou.mybatisplus.extension.service.IService
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.entity.BacSettingVO
-import top.tcyeee.bookmarkify.entity.common.GradientConfig
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import top.tcyeee.bookmarkify.entity.BackSettingParams
+import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
@@ -28,11 +28,11 @@ interface IUserService : IService<UserEntity> {
 
     /**
      * 更新背景颜色
-     * @param config 背景颜色配置
+     * @param params 背景颜色配置
      * @param uid 用户ID
      * @return 是否成功
      */
-    fun updateBacColor(config: GradientConfig, uid: String): Boolean
+    fun updateBacColor(params: GradientConfigParams, uid: String): Boolean
 
     /**
      * 上传背景图片

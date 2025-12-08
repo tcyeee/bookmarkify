@@ -8,13 +8,13 @@ import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.BacSettingVO
-import top.tcyeee.bookmarkify.entity.common.GradientConfig
 import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
 import top.tcyeee.bookmarkify.entity.entity.BackgroundImageEntity
 import top.tcyeee.bookmarkify.entity.entity.BackgroundType
 import top.tcyeee.bookmarkify.entity.entity.UserBackgroundLinkEntity
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import top.tcyeee.bookmarkify.entity.BackSettingParams
+import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
@@ -88,11 +88,11 @@ class UserServiceImpl(
         return ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::nickName, params.nickName).update()
     }
 
-    override fun updateBacColor(config: GradientConfig, uid: String): Boolean {
+    override fun updateBacColor(params: GradientConfigParams, uid: String): Boolean {
         val entity = BackgroundGradientEntity(
             uid = uid,
-            gradient = JSONUtil.toJsonStr(config.colors),
-            direction = config.direction,
+            gradient = JSONUtil.toJsonStr(params.colors),
+            direction = params.direction,
         ).also { bacGradientService.save(it) }
 
         backSettingService.ktUpdate().eq(UserBackgroundLinkEntity::uid, uid)
