@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="bookmark-icon" @click="sysStore.addBookmarkDialogVisible = true">
-      <span class="icon--add" />
+      <span class="icon--add icon-size-35 text-gray-400" />
     </div>
 
     <dialog id="dialog_add" class="cy-modal">
@@ -15,7 +15,7 @@
           </transition>
 
           <label class="cy-input flex items-center gap-2 w-full" :class="data.urlIsTrue ? 'cy-input-success' : ''">
-            <span class="icon--earth" />
+            <span class="icon--earth icon-size-30 text-gray-500" />
             <div>http://</div>
             <input v-model="data.input" type="text" placeholder="输入网址.." @input="checkInput" @keyup.enter="addOne" />
             <kbd class="cy-kbd cursor-pointer" @click="addOne">&emsp;enter&emsp; </kbd>

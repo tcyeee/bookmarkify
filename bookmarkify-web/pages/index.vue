@@ -15,7 +15,7 @@
       <div v-if="!data.fade" class="fixed bottom-0">
         <NuxtLink to="/setting">
           <div class="cy-btn cy-btn-ghost mb-5 ml-5">
-            <span class="icon--setting icon-size-30 text-red-400" />
+            <span class="icon--setting icon-size-30 text-gray-700" />
           </div>
         </NuxtLink>
       </div>
