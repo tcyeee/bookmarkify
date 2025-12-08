@@ -112,7 +112,7 @@ class UserServiceImpl(
             this.uid = uid
             this.type = BackgroundType.IMAGE
             this.backgroundLinkId = bacImgEntity.id
-        }
+        }.also { backSettingService.saveOrUpdate(it) }
         return file.currentName
     }
 
