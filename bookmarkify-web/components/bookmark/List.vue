@@ -4,11 +4,24 @@
     <!-- <BookmarkReturn v-show="data.subItemId" @click="backTopLayer()" /> -->
 
     <!-- 一级菜单 -->
-    <draggable class="flex flex-wrap flex-start gap-12" v-show="!data.subItemId" v-model="data.pageData" v-bind="dragOptions" group="people" @sort="sort" item-key="id">
+    <draggable
+      class="flex flex-wrap flex-start gap-12"
+      v-show="!data.subItemId"
+      v-model="data.pageData"
+      v-bind="dragOptions"
+      group="people"
+      @sort="sort"
+      item-key="id">
       <template #item="item">
-        <div @contextmenu="onContextMenu($event,item.element)">
-          <BookmarkCellDir v-if="item.element.type == 'BOOKMARK_DIR'" :value="item.element.typeDir" @click="openDir(item.element)" />
-          <BookmarkCellItem v-if="item.element.type == 'BOOKMARK'" :value="item.element.typeApp" @click="openPage(item.element.typeApp)" />
+        <div @contextmenu="onContextMenu($event, item.element)">
+          <BookmarkCellDir
+            v-if="item.element.type == 'BOOKMARK_DIR'"
+            :value="item.element.typeDir"
+            @click="openDir(item.element)" />
+          <BookmarkCellItem
+            v-if="item.element.type == 'BOOKMARK'"
+            :value="item.element.typeApp"
+            @click="openPage(item.element.typeApp)" />
           <BookmarkCellLoading v-if="item.element.type == 'LOADING'" />
         </div>
       </template>
@@ -29,103 +42,103 @@
   </div>
 </template>
 <script lang="ts" setup>
-import Draggable from "vuedraggable";
-import ContextMenu from "@imengyu/vue3-context-menu";
-import { bookmarksSort, bookmarksDel } from "@api";
-import type { HomeItem, Bookmark, BookmarkSortParams } from "@api/typing";
+import Draggable from 'vuedraggable'
+import ContextMenu from '@imengyu/vue3-context-menu'
+import { bookmarksSort, bookmarksDel } from '@api'
+import type { HomeItem, Bookmark, BookmarkSortParams } from '@typing'
 
-const sysStore = useSysStore();
-const bookmarkStore = useBookmarkStore();
+const sysStore = useSysStore()
+const bookmarkStore = useBookmarkStore()
 
 const props = defineProps<{
-  data: Array<HomeItem>;
-}>();
+  data: Array<HomeItem>
+}>()
 
 const data = reactive<{
-  subApps?: Array<Bookmark>;
-  subItemId?: string;
-  pageData?: Array<HomeItem>;
-  bookmarkDetailDialog: boolean;
-  bookmarkDetail?: Bookmark;
+  subApps?: Array<Bookmark>
+  subItemId?: string
+  pageData?: Array<HomeItem>
+  bookmarkDetailDialog: boolean
+  bookmarkDetail?: Bookmark
 }>({
   pageData: props.data,
   bookmarkDetailDialog: false,
-});
+})
 
 watchEffect(() => {
-  data.pageData = props.data;
-  sysStore.preventKeyEventsFlag = data.bookmarkDetailDialog;
-});
+  data.pageData = props.data
+  sysStore.preventKeyEventsFlag = data.bookmarkDetailDialog
+})
 
-const dragOptions = ref({ animation: 300 });
+const dragOptions = ref({ animation: 300 })
 
 function addOne(item: HomeItem) {
-  bookmarkStore.addEmpty(item);
+  bookmarkStore.addEmpty(item)
 }
 
 function openDir(item: HomeItem) {
-  data.subItemId = item.id;
-  data.subApps = item.typeDir.bookmarkList;
+  data.subItemId = item.id
+  data.subApps = item.typeDir.bookmarkList
   window.scrollTo({
     top: 0,
-    behavior: "smooth", // 平滑滚动到顶部，可选
-  });
+    behavior: 'smooth', // 平滑滚动到顶部，可选
+  })
 }
 
 function openPage(bookmark: Bookmark) {
-  window.open(bookmark.urlFull, "_blank");
+  window.open(bookmark.urlFull, '_blank')
 }
 
 function backTopLayer() {
-  data.subItemId = undefined;
+  data.subItemId = undefined
   window.scrollTo({
     top: 0,
-    behavior: "smooth", // 平滑滚动到顶部，可选
-  });
+    behavior: 'smooth', // 平滑滚动到顶部，可选
+  })
 }
 
 function getClickMenu(item: HomeItem) {
   return [
     {
-      label: "查看详情",
+      label: '查看详情',
       onClick: () => clickDetail(item),
     },
     {
-      label: "删除书签",
+      label: '删除书签',
       onClick: () => delOne(item),
     },
-  ];
+  ]
 }
 
 function onContextMenu(e: MouseEvent, item: HomeItem) {
-  ContextMenu.showContextMenu({ items: getClickMenu(item), x: e.x, y: e.y });
+  ContextMenu.showContextMenu({ items: getClickMenu(item), x: e.x, y: e.y })
 }
 
 // 查看详情
 function clickDetail(item: HomeItem) {
-  data.bookmarkDetailDialog = true;
-  data.bookmarkDetail = item.typeApp;
+  data.bookmarkDetailDialog = true
+  data.bookmarkDetail = item.typeApp
 }
 
 // 删除书签
 function delOne(item: HomeItem) {
-  bookmarksDel([item.id]);
+  bookmarksDel([item.id])
 
-  const index: number = data.pageData?.findIndex((a) => a.id == item.id) || -1;
-  if (index !== -1) data.pageData?.splice(index, 1);
+  const index: number = data.pageData?.findIndex((a) => a.id == item.id) || -1
+  if (index !== -1) data.pageData?.splice(index, 1)
 }
 
 // 重新排序
 function sort() {
-  let params: Array<BookmarkSortParams> = [];
+  let params: Array<BookmarkSortParams> = []
   data.pageData?.forEach((item) => {
-    params.push({ id: item.id, sort: params.length });
-  });
-  bookmarksSort(params);
+    params.push({ id: item.id, sort: params.length })
+  })
+  bookmarksSort(params)
 }
 </script>
 
-<style >
+<style>
 .bookmark-dialog-box {
   border-radius: 2rem;
   padding: 3rem;

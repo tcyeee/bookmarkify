@@ -13,7 +13,7 @@
 </template>
 
 <script lang="ts" setup>
-import type { BackgroundConfig } from '@api/typing'
+import type { BackgroundConfig } from '@typing'
 
 const props = defineProps<{
   backgroundPath?: string | null

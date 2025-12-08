@@ -95,8 +95,8 @@
 import { useUserStore } from '@stores/user.store'
 import { imageConfig } from '@config/image.config'
 import BackgroundPreview from './BackgroundPreview.vue'
-import { BackgroundType } from '@api/typing'
-import type { BackgroundConfig, GradientConfig } from '@api/typing'
+import { BackgroundType } from '@typing'
+import type { BackgroundConfig, BackgroundGradientEntity } from '@typing'
 import { updateBacColor, uploadBacPic } from '@api'
 
 interface Props {
@@ -128,7 +128,7 @@ const gradientColors = ref<string[]>(['#a69f9f', '#c1baba', '#8f9ea6'])
 const gradientDirection = ref<number>(135)
 
 // 预设渐变
-const presetGradients: GradientConfig[] = [
+const presetGradients: BackgroundGradientEntity[] = [
   { colors: ['#a69f9f', '#c1baba', '#8f9ea6'], direction: 135 },
   { colors: ['#667eea', '#764ba2'], direction: 135 },
   { colors: ['#f093fb', '#f5576c'], direction: 135 },
@@ -179,13 +179,13 @@ function switchType(type: BackgroundType) {
 }
 
 // 选择预设渐变
-function selectPreset(preset: GradientConfig) {
+function selectPreset(preset: BackgroundGradientEntity) {
   gradientColors.value = [...preset.colors]
   gradientDirection.value = preset.direction || 135
 }
 
 // 检查预设是否激活
-function isPresetActive(preset: GradientConfig) {
+function isPresetActive(preset: BackgroundGradientEntity) {
   return (
     gradientColors.value.length === preset.colors.length &&
     gradientColors.value.every((color, index) => color === preset.colors[index]) &&

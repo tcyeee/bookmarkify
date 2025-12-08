@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.entity.entity
 import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
+import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.BackSettingParams
@@ -51,10 +52,11 @@ data class BackgroundImageEntity(
 
 @TableName("background_gradient")
 data class BackgroundGradientEntity(
-    @TableId @field:Schema(description = "背景ID") val id: String = IdUtil.fastUUID(),
-    @field:Schema(description = "用户ID") var uid: String,
+    @TableId @JsonIgnore @field:Schema(description = "背景ID") val id: String = IdUtil.fastUUID(),
+    @JsonIgnore @field:Schema(description = "用户ID") var uid: String,
+    @JsonIgnore @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
+    @JsonIgnore @field:Schema(description = "是否是默认展示的背景") val isDefault: Boolean = false,
+
     @field:Schema(description = "背景渐变色(JSON)") var gradient: String,
     @field:Schema(description = "背景渐变方向") var direction: Int,
-    @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
-    @field:Schema(description = "是否是默认展示的背景") val isDefault: Boolean = false,
 )

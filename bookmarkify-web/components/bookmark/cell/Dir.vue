@@ -1,4 +1,3 @@
-
 <template>
   <div class="w-20 flex flex-col items-center">
     <div class="w-app h-app rounded-xl bg-gray-300 flex justify-center items-center shadow">
@@ -13,20 +12,16 @@
         </div>
       </div>
     </div>
-    <div class="w-18 text-xs mt-[0.3rem] text-gray-800  truncate text-center">{{ value.name }}</div>
+    <div class="w-18 text-xs mt-[0.3rem] text-gray-800 truncate text-center">{{ value.name }}</div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { type Bookmark, type BookmarkDir } from "@api/typing";
+import type { Bookmark, BookmarkDir } from '@typing'
 
-defineProps<{
-  value: BookmarkDir;
-}>();
+defineProps<{ value: BookmarkDir }>()
 
-reactive<{
-  bookmarks: Array<Bookmark>;
-}>({
+reactive<{ bookmarks: Array<Bookmark> }>({
   bookmarks: [],
-});
+})
 </script>

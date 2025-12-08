@@ -27,4 +27,6 @@ class LoginController(
     fun loginByDeviceId(@RequestParam deviceId: String): UserAuthEntityVo {
         return loginService.loginByDeviceId(deviceId)
     }
+
+    // loginout
 }

@@ -5,22 +5,22 @@
 </template>
 
 <script lang="ts" setup>
-import { type HomeItem } from "@api/typing";
-const storeBookmark = useBookmarkStore();
+import { type HomeItem } from '@typing'
+const storeBookmark = useBookmarkStore()
 
 defineProps<{
-  status: boolean;
-}>();
+  status: boolean
+}>()
 
 const data = reactive<{
-  bookmarkList: Array<HomeItem>;
+  bookmarkList: Array<HomeItem>
 }>({
   bookmarkList: storeBookmark.bookmarks || [],
-});
+})
 
 onMounted(() => {
-  storeBookmark.addAction(updateAllBookmark);
-});
+  storeBookmark.addAction(updateAllBookmark)
+})
 
 function updateAllBookmark() {
   // storeBookmark.get().then((res) => (data.bookmarkList = res));
