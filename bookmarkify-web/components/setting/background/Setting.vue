@@ -55,7 +55,7 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{ (e: 'update', config: BacSettingVO): void }>()
 
-const fileInputRef = ref<HTMLInputElement | null>(null)
+const fileInputRef = ref<Ref<HTMLInputElement | null>>()
 const previewUrl = ref<string | null>(null)
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
@@ -195,9 +195,7 @@ async function handleUpload() {
 
     previewUrl.value = null
     selectedFile.value = null
-    if (fileInputRef.value) {
-      fileInputRef.value.value = ''
-    }
+    if (fileInputRef.value) fileInputRef.value.value = null
   } catch (error: any) {
     ElMessage.error(error.message || '背景上传失败，请重试')
   } finally {
@@ -208,9 +206,7 @@ async function handleUpload() {
 function handleCancel() {
   previewUrl.value = null
   selectedFile.value = null
-  if (fileInputRef.value) {
-    fileInputRef.value.value = ''
-  }
+  if (fileInputRef.value) fileInputRef.value.value = null
 }
 
 async function handleReset() {
