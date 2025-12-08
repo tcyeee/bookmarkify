@@ -4,6 +4,7 @@ import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
+import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.BackSettingParams
 import java.time.LocalDateTime
 
@@ -35,6 +36,8 @@ data class UserBackgroundLinkEntity(
         this.backgroundLinkId = params.backgroundId
         this.updateTime = LocalDateTime.now()
     }
+
+    fun vo(): BacSettingVO = BacSettingVO(uid = this.uid, type = this.type, backgroundLinkId = this.backgroundLinkId)
 }
 
 @TableName("background_image")

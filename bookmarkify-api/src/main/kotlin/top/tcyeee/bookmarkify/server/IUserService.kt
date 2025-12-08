@@ -9,6 +9,7 @@ import top.tcyeee.bookmarkify.entity.BackSettingParams
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
+import top.tcyeee.bookmarkify.entity.dto.UserSetting
 
 /**
  * @author tcyeee
@@ -57,5 +58,17 @@ interface IUserService : IService<UserEntity> {
      */
     fun bacSetting(params: BackSettingParams, uid: String): Boolean
 
+    /**
+     * 查询用户设置
+     * @param uid 用户ID
+     * @return 用户设置
+     */
+    fun queryUserSetting(uid: String): UserSetting
+
+    /**
+     * 查询用户背景设置
+     * @param uid 用户ID
+     * @return 用户背景设置
+     */
     fun queryUserBacSetting(uid: String): BacSettingVO
 }
