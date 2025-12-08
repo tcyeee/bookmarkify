@@ -16,4 +16,4 @@ export const uploadAvatar = (file: File) => http.upload('/user/uploadAvatar', fi
 
 /* =========[ /setting ]========= */
 export const uploadBacPic = (file: File) => http.upload('/setting/uploadBacPic', file) as Promise<string>
-export const updateBacColor = (config: t.BackgroundConfig) => http.post('/setting/updateBacColor', config) as Promise<boolean>
+export const updateBacColor = (params: t.BackgroundConfig) => http.post('/setting/updateBacColor', params) as Promise<boolean>

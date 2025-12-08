@@ -6,10 +6,10 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
-import top.tcyeee.bookmarkify.entity.common.GradientConfig
 import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
 import top.tcyeee.bookmarkify.entity.entity.BackgroundImageEntity
 import top.tcyeee.bookmarkify.entity.BackSettingParams
+import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.server.impl.BackgroundGradientServiceImpl
 import top.tcyeee.bookmarkify.server.impl.BackgroundImageServiceImpl
@@ -36,7 +36,7 @@ class SettingController(
 
     @PostMapping("updateBacColor")
     @Operation(summary = "上传渐变色背景图片")
-    fun updateBacColor(@RequestBody config: GradientConfig): Boolean = userService.updateBacColor(config, BaseUtils.uid())
+    fun updateBacColor(@RequestBody params: GradientConfigParams): Boolean = userService.updateBacColor(params, BaseUtils.uid())
 
     @PostMapping("selectBackground")
     @Operation(summary = "在已有的渐变色背景和图片背景中选择主页背景")
