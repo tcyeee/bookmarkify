@@ -27,7 +27,7 @@
         <label class="config-label">预设渐变：</label>
         <div class="preset-gradients">
           <div
-            v-for="(preset, index) in presetGradients"
+            v-for="(preset, index) in sysStore.defaultGradientBackgroundsList"
             :key="index"
             class="preset-item"
             :class="{ 'preset-item-active': isPresetActive(preset) }"
@@ -99,6 +99,8 @@ import type { BacSettingVO, BacGradientVO } from '@typing'
 import { updateBacColor, uploadBacPic } from '@api'
 import { getCurrentEnvironment } from '@utils'
 
+const sysStore = useSysStore()
+
 interface Props {
   backgroundPath?: string | null
   backgroundConfig?: BacSettingVO | null
@@ -125,20 +127,6 @@ const currentType = ref<BackgroundType>(
 // 渐变配置
 const gradientColors = ref<string[]>(['#a69f9f', '#c1baba', '#8f9ea6'])
 const gradientDirection = ref<number>(135)
-
-// 预设渐变
-const presetGradients: BacGradientVO[] = [
-  { colors: ['#a69f9f', '#c1baba', '#8f9ea6'], direction: 135 },
-  { colors: ['#667eea', '#764ba2'], direction: 135 },
-  { colors: ['#f093fb', '#f5576c'], direction: 135 },
-  { colors: ['#4facfe', '#00f2fe'], direction: 135 },
-  { colors: ['#43e97b', '#38f9d7'], direction: 135 },
-  { colors: ['#fa709a', '#fee140'], direction: 135 },
-  { colors: ['#30cfd0', '#330867'], direction: 135 },
-  { colors: ['#a8edea', '#fed6e3'], direction: 135 },
-  { colors: ['#ff9a9e', '#fecfef'], direction: 135 },
-  { colors: ['#ffecd2', '#fcb69f'], direction: 135 },
-]
 
 // 初始化渐变配置
 onMounted(() => {
