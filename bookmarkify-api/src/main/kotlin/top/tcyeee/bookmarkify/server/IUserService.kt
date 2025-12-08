@@ -32,7 +32,7 @@ interface IUserService : IService<UserEntity> {
      * @param uid 用户ID
      * @return 是否成功
      */
-    fun updateBacColor(params: GradientConfigParams, uid: String): Boolean
+    fun addBacColor(params: GradientConfigParams, uid: String): Boolean
 
     /**
      * 上传背景图片
@@ -40,7 +40,7 @@ interface IUserService : IService<UserEntity> {
      * @param uid 用户ID
      * @return 背景图片路径 eg bacPic/1234567890.jpg
      */
-    fun updateBacImg(file: MultipartFile, uid: String): String
+    fun addBacImg(file: MultipartFile, uid: String): String
 
     /**
      * 上传头像

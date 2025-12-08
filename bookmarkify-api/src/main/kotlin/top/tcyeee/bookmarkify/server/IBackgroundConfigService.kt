@@ -11,4 +11,5 @@ import top.tcyeee.bookmarkify.entity.entity.BackgroundConfigEntity
  */
 interface IBackgroundConfigService : IService<BackgroundConfigEntity> {
     fun queryByUid(uid: String): BackgroundConfigEntity
+    fun deleteByUid(uid: String): Boolean
 }

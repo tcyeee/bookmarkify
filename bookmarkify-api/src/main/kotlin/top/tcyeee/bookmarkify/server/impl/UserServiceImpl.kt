@@ -88,7 +88,7 @@ class UserServiceImpl(
         return ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::nickName, params.nickName).update()
     }
 
-    override fun updateBacColor(params: GradientConfigParams, uid: String): Boolean {
+    override fun addBacColor(params: GradientConfigParams, uid: String): Boolean {
         val entity = BackgroundGradientEntity(
             uid = uid,
             gradient = JSONUtil.toJsonStr(params.colors),
@@ -101,7 +101,7 @@ class UserServiceImpl(
         return true
     }
 
-    override fun updateBacImg(file: MultipartFile, uid: String): String {
+    override fun addBacImg(file: MultipartFile, uid: String): String {
         val file = fileService.uploadBackground(BaseUtils.uid(), file)
 
         // 添加到背景图片数据库

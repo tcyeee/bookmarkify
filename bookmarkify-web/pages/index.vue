@@ -71,8 +71,9 @@ const backgroundStyle = computed(() => {
     return { backgroundImage: `linear-gradient(${direction}deg, ${colors})` }
   }
 
-  if (config && config.type === BackgroundType.IMAGE) {
-    return { backgroundImage: getImageUrlByUserFile(config.bacImgFile!) }
+  if (config && config.type === BackgroundType.IMAGE && config.bacImgFile) {
+    const imageUrl = getImageUrlByUserFile(config.bacImgFile)
+    return { backgroundImage: `url(${imageUrl})` }
   }
 
   return { backgroundImage: 'linear-gradient(135deg, #a69f9f, #c1baba, #8f9ea6)' }

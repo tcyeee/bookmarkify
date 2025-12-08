@@ -23,6 +23,10 @@ class BackgroundConfigServiceImpl(
     override fun queryByUid(uid: String): BackgroundConfigEntity =
         ktQuery().eq(BackgroundConfigEntity::uid, uid).one() ?: initUserBacSetting(uid)
 
+    override fun deleteByUid(uid: String): Boolean = ktUpdate()
+        .eq(BackgroundConfigEntity::uid, uid)
+        .remove()
+
     private fun initUserBacSetting(uid: String): BackgroundConfigEntity {
         // 默认找到第一个默认渐变色进行关联
         val first = backgroundGradientService.ktQuery()
