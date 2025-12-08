@@ -5,10 +5,10 @@
     "paths": {
       "@api": ["server/apis"],
       "@api/*": ["server/apis/*"],
-      "@stores/*": ["stores/*"],
+      "@stores/*": ["stores"],
       "@config": ["server/config"],
       "@config/*": ["server/config/*"],
-      "@typing": ["typing/index.ts"]
+      "@typing": ["typing"]
     }
   },
   "extends": "./.nuxt/tsconfig.json"

@@ -221,8 +221,7 @@ async function saveGradient() {
     emit('update', config)
     ElNotification.success({ message: '渐变背景保存成功' })
 
-    // 刷新用户信息
-    await userStore.getUserInfo()
+    // TODO 刷新设置信息
   } catch (error: any) {
     ElMessage.error(error.message || '保存失败，请重试')
   } finally {
@@ -282,8 +281,7 @@ async function handleUpload() {
       fileInputRef.value.value = ''
     }
 
-    // 刷新用户信息
-    await userStore.getUserInfo()
+    // TODO 刷新设置信息
   } catch (error: any) {
     ElMessage.error(error.message || '背景上传失败，请重试')
   } finally {

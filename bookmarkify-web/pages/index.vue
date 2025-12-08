@@ -2,9 +2,11 @@
   <div class="overflow-hidden select-none">
     <!-- 内容信息 -->
     <div class="absolute w-screen h-screen z-99">
-
       <!-- 时间信息 -->
-      <HomeTimeStr :class="classFadeDate" @click="sceneToggle()" class="text-[5rem] text-white opacity-80 text-center font-bold" />
+      <HomeTimeStr
+        :class="classFadeDate"
+        @click="sceneToggle()"
+        class="text-[5rem] text-white opacity-80 text-center font-bold" />
 
       <!-- 内容页面 -->
       <HomeMain :status="data.fade" class="absolute left-[10%] right-[10%] top-[30%]" />
@@ -12,7 +14,7 @@
       <!-- 去设置 -->
       <div v-if="!data.fade" class="fixed bottom-0">
         <NuxtLink to="/setting">
-          <div class="cy-btn cy-btn-ghost  mb-5 ml-5">
+          <div class="cy-btn cy-btn-ghost mb-5 ml-5">
             <span class="icon--setting" />
           </div>
         </NuxtLink>
@@ -25,79 +27,75 @@
 </template>
 
 <script lang="ts" setup>
-
-const sysStore = useSysStore();
-const userStore = useUserStore();
+const sysStore = useSysStore()
+const userStore = useUserStore()
 
 const data = reactive<{
-  fade: boolean;
-  duringAnimate: boolean;
+  fade: boolean
+  duringAnimate: boolean
 }>({
   fade: false,
   duringAnimate: false,
-});
+})
 
 onMounted(async () => {
-  sysStore.registerKeyEvent("Space", "/", () => sceneToggle("Space"));
-  sysStore.registerKeyEvent("Escape", "/", () => sceneToggle("Escape"));
-  // 获取用户信息以加载背景
-  if (!userStore.account) {
-    await userStore.getUserInfo();
-  }
-});
+  sysStore.registerKeyEvent('Space', '/', () => sceneToggle('Space'))
+  sysStore.registerKeyEvent('Escape', '/', () => sceneToggle('Escape'))
+  // TODO 刷新设置信息
+})
 
 const classFadeBg = computed(() => {
   return {
-    "animate-fade-bg-in": data.fade,
-    "animate-fade-bg-out": !data.fade,
-  };
-});
+    'animate-fade-bg-in': data.fade,
+    'animate-fade-bg-out': !data.fade,
+  }
+})
 
 const classFadeDate = computed(() => {
   return {
-    "animate-fade-date-in": data.fade,
-    "animate-fade-date-out": !data.fade,
-  };
-});
+    'animate-fade-date-in': data.fade,
+    'animate-fade-date-out': !data.fade,
+  }
+})
 
 // 背景样式
 const backgroundStyle = computed(() => {
-  const account = userStore.account;
-  const backgroundConfig = account?.backgroundConfig;
-  
+  const account = userStore.account
+  const backgroundConfig = account?.backgroundConfig
+
   // 优先使用新的背景配置
   if (backgroundConfig) {
     if (backgroundConfig.type === 'GRADIENT' && backgroundConfig.gradient) {
-      const colors = backgroundConfig.gradient.colors.join(', ');
-      const direction = backgroundConfig.gradient.direction || 135;
+      const colors = backgroundConfig.gradient.colors.join(', ')
+      const direction = backgroundConfig.gradient.direction || 135
       return {
         backgroundImage: `linear-gradient(${direction}deg, ${colors})`,
-      };
+      }
     } else if (backgroundConfig.type === 'IMAGE' && backgroundConfig.imagePath) {
       // const backgroundUrl = getImageUrl(backgroundConfig.imagePath);
       // return {
       //   backgroundImage: `url(${backgroundUrl})`,
       // };
-      return ""
+      return ''
     }
   }
 
   // 默认渐变背景
   return {
     backgroundImage: 'linear-gradient(135deg, #a69f9f, #c1baba, #8f9ea6)',
-  };
-});
+  }
+})
 
 // [ESC] 开关APP显示
 function sceneToggle(key?: string) {
   // 如果正好处于添加书签窗口，则仅关闭添加窗口
   if (sysStore.addBookmarkDialogVisible) {
     // 如果是按下空格，则不管
-    if (key === "Space") return;
-    sysStore.addBookmarkDialogVisible = false;
-    return;
+    if (key === 'Space') return
+    sysStore.addBookmarkDialogVisible = false
+    return
   }
-  data.fade = !data.fade;
+  data.fade = !data.fade
 }
 </script>
 
@@ -184,4 +182,3 @@ function sceneToggle(key?: string) {
   animation: index-date-out 0.3s forwards;
 }
 </style>
-

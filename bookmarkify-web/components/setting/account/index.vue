@@ -12,13 +12,9 @@
 </template>
 
 <script lang="ts" setup>
-const userStore = useUserStore();
+const userStore = useUserStore()
 
-onMounted(() => {
-  userStore.getUserInfo()
-});
-
+onMounted(() => {})
 </script>
 
-<style lang="scss" scoped>
-</style>
+<style lang="scss" scoped></style>

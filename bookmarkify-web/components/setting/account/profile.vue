@@ -46,6 +46,6 @@ function update() {
 
 async function handleAvatarUpdate(avatarPath: string) {
   // 头像上传成功后，更新用户信息中的头像路径
-  await userStore.getUserInfo()
+  await userStore.refreshUserInfo()
 }
 </script>
