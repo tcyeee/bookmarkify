@@ -33,5 +33,6 @@
     "satoken",
     "stringtype",
     "Uptate"
-  ]
+  ],
+  "java.compile.nullAnalysis.mode": "automatic"
 }
