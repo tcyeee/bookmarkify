@@ -29,7 +29,7 @@ export const useUserStore = defineStore(
     /**
      * 获取用户信息（同时刷新存储中的用户信息）
      */
-    async function getUserInfo(): Promise<UserInfoEntity> {
+    async function refreshUserInfo(): Promise<UserInfoEntity> {
       Loading.value = true
       try {
         const result = await queryUserInfo()
@@ -80,7 +80,7 @@ export const useUserStore = defineStore(
       localStorage.setItem('deviceUid', deviceUid)
       return deviceUid
     }
-    return { login, logout, authStatus, account, getUserInfo, avatarUrl }
+    return { login, logout, authStatus, account, refreshUserInfo, avatarUrl }
   },
   { persist: true }
 )

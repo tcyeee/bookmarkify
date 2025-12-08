@@ -10,7 +10,7 @@ export default defineNuxtConfig({
     '@api': resolve(__dirname, 'server/apis'),
     '@stores': resolve(__dirname, 'stores'),
     '@config': resolve(__dirname, 'server/config'),
-    '@typing': resolve(__dirname, 'typing/index.ts'),
+    '@typing': resolve(__dirname, 'typing'),
   },
   modules: [
     '@pinia/nuxt',
