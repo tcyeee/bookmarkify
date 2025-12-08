@@ -93,7 +93,7 @@
 
 <script lang="ts" setup>
 import { imageConfig } from '@config/image.config'
-import BackgroundPreview from './BackgroundPreview.vue'
+import BackgroundPreview from './Preview.vue'
 import { BackgroundType, UserFileType } from '@typing'
 import type { BacSettingVO, BacGradientVO } from '@typing'
 import { resetBacBackground, updateBacColor, uploadBacPic } from '@api'
