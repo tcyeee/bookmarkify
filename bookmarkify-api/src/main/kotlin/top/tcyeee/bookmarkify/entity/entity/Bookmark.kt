@@ -65,7 +65,7 @@ data class Bookmark(
         this.updateTime = LocalDateTime.now()
     }
 
-    fun checkActity(isActivity: Boolean) {
+    fun checkActivity(isActivity: Boolean) {
         this.isActivity = isActivity
         this.updateTime = LocalDateTime.now()
     }

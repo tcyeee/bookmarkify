@@ -113,7 +113,7 @@ object BookmarkUtils {
     }
 
     /**
-     * 获取用户LOGO文件,同时下载到本地
+     * 获取目标网站LOGO,同时下载到本地
      *
      * @param document 解析后的网页文件
      * @return url的存储地址

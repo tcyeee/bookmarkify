@@ -44,16 +44,19 @@ class BookmarkServiceImpl(
         val document: Document? = BookmarkUtils.getDocument(bookmark.rawUrl)
         document ?: return offline(bookmark)
 
-        /* 设置标题,描述,LOGO */
+        /* 保存网站标题,描述 */
         bookmark.setTitle(document)
+
+        /* 保存网站LOGO */
         val iconStorePath = BookmarkUtils.getLogoUrl(document, projectConfig.imgPath, bookmark)
         bookmark.setLogo(iconStorePath)
+
         updateById(bookmark)
     }
 
     override fun offline(bookmark: Bookmark) {
         bookmark.title = bookmark.urlHost
-        bookmark.checkActity(false)
+        bookmark.checkActivity(false)
         updateById(bookmark)
     }
 
