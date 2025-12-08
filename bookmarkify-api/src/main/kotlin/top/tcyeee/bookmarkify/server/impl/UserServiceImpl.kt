@@ -49,7 +49,7 @@ class UserServiceImpl(
 
         if (result.type == BackgroundType.GRADIENT) {
             bacGradientService.getById(result.backgroundLinkId).apply {
-                result.bacColorGradient = this.gradient
+                result.bacColorGradient = this.gradientArray()
                 result.bacColorDirection = this.direction
             }
         }

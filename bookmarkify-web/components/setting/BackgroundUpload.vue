@@ -96,18 +96,18 @@ import { useUserStore } from '@stores/user.store'
 import { imageConfig } from '@config/image.config'
 import BackgroundPreview from './BackgroundPreview.vue'
 import { BackgroundType } from '@typing'
-import type { BackgroundConfig, BackgroundGradientEntity } from '@typing'
+import type { BacSettingVO, BackgroundGradientEntity } from '@typing'
 import { updateBacColor, uploadBacPic } from '@api'
 
 interface Props {
   backgroundPath?: string | null
-  backgroundConfig?: BackgroundConfig | null
+  backgroundConfig?: BacSettingVO | null
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  (e: 'update', config: BackgroundConfig): void
+  (e: 'update', config: BacSettingVO): void
   (e: 'reset'): void
 }>()
 
@@ -150,7 +150,7 @@ onMounted(() => {
 })
 
 // 预览配置
-const previewConfig = computed<BackgroundConfig | null>(() => {
+const previewConfig = computed<BacSettingVO | null>(() => {
   if (currentType.value === BackgroundType.GRADIENT) {
     return {
       type: BackgroundType.GRADIENT,
@@ -209,7 +209,7 @@ function removeColor(index: number) {
 async function saveGradient() {
   saving.value = true
   try {
-    const config: BackgroundConfig = {
+    const config: BacSettingVO = {
       type: BackgroundType.GRADIENT,
       gradient: {
         colors: gradientColors.value,
@@ -266,9 +266,9 @@ async function handleUpload() {
   uploading.value = true
   try {
     const imagePath = await uploadBacPic(selectedFile.value)
-    const config: BackgroundConfig = {
+    const config: BacSettingVO = {
       type: BackgroundType.IMAGE,
-      imagePath,
+      bacImgFile: imagePath,
     }
 
     emit('update', config)

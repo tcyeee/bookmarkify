@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { UserSetting } from '@typing'
 
 export const useSysStore = defineStore(
   'sys',
@@ -13,8 +12,6 @@ export const useSysStore = defineStore(
     const settingTabIndex = ref(0)
     /* 添加书签对话框可见性 */
     const addBookmarkDialogVisible = ref(false)
-    /* 用户设置信息 */
-    const setting = ref<UserSetting>()
 
     /**
      * 触发键盘事件(每次按下任意键自动触发该方法)

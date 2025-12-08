@@ -13,16 +13,16 @@
 </template>
 
 <script lang="ts" setup>
-import type { BackgroundConfig } from '@typing'
+import type { BacSettingVO } from '@typing'
 
 const props = defineProps<{
   backgroundPath?: string | null
-  backgroundConfig?: BackgroundConfig | null
+  backgroundConfig?: BacSettingVO | null
 }>()
 
 const backgroundUrl = computed(() => {
-  if (props.backgroundConfig?.type === 'IMAGE' && props.backgroundConfig.imagePath) {
-    return props.backgroundConfig.imagePath
+  if (props.backgroundConfig?.type === 'IMAGE' && props.backgroundConfig.bacImgFile) {
+    return props.backgroundConfig.bacImgFile
   }
   if (props.backgroundPath) {
     return props.backgroundPath

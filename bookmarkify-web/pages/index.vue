@@ -27,6 +27,9 @@
 </template>
 
 <script lang="ts" setup>
+import { getImageUrlByUserFile } from '@config'
+import { BackgroundType, type BacSettingVO } from '@typing'
+
 const sysStore = useSysStore()
 const userStore = useUserStore()
 
@@ -60,30 +63,19 @@ const classFadeDate = computed(() => {
 
 // 背景样式
 const backgroundStyle = computed(() => {
-  const account = userStore.account
-  const backgroundConfig = account?.backgroundConfig
+  const config: BacSettingVO | undefined = userStore.account?.userSetting?.bacSetting
 
-  // 优先使用新的背景配置
-  if (backgroundConfig) {
-    if (backgroundConfig.type === 'GRADIENT' && backgroundConfig.gradient) {
-      const colors = backgroundConfig.gradient.colors.join(', ')
-      const direction = backgroundConfig.gradient.direction || 135
-      return {
-        backgroundImage: `linear-gradient(${direction}deg, ${colors})`,
-      }
-    } else if (backgroundConfig.type === 'IMAGE' && backgroundConfig.imagePath) {
-      // const backgroundUrl = getImageUrl(backgroundConfig.imagePath);
-      // return {
-      //   backgroundImage: `url(${backgroundUrl})`,
-      // };
-      return ''
-    }
+  if (config && config.type === BackgroundType.GRADIENT) {
+    const colors = config.bacColorGradient!.join(',')
+    const direction = config.bacColorDirection || 135
+    return { backgroundImage: `linear-gradient(${direction}deg, ${colors})` }
   }
 
-  // 默认渐变背景
-  return {
-    backgroundImage: 'linear-gradient(135deg, #a69f9f, #c1baba, #8f9ea6)',
+  if (config && config.type === BackgroundType.IMAGE) {
+    return { backgroundImage: getImageUrlByUserFile(config.bacImgFile!) }
   }
+
+  return { backgroundImage: 'linear-gradient(135deg, #a69f9f, #c1baba, #8f9ea6)' }
 })
 
 // [ESC] 开关APP显示

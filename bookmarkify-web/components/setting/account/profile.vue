@@ -31,7 +31,7 @@ import { useUserStore } from '@stores/user.store'
 const userStore = useUserStore()
 
 const account = computed<UserInfoEntity | undefined>(() => userStore.account)
-const avatarUrl: Ref<string | undefined> = computed(() => userStore.avatarUrl)
+const avatarUrl: Ref<string | undefined> = computed(() => userStore.account?.avatar?.currentName)
 
 function update() {
   const params = {
