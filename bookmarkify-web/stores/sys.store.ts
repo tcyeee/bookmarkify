@@ -1,3 +1,5 @@
+import { defaultGradientBackgrounds, defaultImageBackgrounds } from '@api'
+import type { BacGradientVO, UserFile } from '@typing'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
@@ -12,6 +14,19 @@ export const useSysStore = defineStore(
     const settingTabIndex = ref(0)
     /* 添加书签对话框可见性 */
     const addBookmarkDialogVisible = ref(false)
+
+    /* 系统默认图片背景 */
+    const defaultImageBackgroundsList = ref<UserFile[]>([])
+    /* 系统默认渐变背景 */
+    const defaultGradientBackgroundsList = ref<BacGradientVO[]>([])
+
+    /**
+     * 刷新系统默认配置信息
+     */
+    async function refreshSystemConfig() {
+      defaultImageBackgroundsList.value = await defaultImageBackgrounds()
+      defaultGradientBackgroundsList.value = await defaultGradientBackgrounds()
+    }
 
     /**
      * 触发键盘事件(每次按下任意键自动触发该方法)
@@ -50,6 +65,7 @@ export const useSysStore = defineStore(
       addBookmarkDialogVisible,
       triggerKeyEvent,
       registerKeyEvent,
+      refreshSystemConfig,
     }
   },
   { persist: false }
