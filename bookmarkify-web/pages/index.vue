@@ -1,4 +1,5 @@
 <template>
+  <div>{{ sysStore.addBookmarkDialogVisible }}</div>
   <div class="overflow-hidden select-none">
     <!-- 内容信息 -->
     <div class="absolute w-screen h-screen z-99">
@@ -9,10 +10,10 @@
         class="text-[5rem] text-white opacity-80 text-center font-bold" />
 
       <!-- 内容页面 -->
-      <HomeMain :status="data.fade" class="absolute left-[10%] right-[10%] top-[30%]" />
+      <HomeMain :status="data.appView" class="absolute left-[10%] right-[10%] top-[30%]" />
 
       <!-- 去设置 -->
-      <div v-if="!data.fade" class="fixed bottom-0">
+      <div v-if="!data.appView" class="fixed bottom-0">
         <NuxtLink to="/setting">
           <div class="cy-btn cy-btn-ghost mb-5 ml-5">
             <span class="icon--setting icon-size-30 text-gray-700" />
@@ -34,10 +35,10 @@ const sysStore = useSysStore()
 const userStore = useUserStore()
 
 const data = reactive<{
-  fade: boolean
-  duringAnimate: boolean
+  appView: boolean // 是否显示APP
+  duringAnimate: boolean // 是否正在动画
 }>({
-  fade: false,
+  appView: false,
   duringAnimate: false,
 })
 
@@ -49,15 +50,15 @@ onMounted(async () => {
 
 const classFadeBg = computed(() => {
   return {
-    'animate-fade-bg-in': data.fade,
-    'animate-fade-bg-out': !data.fade,
+    'animate-fade-bg-in': data.appView,
+    'animate-fade-bg-out': !data.appView,
   }
 })
 
 const classFadeDate = computed(() => {
   return {
-    'animate-fade-date-in': data.fade,
-    'animate-fade-date-out': !data.fade,
+    'animate-fade-date-in': data.appView,
+    'animate-fade-date-out': !data.appView,
   }
 })
 
@@ -88,7 +89,7 @@ function sceneToggle(key?: string) {
     sysStore.addBookmarkDialogVisible = false
     return
   }
-  data.fade = !data.fade
+  data.appView = !data.appView
 }
 </script>
 
