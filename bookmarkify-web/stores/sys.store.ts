@@ -63,6 +63,8 @@ export const useSysStore = defineStore(
       preventKeyEventsFlag,
       settingTabIndex,
       addBookmarkDialogVisible,
+      defaultImageBackgroundsList,
+      defaultGradientBackgroundsList,
       triggerKeyEvent,
       registerKeyEvent,
       refreshSystemConfig,
