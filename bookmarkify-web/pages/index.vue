@@ -1,5 +1,4 @@
 <template>
-  <div>{{ sysStore.addBookmarkDialogVisible }}</div>
   <div class="overflow-hidden select-none">
     <!-- 内容信息 -->
     <div class="absolute w-screen h-screen z-99">
