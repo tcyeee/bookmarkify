@@ -17,4 +17,3 @@ const avatarUrl = computed(() => {
   return getAvatarUrl(props.avatarPath)
 })
 </script>
-

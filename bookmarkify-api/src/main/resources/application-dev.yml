@@ -12,5 +12,6 @@ spring:
       password: ${BOOKMARKIFY_REDIS_PASSWORD}
 
 config:
+  # 这里必须是前端项目中/public/upload目录，否则图片无法正常读取
   img-path: ${BOOKMARKIFY_FILE_UPLOAD_DIR}
-  img-prefix: 'https://file.bookmarkify.cc'
+  img-prefix: ${BOOKMARKIFY_FILE_UPLOAD_PREFIX}

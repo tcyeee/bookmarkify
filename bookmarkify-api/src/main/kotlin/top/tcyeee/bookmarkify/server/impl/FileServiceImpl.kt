@@ -5,7 +5,6 @@ import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.entity.UserFile
-import top.tcyeee.bookmarkify.entity.entity.UserFileType
 import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.server.IFileService
 import top.tcyeee.bookmarkify.utils.FileType
@@ -27,7 +26,7 @@ class FileServiceImpl(
         return UserFile(
             uid = uid,
             originName = file.originalFilename ?: "",
-            type = UserFileType.AVATAR_IMAGE,
+            type = FileType.AVATAR,
             currentName = fileName,
             size = file.size,
         ).also { save(it) }
@@ -38,7 +37,7 @@ class FileServiceImpl(
         return UserFile(
             uid = uid,
             originName = file.originalFilename ?: "",
-            type = UserFileType.BACKGROUND_IMAGE,
+            type = FileType.BACKGROUND,
             currentName = fileName,
             size = file.size,
         ).also { save(it) }

@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.utils.CurrentEnvironment
+import top.tcyeee.bookmarkify.utils.FileType
 import top.tcyeee.bookmarkify.utils.currentEnvironment
 import java.time.LocalDateTime
 
@@ -22,15 +23,7 @@ data class UserFile(
     @JsonIgnore @field:Schema(description = "文件创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "文件是否被删除") val deleted: Boolean = false,
 
-    @field:Schema(description = "文件类型") val type: UserFileType,
+    @field:Schema(description = "文件类型") val type: FileType,
     @field:Schema(description = "文件所在环境") val environment: CurrentEnvironment = currentEnvironment(),
     @field:Schema(description = "文件当前名称") val currentName: String,
 )
-
-enum class UserFileType {
-    /* 头像图片 */
-    AVATAR_IMAGE,
-
-    /* 背景图片 */
-    BACKGROUND_IMAGE,
-}
