@@ -4,7 +4,7 @@
     <div class="setting-section">
       <h3 class="setting-section-title">主页背景</h3>
       <p class="setting-section-desc">自定义您的主页背景，支持渐变背景和图片背景</p>
-      <BackgroundUpload
+      <BackgroundSetting
         :background-path="userStore.account?.userSetting?.bacSetting?.bacImgFile?.currentName"
         :background-config="userStore.account?.userSetting?.bacSetting"
         @update="userStore.refreshUserInfo()" />
@@ -13,7 +13,7 @@
 </template>
 
 <script lang="ts" setup>
-import BackgroundUpload from './background/Upload.vue'
+import BackgroundSetting from './background/Setting.vue'
 
 const userStore = useUserStore()
 </script>
