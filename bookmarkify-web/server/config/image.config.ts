@@ -1,4 +1,4 @@
-import type { UserFile } from "@api/typing"
+import type { UserFile } from '@typing'
 
 /**
  * 根据环境获取文件服务基础 URL
@@ -6,23 +6,23 @@ import type { UserFile } from "@api/typing"
  * 生产环境：返回生产环境的文件服务 URL
  */
 function getFileServiceBaseUrl(env?: String): string {
-    const localUrl = '/upload'
-    const onlineUrl = 'https://file.bookmarkify.cc'
-    if (env) return (env === 'LOCAL') ? localUrl : onlineUrl
+  const localUrl = '/upload'
+  const onlineUrl = 'https://file.bookmarkify.cc'
+  if (env) return env === 'LOCAL' ? localUrl : onlineUrl
 
-    const isDev = process.env.NODE_ENV === 'development' || process.env.NUXT_ENV === 'development'
-    return isDev ? localUrl : onlineUrl
+  const isDev = process.env.NODE_ENV === 'development' || process.env.NUXT_ENV === 'development'
+  return isDev ? localUrl : onlineUrl
 }
 
 export const imageConfig = {
-    /* 默认头像路径 */
-    defaultAvatarPath: '/avatar/default.png',
-    /* 图片大小限制（字节）  */
-    maxImageSize: 5 * 1024 * 1024,
+  /* 默认头像路径 */
+  defaultAvatarPath: '/avatar/default.png',
+  /* 图片大小限制（字节）  */
+  maxImageSize: 5 * 1024 * 1024,
 }
 
 /**
- * 
+ *
  * @param userFile UserFile对象
  * 示例:
  * {
@@ -38,7 +38,7 @@ export const imageConfig = {
  * @returns 图片的完整 URL
  */
 export function getImageUrlByUserFile(userFile: UserFile): string {
-    return `${getFileServiceBaseUrl(userFile.environment)}/${userFile.currentName}`
+  return `${getFileServiceBaseUrl(userFile.environment)}/${userFile.currentName}`
 }
 
 /**
@@ -47,17 +47,17 @@ export function getImageUrlByUserFile(userFile: UserFile): string {
  * @returns 完整的图片 URL
  */
 export function getImageUrl(path: string | null | undefined): string {
-    if (!path) return imageConfig.defaultAvatarPath
+  if (!path) return imageConfig.defaultAvatarPath
 
-    // 如果是 data URL（base64 编码的图片），直接返回
-    if (path.startsWith('data:')) return path
+  // 如果是 data URL（base64 编码的图片），直接返回
+  if (path.startsWith('data:')) return path
 
-    // 如果已经是完整 URL，直接返回
-    if (path.startsWith('http://') || path.startsWith('https://')) return path
+  // 如果已经是完整 URL，直接返回
+  if (path.startsWith('http://') || path.startsWith('https://')) return path
 
-    // 移除 path 的前导斜杠，避免双斜杠
-    const cleanPath = path.startsWith('/') ? path.slice(1) : path
-    return `${getFileServiceBaseUrl()}/${cleanPath}`
+  // 移除 path 的前导斜杠，避免双斜杠
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path
+  return `${getFileServiceBaseUrl()}/${cleanPath}`
 }
 
 /**
@@ -66,7 +66,7 @@ export function getImageUrl(path: string | null | undefined): string {
  * @returns 头像的完整 URL，如果为空则返回默认头像
  */
 export function getAvatarUrl(avatarPath: string | null | undefined): string {
-    if (!avatarPath) return imageConfig.defaultAvatarPath
+  if (!avatarPath) return imageConfig.defaultAvatarPath
 
-    return getImageUrl(avatarPath)
+  return getImageUrl(avatarPath)
 }

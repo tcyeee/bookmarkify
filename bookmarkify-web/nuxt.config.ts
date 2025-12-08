@@ -1,4 +1,4 @@
-import tailwindcss from "@tailwindcss/vite";
+import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 export default defineNuxtConfig({
   app: {
@@ -9,7 +9,8 @@ export default defineNuxtConfig({
   alias: {
     '@api': resolve(__dirname, 'server/apis'),
     '@stores': resolve(__dirname, 'stores'),
-    '@config': resolve(__dirname, 'server/config')
+    '@config': resolve(__dirname, 'server/config'),
+    '@typing': resolve(__dirname, 'typing/index.ts'),
   },
   modules: [
     '@pinia/nuxt',
@@ -17,26 +18,22 @@ export default defineNuxtConfig({
     'pinia-plugin-persistedstate/nuxt',
     // 'nuxt-vue3-google-signin'
   ],
-  plugins: [
-    '~/plugins/keyListener.ts',
-    '~/plugins/contextMenu.ts',
-    '~/plugins/auth.ts'
-  ],
+  plugins: ['~/plugins/keyListener.ts', '~/plugins/contextMenu.ts', '~/plugins/auth.ts', '~/plugins/systemInit.ts'],
   vite: {
-    plugins: [
-      tailwindcss(),
-    ],
+    plugins: [tailwindcss()],
   },
   runtimeConfig: {
     public: {
       apiBase: process.env.NUXT_API_BASE,
-      wsBase: process.env.NUXT_WS_BASE
-    }
+      wsBase: process.env.NUXT_WS_BASE,
+    },
   },
   build: {
     transpile: ['dayjs', 'element-plus'],
   },
-  elementPlus: { /** Options */ },
+  elementPlus: {
+    /** Options */
+  },
   css: ['~/assets/css/app.css', '~/assets/css/common.scss', '~/assets/css/icon.scss'],
   devtools: { enabled: true },
   // pinia: {

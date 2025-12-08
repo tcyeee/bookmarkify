@@ -1,5 +1,6 @@
-import http from './http/http'
-import type * as t from './typing'
+import http from './http'
+import type * as t from '@typing'
+export * from './auth'
 
 /* =========[ /bookmark ]========= */
 export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<Array<t.HomeItem>>
@@ -16,4 +17,5 @@ export const uploadAvatar = (file: File) => http.upload('/user/uploadAvatar', fi
 
 /* =========[ /setting ]========= */
 export const uploadBacPic = (file: File) => http.upload('/setting/uploadBacPic', file) as Promise<string>
-export const updateBacColor = (params: t.GradientConfig) => http.post('/setting/updateBacColor', params) as Promise<boolean>
+export const updateBacColor = (params: t.BackgroundGradientEntity) =>
+  http.post('/setting/updateBacColor', params) as Promise<boolean>
