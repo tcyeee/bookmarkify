@@ -6,7 +6,7 @@ export interface BookmarkUpdateParams {
   iconHd?: boolean
 }
 
-export interface bookmarksAddOneParams {
+export interface BookmarksAddOneParams {
   url: string
 }
 
