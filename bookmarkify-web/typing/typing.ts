@@ -1,4 +1,4 @@
-import type { BackgroundType, CurrentEnvironment, HomeItemType, UserFileType } from './enum'
+import type { BackgroundType, CurrentEnvironment, HomeItemType, SocketTypes, UserFileType } from './enum'
 
 export interface LoginParams {
   account: string
@@ -50,70 +50,4 @@ export interface UserFile {
 export interface UserInfoUpdate {
   nickName?: string
   phone?: string
-}
-
-export interface BookmarkUpdatePrams {
-  linkId: string
-  title: string
-  description: string
-}
-
-export interface BookmarkSortParams {
-  id: string
-  sort: number
-}
-
-export interface Bookmark {
-  uid: string
-  bookmarkId: string
-  bookmarkUserLinkId: string
-
-  isActivity: string
-  urlFull: string
-  title: string
-  description: string
-
-  iconActivity: boolean
-  iconHd: boolean
-  iconUrlFull: string
-}
-
-export interface BookmarkUpdateParams {
-  id: string
-  iconActivity?: boolean
-  iconHd?: boolean
-}
-
-export interface bookmarksAddOneParams {
-  url: string
-}
-
-export interface BookmarkTag {
-  id: string
-  name: string
-  uid: string
-  description: string
-  color: string
-}
-
-export interface BookmarkDetail {
-  bookmark: Bookmark
-  tags: Array<BookmarkTag>
-}
-
-export interface HomeItem {
-  id: string
-  uid: string
-  sort: number
-  type: HomeItemType // 书签类型,可用值:
-  typeApp: Bookmark
-  typeDir: BookmarkDir
-  typeFuc: string // 方法枚举 USER_INFO BOOKMARK_MANAGE
-  bookmarkId?: string // 用于新建书签时定位
-}
-
-export interface BookmarkDir {
-  name: string
-  bookmarkList: Array<Bookmark>
-  bookmarkUserLinkIds: Array<string>
 }

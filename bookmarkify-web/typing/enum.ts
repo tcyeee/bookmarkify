@@ -36,3 +36,12 @@ export enum HomeItemType {
   SETTING = 'SETTING',
   LOADING = 'LOADING',
 }
+
+export enum DialogStatus {
+  LOGIN = 'LOGIN',
+  REGISTER = 'REGISTER',
+}
+
+export enum SocketTypes {
+  BOOKMARK_UPDATE_ONE = 'BOOKMARK_UPDATE_ONE',
+}

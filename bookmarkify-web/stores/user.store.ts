@@ -64,19 +64,6 @@ export const useUserStore = defineStore(
       }
     }
 
-    // async function loginByDeviceUid(): Promise<UserEntity> {
-    //   if (Loading.value) return Promise.reject('loading..');
-    //   Loading.value = true;
-    //   console.log(`[DEBUG] 重新登陆获取TOKEN:${res.token}`);
-    //   authStatus.value = AuthStatus.Login;
-    //   auth.token = res.token;
-
-    //   // 重连 websocket
-    //   const socketStore = useWebSocketStore()
-    //   socketStore.connect(res.token)
-    //   return Promise.resolve(res);
-    // }
-
     function logout() {
       console.log('DEBUG: logout')
       account.value = undefined
