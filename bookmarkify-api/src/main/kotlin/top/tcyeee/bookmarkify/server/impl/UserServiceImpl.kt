@@ -38,11 +38,7 @@ class UserServiceImpl(
     private val fileService: FileServiceImpl,
 ) : IUserService, ServiceImpl<UserMapper, UserEntity>() {
 
-    override fun createUserByDeviceId(deviceId: String): UserEntity {
-        val userEntity = UserEntity(deviceId)
-        this.save(userEntity)
-        return userEntity
-    }
+    override fun createUserByDeviceId(deviceId: String): UserEntity = UserEntity(deviceId).also { save(it) }
 
     override fun queryUserBacSetting(uid: String): BacSettingVO {
         val result = backSettingService.queryByUid(uid).vo()

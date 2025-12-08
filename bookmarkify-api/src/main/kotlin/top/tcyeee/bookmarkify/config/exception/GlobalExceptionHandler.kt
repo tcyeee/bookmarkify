@@ -14,7 +14,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice
-import org.springframework.web.servlet.resource.NoResourceFoundException
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.config.result.ResultWrapper.Companion.error
 
@@ -53,7 +52,6 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
             }
 
             is RedisCommandTimeoutException -> print(ErrorType.E203, e, request)
-            is NoResourceFoundException -> print(ErrorType.E202, e, request)
             is NotLoginException -> print(ErrorType.E101, e, request)
             else -> print(ErrorType.E999, e, request)
         }
@@ -70,8 +68,8 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
     private fun print(type: ErrorType, e: Exception, request: HttpServletRequest): ResultWrapper {
         if (type == ErrorType.E999) {
             log.error("Σ(oﾟдﾟoﾉ)  ${request.requestURI} | [${type.name}] ${e.message}")
-            e.printStackTrace()
         }
+        e.printStackTrace()
         return error(type)
     }
 
