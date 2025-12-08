@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { DialogStatus, type KeyEvent } from './types'
-import type { BackgroundGradientEntity } from '@typing'
+import { DialogStatus, type KeyEvent, type BackgroundGradientEntity } from '@typing'
 
 export const useSysStore = defineStore(
   'sys',
