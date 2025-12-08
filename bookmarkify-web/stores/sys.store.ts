@@ -1,86 +1,57 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { DialogStatus, type KeyEvent, type BackgroundGradientEntity } from '@typing'
+import type { UserSetting } from '@typing'
 
 export const useSysStore = defineStore(
   'sys',
   () => {
-    // state
+    /* 阻止键盘事件开关 */
     const preventKeyEventsFlag = ref(false)
-    const sysEvents = ref<Map<string, Map<string, KeyEvent>> | undefined>(undefined)
-    const dialogLoginManage = ref<Set<DialogStatus> | undefined>(undefined)
+    /* 键盘事件 */
+    const keyEvents = ref<Map<string, Set<Function>>>()
+    /* 设置标签页索引 */
     const settingTabIndex = ref(0)
+    /* 添加书签对话框可见性 */
     const addBookmarkDialogVisible = ref(false)
+    /* 用户设置信息 */
+    const setting = ref<UserSetting>()
 
-    // 默认图片背景
-    const defaultImageBackground = ref<BackgroundGradientEntity[]>([])
-    // 默认渐变色背景
-    const defaultGradientBackground = ref<string | undefined>(undefined)
-
-    // actions
-
-    // 获取当前 dialog 状态
-    function checkDialogStatus(dialogName: DialogStatus | string): boolean {
-      const status = DialogStatus[dialogName as keyof typeof DialogStatus]
-      return dialogLoginManage.value ? dialogLoginManage.value.has(status) : false
-    }
-
-    // 修改当前 dialog 状态
-    function updateDialogStatus(dialogName: DialogStatus, status?: boolean): void {
-      if (!dialogLoginManage.value) throw new Error('dialogLoginManage 未定义')
-      if (status) {
-        dialogLoginManage.value.add(dialogName)
-      } else {
-        dialogLoginManage.value.delete(dialogName)
-      }
-    }
-
-    // 触发键盘事件
+    /**
+     * 触发键盘事件(每次按下任意键自动触发该方法)
+     * @param keyCode 按键码
+     * @param triggerPath 触发路径
+     */
     function triggerKeyEvent(keyCode: string, path: string) {
+      const eventName = keyCode + path
+
       if (preventKeyEventsFlag.value) return
-      if (!sysEvents.value || !sysEvents.value.has(keyCode)) return
+      if (!keyEvents.value || !keyEvents.value.has(eventName)) return
 
-      console.log(`[DEBUG]: 触发按键: ${keyCode}`)
-      const events = sysEvents.value.get(keyCode) || new Map()
-      if (!events.has(keyCode + path)) return
-
-      const info = events.get(keyCode + path)
-      info?.triggerFunc.call(null)
+      console.log(`[KEYBOARD]: 触发'${keyCode}'键事件`)
+      keyEvents.value.get(eventName)?.forEach((event) => event.call(null))
     }
 
-    // 获取按键关联键盘事件
-    function getKeyEvent(keyCode: string): Map<string, KeyEvent> | undefined {
-      if (!(sysEvents.value instanceof Map)) sysEvents.value = new Map()
-      return sysEvents.value.get(keyCode)
-    }
+    /**
+     * 注册键盘事件
+     * @param keyCode 按键码
+     * @param triggerPath 触发页面限制路径
+     * @param triggerFunc 触发函数
+     */
+    function registerKeyEvent(keyCode: string, triggerPath: string, triggerFunc: Function) {
+      const eventKey = keyCode + triggerPath
 
-    // 存入键盘事件
-    function setKeyEvent(keyCode: string, events: Map<string, KeyEvent>) {
-      if (!sysEvents.value) sysEvents.value = new Map()
-      sysEvents.value.set(keyCode, events)
-      console.log(`为${keyCode}绑定一个键盘事件,当前总事件:${sysEvents.value.size}`)
-    }
+      if (!keyEvents.value) keyEvents.value = new Map()
+      if (!keyEvents.value.has(eventKey)) keyEvents.value.set(eventKey, new Set())
 
-    // 注册键盘事件
-    function registerKeyEvent(keyCode: string, currentPath: string, triggerFunc: Function) {
-      const events = getKeyEvent(keyCode) || new Map()
-      events.set(keyCode + currentPath, { currentPath, triggerFunc })
-      setKeyEvent(keyCode, events)
+      keyEvents.value.get(eventKey)!.add(triggerFunc)
+      console.log(`[KEYBOARD] 在${triggerPath}页面为'${keyCode}'键绑定事件,当前总事件数:${keyEvents.value.size}`)
     }
 
     return {
-      // state
       preventKeyEventsFlag,
-      sysEvents,
-      dialogLoginManage,
       settingTabIndex,
       addBookmarkDialogVisible,
-      // actions
-      checkDialogStatus,
-      updateDialogStatus,
       triggerKeyEvent,
-      getKeyEvent,
-      setKeyEvent,
       registerKeyEvent,
     }
   },

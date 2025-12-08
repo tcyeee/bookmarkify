@@ -10,31 +10,6 @@ export interface UserAuthParams {
   token?: string
 }
 
-export interface BackgroundGradientEntity {
-  colors: string[] // 渐变色数组，至少2个颜色
-  direction?: number // 渐变方向角度，默认135
-}
-
-export interface UserSetting {
-  backgroundSetting: BackgroundConfig
-}
-
-export interface BackgroundConfig {
-  type: BackgroundType
-  gradient?: BackgroundGradientEntity // 当type为GRADIENT时使用
-  imagePath?: string // 当type为IMAGE时使用
-}
-
-export interface UserInfoEntity {
-  uid: string
-  token: string
-  nickName: string
-  phone?: string
-  email?: string
-  verified: boolean
-  avatar: UserFile
-}
-
 export interface UserFile {
   id: string /* 文件ID */
   uid: string /* 文件所属用户ID */
