@@ -24,8 +24,8 @@ enum class BackgroundType {
     IMAGE,
 }
 
-@TableName("user_background_link")
-data class UserBackgroundLinkEntity(
+@TableName("background_config")
+data class BackgroundConfigEntity(
     @TableId val id: String = IdUtil.fastUUID(),
     @field:Schema(description = "用户ID") var uid: String,
     @field:Schema(description = "背景类型") var type: BackgroundType,

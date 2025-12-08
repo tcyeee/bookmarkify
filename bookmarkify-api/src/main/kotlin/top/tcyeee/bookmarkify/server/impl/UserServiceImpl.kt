@@ -11,7 +11,7 @@ import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
 import top.tcyeee.bookmarkify.entity.entity.BackgroundImageEntity
 import top.tcyeee.bookmarkify.entity.entity.BackgroundType
-import top.tcyeee.bookmarkify.entity.entity.UserBackgroundLinkEntity
+import top.tcyeee.bookmarkify.entity.entity.BackgroundConfigEntity
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import top.tcyeee.bookmarkify.entity.BackSettingParams
 import top.tcyeee.bookmarkify.entity.GradientConfigParams
@@ -31,7 +31,7 @@ import top.tcyeee.bookmarkify.utils.pwd
  */
 @Service
 class UserServiceImpl(
-    private val backSettingService: UserBackgroundLinkServiceImpl,
+    private val backSettingService: BackgroundConfigServiceImpl,
     private val bacGradientService: BackgroundGradientServiceImpl,
     private val bacImageService: BackgroundImageServiceImpl,
     private val fileMapper: FileMapper,
@@ -66,11 +66,11 @@ class UserServiceImpl(
     )
 
     override fun bacSetting(params: BackSettingParams, uid: String): Boolean {
-        val entity = backSettingService.ktQuery().eq(UserBackgroundLinkEntity::uid, uid).one()
+        val entity = backSettingService.ktQuery().eq(BackgroundConfigEntity::uid, uid).one()
             // 如果查询到了，则修改其中的参数
             ?.also { it.updateParams(params) }
         // 如果没有查询到，则创建对象
-            ?: UserBackgroundLinkEntity(uid = uid, type = params.type, backgroundLinkId = params.backgroundId)
+            ?: BackgroundConfigEntity(uid = uid, type = params.type, backgroundLinkId = params.backgroundId)
         backSettingService.saveOrUpdate(entity)
         return true
     }
@@ -95,9 +95,9 @@ class UserServiceImpl(
             direction = params.direction,
         ).also { bacGradientService.save(it) }
 
-        backSettingService.ktUpdate().eq(UserBackgroundLinkEntity::uid, uid)
-            .set(UserBackgroundLinkEntity::type, BackgroundType.GRADIENT)
-            .set(UserBackgroundLinkEntity::backgroundLinkId, entity.id).update()
+        backSettingService.ktUpdate().eq(BackgroundConfigEntity::uid, uid)
+            .set(BackgroundConfigEntity::type, BackgroundType.GRADIENT)
+            .set(BackgroundConfigEntity::backgroundLinkId, entity.id).update()
         return true
     }
 
@@ -108,12 +108,11 @@ class UserServiceImpl(
         val bacImgEntity = BackgroundImageEntity(uid = uid, fileId = file.id).also { bacImageService.save(it) }
 
         // 修改用户背景图片设置
-        UserBackgroundLinkEntity(
-            uid = uid,
-            type = BackgroundType.IMAGE,
-            backgroundLinkId = bacImgEntity.id
-        ).also { backSettingService.save(it) }
-
+        backSettingService.queryByUid(uid).apply {
+            this.uid = uid
+            this.type = BackgroundType.IMAGE
+            this.backgroundLinkId = bacImgEntity.id
+        }
         return file.currentName
     }
 
