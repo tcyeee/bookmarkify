@@ -1,4 +1,4 @@
-import type { BackgroundType, CurrentEnvironment, HomeItemType, SocketTypes, UserFileType } from './enum'
+import type { CurrentEnvironment, UserFileType } from './enum'
 
 export interface LoginParams {
   account: string

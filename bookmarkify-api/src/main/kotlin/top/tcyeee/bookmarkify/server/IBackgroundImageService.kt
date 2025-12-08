@@ -12,4 +12,5 @@ import top.tcyeee.bookmarkify.entity.entity.UserFile
  */
 interface IBackgroundImageService : IService<BackgroundImageEntity> {
     fun getFileById(id: String): UserFile
+    fun defaultImageBackgrounds():Array<UserFile>
 }

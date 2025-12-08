@@ -21,5 +21,6 @@ export const uploadAvatar = (file: File) => http.upload('/user/uploadAvatar', fi
 /* =========[ /setting ]========= */
 export const queryUserSetting = () => http.get('/setting/query') as Promise<t.UserSetting>
 export const uploadBacPic = (file: File) => http.upload('/setting/uploadBacPic', file) as Promise<string>
-export const updateBacColor = (params: t.BackgroundGradientEntity) =>
-  http.post('/setting/updateBacColor', params) as Promise<boolean>
+export const updateBacColor = (params: t.BacGradientVO) => http.post('/setting/updateBacColor', params) as Promise<boolean>
+export const defaultImageBackgrounds = () => http.get('/setting/background/images') as Promise<Array<t.UserFile>>
+export const defaultGradientBackgrounds = () => http.get('/setting/background/gradients') as Promise<Array<t.BacGradientVO>>

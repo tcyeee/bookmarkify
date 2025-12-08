@@ -3,8 +3,8 @@ package top.tcyeee.bookmarkify.entity.entity
 import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
-import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
+import top.tcyeee.bookmarkify.entity.BacGradientVO
 import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.BackSettingParams
 import java.time.LocalDateTime
@@ -63,4 +63,6 @@ data class BackgroundGradientEntity(
         return this.gradient.trim().removePrefix("[").removeSuffix("]").split(",")
             .map { it.trim().removeSurrounding("\"") }.toTypedArray()
     }
+
+    fun vo(): BacGradientVO = BacGradientVO(colors = this.gradientArray(), direction = this.direction)
 }

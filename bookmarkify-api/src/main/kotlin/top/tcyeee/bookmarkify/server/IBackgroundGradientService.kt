@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
+import top.tcyeee.bookmarkify.entity.BacGradientVO
 import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
 
 /**
@@ -9,4 +10,6 @@ import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
  * @author tcyeee
  * @date 12/7/25 15:00
  */
-interface IBackgroundGradientService : IService<BackgroundGradientEntity>
+interface IBackgroundGradientService : IService<BackgroundGradientEntity> {
+    fun defaultGradientBackgrounds():Array<BacGradientVO>
+}

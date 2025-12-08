@@ -92,12 +92,12 @@
 </template>
 
 <script lang="ts" setup>
-import { useUserStore } from '@stores/user.store'
 import { imageConfig } from '@config/image.config'
 import BackgroundPreview from './BackgroundPreview.vue'
-import { BackgroundType } from '@typing'
-import type { BacSettingVO, BackgroundGradientEntity } from '@typing'
+import { BackgroundType, UserFileType } from '@typing'
+import type { BacSettingVO, BacGradientVO } from '@typing'
 import { updateBacColor, uploadBacPic } from '@api'
+import { getCurrentEnvironment } from '@utils'
 
 interface Props {
   backgroundPath?: string | null
@@ -111,7 +111,6 @@ const emit = defineEmits<{
   (e: 'reset'): void
 }>()
 
-const userStore = useUserStore()
 const fileInputRef = ref<HTMLInputElement>()
 const previewUrl = ref<string | null>(null)
 const selectedFile = ref<File | null>(null)
@@ -128,7 +127,7 @@ const gradientColors = ref<string[]>(['#a69f9f', '#c1baba', '#8f9ea6'])
 const gradientDirection = ref<number>(135)
 
 // 预设渐变
-const presetGradients: BackgroundGradientEntity[] = [
+const presetGradients: BacGradientVO[] = [
   { colors: ['#a69f9f', '#c1baba', '#8f9ea6'], direction: 135 },
   { colors: ['#667eea', '#764ba2'], direction: 135 },
   { colors: ['#f093fb', '#f5576c'], direction: 135 },
@@ -143,9 +142,9 @@ const presetGradients: BackgroundGradientEntity[] = [
 
 // 初始化渐变配置
 onMounted(() => {
-  if (props.backgroundConfig?.type === BackgroundType.GRADIENT && props.backgroundConfig.gradient) {
-    gradientColors.value = [...props.backgroundConfig.gradient.colors]
-    gradientDirection.value = props.backgroundConfig.gradient.direction || 135
+  if (props.backgroundConfig?.type === BackgroundType.GRADIENT) {
+    gradientColors.value = [...props.backgroundConfig.bacColorGradient!]
+    gradientDirection.value = props.backgroundConfig.bacColorDirection! || 135
   }
 })
 
@@ -179,13 +178,13 @@ function switchType(type: BackgroundType) {
 }
 
 // 选择预设渐变
-function selectPreset(preset: BackgroundGradientEntity) {
+function selectPreset(preset: BacGradientVO) {
   gradientColors.value = [...preset.colors]
   gradientDirection.value = preset.direction || 135
 }
 
 // 检查预设是否激活
-function isPresetActive(preset: BackgroundGradientEntity) {
+function isPresetActive(preset: BacGradientVO) {
   return (
     gradientColors.value.length === preset.colors.length &&
     gradientColors.value.every((color, index) => color === preset.colors[index]) &&
@@ -209,16 +208,18 @@ function removeColor(index: number) {
 async function saveGradient() {
   saving.value = true
   try {
-    const config: BacSettingVO = {
-      type: BackgroundType.GRADIENT,
-      gradient: {
-        colors: gradientColors.value,
-        direction: gradientDirection.value,
-      },
-    }
+    await updateBacColor({
+      colors: gradientColors.value,
+      direction: gradientDirection.value,
+    })
 
-    await updateBacColor(config.gradient!)
-    emit('update', config)
+    const bacSettingVO: BacSettingVO = {
+      type: BackgroundType.GRADIENT,
+      bacColorGradient: gradientColors.value,
+      bacColorDirection: gradientDirection.value,
+    }
+    emit('update', bacSettingVO)
+
     ElNotification.success({ message: '渐变背景保存成功' })
 
     // TODO 刷新设置信息
@@ -266,12 +267,15 @@ async function handleUpload() {
   uploading.value = true
   try {
     const imagePath = await uploadBacPic(selectedFile.value)
-    const config: BacSettingVO = {
-      type: BackgroundType.IMAGE,
-      bacImgFile: imagePath,
-    }
 
-    emit('update', config)
+    emit('update', {
+      type: BackgroundType.IMAGE,
+      bacImgFile: {
+        environment: getCurrentEnvironment(),
+        currentName: imagePath,
+        type: UserFileType.BACKGROUND_IMAGE,
+      },
+    })
     ElNotification.success({ message: '背景上传成功' })
 
     // 重置状态

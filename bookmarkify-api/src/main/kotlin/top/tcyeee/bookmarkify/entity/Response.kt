@@ -2,9 +2,7 @@ package top.tcyeee.bookmarkify.entity
 
 import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.EnumUtil
-import cn.hutool.core.util.IdUtil
 import cn.hutool.core.util.StrUtil
-import com.baomidou.mybatisplus.annotation.TableId
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
@@ -143,4 +141,9 @@ class BacSettingVO(
     /* 如果是渐变色背景 */
     @field:Schema(description = "背景渐变色") var bacColorGradient: Array<String>? = null,
     @field:Schema(description = "背景渐变方向") var bacColorDirection: Int? = null,
+)
+
+class BacGradientVO(
+    @field:Schema(description = "背景渐变色") var colors: Array<String>,
+    @field:Schema(description = "背景渐变方向") var direction: Int,
 )

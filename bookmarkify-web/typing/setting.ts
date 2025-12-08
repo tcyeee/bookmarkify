@@ -1,11 +1,11 @@
 import type { BackgroundType } from './enum'
-import type { UserFile } from './typing'
+import type { UserFile } from './user'
 
 export interface UserSetting {
   bacSetting: BacSettingVO
 }
 
-export interface BackgroundGradientEntity {
+export interface BacGradientVO {
   colors: string[] // 渐变色数组，至少2个颜色
   direction?: number // 渐变方向角度，默认135
 }
