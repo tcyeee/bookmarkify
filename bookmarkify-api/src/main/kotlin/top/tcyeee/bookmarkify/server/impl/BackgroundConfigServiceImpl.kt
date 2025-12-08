@@ -4,9 +4,9 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
 import top.tcyeee.bookmarkify.entity.entity.BackgroundType
-import top.tcyeee.bookmarkify.entity.entity.UserBackgroundLinkEntity
-import top.tcyeee.bookmarkify.mapper.UserBackgroundLinkMapper
-import top.tcyeee.bookmarkify.server.IUserBackgroundLinkService
+import top.tcyeee.bookmarkify.entity.entity.BackgroundConfigEntity
+import top.tcyeee.bookmarkify.mapper.BackgroundConfigMapper
+import top.tcyeee.bookmarkify.server.IBackgroundConfigService
 
 /**
  * 用户背景关联 Service 实现
@@ -15,20 +15,20 @@ import top.tcyeee.bookmarkify.server.IUserBackgroundLinkService
  * @date 12/7/25 15:00
  */
 @Service
-class UserBackgroundLinkServiceImpl(
+class BackgroundConfigServiceImpl(
     private val backgroundGradientService: BackgroundGradientServiceImpl
-) : IUserBackgroundLinkService,
-    ServiceImpl<UserBackgroundLinkMapper, UserBackgroundLinkEntity>() {
+) : IBackgroundConfigService,
+    ServiceImpl<BackgroundConfigMapper, BackgroundConfigEntity>() {
 
-    override fun queryByUid(uid: String): UserBackgroundLinkEntity =
-        ktQuery().eq(UserBackgroundLinkEntity::uid, uid).one() ?: initUserBacSetting(uid)
+    override fun queryByUid(uid: String): BackgroundConfigEntity =
+        ktQuery().eq(BackgroundConfigEntity::uid, uid).one() ?: initUserBacSetting(uid)
 
-    private fun initUserBacSetting(uid: String): UserBackgroundLinkEntity {
+    private fun initUserBacSetting(uid: String): BackgroundConfigEntity {
         // 默认找到第一个默认渐变色进行关联
         val first = backgroundGradientService.ktQuery()
             .eq(BackgroundGradientEntity::isDefault, true).last("limit 1").one()
 
-        return UserBackgroundLinkEntity(
+        return BackgroundConfigEntity(
             uid = uid,
             type = BackgroundType.GRADIENT,
             backgroundLinkId = first.id
