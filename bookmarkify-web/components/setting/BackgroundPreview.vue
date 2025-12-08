@@ -2,7 +2,7 @@
   <div class="background-preview-container">
     <div class="background-preview" :style="previewStyle">
       <img v-if="backgroundUrl" :src="backgroundUrl" alt="主页背景" class="preview-image" />
-      <div v-else-if="backgroundConfig?.type === 'GRADIENT' && backgroundConfig.gradient" class="preview-gradient">
+      <div v-else-if="backgroundConfig?.type === 'GRADIENT' && backgroundConfig.bacColorGradient" class="preview-gradient">
         <span>渐变背景</span>
       </div>
       <div v-else class="preview-placeholder">
@@ -14,6 +14,7 @@
 
 <script lang="ts" setup>
 import type { BacSettingVO } from '@typing'
+import { getImageUrlByUserFile, getImageUrl } from '@config'
 
 const props = defineProps<{
   backgroundPath?: string | null
@@ -22,18 +23,18 @@ const props = defineProps<{
 
 const backgroundUrl = computed(() => {
   if (props.backgroundConfig?.type === 'IMAGE' && props.backgroundConfig.bacImgFile) {
-    return props.backgroundConfig.bacImgFile
+    return getImageUrlByUserFile(props.backgroundConfig.bacImgFile)
   }
   if (props.backgroundPath) {
-    return props.backgroundPath
+    return getImageUrl(props.backgroundPath)
   }
   return null
 })
 
 const previewStyle = computed(() => {
-  if (props.backgroundConfig?.type === 'GRADIENT' && props.backgroundConfig.gradient) {
-    const colors = props.backgroundConfig.gradient.colors.join(', ')
-    const direction = props.backgroundConfig.gradient.direction || 135
+  if (props.backgroundConfig?.type === 'GRADIENT' && props.backgroundConfig.bacColorGradient) {
+    const colors = props.backgroundConfig.bacColorGradient.join(', ')
+    const direction = props.backgroundConfig.bacColorDirection || 135
     return {
       backgroundImage: `linear-gradient(${direction}deg, ${colors})`,
     }

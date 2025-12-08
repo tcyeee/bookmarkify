@@ -34,6 +34,7 @@ export const useUserStore = defineStore(
         account.value = result
         return result
       } catch (err: any) {
+        ElMessage.error(err.message || '刷新用户信息失败')
         if (err.code == 202) logout()
         throw err
       } finally {

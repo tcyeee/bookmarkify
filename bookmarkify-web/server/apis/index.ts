@@ -24,3 +24,4 @@ export const uploadBacPic = (file: File) => http.upload('/setting/uploadBacPic',
 export const updateBacColor = (params: t.BacGradientVO) => http.post('/setting/updateBacColor', params) as Promise<boolean>
 export const defaultImageBackgrounds = () => http.get('/setting/background/images') as Promise<Array<t.UserFile>>
 export const defaultGradientBackgrounds = () => http.get('/setting/background/gradients') as Promise<Array<t.BacGradientVO>>
+export const resetBacBackground = () => http.get('/setting/background/reset') as Promise<boolean>

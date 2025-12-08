@@ -96,10 +96,11 @@ import { imageConfig } from '@config/image.config'
 import BackgroundPreview from './BackgroundPreview.vue'
 import { BackgroundType, UserFileType } from '@typing'
 import type { BacSettingVO, BacGradientVO } from '@typing'
-import { updateBacColor, uploadBacPic } from '@api'
+import { resetBacBackground, updateBacColor, uploadBacPic } from '@api'
 import { getCurrentEnvironment } from '@utils'
 
 const sysStore = useSysStore()
+const userStore = useUserStore()
 
 interface Props {
   backgroundPath?: string | null
@@ -107,11 +108,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-
-const emit = defineEmits<{
-  (e: 'update', config: BacSettingVO): void
-  (e: 'reset'): void
-}>()
+const emit = defineEmits<{ (e: 'update', config: BacSettingVO): void }>()
 
 const fileInputRef = ref<HTMLInputElement>()
 const previewUrl = ref<string | null>(null)
@@ -129,23 +126,47 @@ const gradientColors = ref<string[]>(['#a69f9f', '#c1baba', '#8f9ea6'])
 const gradientDirection = ref<number>(135)
 
 // 初始化渐变配置
-onMounted(() => {
+function initGradientConfig() {
   if (props.backgroundConfig?.type === BackgroundType.GRADIENT) {
     gradientColors.value = [...props.backgroundConfig.bacColorGradient!]
     gradientDirection.value = props.backgroundConfig.bacColorDirection! || 135
   }
+}
+
+onMounted(() => {
+  initGradientConfig()
 })
+
+// 监听 props 变化，更新组件状态
+watch(
+  () => props.backgroundConfig,
+  (newConfig) => {
+    if (newConfig) {
+      // 更新当前类型
+      currentType.value = newConfig.type || (props.backgroundPath ? BackgroundType.IMAGE : BackgroundType.GRADIENT)
+      // 更新渐变配置
+      initGradientConfig()
+    }
+  },
+  { deep: true }
+)
 
 // 预览配置
 const previewConfig = computed<BacSettingVO | null>(() => {
   if (currentType.value === BackgroundType.GRADIENT) {
     return {
       type: BackgroundType.GRADIENT,
-      gradient: {
-        colors: gradientColors.value,
-        direction: gradientDirection.value,
-      },
+      bacColorGradient: gradientColors.value,
+      bacColorDirection: gradientDirection.value,
     }
+  }
+  // 如果当前类型是图片且有预览URL，返回预览配置
+  if (currentType.value === BackgroundType.IMAGE && previewUrl.value) {
+    return null // 预览URL会通过backgroundPath传递
+  }
+  // 如果有现有的背景配置，返回它
+  if (props.backgroundConfig) {
+    return props.backgroundConfig
   }
   return null
 })
@@ -256,14 +277,16 @@ async function handleUpload() {
   try {
     const imagePath = await uploadBacPic(selectedFile.value)
 
-    emit('update', {
+    const newConfig: BacSettingVO = {
       type: BackgroundType.IMAGE,
       bacImgFile: {
         environment: getCurrentEnvironment(),
         currentName: imagePath,
         type: UserFileType.BACKGROUND,
       },
-    })
+    }
+
+    emit('update', newConfig)
     ElNotification.success({ message: '背景上传成功' })
 
     // 重置状态
@@ -272,8 +295,6 @@ async function handleUpload() {
     if (fileInputRef.value) {
       fileInputRef.value.value = ''
     }
-
-    // TODO 刷新设置信息
   } catch (error: any) {
     ElMessage.error(error.message || '背景上传失败，请重试')
   } finally {
@@ -291,8 +312,11 @@ function handleCancel() {
 }
 
 // 恢复默认背景
-function handleReset() {
-  emit('reset')
+async function handleReset() {
+  // 恢复默认背景
+  await resetBacBackground()
+  // 刷新用户信息
+  await userStore.refreshUserInfo()
 }
 </script>
 

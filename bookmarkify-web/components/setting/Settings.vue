@@ -7,30 +7,15 @@
       <BackgroundUpload
         :background-path="userStore.account?.userSetting?.bacSetting?.bacImgFile?.currentName"
         :background-config="userStore.account?.userSetting?.bacSetting"
-        @update="handleBackgroundUpdate"
-        @reset="handleBackgroundReset" />
+        @update="userStore.refreshUserInfo()" />
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { useUserStore } from '@stores/user.store'
 import BackgroundUpload from './BackgroundUpload.vue'
 
 const userStore = useUserStore()
-
-onMounted(() => {})
-
-async function handleBackgroundUpdate(config: any) {
-  // 背景已通过 API 更新，刷新用户信息即可
-  // TODO 刷新设置信息
-}
-
-async function handleBackgroundReset() {
-  // TODO: 调用 API 重置背景
-  // 暂时先刷新用户信息
-  // TODO 刷新设置信息
-}
 </script>
 
 <style scoped>
