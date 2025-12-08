@@ -33,14 +33,15 @@ export const useSysStore = defineStore(
      * @param keyCode 按键码
      * @param triggerPath 触发路径
      */
-    function triggerKeyEvent(keyCode: string, path: string) {
-      const eventName = keyCode + path
+    function triggerKeyEvent(keyCode: string, triggerPath: string) {
+      const eventKey = eventName(keyCode, triggerPath)
 
       if (preventKeyEventsFlag.value) return
-      if (!keyEvents.value || !keyEvents.value.has(eventName)) return
+      if (!keyEvents.value || !keyEvents.value.has(eventKey)) return
 
-      console.log(`[KEYBOARD]: 触发'${keyCode}'键事件`)
-      keyEvents.value.get(eventName)?.forEach((event) => event.call(null))
+      const eventList = keyEvents.value.get(eventKey)
+      console.log(`[KEYBOARD]: '${keyCode}'键按下，注册名:${eventKey},事件数:${eventList?.size}`)
+      eventList?.forEach((event) => event.call(null))
     }
 
     /**
@@ -50,13 +51,26 @@ export const useSysStore = defineStore(
      * @param triggerFunc 触发函数
      */
     function registerKeyEvent(keyCode: string, triggerPath: string, triggerFunc: Function) {
-      const eventKey = keyCode + triggerPath
+      const eventKey = eventName(keyCode, triggerPath)
 
       if (!keyEvents.value) keyEvents.value = new Map()
       if (!keyEvents.value.has(eventKey)) keyEvents.value.set(eventKey, new Set())
 
-      keyEvents.value.get(eventKey)!.add(triggerFunc)
-      console.log(`[KEYBOARD] 在${triggerPath}页面为'${keyCode}'键绑定事件,当前总事件数:${keyEvents.value.size}`)
+      const events = keyEvents.value.get(eventKey)!
+      events.add(triggerFunc)
+
+      console.log(
+        `[KEYBOARD] 在${triggerPath}页面为'${keyCode}'键绑定事件,注册名:${eventKey},
+        同注册名下事件数:${keyEvents.value.get(eventKey)?.size}
+        分别是:${Array.from(keyEvents.value.get(eventKey)!)}
+        ------------------------------
+        当前总事件数:${keyEvents.value.size},
+        分别是:${Array.from(keyEvents.value.keys())}`
+      )
+    }
+
+    function eventName(keyCode: string, triggerPath: string) {
+      return keyCode + '-' + triggerPath
     }
 
     return {
