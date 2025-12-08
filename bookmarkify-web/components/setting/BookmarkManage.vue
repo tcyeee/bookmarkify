@@ -1,54 +1,28 @@
 <template>
   <div class="bookmark-import">
     <h3 class="setting-section-title">导入 Chrome 书签</h3>
-    <p class="setting-section-desc">
-      支持从 Chrome 导出的 HTML 书签文件，一次性导入你的所有书签。
-    </p>
+    <p class="setting-section-desc">支持从 Chrome 导出的 HTML 书签文件，一次性导入你的所有书签。</p>
 
     <div class="import-card">
       <div class="import-actions">
         <label class="cy-btn cy-btn-soft cursor-pointer">
-          <input
-            ref="fileInputRef"
-            type="file"
-            accept=".html,.htm"
-            class="hidden"
-            @change="handleFileChange"
-          />
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+          <input ref="fileInputRef" type="file" accept=".html,.htm" class="hidden" @change="handleFileChange" />
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
               stroke-width="2"
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-            />
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           <span>选择书签文件</span>
         </label>
 
-        <button
-          class="cy-btn cy-btn-accent"
-          :disabled="!selectedFile || importing"
-          @click="handleImport"
-        >
+        <button class="cy-btn cy-btn-accent" :disabled="!selectedFile || importing" @click="handleImport">
           <span v-if="importing">导入中...</span>
           <span v-else>开始导入</span>
         </button>
 
-        <button
-          v-if="selectedFile"
-          class="cy-btn cy-btn-ghost"
-          :disabled="importing"
-          @click="handleReset"
-        >
-          清除选择
-        </button>
+        <button v-if="selectedFile" class="cy-btn cy-btn-ghost" :disabled="importing" @click="handleReset">清除选择</button>
       </div>
 
       <div class="import-file-info">

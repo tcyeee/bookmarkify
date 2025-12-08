@@ -13,7 +13,7 @@
 </template>
 
 <script lang="ts" setup>
-import BackgroundUpload from './BackgroundUpload.vue'
+import BackgroundUpload from './background/Upload.vue'
 
 const userStore = useUserStore()
 </script>
