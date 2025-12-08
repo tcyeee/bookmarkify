@@ -9,7 +9,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkShow
  * @date 3/15/25 20:33
  */
 object SocketUtils {
-    fun updateMarkbook(uid: String, bookmark: BookmarkShow) {
+    fun updateBookmark(uid: String, bookmark: BookmarkShow) {
         SessionManager.send(SocketMsgType.BOOKMARK_UPDATE_ONE, uid, bookmark)
     }
 }
