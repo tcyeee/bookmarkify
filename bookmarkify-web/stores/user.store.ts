@@ -71,8 +71,6 @@ export const useUserStore = defineStore(
     }
 
     function getDeviceUid(): string {
-      if (!import.meta.client) return ''
-
       var deviceUid = localStorage.getItem(deviceIdKey)
       if (deviceUid !== null) return deviceUid
 
