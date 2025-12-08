@@ -19,7 +19,7 @@ enum class ErrorType(var msg: String) {
 
     /* 不提示的部分 */
     E201("Websocket认证失败"),
-    E202("数据丢失"),
+    E202("数据丢失!!"),
     E203("REDIS断开连接"),
     E212("阿里云短信回执查询时候SmsStatus枚举解析异常"),
     E213("阿里云短信回执查询时候SmsType枚举解析异常"),
