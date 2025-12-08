@@ -36,16 +36,12 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
 import type { Ref } from 'vue'
 
 const props = defineProps<{
   previewUrl: string | null
   backgroundPath?: string | null
   uploading: boolean
-  fileInputRef?: Ref<HTMLInputElement | null | undefined>
+  fileInputRef?: Ref<HTMLInputElement | null> | null
 }>()
-
-// 允许父组件传入外部的 fileInputRef，未传入则使用本地 ref
-const fileInputRef = props.fileInputRef ?? ref<HTMLInputElement>()
 </script>
