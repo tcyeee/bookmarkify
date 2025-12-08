@@ -23,11 +23,9 @@ export enum CurrentEnvironment {
 
 export enum UserFileType {
   /* 头像图片 */
-  AVATAR_IMAGE = 'AVATAR_IMAGE',
+  AVATAR = 'AVATAR',
   /* 背景图片 */
-  BACKGROUND_IMAGE = 'BACKGROUND_IMAGE',
-  /* 其他文件 */
-  OTHER_FILE = 'OTHER_FILE',
+  BACKGROUND = 'BACKGROUND',
 }
 
 export enum HomeItemType {

@@ -261,7 +261,7 @@ async function handleUpload() {
       bacImgFile: {
         environment: getCurrentEnvironment(),
         currentName: imagePath,
-        type: UserFileType.BACKGROUND_IMAGE,
+        type: UserFileType.BACKGROUND,
       },
     })
     ElNotification.success({ message: '背景上传成功' })

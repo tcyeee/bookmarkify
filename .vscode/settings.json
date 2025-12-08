@@ -26,10 +26,12 @@
     "fasterxml",
     "hutool",
     "ibatis",
+    "jdbc",
     "maki",
     "mybatisplus",
     "nums",
     "satoken",
+    "stringtype",
     "Uptate"
   ]
 }

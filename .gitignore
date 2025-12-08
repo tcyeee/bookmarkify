@@ -7,7 +7,8 @@
 .idea
 dist
 build
-/upload
+
+bookmarkify-web/public/upload
 
 # Node dependencies
 node_modules
