@@ -136,10 +136,12 @@ data class BacSettingVO(
     @field:Schema(description = "用户ID") var uid: String,
     @field:Schema(description = "背景类型") var type: BackgroundType,
 
+    @JsonIgnore @field:Schema(description = "背景ID") var backgroundLinkId: String,
+
     /* 如果是图片背景 */
     @field:Schema(description = "图片背景") var bacImgFile: UserFile? = null,
 
     /* 如果是渐变色背景 */
-    @field:Schema(description = "背景渐变色(JSON)") var bacColorGradient: String,
-    @field:Schema(description = "背景渐变方向") var bacColorDirection: Int,
+    @field:Schema(description = "背景渐变色(JSON)") var bacColorGradient: String? = null,
+    @field:Schema(description = "背景渐变方向") var bacColorDirection: Int? = null,
 )

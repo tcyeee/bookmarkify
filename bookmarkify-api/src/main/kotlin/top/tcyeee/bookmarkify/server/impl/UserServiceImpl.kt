@@ -18,6 +18,7 @@ import top.tcyeee.bookmarkify.entity.BackSettingParams
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
+import top.tcyeee.bookmarkify.entity.dto.UserSetting
 import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.server.IUserService
@@ -44,15 +45,28 @@ class UserServiceImpl(
     }
 
     override fun queryUserBacSetting(uid: String): BacSettingVO {
-        backSettingService.queryByUid(uid)
+        val result = backSettingService.queryByUid(uid).vo()
 
-        TODO("Not yet implemented")
+        if (result.type == BackgroundType.GRADIENT) {
+            bacGradientService.getById(result.backgroundLinkId).apply {
+                result.bacColorGradient = this.gradient
+                result.bacColorDirection = this.direction
+            }
+        }
+
+        if (result.type == BackgroundType.IMAGE) {
+            bacImageService.getFileById(result.backgroundLinkId).apply { result.bacImgFile = this }
+        }
+
+        return result
     }
 
+    override fun queryUserSetting(uid: String): UserSetting = UserSetting(
+        bacSetting = queryUserBacSetting(uid)
+    )
+
     override fun bacSetting(params: BackSettingParams, uid: String): Boolean {
-        val entity = backSettingService.ktQuery()
-            .eq(UserBackgroundLinkEntity::uid, uid)
-            .one()
+        val entity = backSettingService.ktQuery().eq(UserBackgroundLinkEntity::uid, uid).one()
             // 如果查询到了，则修改其中的参数
             ?.also { it.updateParams(params) }
         // 如果没有查询到，则创建对象
@@ -63,16 +77,15 @@ class UserServiceImpl(
 
     override fun userInfo(): UserInfoShow {
         val userEntity = getById(BaseUtils.uid()) ?: throw CommonException(ErrorType.E202)
-        return UserInfoShow(userEntity, StpUtil.getTokenValue())
-            .apply { avatar = fileMapper.selectById((userEntity.avatarFileId)) }
+        return UserInfoShow(userEntity, StpUtil.getTokenValue()).apply {
+            avatar = fileMapper.selectById((userEntity.avatarFileId))
+            userSetting = queryUserSetting(uid)
+        }
     }
 
     override fun updateInfo(params: UserInfoUptateParams): Boolean {
         if (params.nickName.isBlank()) return false
-        return ktUpdate()
-            .eq(UserEntity::id, BaseUtils.uid())
-            .set(UserEntity::nickName, params.nickName)
-            .update()
+        return ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::nickName, params.nickName).update()
     }
 
     override fun updateBacColor(config: GradientConfig, uid: String): Boolean {
@@ -82,11 +95,9 @@ class UserServiceImpl(
             direction = config.direction,
         ).also { bacGradientService.save(it) }
 
-        backSettingService.ktUpdate()
-            .eq(UserBackgroundLinkEntity::uid, uid)
+        backSettingService.ktUpdate().eq(UserBackgroundLinkEntity::uid, uid)
             .set(UserBackgroundLinkEntity::type, BackgroundType.GRADIENT)
-            .set(UserBackgroundLinkEntity::backgroundLinkId, entity.id)
-            .update()
+            .set(UserBackgroundLinkEntity::backgroundLinkId, entity.id).update()
         return true
     }
 
@@ -97,8 +108,11 @@ class UserServiceImpl(
         val bacImgEntity = BackgroundImageEntity(uid = uid, fileId = file.id).also { bacImageService.save(it) }
 
         // 修改用户背景图片设置
-        UserBackgroundLinkEntity(uid = uid, type = BackgroundType.IMAGE, backgroundLinkId = bacImgEntity.id)
-            .also { backSettingService.save(it) }
+        UserBackgroundLinkEntity(
+            uid = uid,
+            type = BackgroundType.IMAGE,
+            backgroundLinkId = bacImgEntity.id
+        ).also { backSettingService.save(it) }
 
         return file.currentName
     }
@@ -106,16 +120,12 @@ class UserServiceImpl(
     override fun updateAvatar(file: MultipartFile, uid: String): String {
         val file = fileService.updateAvatar(BaseUtils.uid(), file)
 
-        ktUpdate()
-            .eq(UserEntity::id, uid)
-            .set(UserEntity::avatarFileId, file.id)
-            .update()
+        ktUpdate().eq(UserEntity::id, uid).set(UserEntity::avatarFileId, file.id).update()
 
         return file.currentName
     }
 
-    override fun getByDeviceId(deviceId: String): UserEntity? =
-        ktQuery().eq(UserEntity::deviceId, deviceId).one()
+    override fun getByDeviceId(deviceId: String): UserEntity? = ktQuery().eq(UserEntity::deviceId, deviceId).one()
 
     override fun del(params: UserDelParams): Boolean =
         ktUpdate().eq(UserEntity::id, BaseUtils.uid()).eq(UserEntity::password, pwd(params.password))
