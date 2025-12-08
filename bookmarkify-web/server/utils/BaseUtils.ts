@@ -1,4 +1,4 @@
-import type { UserFile } from '@typing'
+import { CurrentEnvironment } from '@typing'
 
 /**
  * 单位时间内触发事件
@@ -23,4 +23,9 @@ export function limitAction(max: number, action: Function): void {
 
   // 调用action方法
   action()
+}
+
+export function getCurrentEnvironment(): CurrentEnvironment {
+  const isDev = process.env.NODE_ENV === 'development' || process.env.NUXT_ENV === 'development'
+  return isDev ? CurrentEnvironment.LOCAL : CurrentEnvironment.PROD
 }

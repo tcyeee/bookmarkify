@@ -5,8 +5,8 @@
       <h3 class="setting-section-title">主页背景</h3>
       <p class="setting-section-desc">自定义您的主页背景，支持渐变背景和图片背景</p>
       <BackgroundUpload
-        :background-path="userStore.account?.backgroundPath"
-        :background-config="userStore.account?.backgroundConfig"
+        :background-path="userStore.account?.userSetting?.bacSetting?.bacImgFile?.currentName"
+        :background-config="userStore.account?.userSetting?.bacSetting"
         @update="handleBackgroundUpdate"
         @reset="handleBackgroundReset" />
     </div>

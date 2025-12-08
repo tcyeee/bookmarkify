@@ -1,4 +1,4 @@
-export * from './typing'
+export * from './user'
 export * from './enum'
 export * from './result'
 export * from './bookmark'

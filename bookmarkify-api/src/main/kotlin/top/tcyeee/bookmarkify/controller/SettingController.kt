@@ -6,8 +6,6 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
-import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
-import top.tcyeee.bookmarkify.entity.entity.BackgroundImageEntity
 import top.tcyeee.bookmarkify.entity.BackSettingParams
 import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.server.IUserService
@@ -36,7 +34,8 @@ class SettingController(
 
     @PostMapping("updateBacColor")
     @Operation(summary = "上传渐变色背景图片")
-    fun updateBacColor(@RequestBody params: GradientConfigParams): Boolean = userService.updateBacColor(params, BaseUtils.uid())
+    fun updateBacColor(@RequestBody params: GradientConfigParams): Boolean =
+        userService.updateBacColor(params, BaseUtils.uid())
 
     @PostMapping("selectBackground")
     @Operation(summary = "在已有的渐变色背景和图片背景中选择主页背景")
@@ -44,15 +43,10 @@ class SettingController(
 
     @GetMapping("/background/images")
     @Operation(summary = "获取默认背景图片列表")
-    fun defaultImageBackgrounds(): ResultWrapper {
-        val list = imageBackgroundService.ktQuery().eq(BackgroundImageEntity::isDefault, true).list()
-        return ResultWrapper.ok(list)
-    }
+    fun defaultImageBackgrounds() = imageBackgroundService.defaultImageBackgrounds()
 
     @GetMapping("/background/gradients")
     @Operation(summary = "获取默认渐变背景组")
-    fun defaultGradientBackgrounds(): ResultWrapper {
-        val list = gradientBackgroundService.ktQuery().eq(BackgroundGradientEntity::isDefault, true).list()
-        return ResultWrapper.ok(list)
-    }
+    fun defaultGradientBackgrounds() = gradientBackgroundService.defaultGradientBackgrounds()
+
 }

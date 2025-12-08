@@ -11,6 +11,7 @@ export default defineNuxtConfig({
     '@stores': resolve(__dirname, 'stores'),
     '@config': resolve(__dirname, 'server/config'),
     '@typing': resolve(__dirname, 'typing'),
+    '@utils': resolve(__dirname, 'server/utils'),
   },
   modules: [
     '@pinia/nuxt',

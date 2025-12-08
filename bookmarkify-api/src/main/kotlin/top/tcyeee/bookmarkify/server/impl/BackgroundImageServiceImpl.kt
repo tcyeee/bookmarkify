@@ -22,4 +22,10 @@ class BackgroundImageServiceImpl(
 
     override fun getFileById(id: String): UserFile =
         getById(id).let { fileMapper.selectById(it.fileId) }
+
+    override fun defaultImageBackgrounds(): Array<UserFile> =
+        ktQuery().eq(BackgroundImageEntity::isDefault, true).list()
+            .map { it.uid }.toSet().takeIf { it.isNotEmpty() }
+            ?.let { fileMapper.selectByIds(it).toTypedArray() }
+            ?: emptyArray()
 }

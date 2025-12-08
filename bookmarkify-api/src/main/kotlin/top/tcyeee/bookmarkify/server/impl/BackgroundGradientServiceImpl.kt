@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
+import top.tcyeee.bookmarkify.entity.BacGradientVO
 import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
 import top.tcyeee.bookmarkify.mapper.BackgroundGradientMapper
 import top.tcyeee.bookmarkify.server.IBackgroundGradientService
@@ -14,4 +15,9 @@ import top.tcyeee.bookmarkify.server.IBackgroundGradientService
  */
 @Service
 class BackgroundGradientServiceImpl : IBackgroundGradientService,
-    ServiceImpl<BackgroundGradientMapper, BackgroundGradientEntity>()
+    ServiceImpl<BackgroundGradientMapper, BackgroundGradientEntity>() {
+
+    override fun defaultGradientBackgrounds(): Array<BacGradientVO> =
+        ktQuery().eq(BackgroundGradientEntity::isDefault, true).list()
+            .map { it.vo() }.toTypedArray()
+}
