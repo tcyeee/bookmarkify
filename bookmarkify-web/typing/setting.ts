@@ -2,7 +2,7 @@ import type { BackgroundType } from './enum'
 import type { UserFile } from './typing'
 
 export interface UserSetting {
-  backgroundSetting: BackgroundConfig
+  bacSetting: BacSettingVO
 }
 
 export interface BackgroundGradientEntity {
@@ -10,10 +10,12 @@ export interface BackgroundGradientEntity {
   direction?: number // 渐变方向角度，默认135
 }
 
-export interface BackgroundConfig {
+export interface BacSettingVO {
   type: BackgroundType
-  gradient?: BackgroundGradientEntity // 当type为GRADIENT时使用
-  imagePath?: string // 当type为IMAGE时使用
+  bacImgFile?: UserFile // 当BackgroundType为IMAGE时使用
+
+  bacColorGradient?: string[] // 当BackgroundType为GRADIENT时使用
+  bacColorDirection?: number // 当BackgroundType为GRADIENT时使用
 }
 
 export interface UserInfoEntity {
@@ -24,4 +26,5 @@ export interface UserInfoEntity {
   email?: string
   verified: boolean
   avatar: UserFile
+  userSetting: UserSetting
 }

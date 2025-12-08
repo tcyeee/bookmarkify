@@ -19,6 +19,7 @@ export const accountDelete = (pwd: string) => http.post('/user/del', { password:
 export const uploadAvatar = (file: File) => http.upload('/user/uploadAvatar', file) as Promise<string>
 
 /* =========[ /setting ]========= */
+export const queryUserSetting = () => http.get('/setting/query') as Promise<t.UserSetting>
 export const uploadBacPic = (file: File) => http.upload('/setting/uploadBacPic', file) as Promise<string>
 export const updateBacColor = (params: t.BackgroundGradientEntity) =>
   http.post('/setting/updateBacColor', params) as Promise<boolean>

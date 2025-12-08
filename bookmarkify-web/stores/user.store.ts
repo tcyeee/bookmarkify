@@ -1,17 +1,15 @@
 import { defineStore } from 'pinia'
-import { AuthStatus, type UserInfoEntity, type UserSetting } from '@typing'
+import { AuthStatus, type UserInfoEntity } from '@typing'
 import { authByDeviceInfo, queryUserInfo } from '@api'
 import { nanoid } from 'nanoid'
 
 export const useUserStore = defineStore(
   'user',
   () => {
+    /* 用户信息 */
     const account = ref<UserInfoEntity>()
+    /* 加载状态 */
     const Loading = ref<Boolean>(false)
-    const setting = ref<UserSetting>()
-
-    // 用户头像URL  eg：avatar/c100782c-de9c-4c58-a72e-b47dba08bf36.jpg
-    const avatarUrl: Ref<string | undefined> = computed(() => account.value?.avatar?.currentName ?? undefined)
 
     /**
      * 自动跟随 account 状态变化的认证状态
@@ -27,7 +25,7 @@ export const useUserStore = defineStore(
     })
 
     /**
-     * 获取用户信息（同时刷新存储中的用户信息）
+     * 刷新存储中的用户信息
      */
     async function refreshUserInfo(): Promise<UserInfoEntity> {
       Loading.value = true
@@ -50,7 +48,7 @@ export const useUserStore = defineStore(
      */
     async function login(): Promise<UserInfoEntity> {
       console.log('DEBUG: login')
-      if (authStatus.value != AuthStatus.NotLogin) return account.value as UserInfoEntity
+      if (authStatus.value != AuthStatus.NotLogin) return account.value!
 
       /* 即没有登录，也没有认证，则进行临时登录 */
       Loading.value = true
@@ -64,23 +62,24 @@ export const useUserStore = defineStore(
       }
     }
 
+    const deviceIdKey = 'deviceUid'
     function logout() {
       console.log('DEBUG: logout')
       account.value = undefined
-      localStorage.removeItem('deviceUid')
+      localStorage.removeItem(deviceIdKey)
     }
 
     function getDeviceUid(): string {
       if (!import.meta.client) return ''
 
-      var deviceUid = localStorage.getItem('deviceUid')
+      var deviceUid = localStorage.getItem(deviceIdKey)
       if (deviceUid !== null) return deviceUid
 
       deviceUid = nanoid()
       localStorage.setItem('deviceUid', deviceUid)
       return deviceUid
     }
-    return { login, logout, authStatus, account, refreshUserInfo, avatarUrl }
+    return { login, logout, authStatus, account, refreshUserInfo }
   },
   { persist: true }
 )

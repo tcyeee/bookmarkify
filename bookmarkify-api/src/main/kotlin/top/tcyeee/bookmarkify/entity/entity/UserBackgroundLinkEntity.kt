@@ -52,11 +52,15 @@ data class BackgroundImageEntity(
 
 @TableName("background_gradient")
 data class BackgroundGradientEntity(
-    @TableId @JsonIgnore @field:Schema(description = "背景ID") val id: String = IdUtil.fastUUID(),
-    @JsonIgnore @field:Schema(description = "用户ID") var uid: String,
-    @JsonIgnore @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
-    @JsonIgnore @field:Schema(description = "是否是默认展示的背景") val isDefault: Boolean = false,
-
+    @TableId @field:Schema(description = "背景ID") val id: String = IdUtil.fastUUID(),
+    @field:Schema(description = "用户ID") var uid: String,
+    @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
+    @field:Schema(description = "是否是默认展示的背景") val isDefault: Boolean = false,
     @field:Schema(description = "背景渐变色(JSON)") var gradient: String,
     @field:Schema(description = "背景渐变方向") var direction: Int,
-)
+) {
+    fun gradientArray(): Array<String> {
+        return this.gradient.trim().removePrefix("[").removeSuffix("]").split(",")
+            .map { it.trim().removeSurrounding("\"") }.toTypedArray()
+    }
+}
