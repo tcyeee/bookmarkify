@@ -1,14 +1,16 @@
 package top.tcyeee.bookmarkify.config.websocket
 
+import cn.dev33.satoken.stp.StpUtil
 import org.springframework.http.server.ServerHttpRequest
 import org.springframework.http.server.ServerHttpResponse
 import org.springframework.web.socket.WebSocketHandler
 import org.springframework.web.socket.server.HandshakeInterceptor
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
-import top.tcyeee.bookmarkify.utils.BaseUtils
 
 /**
+ * WebSocket 握手之前解析TOKEN
+ *
  * @author tcyeee
  * @date 3/15/25 16:48
  */
@@ -18,15 +20,12 @@ class AuthHandshakeInterceptor : HandshakeInterceptor {
         response: ServerHttpResponse,
         wsHandler: WebSocketHandler,
         attributes: MutableMap<String, Any>
-    ): Boolean {
-        // 通过 URI 获取查询参数中的 token
-        val queryParams = request.uri.query
-        val token = queryParams?.substringAfter("token=")?.takeWhile { it != '&' }
-        if (token == null) throw CommonException(ErrorType.E201)
-
-        val uid = BaseUtils.getUidByToken(token)
-        if (uid != null) attributes["uid"] = uid
-        return uid != null
+    ): Boolean = true.also {
+        request.uri.query
+            ?.substringAfter("token=")?.takeWhile { it != '&' }
+            ?.let { StpUtil.getLoginIdByToken(it) }
+            ?.apply { attributes["uid"] = this }
+            ?: throw CommonException(ErrorType.E201)
     }
 
     override fun afterHandshake(

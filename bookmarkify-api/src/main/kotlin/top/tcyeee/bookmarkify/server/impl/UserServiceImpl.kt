@@ -53,11 +53,9 @@ class UserServiceImpl(
     override fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo =
         BaseUtils.registerDeviceId(request, response, projectConfig)
             // 拿到UserSessionInfo
-            .let { queryOrRegisterByDeviceId(it).authVO() }
+            .let { queryOrRegisterByDeviceId(it).authVO(StpUtil.getTokenValue()) }
             // 在STP中登陆
             .also { StpUtil.login(it.uid, true) }
-            // 在返回结果中添加TOKEN
-            .also { it.token = StpUtil.getTokenValue() }
             // 将用户信息存入Session
             .also { it.writeToSession() }
 

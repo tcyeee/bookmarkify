@@ -23,12 +23,7 @@ import java.time.temporal.ChronoUnit
 object BaseUtils {
     /* 用户相关方法 */
     fun uid(): String = user().uid
-    fun user(): UserSessionInfo = user(StpUtil.getSession())
-    private fun user(session: SaSession): UserSessionInfo = UserSessionInfo(session)
-
-    fun getUidByToken(token: String): String? = StpUtil.getLoginIdByToken(token)
-        ?.let { StpUtil.getSessionByLoginId(it) }
-        ?.let { user(it).uid }
+    fun user(): UserSessionInfo = UserSessionInfo(StpUtil.getSession())
 
     /**
      * Registers and returns the deviceId (anonymous user ID).

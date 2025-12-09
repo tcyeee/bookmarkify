@@ -38,7 +38,7 @@ data class UserEntity(
         deviceId = deviceId,
     )
 
-    fun authVO(): UserSessionInfo = UserSessionInfo(this)
+    fun authVO(token: String): UserSessionInfo = UserSessionInfo(this, token)
 
     fun vo(): UserInfoShow = UserInfoShow(this)
 }

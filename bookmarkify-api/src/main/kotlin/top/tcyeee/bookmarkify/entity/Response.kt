@@ -103,7 +103,6 @@ data class UserInfoShow(
     @field:Schema(description = "绑定的邮箱") var email: String? = null,
     @JsonIgnore @field:Schema(description = "用户头像文件ID") var avatarFileId: String? = null,
 
-    @field:Schema(description = "用户是否验证") var verified: Boolean? = null,
     @field:Schema(description = "用户头像文件") var avatar: UserFile? = null,
     @field:Schema(description = "用户设置信息") var userSetting: UserSetting? = null,
 ) {

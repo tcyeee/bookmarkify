@@ -1,6 +1,5 @@
 import type { UserInfo } from '@typing'
 import type { Result } from '@typing'
-import { useUserStore } from '@stores/user.store'
 
 export default class http {
   static get(path: string, params?: any): any {
@@ -53,7 +52,7 @@ export default class http {
 
     // 创建请求
     console.log(`[API] ${method}::${path}`)
-    if (method == 'GET') path += `?${new URLSearchParams(params).toString()}`
+    if (method == 'GET' && params) path += `?${new URLSearchParams(params).toString()}`
     const body = method == 'POST' ? JSON.stringify(params) : undefined
     const request: Request = new Request(useRuntimeConfig().public.apiBase + path, {
       headers: { 'Content-Type': 'application/json', satoken: userStore.account?.token ?? '' },
