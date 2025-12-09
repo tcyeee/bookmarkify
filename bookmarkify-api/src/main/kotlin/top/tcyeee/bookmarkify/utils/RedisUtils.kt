@@ -4,7 +4,7 @@ import jakarta.annotation.PostConstruct
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.redis.core.ValueOperations
 import org.springframework.stereotype.Component
-import top.tcyeee.bookmarkify.config.entity.redis.RedisType
+import top.tcyeee.bookmarkify.config.cache.RedisType
 
 /**
  * REDIS 工具类
