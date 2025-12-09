@@ -47,13 +47,7 @@ data class UserSessionInfo(
         .let { this }
 
     /* 从STP-Session中读取 */
-    constructor(obj: Any) : this(
-        uid = "",
-        nickName = "",
-        email = "",
-        phone = "",
-        token = ""
-    ) {
+    constructor(obj: Any) : this(uid = "", nickName = "", token = "") {
         val res = JSONUtil.parseObj(obj.toString())
         this.uid = res.getStr("uid")
         this.nickName = res.getStr("nickName")

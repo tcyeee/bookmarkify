@@ -19,7 +19,7 @@ export const useUserStore = defineStore(
       loading.value = true
       try {
         const result = await queryUserInfo()
-        account.value = result
+        account.value = { ...account.value, ...result }
         return result
       } catch (err: any) {
         if (err.code == 202) {
@@ -44,7 +44,7 @@ export const useUserStore = defineStore(
       loading.value = true
       const user = await track()
       loading.value = false
-      account.value = user
+      account.value = { ...account.value, ...user }
       return user
     }
 
