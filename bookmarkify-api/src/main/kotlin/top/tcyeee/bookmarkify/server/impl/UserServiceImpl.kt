@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server.impl
 
+import cn.dev33.satoken.session.SaSession
 import cn.dev33.satoken.stp.StpUtil
 import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
@@ -51,13 +52,15 @@ class UserServiceImpl(
      * @return 用户基础信息+token (注意：这里不包含用户头像和用户设置)
      */
     override fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo =
-        BaseUtils.registerDeviceId(request, response, projectConfig)
-            // 拿到UserSessionInfo
-            .let { queryOrRegisterByDeviceId(it).authVO(StpUtil.getTokenValue()) }
-            // 在STP中登陆
-            .also { StpUtil.login(it.uid, true) }
-            // 将用户信息存入Session
-            .also { it.writeToSession() }
+        if (StpUtil.isLogin() && BaseUtils.user() != null) {
+            BaseUtils.user()!!
+        } else {
+            BaseUtils.registerDeviceId(request, response, projectConfig)
+                .let(this::queryOrRegisterByDeviceId)
+                .also { StpUtil.login(it.id, true) }
+                .authVO(StpUtil.getTokenValue())
+                .writeToSession()
+        }
 
     /**
      * 查询或者注册拿到用户信息

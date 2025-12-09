@@ -20,7 +20,7 @@ data class UserSessionInfo(
     @field:Schema(description = "用户绑定的邮箱") var email: String? = null,
     @field:Schema(description = "用户绑定的手机号") var phone: String? = null,
 
-    @field:Schema(description = "用户是否验证") var verified: Boolean? = false,
+    @field:Schema(description = "用户是否验证") var verified: Boolean = false,
     @field:Schema(description = "用户TOKEN") var token: String,
 ) {
     constructor(user: UserEntity, token: String) : this(
@@ -33,35 +33,34 @@ data class UserSessionInfo(
         this.verified = this.phone != null || this.email != null
     }
 
-    /* 写入STP的Sesssion */
+    /* 写入STP的Session */
     fun writeToSession(): UserSessionInfo = JSONUtil.createObj().apply {
-        this["uid"] = uid
-        this["nickName"] = nickName
-        this["email"] = email
-        this["phone"] = phone
-        this["token"] = token
+        this.set("uid", uid)
+        this.set("nickName", nickName)
+        this.set("token", token)
+        this.set("verified", verified)
+        if (email != null) this.set("email", email)
+        if (phone != null) this.set("phone", phone)
     }
         .let { JSONUtil.toJsonStr(it) }
-        .also { StpUtil.getSession().set("user", it) }
+        .also { StpUtil.getSession().set(SaSession.USER, it) }
         .let { this }
 
     /* 从STP-Session中读取 */
-    constructor(session: SaSession) : this(
+    constructor(obj: Any) : this(
         uid = "",
         nickName = "",
         email = "",
         phone = "",
         token = ""
     ) {
-        val json = session.get("user").toString()
-        val res = JSONUtil.parseObj(json)
+        val res = JSONUtil.parseObj(obj.toString())
+        this.uid = res.getStr("uid")
+        this.nickName = res.getStr("nickName")
+        this.token = res.getStr("token")
 
-        this.uid = res["uid"].toString()
-        this.nickName = res["nickName"].toString()
-        this.email = res["email"].toString()
-        this.phone = res["phone"].toString()
-        this.token = res["token"].toString()
-
-        this.verified = this.phone != null || this.email != null
+        if (res.containsKey("email")) this.email = res.getStr("email")
+        if (res.containsKey("phone")) this.phone = res.getStr("phone")
+        this.verified = res.containsKey("phone") || res.containsKey("email")
     }
 }
