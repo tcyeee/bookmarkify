@@ -3,22 +3,17 @@ package top.tcyeee.bookmarkify.server.impl
 import cn.dev33.satoken.stp.StpUtil
 import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
+import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
-import top.tcyeee.bookmarkify.entity.BacSettingVO
-import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
-import top.tcyeee.bookmarkify.entity.entity.BackgroundImageEntity
-import top.tcyeee.bookmarkify.entity.entity.BackgroundType
-import top.tcyeee.bookmarkify.entity.entity.BackgroundConfigEntity
-import top.tcyeee.bookmarkify.entity.entity.UserEntity
-import top.tcyeee.bookmarkify.entity.BackSettingParams
-import top.tcyeee.bookmarkify.entity.GradientConfigParams
-import top.tcyeee.bookmarkify.entity.UserDelParams
-import top.tcyeee.bookmarkify.entity.UserInfoShow
-import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
+import top.tcyeee.bookmarkify.entity.*
+import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
+import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.server.IUserService
@@ -36,9 +31,43 @@ class UserServiceImpl(
     private val bacImageService: BackgroundImageServiceImpl,
     private val fileMapper: FileMapper,
     private val fileService: FileServiceImpl,
+    private val projectConfig: ProjectConfig,
 ) : IUserService, ServiceImpl<UserMapper, UserEntity>() {
 
-    override fun createUserByDeviceId(deviceId: String): UserEntity = UserEntity(deviceId).also { save(it) }
+    /**
+     * 获取用户信息
+     * @param uid uid
+     * @return 用户基础信息 + 头像 + 设置 （没有TOKEN）
+     */
+    override fun userInfo(uid: String): UserInfoShow = getById(uid)?.vo()?.apply {
+        avatar = fileMapper.selectById(this.avatarFileId)
+        userSetting = queryUserSetting(uid)
+    } ?: throw CommonException(ErrorType.E202)
+
+    /**
+     * 注册用户信息
+     * @param request   request
+     * @param response  response
+     * @return 用户基础信息+token (注意：这里不包含用户头像和用户设置)
+     */
+    override fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo =
+        BaseUtils.registerDeviceId(request, response, projectConfig)
+            // 拿到UserSessionInfo
+            .let { queryOrRegisterByDeviceId(it).authVO() }
+            // 在STP中登陆
+            .also { StpUtil.login(it.uid, true) }
+            // 在返回结果中添加TOKEN
+            .also { it.token = StpUtil.getTokenValue() }
+            // 将用户信息存入Session
+            .also { it.writeToSession() }
+
+    /**
+     * 查询或者注册拿到用户信息
+     * @param deviceId 用户唯一ID（后端生成）
+     * @return 用户信息
+     */
+    private fun queryOrRegisterByDeviceId(deviceId: String): UserEntity =
+        ktQuery().eq(UserEntity::deviceId, deviceId).one() ?: UserEntity(deviceId).also { save(it) }
 
     override fun queryUserBacSetting(uid: String): BacSettingVO {
         val result = backSettingService.queryByUid(uid).vo()
@@ -69,14 +98,6 @@ class UserServiceImpl(
             ?: BackgroundConfigEntity(uid = uid, type = params.type, backgroundLinkId = params.backgroundId)
         backSettingService.saveOrUpdate(entity)
         return true
-    }
-
-    override fun userInfo(): UserInfoShow {
-        val userEntity = getById(BaseUtils.uid()) ?: throw CommonException(ErrorType.E202)
-        return UserInfoShow(userEntity, StpUtil.getTokenValue()).apply {
-            avatar = fileMapper.selectById((userEntity.avatarFileId))
-            userSetting = queryUserSetting(uid)
-        }
     }
 
     override fun updateInfo(params: UserInfoUptateParams): Boolean {
@@ -119,8 +140,6 @@ class UserServiceImpl(
 
         return file.currentName
     }
-
-    override fun getByDeviceId(deviceId: String): UserEntity? = ktQuery().eq(UserEntity::deviceId, deviceId).one()
 
     override fun del(params: UserDelParams): Boolean =
         ktUpdate().eq(UserEntity::id, BaseUtils.uid()).eq(UserEntity::password, pwd(params.password))

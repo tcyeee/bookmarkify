@@ -6,8 +6,9 @@ import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Size
-import org.springframework.data.annotation.Id
 import top.tcyeee.bookmarkify.config.entity.RoleEnum
+import top.tcyeee.bookmarkify.entity.UserInfoShow
+import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import java.time.LocalDateTime
 
 /**
@@ -36,4 +37,8 @@ data class UserEntity(
         nickName = "用户_" + RandomUtil.randomString(5),
         deviceId = deviceId,
     )
+
+    fun authVO(): UserSessionInfo = UserSessionInfo(this)
+
+    fun vo(): UserInfoShow = UserInfoShow(this)
 }

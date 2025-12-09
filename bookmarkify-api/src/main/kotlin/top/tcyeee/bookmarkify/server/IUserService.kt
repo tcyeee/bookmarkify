@@ -1,6 +1,8 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
@@ -9,6 +11,7 @@ import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
+import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
 
 /**
@@ -16,15 +19,21 @@ import top.tcyeee.bookmarkify.entity.dto.UserSetting
  * @date 3/11/25 20:01
  */
 interface IUserService : IService<UserEntity> {
-    fun getByDeviceId(deviceId: String): UserEntity?
-    fun createUserByDeviceId(deviceId: String): UserEntity
-    fun userInfo(): UserInfoShow
-    fun updateInfo(params: UserInfoUptateParams): Boolean
-    fun updateUsername(username: String): Boolean
-    fun changePhone(phone: String): Boolean
-    fun checkPhone(code: Int): Boolean
-    fun changeMail(mail: String): Boolean
-    fun del(params: UserDelParams): Boolean
+    /**
+     * SESSION 注册用户信息
+     * @param request   request
+     * @param response  response
+     * @return 用户基础信息+token (注意：这里不包含用户头像和用户设置)
+     */
+    fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo
+
+    /**
+     * 获取用户信息
+     *
+     * @param uid uid
+     * @return 用户基础信息 + 头像 + 设置 （没有TOKEN）
+     */
+    fun userInfo(uid: String): UserInfoShow
 
     /**
      * 更新背景颜色
@@ -71,4 +80,11 @@ interface IUserService : IService<UserEntity> {
      * @return 用户背景设置
      */
     fun queryUserBacSetting(uid: String): BacSettingVO
+
+    fun updateInfo(params: UserInfoUptateParams): Boolean
+    fun updateUsername(username: String): Boolean
+    fun changePhone(phone: String): Boolean
+    fun checkPhone(code: Int): Boolean
+    fun changeMail(mail: String): Boolean
+    fun del(params: UserDelParams): Boolean
 }

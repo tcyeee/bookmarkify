@@ -3,12 +3,6 @@ export enum Environments {
   PRO = 'production',
 }
 
-export enum AuthStatus {
-  NotLogin = 'NotLogin',
-  Login = 'Login',
-  Auth = 'Auth',
-}
-
 export enum BackgroundType {
   GRADIENT = 'GRADIENT',
   IMAGE = 'IMAGE',

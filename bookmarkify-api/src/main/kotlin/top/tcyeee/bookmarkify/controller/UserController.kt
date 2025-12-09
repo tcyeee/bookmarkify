@@ -25,7 +25,7 @@ class UserController(
 
     @GetMapping("info")
     @Operation(summary = "获取用户信息")
-    fun info(): UserInfoShow = userService.userInfo()
+    fun info(): UserInfoShow = userService.userInfo(BaseUtils.uid())
 
     @PostMapping("updateInfo")
     @Operation(summary = "修改用户信息")
