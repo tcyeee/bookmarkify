@@ -1,10 +1,15 @@
 package top.tcyeee.bookmarkify.config
 
+import org.springframework.cache.CacheManager
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Primary
+import org.springframework.data.redis.cache.RedisCacheConfiguration
+import org.springframework.data.redis.cache.RedisCacheManager
 import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer
+import org.springframework.data.redis.serializer.RedisSerializationContext
 import org.springframework.data.redis.serializer.StringRedisSerializer
 
 /**
@@ -14,11 +19,25 @@ import org.springframework.data.redis.serializer.StringRedisSerializer
 @Configuration
 class RedisConfig {
     @Bean
+    @Primary
     fun redisTemplate(redisConnectionFactory: RedisConnectionFactory): RedisTemplate<String, Any> {
         val template = RedisTemplate<String, Any>()
         template.connectionFactory = redisConnectionFactory
         template.keySerializer = StringRedisSerializer()
         template.valueSerializer = GenericJackson2JsonRedisSerializer()
         return template
+    }
+
+    @Bean
+    @Primary
+    fun cacheManager(redisConnectionFactory: RedisConnectionFactory): CacheManager {
+        val keySerializer = StringRedisSerializer()
+        val valueSerializer = GenericJackson2JsonRedisSerializer()
+        val config = RedisCacheConfiguration.defaultCacheConfig()
+            .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(keySerializer))
+            .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(valueSerializer))
+        return RedisCacheManager.builder(redisConnectionFactory)
+            .cacheDefaults(config)
+            .build()
     }
 }

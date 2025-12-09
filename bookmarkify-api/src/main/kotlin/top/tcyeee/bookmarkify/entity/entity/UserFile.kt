@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.utils.CurrentEnvironment
 import top.tcyeee.bookmarkify.utils.FileType
 import top.tcyeee.bookmarkify.utils.currentEnvironment
+import java.io.Serializable
 import java.time.LocalDateTime
 
 /**
@@ -26,4 +27,4 @@ data class UserFile(
     @field:Schema(description = "文件类型") val type: FileType,
     @field:Schema(description = "文件所在环境") val environment: CurrentEnvironment = currentEnvironment(),
     @field:Schema(description = "文件当前名称") val currentName: String,
-)
+) : Serializable
