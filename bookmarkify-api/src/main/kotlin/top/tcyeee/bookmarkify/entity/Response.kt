@@ -15,7 +15,6 @@ import top.tcyeee.bookmarkify.entity.entity.UserFile
 import top.tcyeee.bookmarkify.entity.enums.FunctionType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
-import java.io.Serializable
 
 data class BookmarkAddOneParams(
     @field:Schema(description = "添加的域名") var url: String,
@@ -129,4 +128,4 @@ class BacSettingVO(
 class BacGradientVO(
     @field:Schema(description = "背景渐变色") var colors: Array<String>,
     @field:Schema(description = "背景渐变方向") var direction: Int,
-) : Serializable
+)
