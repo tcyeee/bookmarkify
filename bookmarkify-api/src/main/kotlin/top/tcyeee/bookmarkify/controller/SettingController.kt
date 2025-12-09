@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
+import org.springframework.cache.annotation.Cacheable
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
@@ -48,12 +49,14 @@ class SettingController(
     @Operation(summary = "重制背景图片")
     fun bacReset(): Boolean = backgroundConfigService.deleteByUid(BaseUtils.uid())
 
-    @GetMapping("/background/images")
     @Operation(summary = "获取默认背景图片列表")
+    @Cacheable("defaultImageBackgrounds")
+    @GetMapping("/background/images")
     fun defaultImageBackgrounds() = imageBackgroundService.defaultImageBackgrounds()
 
-    @GetMapping("/background/gradients")
     @Operation(summary = "获取默认渐变背景组")
+    @Cacheable("defaultGradientBackgrounds")
+    @GetMapping("/background/gradients")
     fun defaultGradientBackgrounds() = gradientBackgroundService.defaultGradientBackgrounds()
 
 }
