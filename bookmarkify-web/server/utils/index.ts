@@ -1,5 +1,8 @@
 import { CurrentEnvironment } from '@typing'
 
+const isClient = import.meta.client
+let timeLockMemory = 0
+
 /**
  * 单位时间内触发事件
  *
@@ -11,7 +14,7 @@ export function limitAction(max: number, action: Function): void {
   max = max < 2 ? 2 : max
   let now = Number(Date.now())
   let scop = (max - 1) * 60 * 1000
-  let timeLock = Number(localStorage.getItem('timeLockStr'))
+  let timeLock = isClient ? Number(localStorage.getItem('timeLockStr')) : timeLockMemory
 
   // 如果时间锁时间小于当前+timeEnd,则放行
   if (timeLock > now + scop) return
@@ -19,7 +22,8 @@ export function limitAction(max: number, action: Function): void {
   // 如果时间锁时间小于当前时间-timeEnd,则重置为当前时间并放行
   if (timeLock < now - scop) timeLock = now
   timeLock += 60000
-  localStorage.setItem('timeLockStr', String(timeLock))
+  if (isClient) localStorage.setItem('timeLockStr', String(timeLock))
+  else timeLockMemory = timeLock
 
   // 调用action方法
   action()
