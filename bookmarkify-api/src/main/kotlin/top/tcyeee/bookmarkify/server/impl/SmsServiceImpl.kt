@@ -3,7 +3,7 @@ package top.tcyeee.bookmarkify.server.impl
 import cn.hutool.core.util.RandomUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
-import top.tcyeee.bookmarkify.config.entity.redis.RedisType
+import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.config.entity.sms.SmsParams
 import top.tcyeee.bookmarkify.config.entity.sms.SmsResponse
 import top.tcyeee.bookmarkify.config.entity.sms.SmsType

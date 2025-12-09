@@ -7,6 +7,8 @@ import top.tcyeee.bookmarkify.entity.entity.UserFile
 import top.tcyeee.bookmarkify.mapper.BackgroundImageMapper
 import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.server.IBackgroundImageService
+import top.tcyeee.bookmarkify.config.cache.RedisType
+import top.tcyeee.bookmarkify.config.cache.RedisCache
 
 /**
  * 用户图片背景 Service 实现
@@ -23,6 +25,7 @@ class BackgroundImageServiceImpl(
     override fun getFileById(id: String): UserFile =
         getById(id).let { fileMapper.selectById(it.fileId) }
 
+    @RedisCache(RedisType.DEFAULT_BACKGROUND_IMAGES)
     override fun defaultImageBackgrounds(): Array<UserFile> =
         ktQuery().eq(BackgroundImageEntity::isDefault, true).list()
             .map { it.uid }.toSet().takeIf { it.isNotEmpty() }
