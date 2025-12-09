@@ -15,8 +15,6 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 class SaTokenConfigure : WebMvcConfigurer {
     // 注册拦截器
     override fun addInterceptors(registry: InterceptorRegistry) {
-        registry.addInterceptor(SaInterceptor { StpUtil.checkLogin() })
-            .addPathPatterns("/**")
-            .excludePathPatterns("/user/doLogin")
+        registry.addInterceptor(SaInterceptor { StpUtil.checkLogin() }).addPathPatterns("/**")
     }
 }
