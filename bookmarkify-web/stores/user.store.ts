@@ -11,6 +11,8 @@ export const useUserStore = defineStore(
     const account = ref<UserInfoEntity>()
     /* 加载状态 */
     const Loading = ref<Boolean>(false)
+    /* 设备 ID 存储（cookie 可在 SSR/CSR 共用） */
+    const deviceIdCookie = useCookie<string | null>('deviceUid', { sameSite: 'lax' })
 
     /**
      * 自动跟随 account 状态变化的认证状态
@@ -68,17 +70,27 @@ export const useUserStore = defineStore(
     function logout() {
       console.log('DEBUG: logout')
       account.value = undefined
+      deviceIdCookie.value = null
       if (isClient) localStorage.removeItem(deviceIdKey)
     }
 
     function getDeviceUid(): string {
-      if (!isClient) return 'server-device-uid'
+      /* 优先读 cookie（SSR 也可读写） */
+      const cookieId = deviceIdCookie.value
+      if (cookieId) return cookieId
 
-      var deviceUid = localStorage.getItem(deviceIdKey)
-      if (deviceUid !== null) return deviceUid
+      /* 仅在客户端访问 localStorage */
+      if (isClient) {
+        const localId = localStorage.getItem(deviceIdKey)
+        if (localId) {
+          deviceIdCookie.value = localId
+          return localId
+        }
+      }
 
-      deviceUid = nanoid()
-      localStorage.setItem('deviceUid', deviceUid)
+      const deviceUid = nanoid()
+      deviceIdCookie.value = deviceUid
+      if (isClient) localStorage.setItem(deviceIdKey, deviceUid)
       return deviceUid
     }
     return { login, logout, authStatus, account, refreshUserInfo }
