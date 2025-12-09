@@ -24,13 +24,12 @@ export const useSysStore = defineStore(
     /* 系统默认渐变背景 */
     const defaultGradientBackgroundsList = ref<BacGradientVO[]>([])
 
-    /**
-     * 刷新系统默认配置信息
-     */
-    async function refreshSystemConfig() {
-      defaultImageBackgroundsList.value = await defaultImageBackgrounds()
-      defaultGradientBackgroundsList.value = await defaultGradientBackgrounds()
-    }
+async function refreshSystemConfig() {
+   [defaultImageBackgroundsList.value, defaultGradientBackgroundsList.value] = await Promise.all([
+    defaultImageBackgrounds(),
+    defaultGradientBackgrounds()
+  ])
+}
 
     /**
      * 触发键盘事件(每次按下任意键自动触发该方法)
