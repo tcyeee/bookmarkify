@@ -37,7 +37,7 @@ object BaseUtils {
     fun registerDeviceId(request: HttpServletRequest, response: HttpServletResponse, config: ProjectConfig): String =
         request.cookies
             ?.find { it.name == config.uidCookieName }?.value
-            ?: "SERVER-${IdUtil.fastUUID()}".also {
+            ?: IdUtil.fastUUID().also {
                 Cookie(config.uidCookieName, it).apply {
                     maxAge = config.uidCookieMaxAge
                     path = config.uidCookiePath
