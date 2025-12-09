@@ -11,6 +11,10 @@ import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer
 import org.springframework.data.redis.serializer.RedisSerializationContext
 import org.springframework.data.redis.serializer.StringRedisSerializer
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator
 
 /**
  * @author tcyeee
@@ -26,18 +30,5 @@ class RedisConfig {
         template.keySerializer = StringRedisSerializer()
         template.valueSerializer = GenericJackson2JsonRedisSerializer()
         return template
-    }
-
-    @Bean
-    @Primary
-    fun cacheManager(redisConnectionFactory: RedisConnectionFactory): CacheManager {
-        val keySerializer = StringRedisSerializer()
-        val valueSerializer = GenericJackson2JsonRedisSerializer()
-        val config = RedisCacheConfiguration.defaultCacheConfig()
-            .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(keySerializer))
-            .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(valueSerializer))
-        return RedisCacheManager.builder(redisConnectionFactory)
-            .cacheDefaults(config)
-            .build()
     }
 }
