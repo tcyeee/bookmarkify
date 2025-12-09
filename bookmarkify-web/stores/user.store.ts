@@ -1,29 +1,33 @@
 import { defineStore } from 'pinia'
-import { type UserInfoEntity } from '@typing'
+import { type UserInfo } from '@typing'
 import { track, queryUserInfo } from '@api'
 
 export const useUserStore = defineStore(
   'user',
   () => {
     /* 用户信息 */
-    const account = ref<UserInfoEntity>()
+    const account = ref<UserInfo>()
     /* 加载状态 */
     const loading = ref<Boolean>(false)
     /* 设备 ID 存储（cookie 可在 SSR/CSR 共用） */
     const deviceIdCookie = useCookie<string | null>('deviceUid', { sameSite: 'lax' })
 
     /**
-     * 刷新存储中的用户信息
+     * 获取用户信息（包含头像和设置信息）
      */
-    async function refreshUserInfo(): Promise<UserInfoEntity> {
+    async function refreshUserInfo(): Promise<UserInfo> {
       loading.value = true
       try {
         const result = await queryUserInfo()
         account.value = result
         return result
       } catch (err: any) {
+        if (err.code == 202) {
+          await logout()
+          ElMessage.error('用户信息已过期,已重新登录,请刷新页面')
+          return await loginOrRegister()
+        }
         ElMessage.error(err.message || '刷新用户信息失败')
-        if (err.code == 202) logout()
         throw err
       } finally {
         loading.value = false
@@ -33,9 +37,9 @@ export const useUserStore = defineStore(
     /**
      * 登录或注册,每次请求均会刷新用户信息
      *
-     * @returns 用户信息
+     * @returns 用户信息+TOKEN（不含头像和设置信息）
      */
-    async function loginOrRegister(): Promise<UserInfoEntity> {
+    async function loginOrRegister(): Promise<UserInfo> {
       console.log('DEBUG: 登录或者注册，刷新最新用户信息')
       loading.value = true
       const user = await track()
@@ -44,8 +48,8 @@ export const useUserStore = defineStore(
       return user
     }
 
-    function logout() {
-      console.log('DEBUG: logout')
+    async function logout() {
+      console.log('DEBUG: 退出登陆')
       account.value = undefined
       deviceIdCookie.value = null
     }

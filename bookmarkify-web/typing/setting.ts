@@ -18,13 +18,21 @@ export interface BacSettingVO {
   bacColorDirection?: number // 当BackgroundType为GRADIENT时使用
 }
 
-export interface UserInfoEntity {
-  uid: string
-  token: string
-  nickName: string
-  phone?: string
-  email?: string
-  verified: boolean
-  avatar: UserFile
-  userSetting: UserSetting
+/**
+ * 这里比较特殊，对应到后端其实是两个不同的实体类
+ * UserInfoShow 和 UserSessionInfo
+ */
+export interface UserInfo {
+  uid: string // 用户唯一ID
+  nickName: string // 用户昵称
+  phone?: string // 用户手机号
+  email?: string // 用户邮箱
+  verified: boolean // 用户是否验证
+
+  /* 仅/tract接口会返回 */
+  token: string // 用户TOKEN
+
+  /* 仅/info接口会返回 */
+  avatar: UserFile // 用户头像
+  userSetting: UserSetting // 用户设置
 }
