@@ -2,7 +2,7 @@ import http from './http'
 import type * as t from '@typing'
 
 /* =========[ /auth ]========= */
-export const track = () => http.get('/auth/track') as Promise<t.UserInfoEntity>
+export const track = () => http.get('/auth/track') as Promise<t.UserInfo>
 
 /* =========[ /bookmark ]========= */
 export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<Array<t.HomeItem>>
@@ -13,7 +13,7 @@ export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post('/bo
 
 /* =========[ /user ]========= */
 export const updateUserInfo = (param: t.UserInfoUpdate) => http.post('/user/updateInfo', param) as Promise<boolean>
-export const queryUserInfo = () => http.get('/user/info') as Promise<t.UserInfoEntity>
+export const queryUserInfo = () => http.get('/user/info') as Promise<t.UserInfo>
 export const accountDelete = (pwd: string) => http.post('/user/del', { password: btoa(pwd) }) as Promise<boolean>
 export const uploadAvatar = (file: File) => http.upload('/user/uploadAvatar', file) as Promise<string>
 

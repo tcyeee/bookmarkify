@@ -25,12 +25,12 @@
 
 <script lang="ts" setup>
 import { updateUserInfo } from '@api'
-import type { UserInfoEntity } from '@typing'
+import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useUserStore } from '@stores/user.store'
 const userStore = useUserStore()
 
-const account = computed<UserInfoEntity | undefined>(() => userStore.account)
+const account = computed<UserInfo | undefined>(() => userStore.account)
 const avatarUrl: Ref<string | undefined> = computed(() => userStore.account?.avatar?.currentName)
 
 function update() {

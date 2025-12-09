@@ -1,4 +1,4 @@
-import type { UserInfoEntity } from '@typing'
+import type { UserInfo } from '@typing'
 import type { Result } from '@typing'
 import { useUserStore } from '@stores/user.store'
 
@@ -80,7 +80,7 @@ async function resultCheck(result: Result<object>, request: Request): Promise<an
   // 如果遇到token失效,则重新登录
   if ([101].includes(result.code)) {
     const userStore = useUserStore()
-    const account: UserInfoEntity = await userStore.login()
+    const account: UserInfo = await userStore.login()
     if (account.token) {
       request.headers.set('satoken', account.token)
       return await fetch(request)
