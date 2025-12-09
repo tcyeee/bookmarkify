@@ -25,6 +25,10 @@ sa-token:
   is-log: true
   is-print: false
 
+config:
+  uid-cookie-name: 'deviceUid'    # 匿名用户 cookie 名称
+  uid-cookie-path: "/"            # 匿名用户 cookie 路径
+  uid-cookie-max-age: 315360000   # 10 年（秒）
 
 spring:
   servlet:
