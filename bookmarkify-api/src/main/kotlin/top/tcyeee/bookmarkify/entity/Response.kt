@@ -6,7 +6,6 @@ import cn.hutool.core.util.StrUtil
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
-import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
 import top.tcyeee.bookmarkify.entity.entity.BackgroundType
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
@@ -97,35 +96,18 @@ data class HomeItemShow(
     )
 }
 
-data class UserAuthEntityVo(
-    var uid: String,
-    val token: String,
-    val nickName: String? = null,
-    val mail: String? = null,
-) {
-    constructor(user: UserSessionInfo, token: String) : this(
-        uid = user.uid, token = token, nickName = user.nickName, mail = user.email
-    )
-}
-
 data class UserInfoShow(
-    var uid: String,
-    var token: String,
-    var nickName: String,
-    var phone: String? = null,
-    var email: String? = null,
-    var avatarFileId: String? = null,
-    var verified: Boolean? = null,       // 是否为验证过的账户(例如绑定手机号,绑定邮箱等)
-    var avatar: UserFile? = null,
+    @field:Schema(description = "UID") var uid: String,
+    @field:Schema(description = "用户名称") var nickName: String,
+    @field:Schema(description = "绑定的手机号") var phone: String? = null,
+    @field:Schema(description = "绑定的邮箱") var email: String? = null,
+    @JsonIgnore @field:Schema(description = "用户头像文件ID") var avatarFileId: String? = null,
 
-    // 用户设置信息
-    var userSetting: UserSetting? = null,
+    @field:Schema(description = "用户是否验证") var verified: Boolean? = null,
+    @field:Schema(description = "用户头像文件") var avatar: UserFile? = null,
+    @field:Schema(description = "用户设置信息") var userSetting: UserSetting? = null,
 ) {
-    constructor(user: UserEntity, token: String) : this(
-        uid = user.id,
-        token = token,
-        nickName = user.nickName,
-    ) {
+    constructor(user: UserEntity) : this(uid = user.id, nickName = user.nickName) {
         BeanUtil.copyProperties(user, this)
     }
 }
@@ -143,6 +125,7 @@ class BacSettingVO(
     @field:Schema(description = "背景渐变方向") var bacColorDirection: Int? = null,
 )
 
+@Suppress("unused")
 class BacGradientVO(
     @field:Schema(description = "背景渐变色") var colors: Array<String>,
     @field:Schema(description = "背景渐变方向") var direction: Int,

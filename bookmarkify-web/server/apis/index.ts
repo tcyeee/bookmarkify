@@ -2,8 +2,7 @@ import http from './http'
 import type * as t from '@typing'
 
 /* =========[ /auth ]========= */
-export const authByDeviceInfo = (deviceId: string) =>
-  http.get('/auth/loginByDeviceId', { deviceId: deviceId }) as Promise<t.UserInfoEntity>
+export const track = () => http.get('/auth/track') as Promise<t.UserInfoEntity>
 
 /* =========[ /bookmark ]========= */
 export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<Array<t.HomeItem>>
