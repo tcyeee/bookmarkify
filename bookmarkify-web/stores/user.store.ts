@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid'
 export const useUserStore = defineStore(
   'user',
   () => {
+    const isClient = import.meta.client
     /* 用户信息 */
     const account = ref<UserInfoEntity>()
     /* 加载状态 */
@@ -67,10 +68,12 @@ export const useUserStore = defineStore(
     function logout() {
       console.log('DEBUG: logout')
       account.value = undefined
-      localStorage.removeItem(deviceIdKey)
+      if (isClient) localStorage.removeItem(deviceIdKey)
     }
 
     function getDeviceUid(): string {
+      if (!isClient) return 'server-device-uid'
+
       var deviceUid = localStorage.getItem(deviceIdKey)
       if (deviceUid !== null) return deviceUid
 
