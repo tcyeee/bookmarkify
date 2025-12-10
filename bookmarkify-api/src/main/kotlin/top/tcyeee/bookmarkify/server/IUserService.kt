@@ -27,13 +27,15 @@ interface IUserService : IService<UserEntity> {
      */
     fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo
 
+    fun loginOut()
+
     /**
-     * 获取用户信息
+     * 获取用户本人信息，如果数据库没有，则需要同步注册此人的TOKEN
      *
      * @param uid uid
      * @return 用户基础信息 + 头像 + 设置 （没有TOKEN）
      */
-    fun userInfo(uid: String): UserInfoShow
+    fun me(uid: String): UserInfoShow
 
     /**
      * 更新背景颜色

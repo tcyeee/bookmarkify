@@ -27,5 +27,4 @@ class LoginController(private val userService: UserServiceImpl) {
     @Operation(summary = "创建用户标记")
     fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo =
         userService.track(request, response)
-
 }

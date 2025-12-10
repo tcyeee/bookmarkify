@@ -40,10 +40,13 @@ class UserServiceImpl(
      * @param uid uid
      * @return 用户基础信息 + 头像 + 设置 （没有TOKEN）
      */
-    override fun userInfo(uid: String): UserInfoShow = getById(uid)?.vo()?.apply {
+    override fun me(uid: String): UserInfoShow = getById(uid)?.vo()?.apply {
         avatar = fileMapper.selectById(this.avatarFileId)
         userSetting = queryUserSetting(uid)
-    } ?: throw CommonException(ErrorType.E202)
+    } ?: run {
+        this.loginOut()
+        throw CommonException(ErrorType.E202)
+    }
 
     /**
      * 注册用户信息
@@ -61,6 +64,11 @@ class UserServiceImpl(
                 .authVO(StpUtil.getTokenValue())
                 .writeToSession()
         }
+
+    override fun loginOut() {
+        StpUtil.getSession().clear()
+        StpUtil.logout()
+    }
 
     /**
      * 查询或者注册拿到用户信息

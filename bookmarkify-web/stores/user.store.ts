@@ -9,8 +9,6 @@ export const useUserStore = defineStore(
     const account = ref<UserInfo>()
     /* 加载状态 */
     const loading = ref<Boolean>(false)
-    /* 设备 ID 存储（cookie 可在 SSR/CSR 共用） */
-    const deviceIdCookie = useCookie<string | null>('deviceUid', { sameSite: 'lax' })
 
     /**
      * 获取用户信息（包含头像和设置信息）
@@ -51,7 +49,6 @@ export const useUserStore = defineStore(
     async function logout() {
       console.log('DEBUG: 退出登陆')
       account.value = undefined
-      deviceIdCookie.value = null
     }
     return { login: loginOrRegister, logout, account, refreshUserInfo }
   },
