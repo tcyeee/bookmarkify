@@ -4,6 +4,13 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'bookmarkify', // 默认标题
+      script: [
+        {
+          src: 'https://cloud.umami.is/script.js',
+          defer: true,
+          'data-website-id': '53ab5e59-d09c-4ce0-9265-6722eea41842',
+        },
+      ],
     },
   },
   alias: {
