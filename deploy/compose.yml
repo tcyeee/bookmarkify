@@ -1,7 +1,7 @@
-# 手动替换所有REPLACE_FLAG为实际值
-# 手动替换所有REPLACE_FLAG为实际值
-# 手动替换所有REPLACE_FLAG为实际值
-# 手动替换所有REPLACE_FLAG为实际值
+# Manually replace every REPLACE_FLAG with the actual value
+# Manually replace every REPLACE_FLAG with the actual value
+# Manually replace every REPLACE_FLAG with the actual value
+# Manually replace every REPLACE_FLAG with the actual value
 
 services:
   nginx:

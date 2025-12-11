@@ -1,0 +1,16 @@
+# Manually replace every REPLACE_FLAG with the actual value
+# Manually replace every REPLACE_FLAG with the actual value
+# Manually replace every REPLACE_FLAG with the actual value
+# Manually replace every REPLACE_FLAG with the actual value
+
+# If you're developing locally, you'll need to replicate and use these environments
+export BOOKMARKIFY_GOOGLE_LOGIN_ID='REPLACE_FLAG'
+export BOOKMARKIFY_POSTGRES_HOST='REPLACE_FLAG'
+export BOOKMARKIFY_POSTGRES_USERNAME='REPLACE_FLAG'
+export BOOKMARKIFY_POSTGRES_PASSWORD='REPLACE_FLAG'
+export BOOKMARKIFY_REDIS_HOST='REPLACE_FLAG'
+export BOOKMARKIFY_REDIS_PORT='REPLACE_FLAG'
+export BOOKMARKIFY_REDIS_PASSWORD='REPLACE_FLAG'
+export BOOKMARKIFY_LOG_DIR='REPLACE_FLAG'
+export BOOKMARKIFY_FILE_UPLOAD_DIR='REPLACE_FLAG'
+export BOOKMARKIFY_FILE_UPLOAD_PREFIX='REPLACE_FLAG'
