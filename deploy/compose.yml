@@ -1,0 +1,67 @@
+# 手动替换所有REPLACE_FLAG为实际值
+# 手动替换所有REPLACE_FLAG为实际值
+# 手动替换所有REPLACE_FLAG为实际值
+# 手动替换所有REPLACE_FLAG为实际值
+
+services:
+  nginx:
+    image: "nginx:latest"
+    container_name: "nginx"
+    restart: "always"
+    ports:
+      - "443:443"
+      - "80:80"
+      - "6003:6003"
+    volumes:
+      - "/root/docker/nginx/conf.d:/etc/nginx/conf.d"
+      - "/root/docker/nginx/program:/var/www"
+      - "/root/bookmarkify/file:/var/file"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+    environment:
+      - "TZ=Asia/Shanghai"
+    networks:
+      - "app_network"
+
+  bookmarkify-web:
+    image: "bookmarkify-web:latest"
+    container_name: "bookmarkify-web"
+    restart: "always"
+    ports:
+      - "3000:3000"
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+    networks:
+      - "app_network"
+    environment:
+      - "TZ=Asia/Shanghai"
+      - "BOOKMARKIFY_GOOGLE_LOGIN_ID=REPLACE_FLAG"
+
+  bookmarkify-api:
+    image: "bookmarkify-api:latest"
+    container_name: "bookmarkify-api"
+    ports:
+      - "7001:7001"
+    volumes:
+      - "/root/bookmarkify/file:/opt/bookmarkify/file"
+      - "/root/bookmarkify/logs:/opt/bookmarkify/logs"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+    networks:
+      - "app_network"
+    environment:
+      - "TZ=Asia/Shanghai"
+      - "SPRING_DATASOURCE_URL=REPLACE_FLAG"
+      - "SPRING_DATASOURCE_USERNAME=REPLACE_FLAG"
+      - "SPRING_DATASOURCE_PASSWORD=REPLACE_FLAG"
+      - "SPRING_DATA_REDIS_HOST=REPLACE_FLAG"
+      - "SPRING_DATA_REDIS_PORT=REPLACE_FLAG"
+      - "SPRING_DATA_REDIS_PASSWORD=REPLACE_FLAG"
+      - "LOG_DIR=/opt/bookmarkify/logs"
+      - "FILE_UPLOAD_DIR=REPLACE_FLAG"
+      - "FILE_UPLOAD_PREFIX=REPLACE_FLAG"
+
+networks:
+  app_network:
+    name: "app_network"
