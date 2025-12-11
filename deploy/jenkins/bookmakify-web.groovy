@@ -1,7 +1,7 @@
-// 手动替换所有REPLACE_FLAG为实际值
-// 手动替换所有REPLACE_FLAG为实际值
-// 手动替换所有REPLACE_FLAG为实际值
-// 手动替换所有REPLACE_FLAG为实际值
+// Manually replace every REPLACE_FLAG with the actual value
+// Manually replace every REPLACE_FLAG with the actual value
+// Manually replace every REPLACE_FLAG with the actual value
+// Manually replace every REPLACE_FLAG with the actual value
 pipeline {
     agent {
         label 'REPLACE_FLAG'
@@ -9,14 +9,14 @@ pipeline {
 
     stages {
 
-        // 更新代码
+        // Update code
         stage('Checkout') {
             steps {
                 git branch: "master", url: "git@gitee.com:tcyeee/bookmarkify.git"
             }
         }
 
-        // Node打包部署
+        // Build and deploy with Node
         stage('Build by Node') {
             steps {
                 dir('bookmarkify-web') {
@@ -26,7 +26,7 @@ pipeline {
             }
         }
 
-        // 重新部署
+        // Redeploy
         stage('Build by Docker') {
             steps {
                 dir ('bookmarkify-web') {
