@@ -4,12 +4,15 @@
     "baseUrl": ".",
     "paths": {
       "@api": ["server/apis"],
-      "@stores/*": ["stores"],
+      "@stores/*": ["stores/*"],
       "@config": ["server/config"],
       "@config/*": ["server/config/*"],
       "@typing": ["typing"],
       "@utils": ["server/utils"]
     }
+  },
+  "vueCompilerOptions": {
+    "globalTypesPath": "./node_modules/.vue-global-types.d.ts"
   },
   "extends": "./.nuxt/tsconfig.json"
 }

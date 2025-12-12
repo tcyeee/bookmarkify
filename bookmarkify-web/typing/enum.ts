@@ -32,3 +32,12 @@ export enum HomeItemType {
 export enum SocketTypes {
   BOOKMARK_UPDATE_ONE = 'BOOKMARK_UPDATE_ONE',
 }
+
+export enum AuthStatusEnum {
+  /* 未登录 */
+  NONE = 'NONE',
+  /* 已登录 */
+  LOGGED = 'LOGGED',
+  /* 已认证 */
+  AUTHED = 'AUTHED',
+}

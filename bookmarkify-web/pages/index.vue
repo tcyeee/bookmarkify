@@ -30,6 +30,11 @@
 import { getImageUrlByUserFile } from '@config'
 import { BackgroundType, type BacSettingVO } from '@typing'
 
+definePageMeta({
+  middleware: 'auth',
+  layout: 'default',
+})
+
 const sysStore = useSysStore()
 const userStore = useUserStore()
 
