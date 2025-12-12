@@ -18,6 +18,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "got": "11.8.2",
     "metascraper": "^5.49.7",
     "metascraper-amazon": "^5.49.7",
     "metascraper-audio": "^5.49.7",

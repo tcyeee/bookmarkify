@@ -1,7 +1,7 @@
 import express from "express";
+import got from "got";
 
 const app = express();
-
 const metascraper = require("metascraper")([
   require("metascraper-amazon")(),
   require("metascraper-audio")(),
@@ -30,9 +30,20 @@ const metascraper = require("metascraper")([
   require("metascraper-youtube")(),
 ]);
 
-app.get("/", (req, res) => {
-  const url = req.query.url as string;
+const scrapeMetaData = async (targetUrl: string) => {
+  const { body: html, url } = await got(targetUrl);
+  const metadata = await metascraper({ html, url });
+  console.log(metadata);
+  return metadata;
+};
 
+app.get("/", (req, res) => {
+  const targetUrl = req.query.url as string;
+
+  scrapeMetaData(targetUrl).then((metadata) => {
+    console.log(metadata);
+    res.send(metadata);
+  });
   res.send("Hello Express + TypeScript");
 });
 
