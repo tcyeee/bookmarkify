@@ -3,7 +3,15 @@ import { resolve } from 'path'
 export default defineNuxtConfig({
   app: {
     head: {
-      title: 'bookmarkify', // 默认标题
+      title: 'bookmarkify 书签鸭',
+      meta: [
+        { name: 'description', content: 'bookmarkify 书签鸭，一个现代化的书签管理平台' },
+        { name: 'keywords', content: 'bookmarkify,书签鸭,书签管理,书签分享,书签发现,书签社区' },
+        { name: 'author', content: 'tcyeee' },
+        { name: 'robots', content: 'index, follow' },
+        { name: 'google', content: 'notranslate' },
+      ],
+      link: [{ rel: 'icon', type: 'image/x-icon', href: '/assets/logo/logo-lg.png' }],
       script: [
         {
           src: 'https://cloud.umami.is/script.js',
@@ -20,12 +28,7 @@ export default defineNuxtConfig({
     '@typing': resolve(__dirname, 'typing'),
     '@utils': resolve(__dirname, 'server/utils'),
   },
-  modules: [
-    '@pinia/nuxt',
-    '@element-plus/nuxt',
-    'pinia-plugin-persistedstate/nuxt',
-    // 'nuxt-vue3-google-signin'
-  ],
+  modules: ['@pinia/nuxt', '@element-plus/nuxt', 'pinia-plugin-persistedstate/nuxt'],
   plugins: ['~/plugins/keyListener.ts', '~/plugins/contextMenu.ts', '~/plugins/auth.ts', '~/plugins/systemInit.ts'],
   vite: {
     plugins: [tailwindcss()],
