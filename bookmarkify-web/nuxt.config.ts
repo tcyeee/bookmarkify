@@ -11,7 +11,6 @@ export default defineNuxtConfig({
         { name: 'robots', content: 'index, follow' },
         { name: 'google', content: 'notranslate' },
       ],
-      link: [{ rel: 'icon', type: 'image/x-icon', href: '/assets/logo/logo-lg.png' }],
       script: [
         {
           src: 'https://cloud.umami.is/script.js',
