@@ -17,8 +17,7 @@ export default class http {
   static async uploadFile(path: string, file: File): Promise<any> {
     const userStore = useUserStore()
 
-    // 除了Login，其他都需要token
-    if (!path.startsWith('/auth/') && !userStore.account?.token) await userStore.login()
+    if (!userStore.account?.token) await userStore.loginOrRegister()
 
     // 创建 FormData
     const formData = new FormData()
@@ -48,7 +47,7 @@ export default class http {
     const userStore = useUserStore()
 
     // 除了Login，其他都需要token
-    if (method != 'GET' && !path.startsWith('/auth/') && !userStore.account?.token) userStore.login()
+    if (method != 'GET' && !path.startsWith('/auth/') && !userStore.account?.token) userStore.loginOrRegister()
 
     // 创建请求
     console.log(`[API] ${method}::${path}`)
@@ -79,7 +78,7 @@ async function resultCheck(result: Result<object>, request: Request): Promise<an
   // 如果遇到token失效,则重新登录
   if ([101].includes(result.code)) {
     const userStore = useUserStore()
-    const account: UserInfo = await userStore.login()
+    const account: UserInfo = await userStore.loginOrRegister()
     if (account.token) {
       request.headers.set('satoken', account.token)
       return await fetch(request)

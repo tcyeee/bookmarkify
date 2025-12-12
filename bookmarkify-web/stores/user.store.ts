@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { type UserInfo } from '@typing'
+import { AuthStatusEnum, type UserInfo } from '@typing'
 import { track, queryUserInfo } from '@api'
 
 export const useUserStore = defineStore(
@@ -9,6 +9,12 @@ export const useUserStore = defineStore(
     const account = ref<UserInfo>()
     /* 加载状态 */
     const loading = ref<Boolean>(false)
+    /* 帐户状态：NONE、LOGGED、AUTHED */
+    const authStatus: Ref<AuthStatusEnum> = computed(() => {
+      if (account.value == undefined) return AuthStatusEnum.NONE
+      const hasAuth = account.value.verified != undefined && account.value.verified == true
+      return hasAuth ? AuthStatusEnum.AUTHED : AuthStatusEnum.LOGGED
+    })
 
     /**
      * 获取用户信息（包含头像和设置信息）
@@ -33,7 +39,7 @@ export const useUserStore = defineStore(
     }
 
     /**
-     * 登录或注册,每次请求均会刷新用户信息
+     * 登录或注册,每次请求均会刷新用户信息,仅在引导页允许注册
      *
      * @returns 用户信息+TOKEN（不含头像和设置信息）
      */
@@ -50,7 +56,7 @@ export const useUserStore = defineStore(
       console.log('DEBUG: 退出登陆')
       account.value = undefined
     }
-    return { login: loginOrRegister, logout, account, refreshUserInfo }
+    return { loginOrRegister, logout, account, refreshUserInfo, authStatus }
   },
   { persist: true }
 )
