@@ -1,29 +1,36 @@
 <template>
-  <CommonHeader :class="['fixed top-0 z-10 w-full transition-transform duration-300', { '-translate-y-full': isHeaderHidden }]" />
-  <div class="bg-gray-100 min-h-screen pt-28 flex flex-col">
+  <CommonHeader
+    :class="[
+      'fixed top-0 z-10 w-full transition-transform duration-300 backdrop-blur bg-white/80 dark:bg-slate-950/80 border-b border-white/20 dark:border-slate-800 text-gray-900 dark:text-slate-100',
+      { '-translate-y-full': isHeaderHidden },
+    ]" />
+  <div class="bg-gray-100 text-gray-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen pt-28 flex flex-col transition-colors">
     <div class="flex-1">
       <div class="mx-auto w-full px-4 sm:px-6 lg:px-8" :style="containerStyle">
         <div class="flex items-start gap-6 lg:gap-8 pb-[10vh]">
-          <aside class="w-60 sm:w-64 lg:w-72 shrink-0">
+          <aside class="w-60 sm:w-64 lg:w-72 shrink-0 space-y-6">
             <NuxtLink to="/" class="block w-full">
-              <div class="cy-btn w-full cy-btn-xl cy-btn-ghost bg-white rounded-xl mb-6 text-lg">返回</div>
+              <div
+                class="cy-btn w-full cy-btn-xl cy-btn-ghost bg-white dark:bg-slate-900 dark:border-slate-700 rounded-xl text-lg transition-colors">
+                返回
+              </div>
             </NuxtLink>
 
             <!-- 侧边栏 -->
-            <div class="p-6 bg-white rounded-2xl">
+            <div class="p-6 bg-white dark:bg-slate-900 dark:border dark:border-slate-800 rounded-2xl shadow-sm transition-colors">
               <ul
                 ref="tabListRef"
-                class="relative flex flex-col gap-3 bg-white w-full text-gray-500 text-lg font-medium select-none overflow-hidden">
+                class="relative flex flex-col gap-3 bg-white dark:bg-slate-900 w-full text-gray-500 dark:text-slate-400 text-lg font-medium select-none overflow-hidden transition-colors">
                 <span
-                  class="absolute left-0 right-0 rounded-lg bg-gray-100 transition-[transform,height] duration-250 ease-out will-change-transform pointer-events-none"
+                  class="absolute left-0 right-0 rounded-lg bg-gray-100 dark:bg-slate-800 transition-[transform,height] duration-250 ease-out will-change-transform pointer-events-none"
                   :style="indicatorStyle"
                   aria-hidden="true" />
                 <li v-for="tab in tabs" :key="tab.value" class="relative">
                   <a
                     :ref="setTabRef(tab.value)"
                     @click="selectOne(tab.value)"
-                    class="relative z-10 flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-200 ease-out hover:text-gray-800"
-                    :class="sysStore.settingTabIndex === tab.value ? 'cy-menu-active text-gray-900' : ''"
+                    class="relative z-10 flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-200 ease-out hover:text-gray-800 hover:dark:text-slate-100"
+                    :class="sysStore.settingTabIndex === tab.value ? 'cy-menu-active text-gray-900 dark:text-slate-100' : ''"
                     :aria-current="sysStore.settingTabIndex === tab.value ? 'page' : undefined">
                     <span :class="['shrink-0', tab.icon]"></span>
                     <span class="leading-6">{{ tab.label }}</span>
@@ -34,7 +41,8 @@
           </aside>
 
           <main class="flex-1 min-w-0">
-            <NuxtPage class="rounded-xl min-h-[70vh]" />
+            <NuxtPage
+              class="rounded-xl min-h-[70vh] bg-white dark:bg-slate-900 dark:border dark:border-slate-800 transition-colors" />
           </main>
         </div>
       </div>

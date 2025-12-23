@@ -1,9 +1,9 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
     <!-- 已验证账号 -->
     <div v-if="!isAuthed" class="space-y-6">
       <div
-        class="rounded-2xl bg-linear-to-br from-slate-200 via-slate-300 to-gray-200 text-slate-800 p-6 sm:p-8 flex flex-col gap-6 sm:flex-row sm:items-center">
+        class="rounded-2xl bg-linear-to-br from-slate-200 via-slate-300 to-gray-200 text-slate-800 p-6 sm:p-8 flex flex-col gap-6 sm:flex-row sm:items-center dark:from-slate-800 dark:via-slate-900 dark:to-slate-900 dark:text-slate-100">
         <div class="shrink-0">
           <AvatarUpload :avatar-path="avatarUrl" @update="handleAvatarUpdate" />
         </div>
@@ -21,16 +21,16 @@
       </div>
 
       <div class="space-y-3 mt-20">
-        <div class="text-lg font-semibold text-slate-800 py-3">基本信息</div>
+        <div class="text-lg font-semibold text-slate-800 dark:text-slate-100 py-3">基本信息</div>
         <div class="flex items-end gap-3">
           <label class="block flex-1 min-w-0">
-            <span class="text-sm text-slate-600">昵称</span>
+            <span class="text-sm text-slate-600 dark:text-slate-300">昵称</span>
             <input
               v-model="form.nickName"
               type="text"
               maxlength="20"
               placeholder="请输入昵称"
-              class="mt-1 h-12 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
+              class="mt-1 h-12 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-slate-500 dark:focus:ring-slate-600" />
           </label>
           <div
             class="overflow-hidden transition-[width] duration-200 ease-out flex justify-end gap-2"
@@ -55,15 +55,15 @@
       </div>
 
       <div class="space-y-3 mt-20">
-        <div class="text-lg font-semibold text-slate-800">账号安全</div>
+        <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">账号安全</div>
 
         <div
-          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-          <div class="flex items-center gap-3 text-slate-700">
-            <span class="icon--memory-email icon-size-20 text-slate-500"></span>
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
+          <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+            <span class="icon--memory-email icon-size-20 text-slate-500 dark:text-slate-400"></span>
             <div>
               <div class="font-medium">邮箱</div>
-              <div class="text-sm text-slate-500">{{ account?.email || '未绑定邮箱' }}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ account?.email || '未绑定邮箱' }}</div>
             </div>
           </div>
           <span class="cy-badge" :class="account?.email ? 'cy-badge-accent' : 'cy-badge-ghost'">
@@ -72,12 +72,12 @@
         </div>
 
         <div
-          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-          <div class="flex items-center gap-3 text-slate-700">
-            <span class="icon--memory-speaker icon-size-20 text-slate-500"></span>
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
+          <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+            <span class="icon--memory-speaker icon-size-20 text-slate-500 dark:text-slate-400"></span>
             <div>
               <div class="font-medium">手机号</div>
-              <div class="text-sm text-slate-500">{{ account?.phone || '未绑定手机号' }}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ account?.phone || '未绑定手机号' }}</div>
             </div>
           </div>
           <span class="cy-badge" :class="account?.phone ? 'cy-badge-accent' : 'cy-badge-ghost'">
@@ -87,15 +87,15 @@
       </div>
 
       <div class="space-y-3 mt-20">
-        <div class="text-lg font-semibold text-slate-800">账号操作</div>
+        <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">账号操作</div>
         <!-- 退出账号 -->
         <div
-          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-          <div class="flex items-center gap-3 text-slate-800">
-            <span class="icon--memory-arrow-down-right-box icon-size-22 text-slate-500"></span>
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
+          <div class="flex items-center gap-3 text-slate-800 dark:text-slate-200">
+            <span class="icon--memory-arrow-down-right-box icon-size-22 text-slate-500 dark:text-slate-400"></span>
             <div>
               <div class="font-semibold">退出登录</div>
-              <div class="text-sm text-slate-500">仅退出当前设备登录，不影响账号数据。</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">仅退出当前设备登录，不影响账号数据。</div>
             </div>
           </div>
           <button class="cy-btn cy-btn-ghost rounded-2xl" @click="userStore.logout()">退出账号</button>
@@ -103,12 +103,12 @@
 
         <!-- 注销账户 -->
         <div
-          class="rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-          <div class="flex items-center gap-3 text-rose-800">
-            <span class="icon--memory-arrow-down-right-box icon-size-22 text-rose-500"></span>
+          class="rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-rose-500/60 dark:bg-rose-500/10">
+          <div class="flex items-center gap-3 text-rose-800 dark:text-rose-100">
+            <span class="icon--memory-arrow-down-right-box icon-size-22 text-rose-500 dark:text-rose-300"></span>
             <div>
               <div class="font-semibold">注销账户</div>
-              <div class="text-sm text-rose-600">注销后账号及数据将被销毁且不可恢复，请谨慎操作。</div>
+              <div class="text-sm text-rose-600 dark:text-rose-200">注销后账号及数据将被销毁且不可恢复，请谨慎操作。</div>
             </div>
           </div>
           <CancelAccount />
@@ -117,12 +117,15 @@
     </div>
 
     <!-- 临时/未验证账号 -->
-    <div v-else class="rounded-2xl border border-dashed border-slate-300 bg-white/70 p-8 text-center shadow-sm">
-      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+    <div
+      v-else
+      class="rounded-2xl border border-dashed border-slate-300 bg-white/70 p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+      <div
+        class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
         <span class="icon--memory-account-alert icon-size-26"></span>
       </div>
-      <div class="text-xl font-semibold text-slate-800 mb-2">未完成验证</div>
-      <div class="text-slate-600 mb-4">请绑定手机号或邮箱完成验证，以便保障账号安全并支持跨设备同步。</div>
+      <div class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2">未完成验证</div>
+      <div class="text-slate-600 dark:text-slate-300 mb-4">请绑定手机号或邮箱完成验证，以便保障账号安全并支持跨设备同步。</div>
       <div class="flex justify-center gap-3">
         <button class="cy-btn cy-btn-accent" @click="triggerLogin" :disabled="saving">立即登录/注册</button>
         <button class="cy-btn cy-btn-ghost" @click="userStore.refreshUserInfo()" :disabled="saving">刷新状态</button>
@@ -138,7 +141,7 @@ import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useUserStore } from '@stores/user.store'
 import { AuthStatusEnum } from '@typing'
-import CancelAccount from './cancel.vue'
+import CancelAccount from './Cancel.vue'
 
 const userStore = useUserStore()
 
