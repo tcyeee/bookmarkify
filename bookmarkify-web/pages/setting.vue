@@ -1,22 +1,40 @@
 <template>
   <div class="bg-white p-8 w-full">
-    <SettingAccount v-show="sysStore.settingTabIndex === 0" />
-    <SettingBookmarkManage v-show="sysStore.settingTabIndex === 1" />
-    <SettingSettings v-show="sysStore.settingTabIndex === 2" />
+    <Transition name="fade-fast" mode="out-in">
+      <component :is="currentComponent" :key="sysStore.settingTabIndex" />
+    </Transition>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { computed } from 'vue'
+import SettingAccount from '~/components/setting/account/index.vue'
+import SettingBookmarkManage from '~/components/setting/BookmarkManage.vue'
+import SettingSettings from '~/components/setting/Settings.vue'
+
 definePageMeta({
   middleware: 'auth',
   layout: 'setting',
 })
 
 const sysStore = useSysStore()
+const components = [SettingAccount, SettingBookmarkManage, SettingSettings] as const
+const currentComponent = computed(() => components[sysStore.settingTabIndex] ?? components[0])
 </script>
 
 <style scoped land="scss">
 .min-h-screen {
   min-height: calc(100vh - 13rem);
+}
+
+:global(.fade-fast-enter-active),
+:global(.fade-fast-leave-active) {
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+:global(.fade-fast-enter-from),
+:global(.fade-fast-leave-to) {
+  opacity: 0;
+  transform: translateY(4px);
 }
 </style>

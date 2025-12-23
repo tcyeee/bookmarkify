@@ -10,35 +10,28 @@
             </NuxtLink>
 
             <!-- 侧边栏 -->
-            <ul class="flex flex-col gap-3 bg-white rounded-xl w-full p-6 text-gray-500 text-lg font-medium select-none">
-              <li>
-                <a
-                  @click="selectOne(0)"
-                  class="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-150 hover:bg-gray-100/80 hover:text-gray-800"
-                  :class="sysStore.settingTabIndex == 0 ? 'cy-menu-active bg-gray-100 text-gray-900' : ''">
-                  <span class="icon--memory-account-box icon-size-22 shrink-0"></span>
-                  <span class="leading-6">个人资料</span>
-                </a>
-              </li>
-              <li>
-                <a
-                  @click="selectOne(1)"
-                  class="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-150 hover:bg-gray-100/80 hover:text-gray-800"
-                  :class="sysStore.settingTabIndex == 1 ? 'cy-menu-active bg-gray-100 text-gray-900' : ''">
-                  <span class="icon--memory-application-code icon-size-22 shrink-0"></span>
-                  <span class="leading-6">书签管理</span>
-                </a>
-              </li>
-              <li>
-                <a
-                  @click="selectOne(2)"
-                  class="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-150 hover:bg-gray-100/80 hover:text-gray-800"
-                  :class="sysStore.settingTabIndex == 2 ? 'cy-menu-active bg-gray-100 text-gray-900' : ''">
-                  <span class="icon--memory-dot-hexagon icon-size-22 shrink-0"></span>
-                  <span class="leading-6">偏好设置</span>
-                </a>
-              </li>
-            </ul>
+
+            <div class="p-6 bg-white rounded-xl">
+              <ul
+                ref="tabListRef"
+                class="relative flex flex-col gap-3 bg-white rounded-xl w-full text-gray-500 text-lg font-medium select-none overflow-hidden">
+                <span
+                  class="absolute left-0 right-0 rounded-lg bg-gray-100 transition-[transform,height] duration-250 ease-out will-change-transform pointer-events-none"
+                  :style="indicatorStyle"
+                  aria-hidden="true" />
+                <li v-for="tab in tabs" :key="tab.value" class="relative">
+                  <a
+                    :ref="setTabRef(tab.value)"
+                    @click="selectOne(tab.value)"
+                    class="relative z-10 flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-200 ease-out hover:text-gray-800"
+                    :class="sysStore.settingTabIndex === tab.value ? 'cy-menu-active text-gray-900' : ''"
+                    :aria-current="sysStore.settingTabIndex === tab.value ? 'page' : undefined">
+                    <span :class="['shrink-0', tab.icon]"></span>
+                    <span class="leading-6">{{ tab.label }}</span>
+                  </a>
+                </li>
+              </ul>
+            </div>
           </aside>
 
           <main class="flex-1 min-w-0">
@@ -52,7 +45,7 @@
 </template>
 
 <script lang="ts" setup>
-import { onBeforeUnmount, onMounted, ref, type CSSProperties } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue'
 
 const sysStore = useSysStore()
 
@@ -62,6 +55,17 @@ const SCROLL_THRESHOLD = 12
 const containerStyle: CSSProperties = {
   maxWidth: 'clamp(960px, 80vw, 1280px)',
 }
+const tabs = [
+  { value: 0, label: '个人资料', icon: 'icon--memory-account-box icon-size-22' },
+  { value: 1, label: '书签管理', icon: 'icon--memory-application-code icon-size-22' },
+  { value: 2, label: '偏好设置', icon: 'icon--memory-dot-hexagon icon-size-22' },
+]
+const indicatorStyle = ref<CSSProperties>({
+  transform: 'translate3d(0, 0, 0)',
+  height: '0px',
+})
+const tabRefs = new Map<number, HTMLElement>()
+const tabListRef = ref<HTMLElement | null>(null)
 
 const handleScroll = () => {
   if (import.meta.server) return
@@ -77,14 +81,51 @@ onMounted(() => {
   if (import.meta.server) return
   lastScrollY.value = window.scrollY
   window.addEventListener('scroll', handleScroll, { passive: true })
+  window.addEventListener('resize', handleResize, { passive: true })
+  nextTick(updateIndicator)
 })
 
 onBeforeUnmount(() => {
   if (import.meta.server) return
   window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('resize', handleResize)
 })
 
 function selectOne(index: number) {
   sysStore.settingTabIndex = index
 }
+
+const setTabRef = (key: number) => (el: Element | null) => {
+  const htmlEl = el as HTMLElement | null
+  if (!htmlEl) {
+    tabRefs.delete(key)
+    return
+  }
+  tabRefs.set(key, htmlEl)
+}
+
+const updateIndicator = () => {
+  const el = tabRefs.get(sysStore.settingTabIndex)
+  const listEl = tabListRef.value
+  if (!el || !listEl) return
+  const listRect = listEl.getBoundingClientRect()
+  const elRect = el.getBoundingClientRect()
+  const top = elRect.top - listRect.top + listEl.scrollTop
+  indicatorStyle.value = {
+    transform: `translate3d(0, ${top}px, 0)`,
+    height: `${elRect.height}px`,
+  }
+}
+
+const handleResize = () => {
+  nextTick(updateIndicator)
+}
+
+watch(
+  () => sysStore.settingTabIndex,
+  async () => {
+    await nextTick()
+    updateIndicator()
+  }
+)
 </script>
