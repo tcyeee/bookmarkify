@@ -1,55 +1,65 @@
 <template>
   <CommonHeader :class="['fixed top-0 z-10 w-full transition-transform duration-300', { '-translate-y-full': isHeaderHidden }]" />
-  <div class="bg-gray-200 h-screen pt-28">
-    <div class="flex gap-10 sm:px-[1vw] md:px-[2vw] lg:px-[4vw] xl:px-[6vw] pb-[10vh] bg-gray-200">
-      <div>
-        <NuxtLink to="/">
-          <div class="cy-btn cy-btn-wide cy-btn-lg rounded-xl mb-8">返回</div>
-        </NuxtLink>
+  <div class="bg-gray-100 min-h-screen pt-28">
+    <div class="mx-auto w-full px-4 sm:px-6 lg:px-8" :style="containerStyle">
+      <div class="flex items-start gap-6 lg:gap-8 pb-[10vh]">
+        <aside class="w-60 sm:w-64 lg:w-72 shrink-0">
+          <NuxtLink to="/" class="block w-full">
+            <div class="cy-btn w-full cy-btn-xl cy-btn-ghost bg-white rounded-xl mb-6">返回</div>
+          </NuxtLink>
 
-        <!-- 侧边栏 -->
-        <ul class="cy-menu bg-white rounded-xl w-40">
-          <li>
-            <a
-              class="text-gray-400 text-lg font-medium"
-              @click="selectOne(0)"
-              :class="sysStore.settingTabIndex == 0 ? 'cy-menu-active' : ''">
-              <span class="icon--memory-account-box icon-size-22"></span>
-              <span>个人资料</span>
-            </a>
+          <!-- 侧边栏 -->
+          <ul class="flex flex-col gap-3 bg-white rounded-xl w-full p-6 text-gray-500 text-lg font-medium select-none">
+            <li>
+              <a
+                @click="selectOne(0)"
+                class="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-150 hover:bg-gray-100/80 hover:text-gray-800"
+                :class="sysStore.settingTabIndex == 0 ? 'cy-menu-active bg-gray-100 text-gray-900' : ''">
+                <span class="icon--memory-account-box icon-size-22 shrink-0"></span>
+                <span class="leading-6">个人资料</span>
+              </a>
+            </li>
+            <li>
+              <a
+                @click="selectOne(1)"
+                class="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-150 hover:bg-gray-100/80 hover:text-gray-800"
+                :class="sysStore.settingTabIndex == 1 ? 'cy-menu-active bg-gray-100 text-gray-900' : ''">
+                <span class="icon--memory-application-code icon-size-22 shrink-0"></span>
+                <span class="leading-6">书签管理</span>
+              </a>
+            </li>
+            <li>
+              <a
+                @click="selectOne(2)"
+                class="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-150 hover:bg-gray-100/80 hover:text-gray-800"
+                :class="sysStore.settingTabIndex == 2 ? 'cy-menu-active bg-gray-100 text-gray-900' : ''">
+                <span class="icon--memory-dot-hexagon icon-size-22 shrink-0"></span>
+                <span class="leading-6">偏好设置</span>
+              </a>
+            </li>
+          </ul>
+        </aside>
 
-            <a
-              class="text-gray-400 text-lg font-medium"
-              @click="selectOne(1)"
-              :class="sysStore.settingTabIndex == 1 ? 'cy-menu-active' : ''">
-              <span class="icon--memory-application-code icon-size-22"></span>
-              <span>书签管理</span>
-            </a>
-
-            <a
-              class="text-gray-400 text-lg font-medium"
-              @click="selectOne(2)"
-              :class="sysStore.settingTabIndex == 2 ? 'cy-menu-active' : ''">
-              <span class="icon--memory-dot-hexagon icon-size-22"></span>
-              <span>偏好设置</span>
-            </a>
-          </li>
-        </ul>
+        <main class="flex-1 min-w-0">
+          <NuxtPage class="rounded-xl min-h-[70vh]" />
+        </main>
       </div>
-      <NuxtPage class="flex-1 rounded-xl min-h-screen" />
     </div>
     <CommonFooter />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, type CSSProperties } from 'vue'
 
 const sysStore = useSysStore()
 
 const isHeaderHidden = ref(false)
 const lastScrollY = ref(0)
 const SCROLL_THRESHOLD = 12
+const containerStyle: CSSProperties = {
+  maxWidth: 'clamp(960px, 80vw, 1280px)',
+}
 
 const handleScroll = () => {
   if (import.meta.server) return
