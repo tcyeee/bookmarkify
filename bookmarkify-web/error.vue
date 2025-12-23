@@ -3,7 +3,7 @@
     <CommonHeader class="shadow-[0_2px_20px_rgba(0,0,0,0.35)]" />
 
     <main class="flex-1 px-6 py-16 flex flex-col items-center justify-center text-center gap-6">
-      <img src="/images/404.png" alt="404" class="w-1/2" />
+      <img src="/images/404.png" alt="404" class="w-40" />
       <h1 class="text-4xl md:text-5xl font-semibold text-white drop-shadow">
         <span class="text-gray-500 text-xl md:text-2xl ml-3">{{ statusCode === 404 ? '页面未找到' : '发生错误' }}</span>
       </h1>
