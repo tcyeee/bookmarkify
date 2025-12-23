@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-3">
+  <div class="space-y-3 text-slate-900 dark:text-slate-100 transition-colors">
     <div class="flex flex-wrap items-center gap-3">
       <label class="cy-btn cy-btn-soft flex items-center gap-2 cursor-pointer">
         <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="$emit('file-change', $event)" />
@@ -31,7 +31,7 @@
         恢复默认
       </button>
     </div>
-    <p class="text-xs text-slate-500">仅支持图片文件，大小限制见上传配置</p>
+    <p class="text-xs text-slate-500 dark:text-slate-400">仅支持图片文件，大小限制见上传配置</p>
   </div>
 </template>
 
