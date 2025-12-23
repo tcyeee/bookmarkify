@@ -1,11 +1,14 @@
 <template>
-  <div>
-    <h3 class="setting-section-title">导入 Chrome 书签</h3>
-    <p class="setting-section-desc">支持从 Chrome 导出的 HTML 书签文件，一次性导入你的所有书签。</p>
+  <div class="space-y-2 text-slate-900 dark:text-slate-100 transition-colors">
+    <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 transition-colors">导入 Chrome 书签</h3>
+    <p class="text-sm text-slate-600 dark:text-slate-400 mb-6 transition-colors">
+      支持从 Chrome 导出的 HTML 书签文件，一次性导入你的所有书签。
+    </p>
 
-    <div class="import-card">
-      <div class="import-actions">
-        <label class="cy-btn cy-btn-soft cursor-pointer">
+    <div
+      class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/80 p-6 shadow-sm transition-colors">
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="cy-btn cy-btn-soft cursor-pointer flex items-center gap-2">
           <input ref="fileInputRef" type="file" accept=".html,.htm" class="hidden" @change="handleFileChange" />
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
@@ -25,18 +28,19 @@
         <button v-if="selectedFile" class="cy-btn cy-btn-ghost" :disabled="importing" @click="handleReset">清除选择</button>
       </div>
 
-      <div class="import-file-info">
+      <div class="mt-3 text-sm text-slate-600 dark:text-slate-300 transition-colors">
         <span v-if="selectedFile">已选择：{{ selectedFile.name }}</span>
         <span v-else>尚未选择文件</span>
       </div>
 
-      <ul class="import-hints">
+      <ul
+        class="mt-4 pl-5 list-disc space-y-1 text-sm text-slate-600 dark:text-slate-300 transition-colors marker:text-slate-500 dark:marker:text-slate-400">
         <li>打开 Chrome 设置 &gt; 书签管理器 &gt; 右上角「⋮」&gt; 导出书签。</li>
         <li>将导出的 `.html` 文件在此处选择并导入。</li>
         <li>导入过程中不会覆盖你已有的书签，仅做合并。</li>
       </ul>
 
-      <div v-if="statusMessage" class="import-status" :class="statusClass">
+      <div v-if="statusMessage" class="mt-4 rounded-md px-4 py-3 text-sm transition-colors" :class="statusClass">
         {{ statusMessage }}
       </div>
     </div>
@@ -84,12 +88,13 @@ function handleReset() {
   }
 }
 
-const statusClass = computed(() => {
-  return {
-    'import-status-success': statusType.value === 'success',
-    'import-status-error': statusType.value === 'error',
-  }
-})
+const statusClass = computed(() =>
+  statusType.value === 'success'
+    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+    : statusType.value === 'error'
+    ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200'
+    : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'
+)
 
 async function handleImport() {
   if (!selectedFile.value) {
@@ -121,68 +126,3 @@ async function handleImport() {
   }
 }
 </script>
-
-<style scoped>
-.setting-section-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: #1f2937;
-}
-
-.setting-section-desc {
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin-bottom: 1.5rem;
-}
-
-.import-card {
-  background-color: #ffffff;
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-}
-
-.import-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.import-file-info {
-  margin-top: 0.75rem;
-  font-size: 0.875rem;
-  color: #4b5563;
-}
-
-.import-hints {
-  margin-top: 1rem;
-  padding-left: 1.1rem;
-  font-size: 0.875rem;
-  color: #6b7280;
-  list-style-type: disc;
-}
-
-.import-hints li + li {
-  margin-top: 0.25rem;
-}
-
-.import-status {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  background-color: #f9fafb;
-  color: #374151;
-}
-
-.import-status-success {
-  background-color: #ecfdf3;
-  color: #166534;
-}
-
-.import-status-error {
-  background-color: #fef2f2;
-  color: #b91c1c;
-}
-</style>

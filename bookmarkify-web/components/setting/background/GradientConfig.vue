@@ -1,7 +1,7 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
     <div>
-      <div class="mb-2 text-sm font-medium text-slate-700">预设渐变</div>
+      <div class="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">预设渐变</div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         <button
           v-for="(preset, index) in presets"
@@ -11,38 +11,38 @@
           :class="[
             'aspect-square rounded-lg border-2 transition-all shadow-sm',
             isPresetActive(preset)
-              ? 'border-blue-500 ring-2 ring-blue-200'
-              : 'border-transparent hover:-translate-y-0.5 hover:shadow-md',
+              ? 'border-blue-500 ring-2 ring-blue-200 ring-offset-2 ring-offset-white dark:ring-offset-slate-900'
+              : 'border-transparent hover:-translate-y-0.5 hover:shadow-md dark:hover:border-slate-700',
           ]"
           @click="selectPreset(preset)" />
       </div>
     </div>
 
     <div class="space-y-4">
-      <div class="text-sm font-medium text-slate-700">自定义渐变</div>
+      <div class="text-sm font-medium text-slate-700 dark:text-slate-200">自定义渐变</div>
       <div class="space-y-3">
         <div
           v-for="(color, index) in colors"
           :key="index"
-          class="flex flex-col gap-2 rounded-lg border border-slate-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center">
-          <label class="text-xs font-medium text-slate-500 sm:w-20 sm:text-right">颜色 {{ index + 1 }}</label>
+          class="flex flex-col gap-2 rounded-lg border border-slate-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center dark:border-slate-800 dark:bg-slate-900">
+          <label class="text-xs font-medium text-slate-500 sm:w-20 sm:text-right dark:text-slate-400">颜色 {{ index + 1 }}</label>
           <div class="flex flex-1 flex-col items-start gap-2 sm:flex-row sm:items-center">
             <input
               :value="color"
               type="color"
-              class="h-10 w-16 cursor-pointer rounded border border-slate-200"
+              class="h-10 w-16 cursor-pointer rounded border border-slate-200 dark:border-slate-700 dark:bg-slate-800"
               @input="updateColor(index, ($event.target as HTMLInputElement).value)" />
             <input
               :value="color"
               type="text"
-              class="w-full flex-1 rounded border border-slate-200 px-3 py-2 font-mono text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none"
+              class="w-full flex-1 rounded border border-slate-200 px-3 py-2 font-mono text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-400"
               placeholder="#000000"
               @input="updateColor(index, ($event.target as HTMLInputElement).value)" />
           </div>
           <button
             v-if="colors.length > 2"
             type="button"
-            class="self-start rounded-lg border border-red-100 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+            class="self-start rounded-lg border border-red-100 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-500/30 dark:text-red-200 dark:hover:bg-red-500/10"
             @click="removeColor(index)">
             删除
           </button>
@@ -50,14 +50,14 @@
       </div>
       <button
         type="button"
-        class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50"
+        class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-600 dark:hover:bg-slate-800"
         @click="addColor">
         + 添加颜色
       </button>
     </div>
 
     <div class="space-y-2">
-      <div class="text-sm font-medium text-slate-700">渐变方向</div>
+      <div class="text-sm font-medium text-slate-700 dark:text-slate-200">渐变方向</div>
       <input
         :value="direction"
         type="range"
@@ -66,7 +66,7 @@
         step="1"
         class="w-full accent-blue-500"
         @input="updateDirection(Number(($event.target as HTMLInputElement).value))" />
-      <div class="text-center text-sm font-medium text-slate-600">{{ direction }}°</div>
+      <div class="text-center text-sm font-medium text-slate-600 dark:text-slate-300">{{ direction }}°</div>
     </div>
 
     <div class="flex flex-wrap items-center justify-center gap-3">
