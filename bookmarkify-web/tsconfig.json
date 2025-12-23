@@ -12,7 +12,7 @@
     }
   },
   "vueCompilerOptions": {
-    "globalTypesPath": "./node_modules/.vue-global-types.d.ts"
+    "globalTypesPath": "./.nuxt/volar.d.ts"
   },
   "extends": "./.nuxt/tsconfig.json"
 }
