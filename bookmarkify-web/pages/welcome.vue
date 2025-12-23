@@ -30,65 +30,67 @@
       </div>
 
       <!-- 划动显示内容 -->
-      <UiScrollReveal v-slot="{ isVisible }" class="max-w-3xl flex flex-col mx-auto">
-        <div
-          :class="{ 'translate-y-8 opacity-0': !isVisible }"
-          class="flex justify-center transition-[transform,opacity] delay-100 duration-500">
-          <div class="rounded-full font-mono text-sm tracking-tight text-neon">Features</div>
-        </div>
+      <section ref="featureSection" class="py-16">
+        <UiScrollReveal v-slot="{ isVisible }" class="max-w-3xl flex flex-col mx-auto">
+          <div
+            :class="{ 'translate-y-8 opacity-0': !isVisible }"
+            class="flex justify-center transition-[transform,opacity] delay-300 duration-500">
+            <div class="rounded-full font-mono text-sm tracking-tight text-neon">Features</div>
+          </div>
 
-        <h2
-          :class="{ 'translate-y-8 opacity-0': !isVisible }"
-          class="mt-4 text-left font-display text-2xl font-light leading-[1.125] md:text-3xl lg:text-4xl transition-[transform,opacity] delay-100 duration-500">
-          Why choose our service?
-        </h2>
+          <h2
+            :class="{ 'translate-y-8 opacity-0': !isVisible }"
+            class="mt-4 text-left font-display text-2xl font-light leading-[1.125] md:text-3xl lg:text-4xl transition-[transform,opacity] delay-300 duration-500">
+            Why choose our service?
+          </h2>
 
-        <h3
-          :class="{ 'translate-y-8 opacity-0': !isVisible }"
-          class="mx-auto mt-4 text-center leading-relaxed text-muted-foreground md:max-w-2xl lg:mt-8 transition-[transform,opacity] delay-100 duration-500">
-          Stunning UI Pro is awesome premium library.
-          <br class="hidden md:block" />
-          Build better, faster with Stunning UI.
-        </h3>
+          <h3
+            :class="{ 'translate-y-8 opacity-0': !isVisible }"
+            class="mx-auto mt-4 text-center leading-relaxed text-muted-foreground md:max-w-2xl lg:mt-8 transition-[transform,opacity] delay-300 duration-500">
+            Stunning UI Pro is awesome premium library.
+            <br class="hidden md:block" />
+            Build better, faster with Stunning UI.
+          </h3>
 
-        <div class="mt-6 transition-[transform,opacity] duration-(--duration) md:mt-12">
-          <div class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2 md:gap-y-8">
-            <div
-              :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-              class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-250 duration-500">
-              <h1 class="font-medium text-2xl">Hover me</h1>
+          <div class="mt-6 transition-[transform,opacity] duration-(--duration) md:mt-12">
+            <div class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2 md:gap-y-8">
+              <div
+                :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
+                class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-250 duration-500">
+                <h1 class="font-medium text-2xl">Hover me</h1>
 
-              <p class="line-clamp-2 text-neon-wb text-lg">
-                {{ paragraphPlaceholder }}
-              </p>
-            </div>
-            <div
-              :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-              class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-500 duration-500">
-              <h1 class="font-medium text-2xl">Hover me</h1>
-              <p class="line-clamp-2 text-neon-wb text-lg">
-                {{ paragraphPlaceholder }}
-              </p>
-            </div>
-            <div
-              :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-              class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-750 duration-500">
-              <h1 class="font-medium text-2xl">Hover me</h1>
-              <p class="line-clamp-2 text-neon-wb text-lg">
-                {{ paragraphPlaceholder }}
-              </p>
-            </div>
-            <div
-              :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-              class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-1000 duration-500">
-              <h1 class="font-medium text-2xl">Hover me</h1>
-              <p class="line-clamp-2 text-neon-wb text-lg">
-                {{ paragraphPlaceholder }}
-              </p>
+                <p class="line-clamp-2 text-neon-wb text-lg">
+                  {{ paragraphPlaceholder }}
+                </p>
+              </div>
+              <div
+                :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
+                class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-500 duration-500">
+                <h1 class="font-medium text-2xl">Hover me</h1>
+                <p class="line-clamp-2 text-neon-wb text-lg">
+                  {{ paragraphPlaceholder }}
+                </p>
+              </div>
+              <div
+                :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
+                class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-750 duration-500">
+                <h1 class="font-medium text-2xl">Hover me</h1>
+                <p class="line-clamp-2 text-neon-wb text-lg">
+                  {{ paragraphPlaceholder }}
+                </p>
+              </div>
+              <div
+                :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
+                class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-1000 duration-500">
+                <h1 class="font-medium text-2xl">Hover me</h1>
+                <p class="line-clamp-2 text-neon-wb text-lg">
+                  {{ paragraphPlaceholder }}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      </UiScrollReveal>
+        </UiScrollReveal>
+      </section>
     </div>
 
     <!-- 回到顶部 -->
@@ -109,14 +111,18 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import FloatingBookmarks from '../components/welcome/FloatingBookmarks.vue'
 import SiteFooter from '../components/welcome/SiteFooter.vue'
+import UiScrollReveal from '../components/stunning/ScrollReveal.vue'
 
 const paragraphPlaceholder = `hello hello hello hello hello hello hello hello hello hello hello hello.`
+const featureSection = ref<HTMLElement | null>(null)
 const handleScroll = () => {
-  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+  featureSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 const showBackToTop = ref(false)
 const toggleBackToTopVisibility = () => {
-  showBackToTop.value = window.scrollY > window.innerHeight
+  const targetTop = featureSection.value?.offsetTop ?? window.innerHeight
+  // 提前一点点显示，避免刚离开第一屏还未触发
+  showBackToTop.value = window.scrollY >= targetTop - 48
 }
 onMounted(() => {
   toggleBackToTopVisibility()
