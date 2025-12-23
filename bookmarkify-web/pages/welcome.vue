@@ -24,7 +24,7 @@
 
           <!-- 开始使用按钮 -->
           <div
-            class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium text-white shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15">
+            class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium text-white shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15 cursor-pointer select-none">
             <ShimmerText
               :shimmerWidth="100"
               class="inline-flex items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 hover:dark:text-neutral-400 text-lg">
@@ -36,7 +36,9 @@
         </div>
 
         <!-- 查看更多按钮 -->
-        <div @click="handleScroll" class="relative z-10 animate-bounce flex flex-col items-center gap-5 cursor-pointer">
+        <div
+          @click="handleScroll"
+          class="relative z-10 animate-bounce flex flex-col items-center gap-5 cursor-pointer select-none">
           <p class="icon--arrow-down-bold icon-size-40 text-white/80" />
         </div>
       </div>
@@ -101,7 +103,7 @@
     <Transition name="fade-up">
       <div
         v-if="showBackToTop"
-        class="fixed bottom-28 right-6 z-50 rounded-full hover:scale-110 transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2"
+        class="fixed bottom-28 right-6 z-50 rounded-full hover:scale-110 transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 cursor-pointer select-none"
         aria-label="回到顶部"
         @click="backToTop">
         <p class="icon--arrow-up-circle icon-size-40 text-gray-400" />
