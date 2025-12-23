@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen w-screen flex flex-col">
-    <div class="flex-1 pb-12">
+    <div class="flex-1">
       <!-- 第一屏 -->
       <div
         class="welcome-hero relative w-full h-screen pb-16 flex flex-col items-center justify-between overflow-hidden text-white">
@@ -12,21 +12,7 @@
         </div>
 
         <!-- 漂浮书签 -->
-        <div class="absolute inset-0 pointer-events-none">
-          <div
-            v-for="bookmark in floatingBookmarks"
-            :key="bookmark.id"
-            class="floating-bookmark"
-            :style="{
-              left: bookmark.left,
-              top: bookmark.top,
-              animationDelay: bookmark.delay,
-              animationDuration: bookmark.duration,
-              fontSize: bookmark.size,
-            }">
-            {{ bookmark.icon }}
-          </div>
-        </div>
+        <FloatingBookmarks />
 
         <!-- 文案 -->
         <div class="relative z-10 flex-1 flex flex-col items-center justify-center gap-4 text-center px-6">
@@ -39,7 +25,7 @@
 
         <!-- 查看更多按钮 -->
         <div @click="handleScroll" class="relative z-10 animate-bounce flex flex-col items-center gap-5 cursor-pointer">
-          <icon class="icon--arrow-down-bold icon-size-40 text-white/80" />
+          <p class="icon--arrow-down-bold icon-size-40 text-white/80" />
         </div>
       </div>
 
@@ -70,8 +56,6 @@
             <div
               :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
               class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-250 duration-500">
-              <Icon name="ri:magic-line" class="w-8 h-8" />
-
               <h1 class="font-medium text-2xl">Hover me</h1>
 
               <p class="line-clamp-2 text-neon-wb text-lg">
@@ -81,7 +65,6 @@
             <div
               :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
               class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-500 duration-500">
-              <Icon name="ri:magic-line" class="w-8 h-8" />
               <h1 class="font-medium text-2xl">Hover me</h1>
               <p class="line-clamp-2 text-neon-wb text-lg">
                 {{ paragraphPlaceholder }}
@@ -90,7 +73,6 @@
             <div
               :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
               class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-750 duration-500">
-              <Icon name="ri:magic-line" class="w-8 h-8" />
               <h1 class="font-medium text-2xl">Hover me</h1>
               <p class="line-clamp-2 text-neon-wb text-lg">
                 {{ paragraphPlaceholder }}
@@ -99,7 +81,6 @@
             <div
               :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
               class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-1000 duration-500">
-              <Icon name="ri:magic-line" class="w-8 h-8" />
               <h1 class="font-medium text-2xl">Hover me</h1>
               <p class="line-clamp-2 text-neon-wb text-lg">
                 {{ paragraphPlaceholder }}
@@ -111,14 +92,13 @@
     </div>
 
     <!-- 回到顶部 -->
-    <Button
+    <div
       v-if="showBackToTop"
-      size="icon"
       class="fixed bottom-28 right-6 z-50 rounded-full hover:scale-110 transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2"
       aria-label="回到顶部"
       @click="backToTop">
-      <icon class="icon--arrow-up-circle icon-size-40 text-gray-400" />
-    </Button>
+      <p class="icon--arrow-up-circle icon-size-40 text-gray-400" />
+    </div>
 
     <!-- 页脚 -->
     <SiteFooter />
@@ -127,19 +107,10 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import FloatingBookmarks from '../components/welcome/FloatingBookmarks.vue'
 import SiteFooter from '../components/welcome/SiteFooter.vue'
 
 const paragraphPlaceholder = `hello hello hello hello hello hello hello hello hello hello hello hello.`
-const floatingBookmarks = [
-  { id: 'b1', icon: '📚', left: '12%', top: '12%', delay: '0s', duration: '12s', size: '38px' },
-  { id: 'b2', icon: '🔖', left: '26%', top: '58%', delay: '1.2s', duration: '14s', size: '34px' },
-  { id: 'b3', icon: '📑', left: '42%', top: '30%', delay: '2.4s', duration: '16s', size: '36px' },
-  { id: 'b4', icon: '📕', left: '58%', top: '68%', delay: '0.8s', duration: '13s', size: '40px' },
-  { id: 'b5', icon: '📘', left: '72%', top: '22%', delay: '1.8s', duration: '15s', size: '42px' },
-  { id: 'b6', icon: '📙', left: '84%', top: '48%', delay: '2.8s', duration: '18s', size: '35px' },
-  { id: 'b7', icon: '📗', left: '6%', top: '72%', delay: '3.2s', duration: '17s', size: '33px' },
-  { id: 'b8', icon: '📓', left: '50%', top: '85%', delay: '4s', duration: '19s', size: '37px' },
-]
 const handleScroll = () => {
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
 }
@@ -197,23 +168,6 @@ const backToTop = () => {
   left: 20%;
   animation-duration: 38s;
   animation-delay: 2s;
-}
-
-.floating-bookmark {
-  position: absolute;
-  animation: floatY ease-in-out infinite alternate;
-  color: #ffffff;
-  text-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
-  opacity: 0.92;
-}
-
-@keyframes floatY {
-  0% {
-    transform: translateY(-12%);
-  }
-  100% {
-    transform: translateY(12%);
-  }
 }
 
 @keyframes haloDrift {
