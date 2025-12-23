@@ -1,5 +1,5 @@
 <template>
-  <div class="bookmark-import">
+  <div>
     <h3 class="setting-section-title">导入 Chrome 书签</h3>
     <p class="setting-section-desc">支持从 Chrome 导出的 HTML 书签文件，一次性导入你的所有书签。</p>
 
@@ -123,10 +123,6 @@ async function handleImport() {
 </script>
 
 <style scoped>
-.bookmark-import {
-  padding: 1.5rem 1.75rem;
-}
-
 .setting-section-title {
   font-size: 1.25rem;
   font-weight: 600;

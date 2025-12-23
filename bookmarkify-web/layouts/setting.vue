@@ -11,10 +11,10 @@
 
             <!-- 侧边栏 -->
 
-            <div class="p-6 bg-white rounded-xl">
+            <div class="p-6 bg-white rounded-2xl">
               <ul
                 ref="tabListRef"
-                class="relative flex flex-col gap-3 bg-white rounded-xl w-full text-gray-500 text-lg font-medium select-none overflow-hidden">
+                class="relative flex flex-col gap-3 bg-white w-full text-gray-500 text-lg font-medium select-none overflow-hidden">
                 <span
                   class="absolute left-0 right-0 rounded-lg bg-gray-100 transition-[transform,height] duration-250 ease-out will-change-transform pointer-events-none"
                   :style="indicatorStyle"
