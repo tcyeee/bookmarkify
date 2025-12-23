@@ -20,7 +20,7 @@
         </div>
       </div>
 
-      <div>
+      <div class="space-y-3 mt-20">
         <div class="text-lg font-semibold text-slate-800 py-3">基本信息</div>
         <div class="flex items-end gap-3">
           <label class="block flex-1 min-w-0">
@@ -54,48 +54,54 @@
         </div>
       </div>
 
-      <div>
-        <div class="text-lg font-semibold text-slate-800 py-3">账号安全</div>
-        <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2 text-slate-700">
-              <span class="icon--memory-email icon-size-20 text-slate-500"></span>
-              <div class="font-medium">邮箱</div>
-            </div>
-            <span class="cy-badge" :class="account?.email ? 'cy-badge-accent' : 'cy-badge-ghost'">
-              {{ account?.email ? '已绑定' : '未绑定' }}
-            </span>
+      <div class="space-y-3 mt-20">
+        <div class="text-lg font-semibold text-slate-800">账号安全</div>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 text-slate-600">
+            <span class="icon--memory-email icon-size-20"></span>
+            <div>邮箱</div>
           </div>
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2 text-slate-700">
-              <span class="icon--memory-speaker icon-size-20 text-slate-500"></span>
-              <div class="font-medium">手机号</div>
-            </div>
-            <span class="cy-badge" :class="account?.phone ? 'cy-badge-accent' : 'cy-badge-ghost'">
-              {{ account?.phone ? '已绑定' : '未绑定' }}
-            </span>
+          <span class="cy-badge" :class="account?.email ? 'cy-badge-accent' : 'cy-badge-ghost'">
+            {{ account?.email ? '已绑定' : '未绑定' }}
+          </span>
+        </div>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 text-slate-600">
+            <span class="icon--memory-speaker icon-size-20"></span>
+            <div>手机号</div>
           </div>
+          <span class="cy-badge" :class="account?.phone ? 'cy-badge-accent' : 'cy-badge-ghost'">
+            {{ account?.phone ? '已绑定' : '未绑定' }}
+          </span>
         </div>
       </div>
 
-      <div>
-        <div class="text-lg font-semibold text-slate-800 py-3">账号退出与注销</div>
+      <div class="space-y-3 mt-20">
+        <div class="text-lg font-semibold text-slate-800">账号操作</div>
         <!-- 退出账号 -->
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="font-medium">退出登录</div>
-            <div class="text-sm text-slate-500">在当前设备上, 退出本帐户</div>
+        <div
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+          <div class="flex items-start gap-3 text-slate-800">
+            <span class="icon--memory-arrow-down-right-box icon-size-22 text-slate-500"></span>
+            <div>
+              <div class="font-semibold">退出登录</div>
+              <div class="text-sm text-slate-500">仅退出当前设备登录，不影响账号数据。</div>
+            </div>
           </div>
-          <button class="cy-btn" @click="userStore.logout()">退出账号</button>
+          <button class="cy-btn cy-btn-ghost rounded-2xl" @click="userStore.logout()">退出账号</button>
         </div>
 
         <!-- 注销账户 -->
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="font-medium">注销账户</div>
-            <div class="text-sm text-slate-500">注销后账号所有数据将被销毁并不可找回，请谨慎操作。</div>
+        <div
+          class="rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+          <div class="flex items-start gap-3 text-rose-800">
+            <span class="icon--memory-arrow-down-right-box icon-size-22 text-rose-500"></span>
+            <div>
+              <div class="font-semibold">注销账户</div>
+              <div class="text-sm text-rose-600">注销后账号及数据将被销毁且不可恢复，请谨慎操作。</div>
+            </div>
           </div>
-          <CancelAccount></CancelAccount>
+          <CancelAccount />
         </div>
       </div>
     </div>
