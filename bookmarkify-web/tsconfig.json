@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "types": ["node"],
+    "types": ["node", "./types/vue-shim"],
     "baseUrl": ".",
     "paths": {
       "@api": ["server/apis"],
