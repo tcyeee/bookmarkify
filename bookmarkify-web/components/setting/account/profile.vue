@@ -20,78 +20,51 @@
         </div>
       </div>
 
-      <div class="grid gap-4 md:grid-cols-2">
-        <div class="rounded-xl border border-slate-100 bg-white/80 p-5 shadow-sm">
-          <div class="flex items-center justify-between mb-4">
-            <div>
-              <div class="text-lg font-semibold text-slate-800">基本信息</div>
-              <div class="text-sm text-slate-500">修改昵称或手机号</div>
-            </div>
-            <span class="cy-badge cy-badge-ghost">资料</span>
-          </div>
-          <div class="space-y-4">
-            <label class="block">
-              <span class="text-sm text-slate-600">昵称</span>
-              <input
-                v-model="form.nickName"
-                type="text"
-                maxlength="20"
-                placeholder="请输入昵称"
-                class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
-            </label>
-            <label class="block">
-              <span class="text-sm text-slate-600">手机号</span>
-              <input
-                v-model="form.phone"
-                type="tel"
-                inputmode="tel"
-                placeholder="可选，便于找回账号"
-                class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
-            </label>
-            <div class="flex justify-end gap-2">
-              <button class="cy-btn cy-btn-ghost" @click="resetForm" :disabled="saving">重置</button>
-              <button class="cy-btn cy-btn-accent" @click="saveProfile" :disabled="saving">
-                <span v-if="saving">保存中...</span>
-                <span v-else>保存</span>
-              </button>
-            </div>
-          </div>
+      <div>
+        <div class="text-lg font-semibold text-slate-800 py-3">基本信息</div>
+        <div class="flex items-end gap-3">
+          <label class="block flex-1">
+            <span class="text-sm text-slate-600">昵称</span>
+            <input
+              v-model="form.nickName"
+              type="text"
+              maxlength="20"
+              placeholder="请输入昵称"
+              class="mt-1 h-12 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
+          </label>
+          <button class="cy-btn cy-btn-accent h-12 px-5" @click="saveProfile" :disabled="saving">
+            <span v-if="saving">保存中...</span>
+            <span v-else>保存</span>
+          </button>
         </div>
+      </div>
 
-        <div class="rounded-xl border border-slate-100 bg-white/80 p-5 shadow-sm flex flex-col gap-4">
+      <div>
+        <div class="text-lg font-semibold text-slate-800">账号安全</div>
+        <div class="space-y-3">
           <div class="flex items-center justify-between">
-            <div>
-              <div class="text-lg font-semibold text-slate-800">账号安全</div>
-              <div class="text-sm text-slate-500">邮箱 / 手机绑定状态</div>
+            <div class="flex items-center gap-2 text-slate-700">
+              <span class="icon--memory-email icon-size-20 text-slate-500"></span>
+              <div>
+                <div class="font-medium">邮箱</div>
+                <div class="text-sm text-slate-500">{{ account?.email || '未绑定' }}</div>
+              </div>
             </div>
-            <span class="cy-badge cy-badge-success">安全</span>
+            <span class="cy-badge" :class="account?.email ? 'cy-badge-accent' : 'cy-badge-ghost'">
+              {{ account?.email ? '已绑定' : '未绑定' }}
+            </span>
           </div>
-          <div class="space-y-3">
-            <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-3">
-              <div class="flex items-center gap-2 text-slate-700">
-                <span class="icon--memory-email icon-size-20 text-slate-500"></span>
-                <div>
-                  <div class="font-medium">邮箱</div>
-                  <div class="text-sm text-slate-500">{{ account?.email || '未绑定' }}</div>
-                </div>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 text-slate-700">
+              <span class="icon--memory-call icon-size-20 text-slate-500"></span>
+              <div>
+                <div class="font-medium">手机号</div>
+                <div class="text-sm text-slate-500">{{ account?.phone || '未绑定' }}</div>
               </div>
-              <span class="cy-badge" :class="account?.email ? 'cy-badge-accent' : 'cy-badge-ghost'">
-                {{ account?.email ? '已绑定' : '未绑定' }}
-              </span>
             </div>
-            <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-3">
-              <div class="flex items-center gap-2 text-slate-700">
-                <span class="icon--memory-call icon-size-20 text-slate-500"></span>
-                <div>
-                  <div class="font-medium">手机号</div>
-                  <div class="text-sm text-slate-500">{{ account?.phone || '未绑定' }}</div>
-                </div>
-              </div>
-              <span class="cy-badge" :class="account?.phone ? 'cy-badge-accent' : 'cy-badge-ghost'">
-                {{ account?.phone ? '已绑定' : '未绑定' }}
-              </span>
-            </div>
-            <div class="text-sm text-slate-500">提示：当前登录状态已验证，可在上方补充手机号或邮箱，便于找回账号。</div>
+            <span class="cy-badge" :class="account?.phone ? 'cy-badge-accent' : 'cy-badge-ghost'">
+              {{ account?.phone ? '已绑定' : '未绑定' }}
+            </span>
           </div>
         </div>
       </div>

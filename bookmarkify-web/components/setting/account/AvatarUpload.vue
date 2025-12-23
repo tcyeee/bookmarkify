@@ -7,7 +7,7 @@
         class="transition duration-200 group-hover:brightness-[0.7]" />
       <button
         type="button"
-        class="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+        class="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-500 group-hover:opacity-100"
         @click.stop.prevent="triggerSelect"
         :disabled="uploading">
         <span class="icon--memory-upload icon-size-32"></span>
