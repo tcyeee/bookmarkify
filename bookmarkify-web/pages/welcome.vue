@@ -94,13 +94,15 @@
     </div>
 
     <!-- 回到顶部 -->
-    <div
-      v-if="showBackToTop"
-      class="fixed bottom-28 right-6 z-50 rounded-full hover:scale-110 transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2"
-      aria-label="回到顶部"
-      @click="backToTop">
-      <p class="icon--arrow-up-circle icon-size-40 text-gray-400" />
-    </div>
+    <Transition name="fade-up">
+      <div
+        v-if="showBackToTop"
+        class="fixed bottom-28 right-6 z-50 rounded-full hover:scale-110 transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2"
+        aria-label="回到顶部"
+        @click="backToTop">
+        <p class="icon--arrow-up-circle icon-size-40 text-gray-400" />
+      </div>
+    </Transition>
 
     <!-- 页脚 -->
     <SiteFooter />
@@ -174,6 +176,21 @@ const backToTop = () => {
   left: 20%;
   animation-duration: 38s;
   animation-delay: 2s;
+}
+
+.fade-up-enter-active,
+.fade-up-leave-active {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+.fade-up-enter-from,
+.fade-up-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+}
+.fade-up-enter-to,
+.fade-up-leave-from {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 @keyframes haloDrift {
