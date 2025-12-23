@@ -31,11 +31,11 @@
 
       <!-- 划动显示内容 -->
       <section ref="featureSection">
-        <UiScrollReveal v-slot="{ isVisible }" class="max-w-3xl flex flex-col mx-auto py-16">
+        <UiScrollReveal v-slot="{ isVisible }" class="max-w-3xl flex flex-col mx-auto justify-center">
           <h2
             :class="{ 'translate-y-8 opacity-0': !isVisible }"
-            class="mt-4 text-left font-display text-2xl font-light leading-[1.125] md:text-3xl lg:text-4xl transition-[transform,opacity] delay-300 duration-500">
-            为什么选择 Bookmarkify？
+            class="mb-10 text-center font-display text-2xl font-light leading-[1.125] md:text-3xl lg:text-4xl transition-[transform,opacity] delay-300 duration-500">
+            为什么选择 Bookmarkify?
           </h2>
 
           <h3
@@ -51,6 +51,8 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-250 duration-500">
+                <p class="icon--floppy-disk icon-size-40" />
+
                 <h1 class="font-medium text-2xl">一键收藏任意页面</h1>
 
                 <p class="line-clamp-2 text-neon-wb text-lg">使用扩展或快捷键秒存网址，自动抓取标题、图标与简介。</p>
@@ -58,18 +60,22 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-500 duration-500">
+                <p class="icon--search icon-size-40" />
+
                 <h1 class="font-medium text-2xl">智能分类与搜索</h1>
                 <p class="line-clamp-2 text-neon-wb text-lg">标签、文件夹与 AI 分类建议，模糊搜索让常用应用随手可得。</p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-750 duration-500">
-                <h1 class="font-medium text-2xl">跨设备同步与备份</h1>
-                <p class="line-clamp-2 text-neon-wb text-lg">云端加密同步，换设备也能立即恢复书签，离线时自动排队上传。</p>
+                <p class="icon--checkbox-marked icon-size-40" />
+                <h1 class="font-medium text-2xl">书签活性检测</h1>
+                <p class="line-clamp-2 text-neon-wb text-lg">自动检测书签是否有效，及时更新书签状态。</p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-1000 duration-500">
+                <p class="icon--cloud icon-size-40" />
                 <h1 class="font-medium text-2xl">分享与发现</h1>
                 <p class="line-clamp-2 text-neon-wb text-lg">公开或私密分享收藏夹，浏览社区精选书签，一键加入自己的库。</p>
               </div>
