@@ -3,10 +3,17 @@ import { resolve } from 'path'
 export default defineNuxtConfig({
   app: {
     head: {
-      title: 'bookmarkify 书签鸭',
+      title: 'Bookmarkify 书签鸭 | 管理、分享你的应用书签',
       meta: [
-        { name: 'description', content: 'bookmarkify 书签鸭，一个现代化的书签管理平台' },
-        { name: 'keywords', content: 'bookmarkify,书签鸭,书签管理,书签分享,书签发现,书签社区' },
+        {
+          name: 'description',
+          content:
+            '集中收藏应用、工具与灵感；一键保存、智能分类与搜索、云端同步、书签活性检测，以及社区分享与发现，随时随地一触即达。',
+        },
+        {
+          name: 'keywords',
+          content: 'bookmarkify,书签鸭,书签管理,云端同步,一键收藏,智能分类,模糊搜索,书签检测,书签分享,社区发现,效率工具',
+        },
         { name: 'author', content: 'tcyeee' },
         { name: 'robots', content: 'index, follow' },
         { name: 'google', content: 'notranslate' },
