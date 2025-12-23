@@ -17,9 +17,9 @@
         <!-- 文案 -->
         <div class="relative z-10 flex-1 flex flex-col items-center justify-center gap-4 text-center px-6">
           <p class="text-sm uppercase tracking-[0.35em] text-white/70">Bookmarkify</p>
-          <h1 class="text-4xl md:text-5xl font-semibold leading-tight drop-shadow">欢迎来到你的智能书签空间</h1>
+          <h1 class="text-4xl md:text-5xl font-semibold leading-tight drop-shadow">管理、发现并分享你的应用书签</h1>
           <p class="max-w-2xl text-base md:text-lg text-white/80">
-            将灵感、阅读与资源收纳成一片宁静的“书签海”，轻轻漂浮，随时被召唤。
+            把常用的 Web 应用、工具和灵感集中收藏，随时同步、搜索与分享，让每一次打开都更高效。
           </p>
         </div>
 
@@ -30,26 +30,20 @@
       </div>
 
       <!-- 划动显示内容 -->
-      <section ref="featureSection" class="py-16">
-        <UiScrollReveal v-slot="{ isVisible }" class="max-w-3xl flex flex-col mx-auto">
-          <div
-            :class="{ 'translate-y-8 opacity-0': !isVisible }"
-            class="flex justify-center transition-[transform,opacity] delay-300 duration-500">
-            <div class="rounded-full font-mono text-sm tracking-tight text-neon">Features</div>
-          </div>
-
+      <section ref="featureSection">
+        <UiScrollReveal v-slot="{ isVisible }" class="max-w-3xl flex flex-col mx-auto py-16">
           <h2
             :class="{ 'translate-y-8 opacity-0': !isVisible }"
             class="mt-4 text-left font-display text-2xl font-light leading-[1.125] md:text-3xl lg:text-4xl transition-[transform,opacity] delay-300 duration-500">
-            Why choose our service?
+            为什么选择 Bookmarkify？
           </h2>
 
           <h3
             :class="{ 'translate-y-8 opacity-0': !isVisible }"
             class="mx-auto mt-4 text-center leading-relaxed text-muted-foreground md:max-w-2xl lg:mt-8 transition-[transform,opacity] delay-300 duration-500">
-            Stunning UI Pro is awesome premium library.
+            一键收藏、智能分类、云端同步与社区分享，把分散的网页应用放进同一个入口。
             <br class="hidden md:block" />
-            Build better, faster with Stunning UI.
+            你的常用应用、工作流和灵感清单，随时随地一触即达。
           </h3>
 
           <div class="mt-6 transition-[transform,opacity] duration-(--duration) md:mt-12">
@@ -57,35 +51,27 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-250 duration-500">
-                <h1 class="font-medium text-2xl">Hover me</h1>
+                <h1 class="font-medium text-2xl">一键收藏任意页面</h1>
 
-                <p class="line-clamp-2 text-neon-wb text-lg">
-                  {{ paragraphPlaceholder }}
-                </p>
+                <p class="line-clamp-2 text-neon-wb text-lg">使用扩展或快捷键秒存网址，自动抓取标题、图标与简介。</p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-500 duration-500">
-                <h1 class="font-medium text-2xl">Hover me</h1>
-                <p class="line-clamp-2 text-neon-wb text-lg">
-                  {{ paragraphPlaceholder }}
-                </p>
+                <h1 class="font-medium text-2xl">智能分类与搜索</h1>
+                <p class="line-clamp-2 text-neon-wb text-lg">标签、文件夹与 AI 分类建议，模糊搜索让常用应用随手可得。</p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-750 duration-500">
-                <h1 class="font-medium text-2xl">Hover me</h1>
-                <p class="line-clamp-2 text-neon-wb text-lg">
-                  {{ paragraphPlaceholder }}
-                </p>
+                <h1 class="font-medium text-2xl">跨设备同步与备份</h1>
+                <p class="line-clamp-2 text-neon-wb text-lg">云端加密同步，换设备也能立即恢复书签，离线时自动排队上传。</p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-1000 duration-500">
-                <h1 class="font-medium text-2xl">Hover me</h1>
-                <p class="line-clamp-2 text-neon-wb text-lg">
-                  {{ paragraphPlaceholder }}
-                </p>
+                <h1 class="font-medium text-2xl">分享与发现</h1>
+                <p class="line-clamp-2 text-neon-wb text-lg">公开或私密分享收藏夹，浏览社区精选书签，一键加入自己的库。</p>
               </div>
             </div>
           </div>
@@ -114,8 +100,6 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import FloatingBookmarks from '../components/welcome/FloatingBookmarks.vue'
 import SiteFooter from '../components/welcome/SiteFooter.vue'
 import UiScrollReveal from '../components/stunning/ScrollReveal.vue'
-
-const paragraphPlaceholder = `hello hello hello hello hello hello hello hello hello hello hello hello.`
 const featureSection = ref<HTMLElement | null>(null)
 const handleScroll = () => {
   featureSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -124,7 +108,7 @@ const showBackToTop = ref(false)
 const toggleBackToTopVisibility = () => {
   const targetTop = featureSection.value?.offsetTop ?? window.innerHeight
   // 提前一点点显示，避免刚离开第一屏还未触发
-  showBackToTop.value = window.scrollY >= targetTop - 48
+  showBackToTop.value = window.scrollY >= targetTop - 500
 }
 onMounted(() => {
   toggleBackToTopVisibility()
