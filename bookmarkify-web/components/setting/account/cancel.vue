@@ -6,11 +6,11 @@
   <dialog id="userDelDialog" class="cy-modal">
     <div class="cy-modal-box">
       <div class="flex items-end gap-2">
-        <span class="icon--warning icon-size-22 text-red-500"></span>
+        <span class="icon--memory-alert-box-fill icon-size-28 text-red-500"></span>
         <h3 class="text-lg font-bold text-red-500">警告: 账户注销后将无法找回!</h3>
       </div>
       <p class="mt-5 setting-subtitle">注销前需要验证密码:</p>
-      <input v-model="data.password" type="password" placeholder="请输入密码" class="cy-input" />
+      <input v-model="data.password" type="password" placeholder="请输入密码" class="cy-input w-full" />
 
       <div class="cy-modal-action">
         <button @click="closeDelDialog" class="cy-btn">取消</button>
