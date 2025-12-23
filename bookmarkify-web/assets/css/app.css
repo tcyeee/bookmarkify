@@ -4,4 +4,10 @@
   themes: light --default, dark --prefersdark, cupcake;
 }
 @theme {
+  --font-jersey10: 'Jersey10', ui-sans-serif, system-ui, sans-serif;
+}
+
+@font-face {
+  font-family: 'Jersey10';
+  src: url('../fonts/Jersey10-Regular.ttf') format('truetype');
 }

@@ -1,12 +1,8 @@
 <template>
-  <div class="h-16 bg-white w-full overflow-hidden shadow flex items-center">
-    <div class="flex opacity-50">
-      <img width="50" src="/assets/logo/logo-lg.png" />
-      <div class="text-primary font-bold pb-3 text-3xl">bookmarkify</div>
+  <div class="px-4 h-16 bg-white w-full overflow-hidden shadow flex items-center">
+    <div class="flex items-center gap-2">
+      <div class="icon--memory-device icon-size-30 hover:text-white"></div>
+      <div class="font-jersey10 font-bold text-4xl">bookmarkify</div>
     </div>
   </div>
 </template>
-
-<script lang="ts" setup></script>
-
-<style></style>
