@@ -1,23 +1,27 @@
 <template>
   <div class="avatar-upload-container">
-    <AvatarPreview :avatar-path="previewUrl || avatarPath" />
-    <div class="mt-4 flex gap-2">
-      <label class="cy-btn cy-btn-soft cursor-pointer">
-        <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleFileChange" />
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-        </svg>
-        <span>选择头像</span>
-      </label>
-      <button v-if="previewUrl" @click="handleUpload" :disabled="uploading" class="cy-btn cy-btn-accent">
+    <div class="relative inline-block group">
+      <AvatarPreview
+        :avatar-path="previewUrl || avatarPath"
+        :fallback-text="fallbackInitial"
+        class="transition duration-200 group-hover:brightness-[0.7]" />
+      <button
+        type="button"
+        class="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+        @click.stop.prevent="triggerSelect"
+        :disabled="uploading">
+        <span class="icon--memory-edit-pen icon-size-26"></span>
+        <span class="text-sm mt-1">更换头像</span>
+      </button>
+      <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleFileChange" />
+    </div>
+
+    <div class="mt-4 flex gap-2 justify-center" v-if="previewUrl">
+      <button @click="handleUpload" :disabled="uploading" class="cy-btn cy-btn-accent">
         <span v-if="uploading">上传中...</span>
         <span v-else>确认上传</span>
       </button>
-      <button v-if="previewUrl" @click="handleCancel" :disabled="uploading" class="cy-btn cy-btn-ghost">取消</button>
+      <button @click="handleCancel" :disabled="uploading" class="cy-btn cy-btn-ghost">取消</button>
     </div>
   </div>
 </template>
@@ -43,6 +47,11 @@ const fileInputRef = ref<HTMLInputElement>()
 const previewUrl = ref<string | null>(null)
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
+const fallbackInitial = computed(() => {
+  const name = userStore.account?.nickName?.trim()
+  if (!name) return '用'
+  return name.slice(0, 1)
+})
 
 // 预览选择的图片
 function handleFileChange(event: Event) {
@@ -98,6 +107,10 @@ async function handleUpload() {
   } finally {
     uploading.value = false
   }
+}
+
+function triggerSelect() {
+  fileInputRef.value?.click()
 }
 
 // 取消上传

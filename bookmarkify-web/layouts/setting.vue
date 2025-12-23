@@ -10,7 +10,6 @@
             </NuxtLink>
 
             <!-- 侧边栏 -->
-
             <div class="p-6 bg-white rounded-2xl">
               <ul
                 ref="tabListRef"
