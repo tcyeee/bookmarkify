@@ -16,7 +16,7 @@
 
         <!-- 文案 -->
         <div class="relative z-10 flex-1 flex flex-col items-center justify-center gap-4 text-center px-6">
-          <p class="text-sm uppercase tracking-[0.35em] text-white/70">Bookmarkify</p>
+          <p class="text-sm uppercase tracking-[0.4em] text-white/60">Bookmarkify</p>
           <h1 class="text-4xl md:text-5xl font-semibold leading-tight drop-shadow">管理、发现并分享你的应用书签</h1>
           <p class="max-w-2xl text-base md:text-lg text-white/80">
             把常用的 Web 应用、工具和灵感集中收藏，随时同步、搜索与分享，让每一次打开都更高效。
@@ -24,13 +24,13 @@
 
           <!-- 开始使用按钮 -->
           <div
-            class="group rounded-full border border-black/5 bg-neutral-100 text-base text-white transition-all ease-in hover:cursor-pointer hover:bg-neutral-200 dark:border-white/5 dark:bg-neutral-900 dark:hover:bg-neutral-800">
+            class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium text-white shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15">
             <ShimmerText
               :shimmerWidth="100"
-              class="inline-flex items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 hover:dark:text-neutral-400">
+              class="inline-flex items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 hover:dark:text-neutral-400 text-lg">
               ✨ 开始使用
               <p
-                class="icon--arrow-right icon-size-3 w-4 h-4 ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
+                class="icon--arrow-right icon-size-30 w-4 h-4 ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
             </ShimmerText>
           </div>
         </div>
