@@ -56,19 +56,29 @@
 
       <div class="space-y-3 mt-20">
         <div class="text-lg font-semibold text-slate-800">账号安全</div>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2 text-slate-600">
-            <span class="icon--memory-email icon-size-20"></span>
-            <div>邮箱</div>
+
+        <div
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+          <div class="flex items-center gap-3 text-slate-700">
+            <span class="icon--memory-email icon-size-20 text-slate-500"></span>
+            <div>
+              <div class="font-medium">邮箱</div>
+              <div class="text-sm text-slate-500">{{ account?.email || '未绑定邮箱' }}</div>
+            </div>
           </div>
           <span class="cy-badge" :class="account?.email ? 'cy-badge-accent' : 'cy-badge-ghost'">
             {{ account?.email ? '已绑定' : '未绑定' }}
           </span>
         </div>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2 text-slate-600">
-            <span class="icon--memory-speaker icon-size-20"></span>
-            <div>手机号</div>
+
+        <div
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+          <div class="flex items-center gap-3 text-slate-700">
+            <span class="icon--memory-speaker icon-size-20 text-slate-500"></span>
+            <div>
+              <div class="font-medium">手机号</div>
+              <div class="text-sm text-slate-500">{{ account?.phone || '未绑定手机号' }}</div>
+            </div>
           </div>
           <span class="cy-badge" :class="account?.phone ? 'cy-badge-accent' : 'cy-badge-ghost'">
             {{ account?.phone ? '已绑定' : '未绑定' }}
@@ -81,7 +91,7 @@
         <!-- 退出账号 -->
         <div
           class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-          <div class="flex items-start gap-3 text-slate-800">
+          <div class="flex items-center gap-3 text-slate-800">
             <span class="icon--memory-arrow-down-right-box icon-size-22 text-slate-500"></span>
             <div>
               <div class="font-semibold">退出登录</div>
@@ -94,7 +104,7 @@
         <!-- 注销账户 -->
         <div
           class="rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-          <div class="flex items-start gap-3 text-rose-800">
+          <div class="flex items-center gap-3 text-rose-800">
             <span class="icon--memory-arrow-down-right-box icon-size-22 text-rose-500"></span>
             <div>
               <div class="font-semibold">注销账户</div>
