@@ -55,15 +55,12 @@
       </div>
 
       <div>
-        <div class="text-lg font-semibold text-slate-800">账号安全</div>
+        <div class="text-lg font-semibold text-slate-800 py-3">账号安全</div>
         <div class="space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2 text-slate-700">
               <span class="icon--memory-email icon-size-20 text-slate-500"></span>
-              <div>
-                <div class="font-medium">邮箱</div>
-                <div class="text-sm text-slate-500">{{ account?.email || '未绑定' }}</div>
-              </div>
+              <div class="font-medium">邮箱</div>
             </div>
             <span class="cy-badge" :class="account?.email ? 'cy-badge-accent' : 'cy-badge-ghost'">
               {{ account?.email ? '已绑定' : '未绑定' }}
@@ -71,11 +68,8 @@
           </div>
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2 text-slate-700">
-              <span class="icon--memory-call icon-size-20 text-slate-500"></span>
-              <div>
-                <div class="font-medium">手机号</div>
-                <div class="text-sm text-slate-500">{{ account?.phone || '未绑定' }}</div>
-              </div>
+              <span class="icon--memory-speaker icon-size-20 text-slate-500"></span>
+              <div class="font-medium">手机号</div>
             </div>
             <span class="cy-badge" :class="account?.phone ? 'cy-badge-accent' : 'cy-badge-ghost'">
               {{ account?.phone ? '已绑定' : '未绑定' }}
