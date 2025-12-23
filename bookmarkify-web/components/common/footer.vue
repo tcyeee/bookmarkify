@@ -1,5 +1,5 @@
 <template>
-  <footer class="w-full bg-gray-900 text-gray-200 shadow-[0_-2px_20px_rgba(0,0,0,0.35)]">
+  <footer class="w-full bg-black text-gray-200">
     <div class="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
       <div class="flex items-center gap-2 font-medium">
         <div class="icon--memory-device icon-size-19 text-gray-300 hover:text-white"></div>
