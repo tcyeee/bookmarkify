@@ -108,18 +108,16 @@
         <p class="icon--arrow-up-circle icon-size-40 text-gray-400" />
       </div>
     </Transition>
-
-    <!-- 页脚 -->
-    <SiteFooter />
   </div>
 </template>
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import FloatingBookmarks from '../components/welcome/FloatingBookmarks.vue'
-import SiteFooter from '../components/welcome/SiteFooter.vue'
 import UiScrollReveal from '../components/stunning/ScrollReveal.vue'
 import ShimmerText from '../components/stunning/ShimmerText.vue'
+
+definePageMeta({ layout: 'explore' })
 
 const userStore = useUserStore()
 

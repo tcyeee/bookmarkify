@@ -21,7 +21,7 @@
       </div>
       <NuxtPage class="flex-1 rounded-xl min-h-screen" />
     </div>
-    <CommonFooter class="fixed bottom-0" />
+    <CommonFooter />
   </div>
 </template>
 

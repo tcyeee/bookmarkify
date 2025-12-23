@@ -6,6 +6,9 @@
     <!-- 账户绑定 -->
     <SettingAccountVerify />
 
+    <!-- 退出登录 -->
+    <SettingAccountLogout v-if="userStore.account" />
+
     <!-- 注销账户 -->
     <SettingAccountCancel />
   </div>
