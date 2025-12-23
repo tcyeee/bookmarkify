@@ -23,7 +23,7 @@
       <div>
         <div class="text-lg font-semibold text-slate-800 py-3">基本信息</div>
         <div class="flex items-end gap-3">
-          <label class="block flex-1">
+          <label class="block flex-1 min-w-0">
             <span class="text-sm text-slate-600">昵称</span>
             <input
               v-model="form.nickName"
@@ -32,10 +32,25 @@
               placeholder="请输入昵称"
               class="mt-1 h-12 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" />
           </label>
-          <button class="cy-btn cy-btn-accent h-12 px-5" @click="saveProfile" :disabled="saving">
-            <span v-if="saving">保存中...</span>
-            <span v-else>保存</span>
-          </button>
+          <div
+            class="overflow-hidden transition-[width] duration-200 ease-out flex justify-end gap-2"
+            :style="buttonWrapperStyle">
+            <button
+              class="cy-btn cy-btn-accent h-12 px-5 min-w-[96px] transition duration-180 ease-out"
+              :style="buttonStyle"
+              @click="saveProfile"
+              :disabled="saving">
+              <span v-if="saving">保存中...</span>
+              <span v-else>保存</span>
+            </button>
+            <button
+              class="cy-btn cy-btn-ghost h-12 px-4 min-w-[80px] transition duration-180 ease-out"
+              :style="buttonStyle"
+              @click="resetForm"
+              :disabled="saving">
+              取消
+            </button>
+          </div>
         </div>
       </div>
 
@@ -106,6 +121,16 @@ const maskedUid = computed(() => {
   return `${uid.slice(0, 8)}••••${uid.slice(-8)}`
 })
 const displayNickName = computed(() => account.value?.nickName || '未命名用户')
+const isDirty = computed(() => form.nickName !== (account.value?.nickName || ''))
+const buttonWrapperStyle = computed(() => ({
+  width: isDirty.value ? '190px' : '0px',
+}))
+
+const buttonStyle = computed(() => ({
+  opacity: isDirty.value ? 1 : 0,
+  transform: isDirty.value ? 'translateX(0)' : 'translateX(10px)',
+  pointerEvents: isDirty.value ? 'auto' : 'none',
+}))
 
 const form = reactive({
   nickName: '',
@@ -159,3 +184,16 @@ async function triggerLogin() {
   }
 }
 </script>
+
+<style scoped>
+:global(.fade-scale-enter-active),
+:global(.fade-scale-leave-active) {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+:global(.fade-scale-enter-from),
+:global(.fade-scale-leave-to) {
+  opacity: 0;
+  transform: translateX(10px);
+}
+</style>
