@@ -9,12 +9,29 @@
 
         <!-- 侧边栏 -->
         <ul class="cy-menu bg-white rounded-xl w-40">
-          <li v-for="(item, index) in pages">
+          <li>
             <a
               class="text-gray-400 text-lg font-medium"
-              @click="selectOne(index)"
-              :class="sysStore.settingTabIndex == index ? 'cy-menu-active' : ''">
-              <span>{{ item }}</span>
+              @click="selectOne(0)"
+              :class="sysStore.settingTabIndex == 0 ? 'cy-menu-active' : ''">
+              <span class="icon--memory-account-box icon-size-22"></span>
+              <span>个人资料</span>
+            </a>
+
+            <a
+              class="text-gray-400 text-lg font-medium"
+              @click="selectOne(1)"
+              :class="sysStore.settingTabIndex == 1 ? 'cy-menu-active' : ''">
+              <span class="icon--memory-application-code icon-size-22"></span>
+              <span>书签管理</span>
+            </a>
+
+            <a
+              class="text-gray-400 text-lg font-medium"
+              @click="selectOne(2)"
+              :class="sysStore.settingTabIndex == 2 ? 'cy-menu-active' : ''">
+              <span class="icon--memory-dot-hexagon icon-size-22"></span>
+              <span>偏好设置</span>
             </a>
           </li>
         </ul>
@@ -29,7 +46,6 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 const sysStore = useSysStore()
-const pages = ['个人资料', '书签管理', '偏好设置']
 
 const isHeaderHidden = ref(false)
 const lastScrollY = ref(0)
