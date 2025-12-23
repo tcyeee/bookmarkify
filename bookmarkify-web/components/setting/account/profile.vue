@@ -3,14 +3,14 @@
     <!-- 已验证账号 -->
     <div v-if="!isAuthed" class="space-y-6">
       <div
-        class="rounded-2xl bg-linear-to-r from-slate-900 via-slate-800 to-slate-700 text-white p-6 sm:p-8 flex flex-col gap-6 sm:flex-row sm:items-center shadow-md">
+        class="rounded-2xl bg-linear-to-br from-slate-200 via-slate-300 to-gray-200 text-slate-800 p-6 sm:p-8 flex flex-col gap-6 sm:flex-row sm:items-center">
         <div class="shrink-0">
           <AvatarUpload :avatar-path="avatarUrl" @update="handleAvatarUpdate" />
         </div>
         <div class="flex-1 space-y-3">
           <div class="flex flex-wrap items-center gap-3">
             <h2 class="text-2xl font-semibold leading-tight">
-              {{ form.nickName || account?.nickName || '未命名用户' }}
+              {{ displayNickName }}
             </h2>
             <span class="cy-badge cy-badge-accent cy-badge-lg">已验证</span>
           </div>
@@ -132,6 +132,7 @@ const maskedUid = computed(() => {
   if (uid.length <= 8) return uid
   return `${uid.slice(0, 8)}••••${uid.slice(-8)}`
 })
+const displayNickName = computed(() => account.value?.nickName || '未命名用户')
 
 const form = reactive({
   nickName: '',
