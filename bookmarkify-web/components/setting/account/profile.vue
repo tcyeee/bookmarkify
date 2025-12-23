@@ -77,6 +77,27 @@
           </div>
         </div>
       </div>
+
+      <div>
+        <div class="text-lg font-semibold text-slate-800 py-3">账号退出与注销</div>
+        <!-- 退出账号 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="font-medium">退出登录</div>
+            <div class="text-sm text-slate-500">在当前设备上, 退出本帐户</div>
+          </div>
+          <button class="cy-btn" @click="userStore.logout()">退出账号</button>
+        </div>
+
+        <!-- 注销账户 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="font-medium">注销账户</div>
+            <div class="text-sm text-slate-500">注销后账号所有数据将被销毁并不可找回，请谨慎操作。</div>
+          </div>
+          <CancelAccount></CancelAccount>
+        </div>
+      </div>
     </div>
 
     <!-- 临时/未验证账号 -->
@@ -101,6 +122,7 @@ import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useUserStore } from '@stores/user.store'
 import { AuthStatusEnum } from '@typing'
+import CancelAccount from './cancel.vue'
 
 const userStore = useUserStore()
 
