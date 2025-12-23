@@ -4,15 +4,15 @@ const userStore = useUserStore()
 export default defineNuxtRouteMiddleware((to, from) => {
   const isNone = [AuthStatusEnum.NONE].includes(userStore.authStatus)
 
-  // 如果当前是/index页面
-  if (to.path === '/' && isNone) {
-    console.log('[DEBUG] 当前是/index页面,没有帐户,跳转到引导页')
-    return navigateTo('/welcome')
-  }
+  // 引导页
+  const welcomePage = '/welcome'
+  // 用户控制台首页
+  const consolePage = '/'
+  // 受限页面列表
+  const restrictPageList = ['/', '/setting']
 
-  // 如果当前是/welcome页面
-  if (to.path === '/welcome' && !isNone) {
-    console.log('[DEBUG] 当前是/welcome页面,已经有帐户,跳转到index')
-    return navigateTo('/')
-  }
+  // 访问受限页面且没有登录,跳转到引导页
+  if (restrictPageList.includes(to.path) && isNone) return navigateTo(welcomePage)
+  // 访问引导页且已登录,跳转到首页
+  if (to.path === welcomePage && !isNone) return navigateTo(consolePage)
 })

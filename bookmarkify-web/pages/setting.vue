@@ -7,11 +7,15 @@
 </template>
 
 <script lang="ts" setup>
-definePageMeta({ layout: "setting" });
-const sysStore = useSysStore();
+definePageMeta({
+  middleware: 'auth',
+  layout: 'setting',
+})
+
+const sysStore = useSysStore()
 </script>
 
-<style scoped land='scss'>
+<style scoped land="scss">
 .min-h-screen {
   min-height: calc(100vh - 13rem);
 }
