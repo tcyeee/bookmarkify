@@ -3,8 +3,9 @@
     <div class="flex-1 pb-12">
       <div class="w-full h-screen pb-16 flex flex-col items-center justify-between bg-gray-300">
         <span class="text-neon-wb text-2xl"> Scroll-driven Section Reveal </span>
-        <div>
-          <Button size="icon" class="rounded-full animate-bounce" @click="handleScroll">查看更多</Button>
+
+        <div @click="handleScroll" class="animate-bounce flex flex-col items-center gap-5">
+          <icon class="icon--arrow-down-bold icon-size-40 text-gray-400" />
         </div>
       </div>
 
@@ -94,10 +95,10 @@
     <Button
       v-if="showBackToTop"
       size="icon"
-      class="fixed bottom-28 right-6 z-50 rounded-full bg-black/80 text-white shadow-lg hover:bg-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      class="fixed bottom-28 right-6 z-50 rounded-full hover:scale-110 transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2"
       aria-label="回到顶部"
       @click="backToTop">
-      ↑
+      <icon class="icon--arrow-up-circle icon-size-40 text-gray-400" />
     </Button>
     <SiteFooter />
   </div>
