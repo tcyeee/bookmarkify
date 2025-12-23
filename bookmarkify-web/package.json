@@ -33,6 +33,7 @@
     "@types/node": "^24.10.1",
     "element-plus": "^2.11.8",
     "sass": "^1.94.2",
+    "typescript": "^5.9.3",
     "vuedraggable": "4.1.0"
   }
 }

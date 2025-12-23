@@ -1,6 +1,6 @@
 <template>
-  <div class="min-h-screen w-screen py-12">
-    <div class="w-full h-screen pb-16 flex flex-col items-center justify-between">
+  <div class="min-h-screen w-screen">
+    <div class="w-full h-screen pb-16 flex flex-col items-center justify-between bg-gray-300">
       <span class="text-neon-wb text-2xl"> Scroll-driven Section Reveal </span>
       <Button size="icon" class="rounded-full animate-bounce" @click="handleScroll">查看更多</Button>
     </div>
