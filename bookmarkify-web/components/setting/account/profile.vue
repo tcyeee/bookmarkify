@@ -14,16 +14,8 @@
             </h2>
             <span class="cy-badge cy-badge-accent cy-badge-lg">已验证</span>
           </div>
-          <div class="text-slate-200/80 text-sm flex flex-wrap gap-3">
-            <span>UID: {{ account?.uid || '——' }}</span>
-            <span class="inline-flex items-center gap-1">
-              <span class="icon--memory-email icon-size-18"></span>
-              {{ account?.email || '未绑定邮箱' }}
-            </span>
-            <span class="inline-flex items-center gap-1">
-              <span class="icon--memory-call icon-size-18"></span>
-              {{ account?.phone || '未绑定手机号' }}
-            </span>
+          <div class="text-gray-500 text-xl uppercase font-jersey10">
+            <span>UID: {{ maskedUid }}</span>
           </div>
         </div>
       </div>
@@ -134,6 +126,12 @@ const accountStatus = computed<AuthStatusEnum | undefined>(() => userStore.authS
 const account = computed<UserInfo | undefined>(() => userStore.account)
 const avatarUrl: Ref<string | undefined> = computed(() => userStore.account?.avatar?.currentName)
 const isAuthed = computed(() => accountStatus.value === AuthStatusEnum.AUTHED)
+const maskedUid = computed(() => {
+  const uid = account.value?.uid
+  if (!uid) return '——'
+  if (uid.length <= 8) return uid
+  return `${uid.slice(0, 8)}••••${uid.slice(-8)}`
+})
 
 const form = reactive({
   nickName: '',
