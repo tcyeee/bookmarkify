@@ -1,17 +1,16 @@
 <template>
   <div class="avatar-upload-container">
-    <div class="relative inline-block group">
+    <div class="relative inline-flex items-center justify-center group">
       <AvatarPreview
         :avatar-path="previewUrl || avatarPath"
         :fallback-text="fallbackInitial"
         class="transition duration-200 group-hover:brightness-[0.7]" />
       <button
         type="button"
-        class="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+        class="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
         @click.stop.prevent="triggerSelect"
         :disabled="uploading">
-        <span class="icon--memory-edit-pen icon-size-26"></span>
-        <span class="text-sm mt-1">更换头像</span>
+        <span class="icon--memory-upload icon-size-32"></span>
       </button>
       <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleFileChange" />
     </div>
