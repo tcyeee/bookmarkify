@@ -25,7 +25,7 @@
         target="_blank"
         rel="noreferrer"
         class="flex items-center gap-1 text-gray-400 transition-colors hover:text-white">
-        <span class="icon--chat-processing icon-size-19 text-current"></span>
+        <span class="icon--memory-chat-processing icon-size-19 text-current"></span>
         <span>问题反馈</span>
       </a>
     </div>

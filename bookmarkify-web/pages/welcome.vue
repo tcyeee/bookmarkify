@@ -29,7 +29,7 @@
               class="inline-flex items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 hover:dark:text-neutral-400 text-lg">
               ✨ 开始使用
               <span
-                class="icon--arrow-right icon-size-30 w-4 h-4 ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5"></span>
+                class="icon--memory-arrow-right icon-size-30 w-4 h-4 ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5"></span>
             </ShimmerText>
           </div>
         </div>
@@ -38,7 +38,7 @@
         <div
           @click="handleScroll"
           class="relative z-10 animate-bounce flex flex-col items-center gap-5 cursor-pointer select-none">
-          <p class="icon--arrow-down-bold icon-size-40 text-white/80" />
+          <span class="icon--memory-arrow-down-bold icon-size-40 text-white/80"></span>
         </div>
       </div>
 
@@ -64,7 +64,7 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-250 duration-500">
-                <p class="icon--floppy-disk icon-size-40" />
+                <span class="icon--memory-floppy-disk icon-size-40 text-current"></span>
 
                 <h1 class="font-medium text-2xl">一键收藏任意页面</h1>
 
@@ -73,7 +73,7 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-500 duration-500">
-                <p class="icon--search icon-size-40" />
+                <span class="icon--memory-search icon-size-40 text-current"></span>
 
                 <h1 class="font-medium text-2xl">智能分类与搜索</h1>
                 <p class="line-clamp-2 text-neon-wb text-lg">标签、文件夹与 AI 分类建议，模糊搜索让常用应用随手可得。</p>
@@ -81,14 +81,14 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-750 duration-500">
-                <p class="icon--checkbox-marked icon-size-40" />
+                <span class="icon--memory-checkbox-marked icon-size-40 text-current"></span>
                 <h1 class="font-medium text-2xl">书签活性检测</h1>
                 <p class="line-clamp-2 text-neon-wb text-lg">自动检测书签是否有效，及时更新书签状态。</p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-1000 duration-500">
-                <p class="icon--cloud icon-size-40" />
+                <span class="icon--memory-cloud icon-size-40 text-current"></span>
                 <h1 class="font-medium text-2xl">分享与发现</h1>
                 <p class="line-clamp-2 text-neon-wb text-lg">公开或私密分享收藏夹，浏览社区精选书签，一键加入自己的库。</p>
               </div>
@@ -105,7 +105,7 @@
         class="fixed bottom-28 right-6 z-50 rounded-full hover:scale-110 transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 cursor-pointer select-none"
         aria-label="回到顶部"
         @click="backToTop">
-        <p class="icon--arrow-up-circle icon-size-40 text-gray-400" />
+        <span class="icon--memory-arrow-up-circle icon-size-40 text-gray-400"></span>
       </div>
     </Transition>
   </div>
