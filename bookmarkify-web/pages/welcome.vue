@@ -23,10 +23,10 @@
           <!-- 开始使用按钮 -->
           <div
             @click="startUse()"
-            class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium text-white shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15 cursor-pointer select-none">
+            class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15 cursor-pointer select-none">
             <ShimmerText
               :shimmerWidth="100"
-              class="inline-flex items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 hover:dark:text-neutral-400 text-lg">
+              class="inline-flex dark:text-black/50! items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 text-lg">
               ✨ 开始使用
               <span
                 class="icon--memory-arrow-right icon-size-30 w-4 h-4 ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5"></span>
@@ -43,17 +43,19 @@
       </div>
 
       <!-- 划动显示内容 -->
-      <section ref="featureSection">
+      <section
+        ref="featureSection"
+        class="relative px-6 py-16 md:py-24 bg-linear-to-b from-white via-white to-slate-50 text-slate-900 transition-colors dark:from-slate-950 dark:via-slate-950/90 dark:to-slate-950 dark:text-slate-100">
         <UiScrollReveal v-slot="{ isVisible }" class="max-w-3xl flex flex-col mx-auto justify-center">
           <h2
             :class="{ 'translate-y-8 opacity-0': !isVisible }"
-            class="mb-10 text-center font-display text-2xl font-light leading-[1.125] md:text-3xl lg:text-4xl transition-[transform,opacity] delay-300 duration-500">
+            class="mb-10 text-center font-display text-2xl font-light leading-[1.125] md:text-3xl lg:text-4xl transition-[transform,opacity] delay-300 duration-500 text-slate-900 dark:text-white">
             为什么选择 Bookmarkify?
           </h2>
 
           <h3
             :class="{ 'translate-y-8 opacity-0': !isVisible }"
-            class="mx-auto mt-4 text-center leading-relaxed text-muted-foreground md:max-w-2xl lg:mt-8 transition-[transform,opacity] delay-300 duration-500">
+            class="mx-auto mt-4 text-center leading-relaxed text-muted-foreground md:max-w-2xl lg:mt-8 transition-[transform,opacity] delay-300 duration-500 text-slate-600 dark:text-slate-300">
             一键收藏、智能分类、云端同步与社区分享，把分散的网页应用放进同一个入口。
             <br class="hidden md:block" />
             你的常用应用、工作流和灵感清单，随时随地一触即达。
@@ -63,34 +65,40 @@
             <div class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2 md:gap-y-8">
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-                class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-250 duration-500">
+                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-250 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
                 <span class="icon--memory-floppy-disk icon-size-40 text-current"></span>
 
                 <h1 class="font-medium text-2xl">一键收藏任意页面</h1>
 
-                <p class="line-clamp-2 text-neon-wb text-lg">使用扩展或快捷键秒存网址，自动抓取标题、图标与简介。</p>
+                <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">
+                  使用扩展或快捷键秒存网址，自动抓取标题、图标与简介。
+                </p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-                class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-500 duration-500">
+                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-500 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
                 <span class="icon--memory-search icon-size-40 text-current"></span>
 
                 <h1 class="font-medium text-2xl">智能分类与搜索</h1>
-                <p class="line-clamp-2 text-neon-wb text-lg">标签、文件夹与 AI 分类建议，模糊搜索让常用应用随手可得。</p>
+                <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">
+                  标签、文件夹与 AI 分类建议，模糊搜索让常用应用随手可得。
+                </p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-                class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-750 duration-500">
+                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-750 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
                 <span class="icon--memory-checkbox-marked icon-size-40 text-current"></span>
                 <h1 class="font-medium text-2xl">书签活性检测</h1>
-                <p class="line-clamp-2 text-neon-wb text-lg">自动检测书签是否有效，及时更新书签状态。</p>
+                <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">自动检测书签是否有效，及时更新书签状态。</p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-                class="space-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-8 transition-[transform,opacity] delay-1000 duration-500">
+                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-1000 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
                 <span class="icon--memory-cloud icon-size-40 text-current"></span>
                 <h1 class="font-medium text-2xl">分享与发现</h1>
-                <p class="line-clamp-2 text-neon-wb text-lg">公开或私密分享收藏夹，浏览社区精选书签，一键加入自己的库。</p>
+                <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">
+                  公开或私密分享收藏夹，浏览社区精选书签，一键加入自己的库。
+                </p>
               </div>
             </div>
           </div>
