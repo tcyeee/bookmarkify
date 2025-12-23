@@ -3,3 +3,6 @@
   prefix: 'cy-';
   themes: light --default, dark --prefersdark, cupcake;
 }
+@theme {
+  /* --font-jersey10: 'jersey10', ui-sans-serif, system-ui, sans-serif; */
+}
