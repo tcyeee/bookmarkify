@@ -17,10 +17,8 @@
         <!-- 文案 -->
         <div class="relative z-10 flex-1 flex flex-col items-center justify-center gap-4 text-center px-6">
           <p class="text-sm uppercase tracking-[0.4em] text-white/60">Bookmarkify</p>
-          <h1 class="text-4xl md:text-5xl font-semibold leading-tight drop-shadow">管理、发现并分享你的应用书签</h1>
-          <p class="max-w-2xl text-base md:text-lg text-white/80">
-            把常用的 Web 应用、工具和灵感集中收藏，随时同步、搜索与分享，让每一次打开都更高效。
-          </p>
+          <h1 class="text-4xl md:text-5xl font-semibold leading-tight drop-shadow">管理、分享你的应用书签</h1>
+          <p class="max-w-2xl text-base md:text-lg text-white/80">集中收藏应用、工具与灵感，探索互联网更多可能</p>
 
           <!-- 开始使用按钮 -->
           <div
