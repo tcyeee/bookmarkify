@@ -12,8 +12,8 @@
       <HomeMain :status="data.appView" class="absolute left-[10%] right-[10%] top-[30%]" />
 
       <!-- 去设置 -->
-      <div v-if="!data.appView" class="fixed bottom-0">
-        <SettingButton />
+      <div class="fixed bottom-0">
+        <SettingButton @home-click="sceneToggle()" />
       </div>
     </div>
 
