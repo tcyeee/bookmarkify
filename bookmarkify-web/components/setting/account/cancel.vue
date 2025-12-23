@@ -1,6 +1,6 @@
 <template>
   <!-- 注销账户 -->
-  <button class="cy-btn cy-btn-error rounded-2xl mt-2" @click="openDelDialog">注销账户</button>
+  <button class="cy-btn cy-btn-error rounded-2xl" @click="openDelDialog">注销账户</button>
 
   <!-- 注销账户对话框 -->
   <dialog id="userDelDialog" class="cy-modal">
