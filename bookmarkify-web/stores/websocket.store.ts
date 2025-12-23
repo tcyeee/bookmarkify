@@ -31,7 +31,6 @@ export const useWebSocketStore = defineStore('socket', {
         this.socket = undefined
         this.isConnected = false
         this.stopHeartbeat() // 停止心跳
-        this.reconnect() // 触发自动重连
       }
 
       this.socket.onopen = () => {
@@ -90,7 +89,6 @@ export const useWebSocketStore = defineStore('socket', {
         this.socket.close()
         this.socket = undefined
       }
-      this.stopHeartbeat()
     },
   },
 })
