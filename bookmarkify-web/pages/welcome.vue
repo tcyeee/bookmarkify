@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen w-screen">
+  <div class="min-h-screen w-screen pb-24">
     <div class="w-full h-screen pb-16 flex flex-col items-center justify-between bg-gray-300">
       <span class="text-neon-wb text-2xl"> Scroll-driven Section Reveal </span>
       <Button size="icon" class="rounded-full animate-bounce" @click="handleScroll">查看更多</Button>
@@ -87,10 +87,13 @@
         </div>
       </div>
     </UiScrollReveal>
+    <SiteFooter />
   </div>
 </template>
 
 <script setup lang="ts">
+import SiteFooter from '../components/welcome/SiteFooter.vue'
+
 const paragraphPlaceholder = `hello hello hello hello hello hello hello hello hello hello hello hello.`
 const handleScroll = () => {
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
