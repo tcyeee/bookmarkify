@@ -19,12 +19,11 @@ const data = reactive<{
 })
 
 onMounted(() => {
-  storeBookmark.addAction(updateAllBookmark)
+  // 当书签更新后，更新数据
+  storeBookmark.addAction(() => {
+    data.bookmarkList = storeBookmark.bookmarks || []
+  })
 })
-
-function updateAllBookmark() {
-  // storeBookmark.get().then((res) => (data.bookmarkList = res));
-}
 </script>
 
 <style scoped>

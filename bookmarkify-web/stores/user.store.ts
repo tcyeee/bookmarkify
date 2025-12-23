@@ -49,6 +49,12 @@ export const useUserStore = defineStore(
       const user = await track()
       loading.value = false
       account.value = { ...account.value, ...user }
+
+      // websocket
+      if (user.token) {
+        const webSocketStore = useWebSocketStore()
+        webSocketStore.connect(user.token)
+      }
       return user
     }
 

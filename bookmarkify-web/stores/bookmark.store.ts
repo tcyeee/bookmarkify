@@ -6,7 +6,9 @@ import { bookmarksShowAll } from '@api'
 export const useBookmarkStore = defineStore(
   'bookmarks',
   () => {
+    // 用户桌面布局信息
     const bookmarks = ref<Array<HomeItem> | undefined>(undefined)
+    // 当书签更新后的回调函数
     const actions = reactive<Record<string, Function>>({})
 
     function sortData(res: Array<HomeItem>) {
