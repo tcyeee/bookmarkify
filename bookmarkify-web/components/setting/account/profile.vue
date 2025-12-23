@@ -141,7 +141,7 @@ import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useUserStore } from '@stores/user.store'
 import { AuthStatusEnum } from '@typing'
-import CancelAccount from './Cancel.vue'
+import CancelAccount from './CancelModel.vue'
 
 const userStore = useUserStore()
 
