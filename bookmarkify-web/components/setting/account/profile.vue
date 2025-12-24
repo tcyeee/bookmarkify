@@ -66,9 +66,6 @@
               <div class="text-sm text-slate-500 dark:text-slate-400">{{ account?.email || '未绑定邮箱' }}</div>
             </div>
           </div>
-          <span class="cy-badge" :class="account?.email ? 'cy-badge-accent' : 'cy-badge-ghost'">
-            {{ account?.email ? '已绑定' : '未绑定' }}
-          </span>
         </div>
 
         <div
@@ -80,9 +77,9 @@
               <div class="text-sm text-slate-500 dark:text-slate-400">{{ account?.phone || '未绑定手机号' }}</div>
             </div>
           </div>
-          <span class="cy-badge" :class="account?.phone ? 'cy-badge-accent' : 'cy-badge-ghost'">
-            {{ account?.phone ? '已绑定' : '未绑定' }}
-          </span>
+          <div class="flex items-center gap-3">
+            <BindPhoneModal :phone="account?.phone" :disabled="saving" @success="handlePhoneBindSuccess" />
+          </div>
         </div>
       </div>
 
@@ -135,13 +132,14 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch, type CSSProperties } from 'vue'
 import { updateUserInfo } from '@api'
 import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useUserStore } from '@stores/user.store'
 import { AuthStatusEnum } from '@typing'
 import CancelAccount from './CancelModel.vue'
+import BindPhoneModal from './BindPhoneModal.vue'
 
 const userStore = useUserStore()
 
@@ -161,7 +159,7 @@ const buttonWrapperStyle = computed(() => ({
   width: isDirty.value ? '190px' : '0px',
 }))
 
-const buttonStyle = computed(() => ({
+const buttonStyle = computed<CSSProperties>(() => ({
   opacity: isDirty.value ? 1 : 0,
   transform: isDirty.value ? 'translateX(0)' : 'translateX(10px)',
   pointerEvents: isDirty.value ? 'auto' : 'none',
@@ -206,6 +204,10 @@ function resetForm() {
 async function handleAvatarUpdate(avatarPath: string) {
   // 头像上传成功后，更新用户信息中的头像路径
   await userStore.refreshUserInfo()
+}
+
+function handlePhoneBindSuccess(phone: string) {
+  form.phone = phone
 }
 
 async function triggerLogin() {
