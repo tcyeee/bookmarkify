@@ -22,9 +22,9 @@ import java.util.concurrent.TimeUnit
 @Service
 class SmsServiceImpl : ISmsService, ServiceImpl<SmsRecordMapper, SmsRecord>() {
 
-    override fun sendVerificationCode(phoneNumber: String): Boolean {
+    override fun sendVerificationCode(phone: String): Boolean {
         val code = RandomUtil.randomInt(1000, 9999)
-        val res: SmsResponse = SmsUtils.send(SmsType.CODE, phoneNumber, SmsParams(code))
+        val res: SmsResponse = SmsUtils.send(SmsType.CODE, phone, SmsParams(code))
         /* 存入DATABASE */
         val entity = SmsRecord(BaseUtils.uid())
         val save = save(entity.intFirst(res))

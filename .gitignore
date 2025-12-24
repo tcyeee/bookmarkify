@@ -12,6 +12,14 @@ bookmarkify-web/public/upload
 
 # Node dependencies
 node_modules
+bookmarkify-api/bin
+bookmarkify-api/build
+bookmarkify-api/out
+bookmarkify-api/target
+bookmarkify-api/classes
+bookmarkify-api/libs
+bookmarkify-api/logs
+bookmarkify-api/tmp
 
 # Logs
 logs

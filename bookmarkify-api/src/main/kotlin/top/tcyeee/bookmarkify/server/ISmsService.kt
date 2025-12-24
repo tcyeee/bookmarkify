@@ -11,6 +11,6 @@ import top.tcyeee.bookmarkify.entity.entity.SmsRecord
  */
 interface ISmsService : IService<SmsRecord> {
     /* 发送验证码,同时存入REDIS */
-    fun sendVerificationCode(phoneNumber: String): Boolean
+    fun sendVerificationCode(phone: String): Boolean
     fun msgStatusCheck(id:String)
 }
