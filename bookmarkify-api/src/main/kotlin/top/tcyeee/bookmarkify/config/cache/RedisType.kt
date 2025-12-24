@@ -13,6 +13,7 @@ enum class RedisType(
     val unit: TimeUnit  // 过期时间单位
 ) {
     CODE_PHONE(3, TimeUnit.MINUTES),
+    CAPTCHA_CODE(3, TimeUnit.MINUTES),
     DEFAULT_BACKGROUND_IMAGES(12, TimeUnit.HOURS),
     DEFAULT_BACKGROUND_GRADIENTS(12, TimeUnit.HOURS)
 }

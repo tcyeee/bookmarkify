@@ -1,16 +1,18 @@
 package top.tcyeee.bookmarkify.server.impl
 
-import cn.dev33.satoken.session.SaSession
 import cn.dev33.satoken.stp.StpUtil
+import cn.hutool.captcha.CaptchaUtil
 import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
+import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
@@ -19,7 +21,9 @@ import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
+import top.tcyeee.bookmarkify.utils.RedisUtils
 import top.tcyeee.bookmarkify.utils.pwd
+
 
 /**
  * @author tcyeee
@@ -33,6 +37,7 @@ class UserServiceImpl(
     private val fileMapper: FileMapper,
     private val fileService: FileServiceImpl,
     private val projectConfig: ProjectConfig,
+    private val smsService: SmsServiceImpl,
 ) : IUserService, ServiceImpl<UserMapper, UserEntity>() {
 
     /**
@@ -68,6 +73,38 @@ class UserServiceImpl(
     override fun loginOut() {
         StpUtil.getSession().clear()
         StpUtil.logout()
+    }
+
+    override fun sendSms(uid: String, params: CaptchaSmsParams): Boolean {
+        val cache = RedisUtils.get<String>(RedisType.CAPTCHA_CODE, uid) ?: return false
+        if (cache != params.captcha.trim()) return false
+        smsService.sendVerificationCode(params.phone)
+        return true
+    }
+
+    override fun verifySms(uid: String, params: SmsVerifyParams): Boolean {
+        val cacheCode = RedisUtils.get<Int>(RedisType.CODE_PHONE, uid)?.toString() ?: return false
+        if (cacheCode != params.smsCode.trim()) throw CommonException(ErrorType.E215)
+
+        // 根据手机号查询用户,如果有,则和携带TOKEN的用户进行数据合并
+        val user = ktQuery().eq(UserEntity::phone, params.phone.trim()).one()
+        if (user != null) {
+            ktUpdate().eq(UserEntity::id, user.id).set(UserEntity::phone, params.phone.trim()).update()
+            // TODO 使用手机号所在的用户信息进行登录
+            // TODO 等待进行数据合并
+            return true
+        } else {
+            // 如果没有,则将手机号绑定到当前用户上
+            ktUpdate().eq(UserEntity::id, uid).set(UserEntity::phone, params.phone.trim()).update()
+            return true
+        }
+    }
+
+    override fun captchaImage(uid: String): ResultWrapper {
+        val lineCaptcha = CaptchaUtil.createLineCaptcha(200, 100)
+        val code = lineCaptcha.code
+        RedisUtils.set(RedisType.CAPTCHA_CODE, uid, code)
+        return ResultWrapper.ok(lineCaptcha.imageBase64)
     }
 
     /**
@@ -127,8 +164,8 @@ class UserServiceImpl(
         return true
     }
 
-    override fun addBacImg(file: MultipartFile, uid: String): String {
-        val file = fileService.uploadBackground(BaseUtils.uid(), file)
+    override fun addBacImg(multipartFile: MultipartFile, uid: String): String {
+        val file = fileService.uploadBackground(uid, multipartFile)
 
         // 添加到背景图片数据库
         val bacImgEntity = BackgroundImageEntity(uid = uid, fileId = file.id).also { bacImageService.save(it) }
@@ -142,11 +179,9 @@ class UserServiceImpl(
         return file.currentName
     }
 
-    override fun updateAvatar(file: MultipartFile, uid: String): String {
-        val file = fileService.updateAvatar(BaseUtils.uid(), file)
-
+    override fun updateAvatar(multipartFile: MultipartFile, uid: String): String {
+        val file = fileService.updateAvatar(BaseUtils.uid(), multipartFile)
         ktUpdate().eq(UserEntity::id, uid).set(UserEntity::avatarFileId, file.id).update()
-
         return file.currentName
     }
 
@@ -158,7 +193,10 @@ class UserServiceImpl(
         ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::nickName, username).update()
 
     override fun changePhone(phone: String): Boolean =
-        ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::phone, phone).update()
+        ktUpdate().eq(UserEntity::id, BaseUtils.uid())
+            .set(UserEntity::phone, phone)
+            .set(UserEntity::verified, true)
+            .update()
 
     override fun checkPhone(code: Int): Boolean =
         ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::email, code).update()
