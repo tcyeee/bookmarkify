@@ -3,8 +3,8 @@
     v-for="(bookmark, index) in bookmarks"
     :key="index"
     class="absolute inset-0 pointer-events-none"
-    :style="{ left: bookmark.left, top: bookmark.top }">
-    <img class="rounded-lg w-25 h-25 blur opacity-50" :src="bookmark.src" loading="lazy" />
+    :style="{ left: bookmark.left, top: bookmark.top, '--i': index }">
+    <img class="rounded-4xl w-25 h-25 blur opacity-50 floating-img" :src="bookmark.src" loading="lazy" />
   </div>
 </template>
 
@@ -24,3 +24,30 @@ const bookmarks = [
   { src: '/welcome/12.png', left: '18%', top: '34%' },
 ]
 </script>
+
+<style scoped>
+.floating-img {
+  animation: float 7s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.25s);
+  transform-origin: center;
+  will-change: transform;
+}
+
+@keyframes float {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  25% {
+    transform: translate3d(4px, -8px, 0) scale(1.02);
+  }
+  50% {
+    transform: translate3d(0, -12px, 0) scale(1.03);
+  }
+  75% {
+    transform: translate3d(-4px, -8px, 0) scale(1.02);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+</style>
