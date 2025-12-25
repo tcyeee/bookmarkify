@@ -27,9 +27,12 @@
                 pattern="[0-9]*"
                 minlength="11"
                 maxlength="11"
-                @input="onPhoneInput" />
+                @input="onPhoneInput"
+                @blur="onPhoneBlur" />
             </label>
-            <p class="text-xs cy-validator-hint" :class="{ hidden: isPhoneValid || !form.phone }">手机号格式错误</p>
+            <p class="text-xs cy-validator-hint" :class="{ hidden: !phoneTouched || !form.phone || isPhoneValid }">
+              手机号格式错误
+            </p>
           </div>
 
           <div class="flex items-center gap-3 mt-4">
@@ -155,8 +158,8 @@ const captchaImgBase64 = ref('') // 图形验证码
 const loading = ref(false)
 const sending = ref(false)
 const buttonText = computed(() => (props.phone ? '更换手机号' : '绑定手机号'))
-const isPhoneValid = computed(() => /^\d{11}$/.test(form.phone.trim()))
-const isHumanValid = computed(() => form.captchaCode.trim().length > 0)
+const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(form.phone.trim()))
+const isHumanValid = computed(() => form.captchaCode.trim().length === 5)
 const isSmsValid = computed(() => /^\d{4}$/.test(form.smsCode.trim()))
 const canSendSms = computed(() => isPhoneValid.value && isHumanValid.value && !sending.value)
 const maskedPhone = computed(() => {
@@ -172,6 +175,8 @@ watch(
   }
 )
 
+const phoneTouched = ref(false)
+
 async function refreshCaptcha() {
   captchaImgBase64.value = await captchaImage()
 }
@@ -181,6 +186,7 @@ async function openDialog() {
 
   // Reset state
   step.value = 1
+  phoneTouched.value = false
   form.smsCode = ''
   form.captchaCode = ''
   if (props.phone) form.phone = props.phone
@@ -195,7 +201,6 @@ async function openDialog() {
 
 function closeDialog() {
   if (!import.meta.client || !dialogRef.value) return
-  handleDialogClose()
   dialogRef.value.close()
 }
 
@@ -228,6 +233,7 @@ function handleDialogClose() {
   form.captchaCode = ''
   form.smsCode = ''
   step.value = 1
+  phoneTouched.value = false
 }
 
 onMounted(() => {
@@ -248,6 +254,10 @@ function onPhoneInput(e: Event) {
   const onlyDigits = target.value.replace(/\D/g, '').slice(0, 11)
   target.value = onlyDigits
   form.phone = onlyDigits
+}
+
+function onPhoneBlur() {
+  phoneTouched.value = true
 }
 
 function onSmsInput(e: Event) {

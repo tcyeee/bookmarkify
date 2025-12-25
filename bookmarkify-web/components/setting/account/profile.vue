@@ -36,7 +36,7 @@
             class="overflow-hidden transition-[width] duration-200 ease-out flex justify-end gap-2"
             :style="buttonWrapperStyle">
             <button
-              class="cy-btn cy-btn-accent h-12 px-5 min-w-[96px] transition duration-180 ease-out"
+              class="cy-btn cy-btn-accent h-12 px-5 min-w-24 transition duration-180 ease-out"
               :style="buttonStyle"
               @click="saveProfile"
               :disabled="saving">
@@ -44,7 +44,7 @@
               <span v-else>保存</span>
             </button>
             <button
-              class="cy-btn cy-btn-ghost h-12 px-4 min-w-[80px] transition duration-180 ease-out"
+              class="cy-btn cy-btn-ghost h-12 px-4 min-w-20 transition duration-180 ease-out"
               :style="buttonStyle"
               @click="resetForm"
               :disabled="saving">
@@ -63,8 +63,11 @@
             <span class="icon--memory-email icon-size-20 text-slate-500 dark:text-slate-400"></span>
             <div>
               <div class="font-medium">邮箱</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">{{ account?.email || '未绑定邮箱' }}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ form.email || '未绑定邮箱' }}</div>
             </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <BindEmailModal :email="form.email" :disabled="saving" @success="handleEmailBindSuccess" />
           </div>
         </div>
 
@@ -74,11 +77,11 @@
             <span class="icon--memory-speaker icon-size-20 text-slate-500 dark:text-slate-400"></span>
             <div>
               <div class="font-medium">手机号</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">{{ account?.phone || '未绑定手机号' }}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ form.phone || '未绑定手机号' }}</div>
             </div>
           </div>
           <div class="flex items-center gap-3">
-            <BindPhoneModal :phone="account?.phone" :disabled="saving" @success="handlePhoneBindSuccess" />
+            <BindPhoneModal :phone="form.phone" :disabled="saving" @success="handlePhoneBindSuccess" />
           </div>
         </div>
       </div>
@@ -121,7 +124,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, ref, watch, type CSSProperties } from 'vue'
+import { computed, reactive, ref, watch, type CSSProperties, type Ref } from 'vue'
 import { updateUserInfo } from '@api'
 import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
@@ -129,6 +132,7 @@ import { useUserStore } from '@stores/user.store'
 import { AuthStatusEnum } from '@typing'
 import AccountDelete from './AccountDelete.vue'
 import BindPhoneModal from './BindPhoneModal.vue'
+import BindEmailModal from './BindEmailModal.vue'
 import AccountLogout from './AccountLogout.vue'
 
 const userStore = useUserStore()
@@ -144,7 +148,12 @@ const maskedUid = computed(() => {
   return `${uid.slice(0, 8)}••••${uid.slice(-8)}`
 })
 const displayNickName = computed(() => account.value?.nickName || '未命名用户')
-const isDirty = computed(() => form.nickName !== (account.value?.nickName || ''))
+const isDirty = computed(() => {
+  const nicknameChanged = form.nickName !== (account.value?.nickName || '')
+  const phoneChanged = form.phone !== (account.value?.phone || '')
+  const emailChanged = form.email !== (account.value?.email || '')
+  return nicknameChanged || phoneChanged || emailChanged
+})
 const buttonWrapperStyle = computed(() => ({
   width: isDirty.value ? '190px' : '0px',
 }))
@@ -158,6 +167,7 @@ const buttonStyle = computed<CSSProperties>(() => ({
 const form = reactive({
   nickName: '',
   phone: '',
+  email: '',
 })
 const saving = ref(false)
 
@@ -166,6 +176,7 @@ watch(
   (val) => {
     form.nickName = val?.nickName || ''
     form.phone = val?.phone || ''
+    form.email = val?.email || ''
   },
   { immediate: true }
 )
@@ -176,6 +187,7 @@ async function saveProfile() {
     await updateUserInfo({
       nickName: form.nickName,
       phone: form.phone,
+      email: form.email,
     })
     await userStore.refreshUserInfo()
     ElNotification.success({ message: '个人资料修改成功' })
@@ -189,6 +201,7 @@ async function saveProfile() {
 function resetForm() {
   form.nickName = account.value?.nickName || ''
   form.phone = account.value?.phone || ''
+  form.email = account.value?.email || ''
 }
 
 async function handleAvatarUpdate(avatarPath: string) {
@@ -198,6 +211,10 @@ async function handleAvatarUpdate(avatarPath: string) {
 
 function handlePhoneBindSuccess(phone: string) {
   form.phone = phone
+}
+
+function handleEmailBindSuccess(email: string) {
+  form.email = email
 }
 
 async function triggerLogin() {

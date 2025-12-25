@@ -54,4 +54,7 @@ class LoginController(private val userService: UserServiceImpl) {
         response: HttpServletResponse,
         @RequestBody params: SmsVerifyParams
     ): UserSessionInfo = userService.verifySms(request, response, BaseUtils.uid(), params)
+
+    // TODO 发送验证邮箱, 邮箱中包含4位验证码, 同时将验证码存入redis,限时15分钟
+    // TODO 验证邮箱
 }

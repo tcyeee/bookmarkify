@@ -29,4 +29,5 @@ export interface UserFile {
 export interface UserInfoUpdate {
   nickName?: string
   phone?: string
+  email?: string
 }
