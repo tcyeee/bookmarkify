@@ -10,7 +10,7 @@
         <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">绑定手机号</h3>
         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">用于账号安全、登录验证与找回，请填写常用手机号。</p>
 
-        <label class="cy-input cy-validator mt-5">
+        <label class="cy-input cy-validator mt-5 w-full">
           <span class="icon--memory-arrow-right-circle icon-size-20 text-gray-500" />
           <input
             v-model="form.phone"
@@ -26,7 +26,7 @@
         </label>
         <p class="text-xs cy-validator-hint" :class="{ 'opacity-0': isPhoneValid || !form.phone }">手机号格式错误</p>
 
-        <label class="cy-input cy-validator mt-4">
+        <label class="cy-input cy-validator mt-4 w-full">
           <span class="icon--memory-robot icon-size-20 text-gray-500" />
           <input
             v-model="form.humanCode"
@@ -76,17 +76,8 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, ref, watch } from 'vue'
-import { useSysStore } from '@stores/sys.store'
-
-const props = defineProps<{
-  phone?: string
-  disabled?: boolean
-}>()
-
-const emit = defineEmits<{
-  (e: 'success', phone: string): void
-}>()
+const props = defineProps<{ phone?: string; disabled?: boolean }>()
+const emit = defineEmits<{ (e: 'success', phone: string): void }>()
 
 const sysStore = useSysStore()
 const dialogRef = ref<HTMLDialogElement>()
@@ -115,13 +106,13 @@ watch(
 function openDialog() {
   if (!import.meta.client || !dialogRef.value) return
   dialogRef.value.showModal()
-  sysStore.preventKeyEventsFlag = true
+  sysStore.togglePreventKeyEventsFlag(true)
 }
 
 function closeDialog() {
   if (!import.meta.client || !dialogRef.value) return
+  handleDialogClose()
   dialogRef.value.close()
-  sysStore.preventKeyEventsFlag = false
 }
 
 async function submit() {
@@ -143,6 +134,22 @@ async function submit() {
     loading.value = false
   }
 }
+
+function handleDialogClose() {
+  sysStore.togglePreventKeyEventsFlag(false)
+}
+
+onMounted(() => {
+  if (!import.meta.client || !dialogRef.value) return
+  dialogRef.value.addEventListener('close', handleDialogClose)
+  dialogRef.value.addEventListener('cancel', handleDialogClose)
+})
+
+onBeforeUnmount(() => {
+  if (!import.meta.client || !dialogRef.value) return
+  dialogRef.value.removeEventListener('close', handleDialogClose)
+  dialogRef.value.removeEventListener('cancel', handleDialogClose)
+})
 
 function onPhoneInput(e: Event) {
   const target = e.target as HTMLInputElement
