@@ -24,12 +24,13 @@ export const useSysStore = defineStore(
     /* 系统默认渐变背景 */
     const defaultGradientBackgroundsList = ref<BacGradientVO[]>([])
 
-async function refreshSystemConfig() {
-   [defaultImageBackgroundsList.value, defaultGradientBackgroundsList.value] = await Promise.all([
-    defaultImageBackgrounds(),
-    defaultGradientBackgrounds()
-  ])
-}
+    // 更新系统配置信息
+    async function refreshSystemConfig() {
+      ;[defaultImageBackgroundsList.value, defaultGradientBackgroundsList.value] = await Promise.all([
+        defaultImageBackgrounds(),
+        defaultGradientBackgrounds(),
+      ])
+    }
 
     /**
      * 触发键盘事件(每次按下任意键自动触发该方法)
@@ -66,6 +67,14 @@ async function refreshSystemConfig() {
       return keyCode + '-' + triggerPath
     }
 
+    /**
+     * 切换阻止键盘事件开关
+     * @param value 开关值
+     */
+    function togglePreventKeyEventsFlag(value: boolean) {
+      preventKeyEventsFlag.value = value
+    }
+
     return {
       preventKeyEventsFlag,
       settingTabIndex,
@@ -75,6 +84,7 @@ async function refreshSystemConfig() {
       triggerKeyEvent,
       registerKeyEvent,
       refreshSystemConfig,
+      togglePreventKeyEventsFlag,
       keyEventLastTriggered,
     }
   },

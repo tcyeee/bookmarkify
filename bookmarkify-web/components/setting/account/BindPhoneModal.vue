@@ -7,14 +7,11 @@
 
     <dialog ref="dialogRef" class="cy-modal">
       <div class="cy-modal-box max-w-md">
-        <div class="flex items-center gap-2">
-          <span class="icon--memory-speaker icon-size-22 text-slate-500"></span>
-          <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">绑定手机号</h3>
-        </div>
+        <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">绑定手机号</h3>
         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">用于账号安全、登录验证与找回，请填写常用手机号。</p>
 
         <label class="cy-input cy-validator mt-5">
-          <span class="icon--phone icon-size-20 text-gray-500" />
+          <span class="icon--memory-arrow-right-circle icon-size-20 text-gray-500" />
           <input
             v-model="form.phone"
             type="tel"
