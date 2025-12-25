@@ -1,12 +1,16 @@
 import { defineStore } from 'pinia'
-import { AuthStatusEnum, type UserInfo } from '@typing'
+import { AuthStatusEnum, type UserFile, type UserInfo, type UserSetting } from '@typing'
 import { track, queryUserInfo, authLogout } from '@api'
 
 export const useUserStore = defineStore(
   'user',
   () => {
-    /* 用户信息 */
+    /* 用户账户信息 */
     const account = ref<UserInfo>()
+    /* 用户设置信息 */
+    const setting = ref<UserSetting>()
+    /* 用户头像 */
+    const avatar = ref<UserFile>()
     /* 加载状态 */
     const loading = ref<Boolean>(false)
     /* 帐户状态：NONE、LOGGED、AUTHED */
@@ -64,6 +68,7 @@ export const useUserStore = defineStore(
       webSocketStore.disconnect()
       account.value = undefined
       await authLogout()
+      navigateTo('/welcome')
     }
     return { loginOrRegister, logout, account, refreshUserInfo, authStatus }
   },

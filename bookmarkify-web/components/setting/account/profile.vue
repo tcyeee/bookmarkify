@@ -95,7 +95,7 @@
               <div class="text-sm text-slate-500 dark:text-slate-400">仅退出当前设备登录，不影响账号数据。</div>
             </div>
           </div>
-          <button class="cy-btn cy-btn-ghost rounded-2xl" @click="userStore.logout()">退出账号</button>
+          <button class="cy-btn cy-btn-ghost rounded-2xl" @click="accountLogout()">退出账号</button>
         </div>
 
         <!-- 注销账户 -->
@@ -219,6 +219,11 @@ async function triggerLogin() {
   } finally {
     saving.value = false
   }
+}
+
+async function accountLogout() {
+  // TODO 如果用户还没认证, 则需要提示“您还没设置任何登录方式,一旦退出,将无法登录”
+  await userStore.logout()
 }
 </script>
 
