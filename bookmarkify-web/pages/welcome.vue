@@ -22,14 +22,24 @@
 
           <!-- 开始使用按钮 -->
           <div
-            @click="startUse()"
-            class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15 cursor-pointer select-none">
+            @click="startUse"
+            :class="[
+              'group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15 cursor-pointer select-none',
+              startLoading ? 'opacity-75 cursor-wait pointer-events-none' : '',
+            ]"
+            :aria-busy="startLoading">
             <ShimmerText
               :shimmerWidth="100"
               class="inline-flex dark:text-black/50! items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 text-lg">
-              ✨ 开始使用
-              <span
-                class="icon--memory-arrow-right icon-size-30 w-4 h-4 ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5"></span>
+              <template v-if="startLoading">
+                <span class="icon--memory-loading icon-size-24 animate-spin"></span>
+                <span>&emsp;处理中...</span>
+              </template>
+              <template v-else>
+                <span>✨ 开始使用</span>
+                <span
+                  class="icon--memory-arrow-right icon-size-30 w-4 h-4 ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5"></span>
+              </template>
             </ShimmerText>
           </div>
         </div>
@@ -128,11 +138,17 @@ import ShimmerText from '../components/stunning/ShimmerText.vue'
 definePageMeta({ layout: 'explore' })
 
 const userStore = useUserStore()
+const startLoading = ref(false)
 
-function startUse() {
-  userStore.loginOrRegister().then(() => {
-    navigateTo('/')
-  })
+async function startUse() {
+  if (startLoading.value) return
+  startLoading.value = true
+  try {
+    await userStore.loginOrRegister()
+    await navigateTo('/')
+  } finally {
+    startLoading.value = false
+  }
 }
 
 const featureSection = ref<HTMLElement | null>(null)
