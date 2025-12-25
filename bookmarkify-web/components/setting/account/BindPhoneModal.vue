@@ -70,6 +70,7 @@
             <div class="relative w-full max-w-60 mx-auto mt-6 mb-4">
               <!-- 隐藏的真实输入框，负责接收输入事件 -->
               <input
+                ref="smsCodeInputRef"
                 v-model="form.smsCode"
                 type="tel"
                 inputmode="numeric"
@@ -138,6 +139,7 @@ const emit = defineEmits<{ (e: 'success', phone: string): void }>()
 
 const sysStore = useSysStore()
 const dialogRef = ref<HTMLDialogElement>()
+const smsCodeInputRef = ref<HTMLInputElement>()
 
 const form = reactive({
   phone: props.phone || '',
@@ -297,6 +299,8 @@ async function sendSms() {
     ElNotification.success({ message: '已发送短信验证码（模拟，输入 0000 即可）' })
     step.value = 2
     startCountdown()
+    await nextTick()
+    smsCodeInputRef.value?.focus()
   } catch (error: any) {
     ElMessage.error(error?.message || '发送失败，请稍后重试')
   } finally {

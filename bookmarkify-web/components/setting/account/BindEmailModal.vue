@@ -25,7 +25,6 @@
                 placeholder="请输入邮箱地址"
                 @input="onEmailInput" />
             </label>
-            <p class="text-xs cy-validator-hint" :class="{ hidden: isEmailValid || !form.email }">邮箱格式错误</p>
           </div>
         </template>
 
@@ -37,6 +36,7 @@
             <div class="relative w-full max-w-[280px] mx-auto mt-6 mb-4">
               <!-- 隐藏的真实输入框，负责接收输入事件 -->
               <input
+                ref="emailCodeInputRef"
                 v-model="form.emailCode"
                 type="tel"
                 inputmode="numeric"
@@ -108,6 +108,7 @@ const emit = defineEmits<{ (e: 'success', email: string): void }>()
 
 const sysStore = useSysStore()
 const dialogRef = ref<HTMLDialogElement>()
+const emailCodeInputRef = ref<HTMLInputElement>()
 
 const form = reactive({
   email: props.email || '',
@@ -242,6 +243,8 @@ async function sendEmailCode() {
     ElNotification.success({ message: '已发送邮箱验证码（模拟，输入 000000 即可）' })
     step.value = 2
     startCountdown()
+    await nextTick()
+    emailCodeInputRef.value?.focus()
   } catch (error: any) {
     ElMessage.error(error?.message || '发送失败，请稍后重试')
   } finally {

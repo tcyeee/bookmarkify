@@ -8,6 +8,11 @@
         class="h-full w-full rounded-full object-cover"
         @error="loadError = true" />
       <div
+        v-else-if="showIconFallback"
+        class="flex h-full w-full items-center justify-center rounded-full bg-slate-200 text-slate-700 text-2xl font-semibold select-none">
+        <span class="icon--memory-account text-gray-300 icon-size-60"></span>
+      </div>
+      <div
         v-else
         class="flex h-full w-full items-center justify-center rounded-full bg-slate-200 text-slate-700 text-2xl font-semibold select-none">
         {{ fallbackInitial }}
@@ -22,6 +27,7 @@ import { getAvatarUrl } from '@config'
 const props = defineProps<{
   avatarPath: string | undefined | null
   fallbackText?: string
+  showIconFallback?: boolean
 }>()
 
 const avatarUrl = computed(() => {
@@ -30,5 +36,6 @@ const avatarUrl = computed(() => {
 
 const loadError = ref(false)
 const showImage = computed(() => !!props.avatarPath && !loadError.value)
+const showIconFallback = computed(() => !showImage.value && !!props.showIconFallback)
 const fallbackInitial = computed(() => (props.fallbackText || '用').trim().slice(0, 1) || '用')
 </script>
