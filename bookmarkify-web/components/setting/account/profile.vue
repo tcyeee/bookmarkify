@@ -85,18 +85,7 @@
 
       <div class="space-y-3 mt-20">
         <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">账号操作</div>
-        <!-- 退出账号 -->
-        <div
-          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
-          <div class="flex items-center gap-3 text-slate-800 dark:text-slate-200">
-            <span class="icon--memory-arrow-down-right-box icon-size-22 text-slate-500 dark:text-slate-400"></span>
-            <div>
-              <div class="font-semibold">退出登录</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">仅退出当前设备登录，不影响账号数据。</div>
-            </div>
-          </div>
-          <button class="cy-btn cy-btn-ghost rounded-2xl" @click="accountLogout()">退出账号</button>
-        </div>
+        <AccountLogout />
 
         <!-- 注销账户 -->
         <div
@@ -108,7 +97,7 @@
               <div class="text-sm text-rose-600 dark:text-rose-200">注销后账号及数据将被销毁且不可恢复，请谨慎操作。</div>
             </div>
           </div>
-          <CancelAccount />
+          <AccountDelete />
         </div>
       </div>
     </div>
@@ -138,8 +127,9 @@ import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useUserStore } from '@stores/user.store'
 import { AuthStatusEnum } from '@typing'
-import CancelAccount from './CancelModel.vue'
+import AccountDelete from './AccountDelete.vue'
 import BindPhoneModal from './BindPhoneModal.vue'
+import AccountLogout from './AccountLogout.vue'
 
 const userStore = useUserStore()
 
@@ -219,11 +209,6 @@ async function triggerLogin() {
   } finally {
     saving.value = false
   }
-}
-
-async function accountLogout() {
-  // TODO 如果用户还没认证, 则需要提示“您还没设置任何登录方式,一旦退出,将无法登录”
-  await userStore.logout()
 }
 </script>
 
