@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
     <!-- 已验证账号 -->
-    <div v-if="!isAuthed" class="space-y-6">
+    <div v-if="isAuthed" class="space-y-6">
       <div
         class="rounded-2xl bg-linear-to-br from-slate-200 via-slate-300 to-gray-200 text-slate-800 p-6 sm:p-8 flex flex-col gap-6 sm:flex-row sm:items-center dark:from-slate-800 dark:via-slate-900 dark:to-slate-900 dark:text-slate-100">
         <div class="shrink-0">
@@ -111,12 +111,14 @@
       class="rounded-2xl border border-dashed border-slate-300 bg-white/70 p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
       <div
         class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-        <span class="icon--memory-account-alert icon-size-26"></span>
+        <span class="icon--memory--alert icon-size-26"></span>
       </div>
       <div class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2">未完成验证</div>
-      <div class="text-slate-600 dark:text-slate-300 mb-4">请绑定手机号或邮箱完成验证，以便保障账号安全并支持跨设备同步。</div>
+      <div class="text-slate-500 dark:text-slate-300 mb-4 text-sm">
+        请绑定手机号或邮箱完成验证，以便保障账号安全并支持跨设备同步。
+      </div>
       <div class="flex justify-center gap-3">
-        <button class="cy-btn cy-btn-accent" @click="triggerLogin" :disabled="saving">立即登录/注册</button>
+        <button class="cy-btn cy-btn-accent" @click="" :disabled="saving">立即登录/注册</button>
         <button class="cy-btn cy-btn-ghost" @click="userStore.refreshUserInfo()" :disabled="saving">刷新状态</button>
       </div>
     </div>
@@ -215,17 +217,6 @@ function handlePhoneBindSuccess(phone: string) {
 
 function handleEmailBindSuccess(email: string) {
   form.email = email
-}
-
-async function triggerLogin() {
-  saving.value = true
-  try {
-    await userStore.loginOrRegister()
-  } catch (error: any) {
-    ElMessage.error(error?.message || '登录失败，请稍后重试')
-  } finally {
-    saving.value = false
-  }
 }
 </script>
 
