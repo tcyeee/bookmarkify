@@ -10,37 +10,53 @@
         <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">绑定手机号</h3>
         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">用于账号安全、登录验证与找回，请填写常用手机号。</p>
 
-        <label class="cy-input cy-validator mt-5 w-full">
-          <span class="icon--memory-arrow-right-circle icon-size-20 text-gray-500" />
-          <input
-            v-model="form.phone"
-            type="tel"
-            inputmode="numeric"
-            class="tabular-nums flex-1"
-            required
-            placeholder="请输入手机号"
-            pattern="[0-9]*"
-            minlength="11"
-            maxlength="11"
-            @input="onPhoneInput" />
-        </label>
-        <p class="text-xs cy-validator-hint" :class="{ 'opacity-0': isPhoneValid || !form.phone }">手机号格式错误</p>
-
-        <label class="cy-input cy-validator mt-4 w-full">
-          <span class="icon--memory-robot icon-size-20 text-gray-500" />
-          <input
-            v-model="form.humanCode"
-            type="text"
-            class="flex-1"
-            required
-            placeholder="请输入人机验证验证码"
-            @input="onHumanInput" />
-        </label>
-        <p class="text-xs text-slate-500 dark:text-slate-400">输入人机验证后才能发送短信验证码（模拟）。</p>
+        <div class="mt-4 w-full">
+          <label class="cy-input cy-validator w-full">
+            <span class="icon--memory-arrow-right-circle icon-size-20 text-gray-500" />
+            <input
+              v-model="form.phone"
+              type="tel"
+              inputmode="numeric"
+              class="tabular-nums flex-1"
+              required
+              placeholder="请输入手机号"
+              pattern="[0-9]*"
+              minlength="11"
+              maxlength="11"
+              @input="onPhoneInput" />
+          </label>
+          <p class="text-xs cy-validator-hint" :class="{ hidden: isPhoneValid || !form.phone }">手机号格式错误</p>
+        </div>
 
         <div class="flex items-center gap-3 mt-4">
           <label class="cy-input cy-validator flex-1">
-            <span class="icon--memory-lock icon-size-20 text-gray-500" />
+            <span class="icon--memory-arrow-right-circle icon-size-20 text-gray-500" />
+            <input
+              v-model="form.captchaCode"
+              type="text"
+              class="flex-1"
+              required
+              placeholder="请输入图形验证码"
+              @input="onCaptchaInput" />
+          </label>
+          <!-- 验证码图片 -->
+          <div>
+            <div
+              class="flex h-11 w-24 items-center justify-center rounded border border-slate-200 bg-slate-50 text-xs text-slate-400 dark:border-slate-700 dark:bg-slate-800"
+              v-if="!captchaImgBase64">
+              加载中…
+            </div>
+            <img
+              v-else
+              class="h-10 w-20 rounded border border-slate-200 object-contain dark:border-slate-700"
+              :src="`data:image/png;base64,${captchaImgBase64}`"
+              alt="图形验证码" />
+          </div>
+        </div>
+
+        <!-- <div class="flex items-center gap-3 mt-4">
+          <label class="cy-input cy-validator flex-1">
+            <span class="icon--memory-arrow-right-circle icon-size-20 text-gray-500" />
             <input
               v-model="form.smsCode"
               type="tel"
@@ -53,19 +69,20 @@
               maxlength="4"
               @input="onSmsInput" />
           </label>
-          <button class="cy-btn cy-btn-ghost min-w-[120px]" :disabled="!canSendSms" @click="sendSms">
-            <span v-if="sending">发送中...</span>
-            <span v-else>发送短信</span>
-          </button>
-        </div>
+        </div> -->
         <p class="text-xs cy-validator-hint" :class="{ 'opacity-0': isSmsValid || !form.smsCode }">短信验证码需为4位数字</p>
 
         <div class="cy-modal-action mt-6">
-          <button class="cy-btn" @click="closeDialog" :disabled="loading">取消</button>
-          <button class="cy-btn cy-btn-accent" :disabled="!isPhoneValid || !isSmsValid || loading" @click="submit">
+          <button class="cy-btn cy-btn-ghost" @click="closeDialog" :disabled="loading">取消</button>
+
+          <button class="cy-btn min-w-[120px]" :disabled="!canSendSms" @click="sendSms">
+            <span v-if="sending">发送中...</span>
+            <span v-else>发送短信</span>
+          </button>
+          <!-- <button class="cy-btn cy-btn-accent" :disabled="!isPhoneValid || !isSmsValid || loading" @click="submit">
             <span v-if="loading">绑定中...</span>
             <span v-else>确认绑定</span>
-          </button>
+          </button> -->
         </div>
       </div>
       <form method="dialog" class="cy-modal-backdrop">
@@ -76,6 +93,7 @@
 </template>
 
 <script lang="ts" setup>
+import { captchaImage } from '@api'
 const props = defineProps<{ phone?: string; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'success', phone: string): void }>()
 
@@ -84,15 +102,17 @@ const dialogRef = ref<HTMLDialogElement>()
 
 const form = reactive({
   phone: props.phone || '',
-  humanCode: '',
+  captchaCode: '',
   smsCode: '',
 })
+
+const captchaImgBase64 = ref('') // 图形验证码
 
 const loading = ref(false)
 const sending = ref(false)
 const buttonText = computed(() => (props.phone ? '更换手机号' : '绑定手机号'))
 const isPhoneValid = computed(() => /^\d{11}$/.test(form.phone.trim()))
-const isHumanValid = computed(() => form.humanCode.trim().length > 0)
+const isHumanValid = computed(() => form.captchaCode.trim().length > 0)
 const isSmsValid = computed(() => /^\d{4}$/.test(form.smsCode.trim()))
 const canSendSms = computed(() => isPhoneValid.value && isHumanValid.value && !sending.value)
 
@@ -103,8 +123,12 @@ watch(
   }
 )
 
-function openDialog() {
+async function openDialog() {
   if (!import.meta.client || !dialogRef.value) return
+
+  // 请求获取人机验证码
+  captchaImgBase64.value = await captchaImage()
+
   dialogRef.value.showModal()
   sysStore.togglePreventKeyEventsFlag(true)
 }
@@ -165,9 +189,9 @@ function onSmsInput(e: Event) {
   form.smsCode = onlyDigits
 }
 
-function onHumanInput(e: Event) {
+function onCaptchaInput(e: Event) {
   const target = e.target as HTMLInputElement
-  form.humanCode = target.value
+  form.captchaCode = target.value
 }
 
 async function sendSms() {
