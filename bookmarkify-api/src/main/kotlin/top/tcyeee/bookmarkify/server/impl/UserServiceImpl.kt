@@ -63,7 +63,7 @@ class UserServiceImpl(
         if (StpUtil.isLogin() && BaseUtils.user() != null) {
             BaseUtils.user()!!
         } else {
-            BaseUtils.registerDeviceId(request, response, projectConfig)
+            BaseUtils.sessionRegisterDeviceId(request, response, projectConfig)
                 .let(this::queryOrRegisterByDeviceId)
                 .also { StpUtil.login(it.id, true) }
                 .authVO(StpUtil.getTokenValue())
@@ -82,21 +82,50 @@ class UserServiceImpl(
         return true
     }
 
-    override fun verifySms(uid: String, params: SmsVerifyParams): Boolean {
-        val cacheCode = RedisUtils.get<Int>(RedisType.CODE_PHONE, uid)?.toString() ?: return false
-        if (cacheCode != params.smsCode.trim()) throw CommonException(ErrorType.E215)
+    /**
+     * 验证码登录/验证/绑定
+     *
+     * # 可能使用到该接口的情况:
+     * 1. 用户正在使用验证码登录    => 将当前临时账户和手机号所在帐户合并
+     * 2. 用户正在绑定/更换手机号   => 在Session中更新, 返回当前帐户信息
+     *
+     */
+    override fun verifySms(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        uid: String,
+        params: SmsVerifyParams
+    ): UserSessionInfo {
+        val cacheCode = RedisUtils.get<Int>(RedisType.CODE_PHONE, uid)?.toString()
+            ?: throw CommonException(ErrorType.E105)
+        if (cacheCode != params.smsCode.trim()) throw CommonException(ErrorType.E106)
 
-        // 根据手机号查询用户,如果有,则和携带TOKEN的用户进行数据合并
-        val user = ktQuery().eq(UserEntity::phone, params.phone.trim()).one()
-        if (user != null) {
-            ktUpdate().eq(UserEntity::id, user.id).set(UserEntity::phone, params.phone.trim()).update()
-            // TODO 使用手机号所在的用户信息进行登录
-            // TODO 等待进行数据合并
-            return true
+        val userEntity: UserEntity? = ktQuery().eq(UserEntity::phone, params.phone.trim()).one()
+        // 手机号已经有对应帐户了,说明是在登录
+        if (userEntity != null) {
+            // 先退出登录,然后重新注册Session
+            this.loginOut()
+            StpUtil.login(userEntity.id, true)
+
+            // TODO 检查是否有必要进行数据合并,临时账户中的信息保存一天时间,超出则不在提示用户
+
+            // 重新在session中存储UserInfo
+            return userEntity.authVO(StpUtil.getTokenValue()).writeToSession()
         } else {
             // 如果没有,则将手机号绑定到当前用户上
-            ktUpdate().eq(UserEntity::id, uid).set(UserEntity::phone, params.phone.trim()).update()
-            return true
+            ktUpdate()
+                .eq(UserEntity::id, uid)
+                .set(UserEntity::phone, params.phone.trim())
+                .set(UserEntity::verified, true)
+                .update()
+
+            // 更新sesssion中的信息(加上手机号)
+            val result = BaseUtils.user() ?: throw CommonException(ErrorType.E215)
+            result.phone = params.phone.trim()
+            result.verified = true
+            result.writeToSession()
+
+            return result
         }
     }
 

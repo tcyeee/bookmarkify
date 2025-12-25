@@ -63,6 +63,7 @@ export const useUserStore = defineStore(
       const webSocketStore = useWebSocketStore()
       webSocketStore.disconnect()
       account.value = undefined
+      // TODO 请求后端退出接口
     }
     return { loginOrRegister, logout, account, refreshUserInfo, authStatus }
   },

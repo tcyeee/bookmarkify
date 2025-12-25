@@ -3,6 +3,10 @@ import type * as t from '@typing'
 
 /* =========[ /auth ]========= */
 export const track = () => http.get('/auth/track') as Promise<t.UserInfo>
+export const logout = () => http.get('/auth/logout') as Promise<void>
+export const captchaImage = () => http.get('/auth/captcha/image') as Promise<string>
+export const captchaSendSms = (params: t.CaptchaSmsParams) => http.post('/auth/captcha/sms', params) as Promise<boolean>
+export const captchaVerify = (params: t.SmsVerifyParams) => http.post('/auth/captcha/verify', params) as Promise<t.UserInfo>
 
 /* =========[ /bookmark ]========= */
 export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<Array<t.HomeItem>>

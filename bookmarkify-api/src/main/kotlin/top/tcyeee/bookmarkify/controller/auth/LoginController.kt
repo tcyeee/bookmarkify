@@ -7,10 +7,16 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.config.result.ResultWrapper
+import top.tcyeee.bookmarkify.entity.CaptchaSmsParams
+import top.tcyeee.bookmarkify.entity.SmsVerifyParams
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.server.impl.UserServiceImpl
+import top.tcyeee.bookmarkify.utils.BaseUtils
 
 /**
  * @author tcyeee
@@ -27,4 +33,24 @@ class LoginController(private val userService: UserServiceImpl) {
     @Operation(summary = "创建用户标记")
     fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo =
         userService.track(request, response)
+
+    @GetMapping("/logout")
+    @Operation(summary = "退出登录")
+    fun logout() = userService.loginOut()
+
+    @GetMapping("captcha/image")
+    @Operation(summary = "获取人机验证图案，返回base64")
+    fun captchaImage(): ResultWrapper = userService.captchaImage(BaseUtils.uid())
+
+    @PostMapping("captcha/sms")
+    @Operation(summary = "校验人机验证码后发送短信验证码")
+    fun sendSms(@RequestBody params: CaptchaSmsParams): Boolean = userService.sendSms(BaseUtils.uid(), params)
+
+    @PostMapping("captcha/verify")
+    @Operation(summary = "校验短信验证码并绑定手机号")
+    fun verifySms(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        @RequestBody params: SmsVerifyParams
+    ): UserSessionInfo = userService.verifySms(request, response, BaseUtils.uid(), params)
 }
