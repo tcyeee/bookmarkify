@@ -2,6 +2,20 @@ import type { UserInfo } from '@typing'
 import type { Result } from '@typing'
 
 export default class http {
+  private static PENDING_DEBOUNCE_MS = 600
+  private static pendingRequests = new Map<string, { promise: Promise<any>; timestamp: number }>()
+  private static withDebounce<T>(key: string, runner: () => Promise<T>): Promise<T> {
+    const now = Date.now()
+    const cached = this.pendingRequests.get(key)
+    if (cached && now - cached.timestamp < this.PENDING_DEBOUNCE_MS) return cached.promise as Promise<T>
+
+    const promise = runner().finally(() => {
+      setTimeout(() => this.pendingRequests.delete(key), this.PENDING_DEBOUNCE_MS)
+    }) as Promise<T>
+    this.pendingRequests.set(key, { promise, timestamp: now })
+    return promise
+  }
+
   static get(path: string, params?: any): any {
     return this.start(path, 'GET', params)
   }
@@ -32,15 +46,17 @@ export default class http {
       method: 'POST',
     })
 
-    try {
-      const response = await fetch(request)
-      const data = await response.json()
-      return resultCheck(data as Result<object>, request)
-    } catch (error) {
-      // @ts-ignore
-      if (error instanceof TypeError) ElMessage.error(`Oops,网络错误,请重试`)
-      return Promise.reject(error)
-    }
+    return this.withDebounce(`UPLOAD:${request.url}`, async () => {
+      try {
+        const response = await fetch(request)
+        const data = await response.json()
+        return resultCheck(data as Result<object>, request)
+      } catch (error) {
+        // @ts-ignore
+        if (error instanceof TypeError) ElMessage.error(`Oops,网络错误,请重试`)
+        return Promise.reject(error)
+      }
+    })
   }
 
   static async start(path: string, method: string, params?: any): Promise<any> {
@@ -59,15 +75,17 @@ export default class http {
       method: method,
     })
 
-    try {
-      const response = await fetch(request)
-      const data = await response.json()
-      return resultCheck(data as Result<object>, request)
-    } catch (error) {
-      // @ts-ignore
-      if (error instanceof TypeError) ElMessage.error(`Oops,网络错误,请重试`)
-      return Promise.reject(error)
-    }
+    return this.withDebounce(`${method}:${request.url}:${body ?? ''}`, async () => {
+      try {
+        const response = await fetch(request)
+        const data = await response.json()
+        return resultCheck(data as Result<object>, request)
+      } catch (error) {
+        // @ts-ignore
+        if (error instanceof TypeError) ElMessage.error(`Oops,网络错误,请重试`)
+        return Promise.reject(error)
+      }
+    })
   }
 }
 

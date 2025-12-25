@@ -14,7 +14,6 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import { useUserStore } from '@stores/user.store'
 import { AuthStatusEnum } from '@typing'
 
 const userStore = useUserStore()
