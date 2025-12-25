@@ -11,7 +11,7 @@
     <button class="cy-btn cy-btn-ghost rounded-2xl" @click="openLogoutDialog">退出账号</button>
   </div>
 
-  <dialog id="logoutDialog" class="cy-modal">
+  <dialog id="logoutDialog" ref="logoutDialogRef" class="cy-modal">
     <div class="cy-modal-box">
       <h3 class="text-lg font-bold">确认退出</h3>
       <p class="py-4">
@@ -29,23 +29,43 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { AuthStatusEnum } from '@typing'
 
+const logoutDialogRef = ref<HTMLDialogElement | null>(null)
 const userStore = useUserStore()
+const sysStore = useSysStore()
 const isAuthed = computed(() => userStore.authStatus === AuthStatusEnum.AUTHED)
+
+function handleDialogClose() {
+  sysStore.togglePreventKeyEventsFlag(false)
+}
 
 function openLogoutDialog() {
   if (!import.meta.client) return
-  const dialog = document.getElementById('logoutDialog') as HTMLDialogElement | null
+  const dialog = logoutDialogRef.value
+  sysStore.togglePreventKeyEventsFlag(true)
   dialog?.showModal()
 }
 
 function closeLogoutDialog() {
   if (!import.meta.client) return
-  const dialog = document.getElementById('logoutDialog') as HTMLDialogElement | null
+  const dialog = logoutDialogRef.value
+  handleDialogClose()
   dialog?.close()
 }
+
+onMounted(() => {
+  const dialog = logoutDialogRef.value
+  dialog?.addEventListener('close', handleDialogClose)
+  dialog?.addEventListener('cancel', handleDialogClose)
+})
+
+onBeforeUnmount(() => {
+  const dialog = logoutDialogRef.value
+  dialog?.removeEventListener('close', handleDialogClose)
+  dialog?.removeEventListener('cancel', handleDialogClose)
+})
 
 async function confirmLogout() {
   await userStore.logout()
