@@ -19,8 +19,7 @@ export interface BacSettingVO {
 }
 
 /**
- * 这里比较特殊，对应到后端其实是两个不同的实体类
- * UserInfoShow 和 UserSessionInfo
+ * 仅仅保存用户的状态信息,因为这里的信息会完全写在Session中,在每次请求的时候携带
  */
 export interface UserInfo {
   uid: string // 用户唯一ID
@@ -28,8 +27,6 @@ export interface UserInfo {
   phone?: string // 用户手机号
   email?: string // 用户邮箱
   verified: boolean // 用户是否验证
-
-  /* 仅/tract接口会返回 */
   token: string // 用户TOKEN
 
   /* 仅/info接口会返回 */
