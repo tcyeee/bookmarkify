@@ -3,23 +3,14 @@ package top.tcyeee.bookmarkify.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
-import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
-import top.tcyeee.bookmarkify.server.ISmsService
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
-import top.tcyeee.bookmarkify.config.cache.RedisType
-import top.tcyeee.bookmarkify.entity.CaptchaSmsParams
-import top.tcyeee.bookmarkify.entity.SmsVerifyParams
-import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
-import top.tcyeee.bookmarkify.utils.RedisUtils
-import java.util.*
 
 /**
  * @author tcyeee
@@ -30,7 +21,6 @@ import java.util.*
 @RequestMapping("/user")
 class UserController(
     private val userService: IUserService,
-    private val smsService: ISmsService,
 ) {
 
     @GetMapping("info")

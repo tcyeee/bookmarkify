@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { AuthStatusEnum, type UserInfo } from '@typing'
-import { track, queryUserInfo } from '@api'
+import { track, queryUserInfo, authLogout } from '@api'
 
 export const useUserStore = defineStore(
   'user',
@@ -63,7 +63,7 @@ export const useUserStore = defineStore(
       const webSocketStore = useWebSocketStore()
       webSocketStore.disconnect()
       account.value = undefined
-      // TODO 请求后端退出接口
+      await authLogout()
     }
     return { loginOrRegister, logout, account, refreshUserInfo, authStatus }
   },
