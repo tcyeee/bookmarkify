@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.CaptchaSmsParams
 import top.tcyeee.bookmarkify.entity.SmsVerifyParams
+import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.server.impl.UserServiceImpl
 import top.tcyeee.bookmarkify.utils.BaseUtils
