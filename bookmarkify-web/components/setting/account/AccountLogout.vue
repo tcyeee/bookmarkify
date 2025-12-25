@@ -16,7 +16,7 @@
       <h3 class="text-lg font-bold">确认退出</h3>
       <p class="py-4">
         <span v-if="isAuthed">确定要退出当前设备吗？</span>
-        <span v-else>您还没设置任何登录方式，一旦退出将无法登录。</span>
+        <span v-else class="text-sm text-gray-500">您还没设置任何登录方式，一旦退出将无法登录。</span>
       </p>
       <div class="cy-modal-action">
         <form method="dialog">
