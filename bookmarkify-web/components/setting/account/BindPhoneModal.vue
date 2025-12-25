@@ -24,15 +24,11 @@
                 class="tabular-nums flex-1"
                 required
                 placeholder="请输入手机号"
-                pattern="[0-9]*"
-                minlength="11"
+                pattern="^1[3-9]\d{9}$"
                 maxlength="11"
                 @input="onPhoneInput"
                 @blur="onPhoneBlur" />
             </label>
-            <p class="text-xs cy-validator-hint" :class="{ hidden: !phoneTouched || !form.phone || isPhoneValid }">
-              手机号格式错误
-            </p>
           </div>
 
           <div class="flex items-center gap-3 mt-4">
@@ -71,7 +67,7 @@
           <div class="mt-4">
             <p class="text-sm text-slate-600 dark:text-slate-300 mb-2">已向 {{ maskedPhone }} 发送验证码短信</p>
 
-            <div class="relative w-full max-w-[240px] mx-auto mt-6 mb-4">
+            <div class="relative w-full max-w-60 mx-auto mt-6 mb-4">
               <!-- 隐藏的真实输入框，负责接收输入事件 -->
               <input
                 v-model="form.smsCode"
@@ -151,7 +147,7 @@ const form = reactive({
 
 const step = ref(1)
 const countdown = ref(0)
-let timer: any = null
+let timer: ReturnType<typeof setInterval> | null = null
 
 const captchaImgBase64 = ref('') // 图形验证码
 
@@ -254,6 +250,9 @@ function onPhoneInput(e: Event) {
   const onlyDigits = target.value.replace(/\D/g, '').slice(0, 11)
   target.value = onlyDigits
   form.phone = onlyDigits
+  if (onlyDigits.length > 0) {
+    phoneTouched.value = true
+  }
 }
 
 function onPhoneBlur() {
