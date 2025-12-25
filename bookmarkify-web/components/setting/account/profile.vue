@@ -118,7 +118,7 @@
         请绑定手机号或邮箱完成验证，以便保障账号安全并支持跨设备同步。
       </div>
       <div class="flex justify-center gap-3">
-        <button class="cy-btn cy-btn-accent" @click="" :disabled="saving">立即登录/注册</button>
+        <LoginDialog :disabled="saving" />
         <button class="cy-btn cy-btn-ghost" @click="userStore.refreshUserInfo()" :disabled="saving">刷新状态</button>
       </div>
     </div>
@@ -136,6 +136,7 @@ import AccountDelete from './AccountDelete.vue'
 import BindPhoneModal from './BindPhoneModal.vue'
 import BindEmailModal from './BindEmailModal.vue'
 import AccountLogout from './AccountLogout.vue'
+import LoginDialog from './LoginDialog.vue'
 
 const userStore = useUserStore()
 
