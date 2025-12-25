@@ -8,8 +8,24 @@
         <div class="text-sm text-slate-500 dark:text-slate-400">仅退出当前设备登录，不影响账号数据。</div>
       </div>
     </div>
-    <button class="cy-btn cy-btn-ghost rounded-2xl" @click="accountLogout()">退出账号</button>
+    <button class="cy-btn cy-btn-ghost rounded-2xl" @click="openLogoutDialog">退出账号</button>
   </div>
+
+  <dialog id="logoutDialog" class="cy-modal">
+    <div class="cy-modal-box">
+      <h3 class="text-lg font-bold">确认退出</h3>
+      <p class="py-4">
+        <span v-if="isAuthed">确定要退出当前设备吗？</span>
+        <span v-else>您还没设置任何登录方式，一旦退出将无法登录。</span>
+      </p>
+      <div class="cy-modal-action">
+        <form method="dialog">
+          <button class="cy-btn cy-btn-ghost">取消</button>
+        </form>
+        <button class="cy-btn cy-btn-error" @click="confirmLogout">确认退出</button>
+      </div>
+    </div>
+  </dialog>
 </template>
 
 <script lang="ts" setup>
@@ -19,18 +35,20 @@ import { AuthStatusEnum } from '@typing'
 const userStore = useUserStore()
 const isAuthed = computed(() => userStore.authStatus === AuthStatusEnum.AUTHED)
 
-async function accountLogout() {
-  if (!isAuthed.value) {
-    try {
-      await ElMessageBox.confirm('您还没设置任何登录方式,一旦退出,将无法登录', '确认退出', {
-        confirmButtonText: '继续退出',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
-    } catch {
-      return
-    }
-  }
+function openLogoutDialog() {
+  if (!import.meta.client) return
+  const dialog = document.getElementById('logoutDialog') as HTMLDialogElement | null
+  dialog?.showModal()
+}
+
+function closeLogoutDialog() {
+  if (!import.meta.client) return
+  const dialog = document.getElementById('logoutDialog') as HTMLDialogElement | null
+  dialog?.close()
+}
+
+async function confirmLogout() {
   await userStore.logout()
+  closeLogoutDialog()
 }
 </script>
