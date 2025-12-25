@@ -10,6 +10,11 @@ export default defineNuxtPlugin(async () => {
     webSocketStore.connect(userStore.account!.token)
   }
 
+  // 如果用户已经登录,则更新用户权限信息
+  if (userStore.authStatus !== AuthStatusEnum.NONE) {
+    userStore.refreshUserInfo()
+  }
+
   // 如果用户已经登录,则更新书签信息
   if (userStore.authStatus !== AuthStatusEnum.NONE) {
     const bookmarkStore = useBookmarkStore()

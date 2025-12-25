@@ -64,10 +64,10 @@ export const useUserStore = defineStore(
 
     async function logout() {
       console.log('DEBUG: 退出登陆')
+      await authLogout()
       const webSocketStore = useWebSocketStore()
       webSocketStore.disconnect()
       account.value = undefined
-      await authLogout()
       navigateTo('/welcome')
     }
     return { loginOrRegister, logout, account, refreshUserInfo, authStatus }
