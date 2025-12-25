@@ -39,6 +39,5 @@ data class UserEntity(
     )
 
     fun authVO(token: String): UserSessionInfo = UserSessionInfo(this, token)
-
     fun vo(): UserInfoShow = UserInfoShow(this)
 }

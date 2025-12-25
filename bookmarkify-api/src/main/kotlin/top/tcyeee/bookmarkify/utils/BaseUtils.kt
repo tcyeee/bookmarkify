@@ -27,22 +27,33 @@ object BaseUtils {
         ?.let { UserSessionInfo(it) }
 
     /**
-     * Registers and returns the deviceId (anonymous user ID).
+     * 在session中存储DeviceID,
      *
-     * Logic:
-     * 1. Try to read the deviceId from cookies.
-     * 2. If not found, generate a new ID, create a cookie, and attach it to the response.
-     * 3. Always return the final deviceId.
+     * TODO 这里的DeviceID会存储到数据库,所以在切换账户的时候,需要清除,否则会出现数据污染
      */
-    fun registerDeviceId(request: HttpServletRequest, response: HttpServletResponse, config: ProjectConfig): String =
-        request.cookies
+    fun sessionRegisterDeviceId(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        config: ProjectConfig
+    ): String {
+        // 在session中获取&生成设备ID
+        val deviceId = request.cookies
             ?.find { it.name == config.uidCookieName }?.value
-            ?: IdUtil.fastUUID().also {
-                Cookie(config.uidCookieName, it).apply {
-                    maxAge = config.uidCookieMaxAge
-                    path = config.uidCookiePath
-                }.also { cookie -> response.addCookie(cookie) }
-            }
+            ?: IdUtil.fastUUID()
+
+        // 在session中存储设备ID
+        Cookie(config.uidCookieName, deviceId)
+            .apply { maxAge = config.uidCookieMaxAge; path = config.uidCookiePath }
+            .also { cookie -> response.addCookie(cookie) }
+
+        return deviceId
+    }
+
+    // 切换Session中的DeviceID
+    fun SessionreSetDeviceId(response: HttpServletResponse, config: ProjectConfig, deviceId: String) =
+        Cookie(config.uidCookieName, deviceId)
+            .apply { maxAge = config.uidCookieMaxAge; path = config.uidCookiePath }
+            .also { cookie -> response.addCookie(cookie) }
 }
 
 /* base64 to Md5 */

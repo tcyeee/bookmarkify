@@ -10,6 +10,16 @@ export interface UserAuthParams {
   token?: string
 }
 
+export interface CaptchaSmsParams {
+  phone: string
+  captcha: string
+}
+
+export interface SmsVerifyParams {
+  phone: string
+  smsCode: string
+}
+
 export interface UserFile {
   environment: CurrentEnvironment
   currentName: string

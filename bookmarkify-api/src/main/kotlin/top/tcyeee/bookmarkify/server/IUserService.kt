@@ -95,5 +95,5 @@ interface IUserService : IService<UserEntity> {
 
     fun captchaImage(uid: String): ResultWrapper
     fun sendSms(uid: String, params: CaptchaSmsParams): Boolean
-    fun verifySms(uid: String, params: SmsVerifyParams): Boolean
+    fun verifySms(request: HttpServletRequest, response: HttpServletResponse,uid: String, params: SmsVerifyParams): UserSessionInfo
 }

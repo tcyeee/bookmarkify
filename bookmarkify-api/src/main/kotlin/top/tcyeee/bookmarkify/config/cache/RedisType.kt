@@ -12,8 +12,13 @@ enum class RedisType(
     val expire: Long,   // 过期时间 -1:永不过期
     val unit: TimeUnit  // 过期时间单位
 ) {
+
+    /* 等待被验证的短信验证码 */
     CODE_PHONE(3, TimeUnit.MINUTES),
+    /* 等待被验证的图形验证码 */ 
     CAPTCHA_CODE(3, TimeUnit.MINUTES),
+    /* 默认背景图片 */
     DEFAULT_BACKGROUND_IMAGES(12, TimeUnit.HOURS),
+    /* 默认背景渐变 */
     DEFAULT_BACKGROUND_GRADIENTS(12, TimeUnit.HOURS)
 }
