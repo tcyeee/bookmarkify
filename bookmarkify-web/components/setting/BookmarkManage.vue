@@ -1,12 +1,8 @@
 <template>
   <div class="space-y-2 text-slate-900 dark:text-slate-100 transition-colors">
-    <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 transition-colors">导入 Chrome 书签</h3>
-    <p class="text-sm text-slate-600 dark:text-slate-400 mb-6 transition-colors">
-      支持从 Chrome 导出的 HTML 书签文件，一次性导入你的所有书签。
-    </p>
+    <h3 class="pb-5 text-xl font-semibold text-slate-900 dark:text-slate-100 transition-colors">导入 Chrome 书签</h3>
 
-    <div
-      class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/80 p-6 shadow-sm transition-colors">
+    <div class="bg-white dark:bg-slate-950/80 transition-colors">
       <div class="flex flex-wrap items-center gap-3">
         <label class="cy-btn cy-btn-soft cursor-pointer flex items-center gap-2">
           <input ref="fileInputRef" type="file" accept=".html,.htm" class="hidden" @change="handleFileChange" />

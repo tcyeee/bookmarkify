@@ -4,6 +4,7 @@
       <AvatarPreview
         :avatar-path="previewUrl || avatarPath"
         :fallback-text="fallbackInitial"
+        :show-icon-fallback="showAccountIcon"
         class="transition duration-200 group-hover:brightness-[0.7]" />
       <button
         type="button"
@@ -51,6 +52,8 @@ const fallbackInitial = computed(() => {
   if (!name) return '用'
   return name.slice(0, 1)
 })
+
+const showAccountIcon = computed(() => !previewUrl.value && !props.avatarPath)
 
 // 预览选择的图片
 function handleFileChange(event: Event) {
