@@ -78,7 +78,7 @@ class UserServiceImpl(
     override fun sendSms(uid: String, params: CaptchaSmsParams): Boolean {
         val cache = RedisUtils.get<String>(RedisType.CAPTCHA_CODE, uid) ?: throw CommonException(ErrorType.E105)
         if (cache != params.captcha.trim()) throw CommonException(ErrorType.E302)
-// TODO        smsService.sendVerificationCode(params.phone)
+        smsService.sendVerificationCode(params.phone)
         return true
     }
 
@@ -234,10 +234,10 @@ class UserServiceImpl(
 
         // 修改用户背景图片设置
         backSettingService.queryByUid(uid).apply {
-                this.uid = uid
-                this.type = BackgroundType.IMAGE
-                this.backgroundLinkId = bacImgEntity.id
-            }.also { backSettingService.saveOrUpdate(it) }
+            this.uid = uid
+            this.type = BackgroundType.IMAGE
+            this.backgroundLinkId = bacImgEntity.id
+        }.also { backSettingService.saveOrUpdate(it) }
         return file.currentName
     }
 
