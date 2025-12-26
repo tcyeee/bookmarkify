@@ -106,9 +106,7 @@
     </div>
 
     <!-- 临时/未验证账号 -->
-    <div
-      v-else
-      class="rounded-2xl border border-dashed border-slate-300 bg-white/70 p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+    <div v-else class="text-center">
       <LoginDialog />
     </div>
   </div>
