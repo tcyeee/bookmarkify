@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { AuthStatusEnum, type EmailVerifyParams, type UserFile, type UserInfo, type UserSetting } from '@typing'
-import { track, queryUserInfo, authLogout, captchaVerifyEmail } from '@api'
+import { AuthStatusEnum, type EmailVerifyParams, type SmsVerifyParams, type UserFile, type UserInfo, type UserSetting } from '@typing'
+import { track, queryUserInfo, authLogout, captchaVerifyEmail, captchaVerifySms } from '@api'
 
 export const useUserStore = defineStore(
   'user',
@@ -27,6 +27,23 @@ export const useUserStore = defineStore(
       loading.value = true
       try {
         const result = await captchaVerifyEmail(params)
+        account.value = { ...account.value, ...result }
+        authStatus.value = AuthStatusEnum.AUTHED
+        return result
+      } catch (err: any) {
+        return Promise.reject(err)
+      } finally {
+        loading.value = false
+      }
+    }
+
+    /**
+     * 登录用户（手机号+验证码）
+     */
+    async function loginWithPhone(params: SmsVerifyParams): Promise<UserInfo> {
+      loading.value = true
+      try {
+        const result = await captchaVerifySms(params)
         account.value = { ...account.value, ...result }
         authStatus.value = AuthStatusEnum.AUTHED
         return result
@@ -87,7 +104,7 @@ export const useUserStore = defineStore(
       account.value = undefined
       navigateTo('/welcome')
     }
-    return { loginOrRegister, logout, account, refreshUserInfo, authStatus, loginWithEmail }
+    return { loginOrRegister, logout, account, refreshUserInfo, authStatus, loginWithEmail, loginWithPhone }
   },
   { persist: true }
 )

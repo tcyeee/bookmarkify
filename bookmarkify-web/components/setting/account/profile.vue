@@ -63,7 +63,7 @@
             <span class="icon--memory-email icon-size-20 text-slate-500 dark:text-slate-400"></span>
             <div>
               <div class="font-medium">邮箱</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">{{ form.email || '未绑定邮箱' }}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ maskedEmail || '未绑定邮箱' }}</div>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -77,7 +77,7 @@
             <span class="icon--memory-speaker icon-size-20 text-slate-500 dark:text-slate-400"></span>
             <div>
               <div class="font-medium">手机号</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">{{ form.phone || '未绑定手机号' }}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ maskedPhone || '未绑定手机号' }}</div>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -149,6 +149,28 @@ const maskedUid = computed(() => {
   if (!uid) return '——'
   if (uid.length <= 8) return uid
   return `${uid.slice(0, 8)}••••${uid.slice(-8)}`
+})
+const maskedEmail = computed(() => {
+  const email = form.email
+  if (!email) return ''
+  const parts = email.split('@')
+  if (parts.length !== 2) return email
+  const [local, domain] = parts
+  if (!local) return email
+  if (local.length <= 2) return `${local[0]}*@${domain}`
+  const start = local[0]
+  const end = local[local.length - 1]
+  const middle = '*'.repeat(local.length - 2)
+  return `${start}${middle}${end}@${domain}`
+})
+const maskedPhone = computed(() => {
+  const phone = form.phone
+  if (!phone) return ''
+  if (phone.length <= 4) return phone
+  const start = phone.slice(0, 3)
+  const end = phone.slice(-4)
+  const middle = '*'.repeat(Math.max(phone.length - 7, 0))
+  return `${start}${middle}${end}`
 })
 const displayNickName = computed(() => account.value?.nickName || '未命名用户')
 const isDirty = computed(() => {
