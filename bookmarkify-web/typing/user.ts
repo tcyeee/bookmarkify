@@ -15,9 +15,17 @@ export interface CaptchaSmsParams {
   captcha: string
 }
 
+export interface CaptchaEmailParams {
+  email: string
+}
+
 export interface SmsVerifyParams {
   phone: string
   smsCode: string
+}
+export interface EmailVerifyParams {
+  email: string
+  code: string
 }
 
 export interface UserFile {

@@ -34,7 +34,7 @@ class MailUtils {
         val url = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=$corpid&corpsecret=$corpsecret"
         val response = HttpUtil.get(url)
         val json = JSONUtil.parseObj(response)
-            if (json.getInt("errcode") != 0) throw CommonException(ErrorType.E217, json.getStr("errmsg"))
+        if (json.getInt("errcode") != 0) throw CommonException(ErrorType.E217, json.getStr("errmsg"))
         return json.getStr("access_token")
             .also { RedisUtils.setConst(RedisType.WECHAT_WORK_ACCESS_TOKEN, it) }
     }
@@ -56,6 +56,8 @@ class MailUtils {
             if (json.getInt("errcode") == 0) {
                 return true
             } else {
+                val errMsg = json.getStr("errmsg")
+                if (errMsg.startsWith("not allow to access from your ip")) throw CommonException(ErrorType.E108)
                 log.error("发送邮件失败: ${json.getStr("errmsg")}")
                 return false
             }

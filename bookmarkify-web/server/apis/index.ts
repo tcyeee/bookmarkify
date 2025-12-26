@@ -6,7 +6,11 @@ export const track = () => http.get('/auth/track') as Promise<t.UserInfo>
 export const authLogout = () => http.get('/auth/logout') as Promise<void>
 export const captchaImage = () => http.get('/auth/captcha/image') as Promise<string>
 export const captchaSendSms = (params: t.CaptchaSmsParams) => http.post('/auth/captcha/sms', params) as Promise<boolean>
-export const captchaVerify = (params: t.SmsVerifyParams) => http.post('/auth/captcha/verify', params) as Promise<t.UserInfo>
+export const captchaVerifySms = (params: t.SmsVerifyParams) => http.post('/auth/captcha/verifySms', params) as Promise<t.UserInfo>
+
+export const captchaSendEmail = (params: t.CaptchaEmailParams) => http.post('/auth/captcha/email', params) as Promise<boolean>
+export const captchaVerifyEmail = (params: t.SmsVerifyParams) =>
+  http.post('/auth/captcha/verifyEmail', params) as Promise<t.UserInfo>
 
 /* =========[ /bookmark ]========= */
 export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<Array<t.HomeItem>>
