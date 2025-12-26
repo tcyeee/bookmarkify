@@ -10,6 +10,11 @@ import top.tcyeee.bookmarkify.entity.entity.HomeItem
  * @date 4/14/24 15:38
  */
 interface IHomeItemService : IService<HomeItem> {
+
+    /**
+     * 查看我的桌面元素
+     * @param uid user id
+     */
     fun findShowByUid(uid: String): List<HomeItemShow>
 
     /**
