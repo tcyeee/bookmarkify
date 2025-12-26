@@ -46,13 +46,13 @@
                 inputmode="numeric"
                 class="absolute inset-0 opacity-0 z-10 h-12 w-full cursor-text"
                 pattern="[0-9]*"
-                minlength="6"
-                maxlength="6"
+                minlength="4"
+                maxlength="4"
                 @input="onEmailCodeInput" />
 
               <div class="flex gap-3 justify-center items-center">
                 <div
-                  v-for="i in 6"
+                  v-for="i in 4"
                   :key="i"
                   class="w-11 h-11 rounded-lg border-2 flex items-center justify-center text-lg font-semibold transition-all duration-200"
                   :class="[
@@ -63,8 +63,12 @@
                   ]">
                   {{ form.emailCode[i - 1] || '' }}
                 </div>
-                <button v-if="form.emailCode.length" type="button" @click="deleteLastEmailCodeDigit">
-                  <span class="icon--memory--arrow-left-box icon-size-20" />
+                <button
+                  v-if="form.emailCode.length"
+                  type="button"
+                  class="relative z-20 flex items-center justify-center text-gray-400 select-none cursor-pointer"
+                  @click="deleteLastEmailCodeDigit">
+                  <span class="icon--memory-arrow-left-box icon-size-40" />
                 </button>
               </div>
               <div v-if="emailCodeError" class="mt-2 text-sm text-red-500 text-center">
@@ -132,7 +136,7 @@ const sending = ref(false)
 const emailCodeError = ref('')
 const buttonText = computed(() => (props.email ? '更换邮箱' : '绑定邮箱'))
 const isEmailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
-const isEmailCodeValid = computed(() => /^\d{6}$/.test(form.emailCode.trim()))
+const isEmailCodeValid = computed(() => /^\d{4}$/.test(form.emailCode.trim()))
 const canSendEmail = computed(() => isEmailValid.value && !sending.value)
 const maskedEmail = computed(() => {
   const email = form.email.trim()

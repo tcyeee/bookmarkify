@@ -1,7 +1,7 @@
 <template>
   <div
     class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-    <span class="icon--memory--alert icon-size-26"></span>
+    <span class="icon--memory-alert icon-size-26"></span>
   </div>
   <div class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">未完成登录</div>
   <div class="text-slate-500 dark:text-slate-300 mb-4 text-sm">
