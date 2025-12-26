@@ -8,7 +8,7 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import AccountProfile from '~/components/setting/account/Profile.vue'
+import AccountProfile from '~/components/setting/account/AccountProfile.vue'
 import SettingBookmarkManage from '~/components/setting/BookmarkManage.vue'
 import SettingSettings from '~/components/setting/Settings.vue'
 
