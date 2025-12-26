@@ -99,7 +99,7 @@
           </button>
         </div>
       </div>
-      <form method="dialog" class="cy-modal-backdrop">
+      <form method="dialog">
         <button @click="closeDialog">close</button>
       </form>
     </dialog>
@@ -107,6 +107,7 @@
 </template>
 
 <script lang="ts" setup>
+import { captchaSendEmail } from '@api'
 const props = defineProps<{ email?: string; disabled?: boolean; hideTrigger?: boolean }>()
 const emit = defineEmits<{ (e: 'success', email: string): void }>()
 
@@ -245,8 +246,8 @@ async function sendEmailCode() {
   if (!canSendEmail.value) return
   sending.value = true
   try {
-    await new Promise((resolve) => setTimeout(resolve, 400))
-    ElNotification.success({ message: '已发送邮箱验证码（模拟，输入 000000 即可）' })
+    await captchaSendEmail({ email: form.email })
+    ElNotification.success({ message: '已发送邮箱验证码' })
     step.value = 2
     startCountdown()
     await nextTick()

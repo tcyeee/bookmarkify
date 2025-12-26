@@ -48,7 +48,7 @@ class LoginController(private val userService: UserServiceImpl) {
     @Operation(summary = "校验人机验证码后发送短信验证码")
     fun sendSms(@RequestBody params: CaptchaSmsParams): Boolean = userService.sendSms(BaseUtils.uid(), params)
 
-    @PostMapping("captcha/verify")
+    @PostMapping("captcha/verifySms")
     @Operation(summary = "校验短信验证码并绑定手机号")
     fun verifySms(
         request: HttpServletRequest, response: HttpServletResponse, @RequestBody params: SmsVerifyParams

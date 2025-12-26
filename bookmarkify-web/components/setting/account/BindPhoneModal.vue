@@ -129,7 +129,7 @@
           </button>
         </div>
       </div>
-      <form method="dialog" class="cy-modal-backdrop">
+      <form method="dialog">
         <button @click="closeDialog">close</button>
       </form>
     </dialog>
