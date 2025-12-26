@@ -85,7 +85,7 @@
                 @input="onSmsInput" />
 
               <!-- 显示的4个方框 -->
-              <div class="flex gap-3 justify-center">
+              <div class="flex gap-3 justify-center items-center">
                 <div
                   v-for="i in 4"
                   :key="i"
@@ -98,6 +98,13 @@
                   ]">
                   {{ form.smsCode[i - 1] || '' }}
                 </div>
+                <button
+                  v-if="form.smsCode.length"
+                  type="button"
+                  class="relative z-20 flex items-center justify-center text-gray-400 select-none cursor-pointer"
+                  @click="deleteLastSmsDigit">
+                  <span class="icon--memory-arrow-left-box icon-size-40" />
+                </button>
               </div>
             </div>
 
@@ -274,6 +281,12 @@ function onSmsInput(e: Event) {
 function onCaptchaInput(e: Event) {
   const target = e.target as HTMLInputElement
   form.captchaCode = target.value
+}
+
+function deleteLastSmsDigit() {
+  if (!form.smsCode) return
+  form.smsCode = form.smsCode.slice(0, -1)
+  smsCodeInputRef.value?.focus()
 }
 
 function startCountdown() {
