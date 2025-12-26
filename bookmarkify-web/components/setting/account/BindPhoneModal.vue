@@ -153,6 +153,7 @@ import { captchaVerifySms, captchaImage, captchaSendSms } from '@api'
 const props = defineProps<{ phone?: string; disabled?: boolean; hideTrigger?: boolean }>()
 const emit = defineEmits<{ (e: 'success', phone: string): void }>()
 
+const userStore = useUserStore()
 const sysStore = useSysStore()
 const dialogRef = ref<HTMLDialogElement>()
 const smsCodeInputRef = ref<HTMLInputElement>()
@@ -226,21 +227,17 @@ async function submit() {
   if (!isPhoneValid.value || !isSmsValid.value) return
   loading.value = true
   const phoneValue = form.phone.trim()
-  try {
-    await captchaVerifySms({ smsCode: form.smsCode, phone: phoneValue }).then(() => {
+  userStore
+    .loginWithPhone({ smsCode: form.smsCode, phone: phoneValue })
+    .then(() => {
       ElNotification.success({ message: '手机号绑定成功' })
       emit('success', phoneValue)
       closeDialog()
     })
-  } catch (error: any) {
-    if (error.code == 301) {
-      smsError.value = error.msg || '短信验证码错误'
-      return
-    }
-    ElMessage.error(error?.message || '手机号绑定失败，请稍后重试')
-  } finally {
-    loading.value = false
-  }
+    .catch((err: any) => {
+      if (err.code === 301) smsError.value = err.msg
+    })
+    .finally(() => (loading.value = false))
 }
 
 function handleDialogClose() {
