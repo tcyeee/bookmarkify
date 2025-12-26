@@ -1,7 +1,7 @@
 <template>
   <div class="overflow-hidden select-none">
     <!-- 内容信息 -->
-    <div class="absolute w-screen h-screen z-99">
+    <div class="absolute w-screen h-screen z-1">
       <!-- 时间信息 -->
       <HomeTimeStr
         :class="classFadeDate"
