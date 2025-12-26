@@ -79,28 +79,32 @@
         type="button"
         class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:hover:border-primary/70"
         aria-label="微信登录"
-        title="微信登录">
+        title="微信登录"
+        @click="showThirdPartyNotReady('微信')">
         <span class="icon--icon-wechat icon-size-22 text-slate-500 dark:text-slate-300"></span>
       </button>
       <button
         type="button"
         class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:hover:border-primary/70"
         aria-label="Github 登录"
-        title="Github 登录">
+        title="Github 登录"
+        @click="showThirdPartyNotReady('Github')">
         <span class="icon--icon-github icon-size-22 text-slate-500 dark:text-slate-300"></span>
       </button>
       <button
         type="button"
         class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:hover:border-primary/70"
         aria-label="谷歌登录"
-        title="谷歌登录">
+        title="谷歌登录"
+        @click="showThirdPartyNotReady('谷歌')">
         <span class="icon--icon-google icon-size-20 text-slate-500 dark:text-slate-300"></span>
       </button>
       <button
         type="button"
         class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:hover:border-primary/70"
         aria-label="抖音登录"
-        title="抖音登录">
+        title="抖音登录"
+        @click="showThirdPartyNotReady('抖音')">
         <span class="icon--icon-tiktok icon-size-21 text-slate-500 dark:text-slate-300"></span>
       </button>
     </div>
@@ -132,4 +136,8 @@ watch(
   },
   { immediate: true }
 )
+
+function showThirdPartyNotReady(provider: string) {
+  ElMessage.info(`暂未适配 ${provider} 登录`)
+}
 </script>
