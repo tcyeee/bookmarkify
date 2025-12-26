@@ -31,3 +31,10 @@ export interface UserInfoUpdate {
   phone?: string
   email?: string
 }
+
+export interface LoginMethod {
+  key: 'phone' | 'email' | 'guest'
+  label: string
+  icon: string
+  description: string
+}
