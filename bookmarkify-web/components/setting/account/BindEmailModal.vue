@@ -93,8 +93,13 @@
         <div class="cy-modal-action mt-10">
           <button class="cy-btn cy-btn-ghost" @click="closeDialog" :disabled="loading">取消</button>
 
-          <button v-if="step === 1" class="cy-btn min-w-[120px]" :disabled="!canSendEmail" @click="sendEmailCode">
+          <button
+            v-if="step === 1"
+            class="cy-btn min-w-[120px]"
+            :disabled="!canSendEmail || countdown > 0"
+            @click="sendEmailCode">
             <span v-if="sending">发送中...</span>
+            <span v-else-if="countdown > 0">{{ countdown }}秒后可重新发送</span>
             <span v-else>发送邮件</span>
           </button>
 
@@ -128,8 +133,7 @@ const form = reactive({
 })
 
 const step = ref(1)
-const countdown = ref(0)
-let timer: any = null
+const countdown = computed(() => sysStore.emailCountdown)
 
 const loading = ref(false)
 const sending = ref(false)
@@ -163,7 +167,6 @@ async function openDialog() {
   step.value = 1
   form.emailCode = ''
   if (props.email) form.email = props.email
-  stopCountdown()
 
   dialogRef.value.showModal()
   sysStore.togglePreventKeyEventsFlag(true)
@@ -196,7 +199,6 @@ async function submit() {
 
 function handleDialogClose() {
   sysStore.togglePreventKeyEventsFlag(false)
-  stopCountdown()
 
   // 清除状态
   form.email = ''
@@ -234,25 +236,21 @@ function onEmailCodeInput(e: Event) {
 }
 
 function startCountdown() {
-  countdown.value = 10
-  if (timer) clearInterval(timer)
-  timer = setInterval(() => {
-    countdown.value--
-    if (countdown.value <= 0) {
-      stopCountdown()
-    }
-  }, 1000)
+  sysStore.startEmailCountdown()
 }
 
 function stopCountdown() {
-  if (timer) {
-    clearInterval(timer)
-    timer = null
-  }
+  sysStore.stopEmailCountdown()
 }
 
 async function sendEmailCode() {
   if (!canSendEmail.value) return
+  if (countdown.value > 0) {
+    step.value = 2
+    await nextTick()
+    emailCodeInputRef.value?.focus()
+    return
+  }
   emailCodeError.value = ''
   sending.value = true
   try {
@@ -286,6 +284,5 @@ function deleteLastEmailCodeDigit() {
 
 function backToStep1() {
   step.value = 1
-  stopCountdown()
 }
 </script>

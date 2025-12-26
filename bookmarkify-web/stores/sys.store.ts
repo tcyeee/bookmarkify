@@ -19,6 +19,11 @@ export const useSysStore = defineStore(
     /* 添加书签对话框可见性 */
     const addBookmarkDialogVisible = ref(false)
 
+    const smsCountdown = ref(0)
+    let smsCountdownTimer: ReturnType<typeof setInterval> | null = null
+    const emailCountdown = ref(0)
+    let emailCountdownTimer: ReturnType<typeof setInterval> | null = null
+
     /* 系统默认图片背景 */
     const defaultImageBackgroundsList = ref<UserFile[]>([])
     /* 系统默认渐变背景 */
@@ -75,10 +80,50 @@ export const useSysStore = defineStore(
       preventKeyEventsFlag.value = value
     }
 
+    function startSmsCountdown(initial = 60) {
+      smsCountdown.value = initial
+      if (smsCountdownTimer !== null) clearInterval(smsCountdownTimer)
+      smsCountdownTimer = setInterval(() => {
+        smsCountdown.value--
+        if (smsCountdown.value <= 0) {
+          stopSmsCountdown()
+        }
+      }, 1000)
+    }
+
+    function stopSmsCountdown() {
+      if (smsCountdownTimer !== null) {
+        clearInterval(smsCountdownTimer)
+        smsCountdownTimer = null
+      }
+      smsCountdown.value = 0
+    }
+
+    function startEmailCountdown(initial = 10) {
+      emailCountdown.value = initial
+      if (emailCountdownTimer !== null) clearInterval(emailCountdownTimer)
+      emailCountdownTimer = setInterval(() => {
+        emailCountdown.value--
+        if (emailCountdown.value <= 0) {
+          stopEmailCountdown()
+        }
+      }, 1000)
+    }
+
+    function stopEmailCountdown() {
+      if (emailCountdownTimer !== null) {
+        clearInterval(emailCountdownTimer)
+        emailCountdownTimer = null
+      }
+      emailCountdown.value = 0
+    }
+
     return {
       preventKeyEventsFlag,
       settingTabIndex,
       addBookmarkDialogVisible,
+      smsCountdown,
+      emailCountdown,
       defaultImageBackgroundsList,
       defaultGradientBackgroundsList,
       triggerKeyEvent,
@@ -86,6 +131,10 @@ export const useSysStore = defineStore(
       refreshSystemConfig,
       togglePreventKeyEventsFlag,
       keyEventLastTriggered,
+      startSmsCountdown,
+      stopSmsCountdown,
+      startEmailCountdown,
+      stopEmailCountdown,
     }
   },
   { persist: false }

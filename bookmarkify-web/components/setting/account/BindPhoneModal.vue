@@ -125,8 +125,9 @@
         <div class="cy-modal-action mt-10">
           <button class="cy-btn cy-btn-ghost" @click="closeDialog" :disabled="loading">取消</button>
 
-          <button v-if="step === 1" class="cy-btn min-w-[120px]" :disabled="!canSendSms" @click="sendSms">
+          <button v-if="step === 1" class="cy-btn min-w-[120px]" :disabled="!canSendSms || countdown > 0" @click="sendSms">
             <span v-if="sending">发送中...</span>
+            <span v-else-if="countdown > 0">{{ countdown }}秒后可重新发送</span>
             <span v-else>发送短信</span>
           </button>
 
@@ -156,8 +157,7 @@ const form = reactive({
 })
 
 const step = ref(1)
-const countdown = ref(0)
-let timer: ReturnType<typeof setInterval> | null = null
+const countdown = computed(() => sysStore.smsCountdown)
 
 const captchaImgBase64 = ref('') // 图形验证码
 
@@ -196,7 +196,6 @@ async function openDialog() {
   form.smsCode = ''
   form.captchaCode = ''
   if (props.phone) form.phone = props.phone
-  stopCountdown()
 
   // 请求获取人机验证码
   await refreshCaptcha()
@@ -234,7 +233,6 @@ async function submit() {
 
 function handleDialogClose() {
   sysStore.togglePreventKeyEventsFlag(false)
-  stopCountdown()
 
   // 清除状态
   form.phone = ''
@@ -290,25 +288,21 @@ function deleteLastSmsDigit() {
 }
 
 function startCountdown() {
-  countdown.value = 60
-  if (timer) clearInterval(timer)
-  timer = setInterval(() => {
-    countdown.value--
-    if (countdown.value <= 0) {
-      stopCountdown()
-    }
-  }, 1000)
+  sysStore.startSmsCountdown()
 }
 
 function stopCountdown() {
-  if (timer) {
-    clearInterval(timer)
-    timer = null
-  }
+  sysStore.stopSmsCountdown()
 }
 
 async function sendSms() {
   if (!canSendSms.value) return
+  if (countdown.value > 0) {
+    step.value = 2
+    await nextTick()
+    smsCodeInputRef.value?.focus()
+    return
+  }
   sending.value = true
   try {
     await captchaSendSms({ phone: form.phone, captcha: form.captchaCode }).then(() => {
@@ -332,6 +326,5 @@ async function resendSms() {
 
 function backToStep1() {
   step.value = 1
-  stopCountdown()
 }
 </script>
