@@ -281,6 +281,7 @@ function deleteLastEmailCodeDigit() {
   if (emailCodeError.value) {
     emailCodeError.value = ''
   }
+  emailCodeInputRef.value?.focus()
 }
 
 function backToStep1() {
