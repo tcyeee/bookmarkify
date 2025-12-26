@@ -15,16 +15,17 @@ import top.tcyeee.bookmarkify.config.cache.RedisType
 @Component
 class RedisUtils(private val redisTemplate: RedisTemplate<String, Any>) {
     companion object {
+        const val SYSTEM_KEY = "system"
         lateinit var template: ValueOperations<String, Any>
-
-        fun set(type: RedisType, value: Any) = set(type, BaseUtils.uid(), value)
-        fun set(type: RedisType, uid: String, value: Any) = template.set(key(type, uid), value, type.expire, type.unit)
 
         inline fun <reified T> get(type: RedisType): T? = get(type, BaseUtils.uid())
         inline fun <reified T> get(type: RedisType, uid: String): T? = template.get(key(type, uid)) as? T
+        inline fun <reified T> getConst(type: RedisType): T? = template.get(key(type, SYSTEM_KEY)) as? T
 
+        fun set(type: RedisType, value: Any) = set(type, BaseUtils.uid(), value)
+        fun set(type: RedisType, uid: String, value: Any) = template.set(key(type, uid), value, type.expire, type.unit)
+        fun setConst(type: RedisType,  value: Any) = template.set(key(type, SYSTEM_KEY), value, type.expire, type.unit)
         fun del(type: RedisType, uid: String) = template.operations.delete(key(type, uid))
-
         fun key(type: RedisType, uid: String) = "${type.name}:$uid"
     }
 
