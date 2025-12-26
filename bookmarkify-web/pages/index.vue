@@ -6,7 +6,7 @@
       <HomeTimeStr
         :class="classFadeDate"
         @click="sceneToggle()"
-        class="text-[5rem] text-white opacity-80 text-center font-bold" />
+        class="text-[5rem] text-white opacity-80 text-center font-bold z-0" />
 
       <!-- 内容页面 -->
       <HomeMain :status="data.appView" class="absolute left-[10%] right-[10%] top-[30%]" />

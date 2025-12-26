@@ -22,13 +22,13 @@ class IHomeItemServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper
 ) : IHomeItemService, ServiceImpl<HomeItemMapper, HomeItem>() {
 
-    override fun    findShowByUid(uid: String): List<HomeItemShow> {
+    override fun findShowByUid(uid: String): List<HomeItemShow> {
         val dataMap = createDataBaseByUid(uid)
         val byUid = findByUid(uid) ?: return emptyList()
         return byUid.map { item -> HomeItemShow(item, dataMap, projectConfig.imgPrefix) }
     }
 
-    override fun createDataBaseByUid(uid: String): Map<String, BookmarkShow> {
+    private fun createDataBaseByUid(uid: String): Map<String, BookmarkShow> {
         val bookmarks: List<BookmarkShow> = bookmarkUserLinkMapper.allBookmarkByUid(uid)
         return bookmarks.associateBy { it.bookmarkUserLinkId.toString() }
     }
