@@ -99,9 +99,6 @@
           </button>
         </div>
       </div>
-      <form method="dialog">
-        <button @click="closeDialog">close</button>
-      </form>
     </dialog>
   </div>
 </template>
