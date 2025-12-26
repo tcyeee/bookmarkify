@@ -6,9 +6,9 @@ import jakarta.servlet.http.HttpServletResponse
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.BacSettingVO
-import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import top.tcyeee.bookmarkify.entity.BackSettingParams
 import top.tcyeee.bookmarkify.entity.CaptchaSmsParams
+import top.tcyeee.bookmarkify.entity.EmailVerifyParams
 import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.entity.SmsVerifyParams
 import top.tcyeee.bookmarkify.entity.UserDelParams
@@ -16,6 +16,7 @@ import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
+import top.tcyeee.bookmarkify.entity.entity.UserEntity
 
 /**
  * @author tcyeee
@@ -24,8 +25,8 @@ import top.tcyeee.bookmarkify.entity.dto.UserSetting
 interface IUserService : IService<UserEntity> {
     /**
      * SESSION 注册用户信息
-     * @param request   request
-     * @param response  response
+     * @param request request
+     * @param response response
      * @return 用户基础信息+token (注意：这里不包含用户头像和用户设置)
      */
     fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo
@@ -86,14 +87,92 @@ interface IUserService : IService<UserEntity> {
      */
     fun queryUserBacSetting(uid: String): BacSettingVO
 
+    /**
+     * 更新用户信息
+     * @param params 用户信息参数
+     * @return 是否更新成功
+     */
     fun updateInfo(params: UserInfoUptateParams): Boolean
+
+    /**
+     * 更新用户名称
+     * @param username 用户名称
+     * @return 是否更新成功
+     */
     fun updateUsername(username: String): Boolean
+
+    /**
+     * 修改手机号
+     * @param phone 手机号
+     * @return 是否修改成功
+     */
     fun changePhone(phone: String): Boolean
+
+    /**
+     * 校验手机号
+     * @param code 验证码
+     * @return 是否校验成功
+     */
     fun checkPhone(code: Int): Boolean
+
+    /**
+     * 修改邮箱
+     * @param mail 邮箱
+     * @return 是否修改成功
+     */
     fun changeMail(mail: String): Boolean
+
+    /**
+     * 删除用户
+     * @param params 删除参数
+     * @return 是否删除成功
+     */
     fun del(params: UserDelParams): Boolean
 
+    /**
+     * 获取图形验证码
+     * @param uid 用户ID
+     * @return 图形验证码结果
+     */
     fun captchaImage(uid: String): ResultWrapper
+
+    /**
+     * 发送短信验证码
+     * @param uid 用户ID
+     * @param params 短信参数
+     * @return 是否发送成功
+     */
     fun sendSms(uid: String, params: CaptchaSmsParams): Boolean
-    fun verifySms(request: HttpServletRequest, response: HttpServletResponse,uid: String, params: SmsVerifyParams): UserSessionInfo
+
+    /**
+     * 校验短信验证码
+     * @param request 请求对象
+     * @param response 响应对象
+     * @param uid 用户ID
+     * @param params 短信验证参数
+     * @return 用户会话信息
+     */
+    fun verifySms(
+        request: HttpServletRequest, response: HttpServletResponse, uid: String, params: SmsVerifyParams
+    ): UserSessionInfo
+
+    /**
+     * 发送邮箱验证码
+     * @param uid 用户ID
+     * @param email 邮箱地址
+     * @return 是否发送成功
+     */
+    fun sendEmail(uid: String, email: String): Boolean
+
+    /**
+     * 校验邮箱验证码
+     * @param request 请求对象
+     * @param response 响应对象
+     * @param uid 用户ID
+     * @param params 邮箱验证参数
+     * @return 用户会话信息
+     */
+    fun verifyEmail(
+        request: HttpServletRequest, response: HttpServletResponse, uid: String, params: EmailVerifyParams
+    ): UserSessionInfo
 }

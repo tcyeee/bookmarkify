@@ -40,3 +40,5 @@ data class GradientConfigParams(
 
 data class CaptchaSmsParams(val phone: String, val captcha: String)
 data class SmsVerifyParams(val phone: String, val smsCode: String)
+data class EmailVerifyParams(val email: String, val code: String)
+data class SendEmailParams(val email: String)

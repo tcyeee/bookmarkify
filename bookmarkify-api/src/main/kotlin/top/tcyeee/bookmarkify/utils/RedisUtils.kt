@@ -23,6 +23,8 @@ class RedisUtils(private val redisTemplate: RedisTemplate<String, Any>) {
         inline fun <reified T> get(type: RedisType): T? = get(type, BaseUtils.uid())
         inline fun <reified T> get(type: RedisType, uid: String): T? = template.get(key(type, uid)) as? T
 
+        fun del(type: RedisType, uid: String) = template.operations.delete(key(type, uid))
+
         fun key(type: RedisType, uid: String) = "${type.name}:$uid"
     }
 

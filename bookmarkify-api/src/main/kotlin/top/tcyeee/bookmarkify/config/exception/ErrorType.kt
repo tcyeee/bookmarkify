@@ -1,9 +1,7 @@
 package top.tcyeee.bookmarkify.config.exception
 
-
 /**
- * 自定义异常类型
- * 新增的错误格式必须为 E(error) + code(错误编号)命名,否则无法解析
+ * 自定义异常类型 新增的错误格式必须为 E(error) + code(错误编号)命名,否则无法解析
  *
  * @author tcyeee
  * @date 2022/10/12 11:12
@@ -28,7 +26,7 @@ enum class ErrorType(var msg: String) {
     E213("阿里云短信回执查询时候SmsType枚举解析异常"),
     E214("阿里云短信发送失败"),
     E215("用户信息丢失"),
-
+    E216("邮件发送失败"),
     E303("域名解析错误"),
 
     /* 极端错误 */
