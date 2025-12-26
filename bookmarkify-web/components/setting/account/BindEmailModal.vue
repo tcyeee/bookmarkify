@@ -234,7 +234,7 @@ function onEmailCodeInput(e: Event) {
 }
 
 function startCountdown() {
-  countdown.value = 60
+  countdown.value = 10
   if (timer) clearInterval(timer)
   timer = setInterval(() => {
     countdown.value--

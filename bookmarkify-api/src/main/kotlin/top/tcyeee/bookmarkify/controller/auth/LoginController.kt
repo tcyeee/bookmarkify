@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
+import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.CaptchaSmsParams
 import top.tcyeee.bookmarkify.entity.EmailVerifyParams
 import top.tcyeee.bookmarkify.entity.SendEmailParams
@@ -36,6 +37,7 @@ class LoginController(private val userService: UserServiceImpl) {
     fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo =
         userService.track(request, response)
 
+    @Throttle
     @GetMapping("/logout")
     @Operation(summary = "退出登录")
     fun logout() = userService.loginOut()
@@ -44,6 +46,7 @@ class LoginController(private val userService: UserServiceImpl) {
     @Operation(summary = "获取人机验证图案，返回base64")
     fun captchaImage(): ResultWrapper = userService.captchaImage(BaseUtils.uid())
 
+    @Throttle(50 * 1000)
     @PostMapping("captcha/sms")
     @Operation(summary = "校验人机验证码后发送短信验证码")
     fun sendSms(@RequestBody params: CaptchaSmsParams): Boolean = userService.sendSms(BaseUtils.uid(), params)
@@ -54,10 +57,12 @@ class LoginController(private val userService: UserServiceImpl) {
         request: HttpServletRequest, response: HttpServletResponse, @RequestBody params: SmsVerifyParams
     ): UserSessionInfo = userService.verifySms(request, response, BaseUtils.uid(), params)
 
+    @Throttle(5 * 1000)
     @PostMapping("captcha/email")
     @Operation(summary = "发送邮箱验证码")
     fun sendEmail(@RequestBody params: SendEmailParams): Boolean = userService.sendEmail(BaseUtils.uid(), params.email)
 
+    @Throttle(5 * 1000)
     @PostMapping("captcha/verifyEmail")
     @Operation(summary = "校验邮箱验证码并绑定邮箱")
     fun verifyEmail(

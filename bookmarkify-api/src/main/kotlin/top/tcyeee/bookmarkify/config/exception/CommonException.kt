@@ -8,8 +8,8 @@ package top.tcyeee.bookmarkify.config.exception
  * @date 2020/6/19 09:42
  */
 class CommonException(
-    val errorType: ErrorType, message: String? = null
-) : RuntimeException(buildMessage(errorType, message)) {
+    val errorType: ErrorType, val customMessage: String? = null
+) : RuntimeException(buildMessage(errorType, customMessage)) {
     companion object {
         private fun buildMessage(errorType: ErrorType, customMessage: String?): String =
             if (customMessage.isNullOrBlank()) errorType.msg
