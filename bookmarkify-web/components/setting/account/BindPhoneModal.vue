@@ -110,6 +110,9 @@
                   <span class="icon--memory-arrow-left-box icon-size-40" />
                 </button>
               </div>
+              <div v-if="smsError" class="mt-2 text-sm text-red-500 text-center">
+                {{ smsError }}
+              </div>
             </div>
 
             <div class="flex items-center justify-between mt-6">
@@ -146,7 +149,7 @@
 </template>
 
 <script lang="ts" setup>
-import { captchaImage, captchaSendSms } from '@api'
+import { captchaVerifySms, captchaImage, captchaSendSms } from '@api'
 const props = defineProps<{ phone?: string; disabled?: boolean; hideTrigger?: boolean }>()
 const emit = defineEmits<{ (e: 'success', phone: string): void }>()
 
@@ -168,6 +171,7 @@ const captchaImgBase64 = ref('') // 图形验证码
 const loading = ref(false)
 const sending = ref(false)
 const captchaError = ref('')
+const smsError = ref('')
 const buttonText = computed(() => (props.phone ? '更换手机号' : '绑定手机号'))
 const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(form.phone.trim()))
 const isHumanValid = computed(() => form.captchaCode.trim().length === 5)
@@ -201,6 +205,7 @@ async function openDialog() {
   form.smsCode = ''
   form.captchaCode = ''
   captchaError.value = ''
+  smsError.value = ''
   if (props.phone) form.phone = props.phone
 
   // 请求获取人机验证码
@@ -219,18 +224,19 @@ defineExpose({ openDialog, closeDialog })
 
 async function submit() {
   if (!isPhoneValid.value || !isSmsValid.value) return
-  if (form.smsCode !== '0000') {
-    ElMessage.error('模拟校验失败，测试请输入 0000')
-    return
-  }
   loading.value = true
   const phoneValue = form.phone.trim()
   try {
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    ElNotification.success({ message: '手机号绑定成功（模拟）' })
-    emit('success', phoneValue)
-    closeDialog()
+    await captchaVerifySms({ smsCode: form.smsCode, phone: phoneValue }).then(() => {
+      ElNotification.success({ message: '手机号绑定成功' })
+      emit('success', phoneValue)
+      closeDialog()
+    })
   } catch (error: any) {
+    if (error.code == 301) {
+      smsError.value = error.msg || '短信验证码错误'
+      return
+    }
     ElMessage.error(error?.message || '手机号绑定失败，请稍后重试')
   } finally {
     loading.value = false
@@ -247,6 +253,7 @@ function handleDialogClose() {
   step.value = 1
   phoneTouched.value = false
   captchaError.value = ''
+  smsError.value = ''
 }
 
 onMounted(() => {
@@ -281,6 +288,9 @@ function onSmsInput(e: Event) {
   const onlyDigits = target.value.replace(/\D/g, '').slice(0, 4)
   target.value = onlyDigits
   form.smsCode = onlyDigits
+  if (smsError.value) {
+    smsError.value = ''
+  }
 }
 
 function onCaptchaInput(e: Event) {

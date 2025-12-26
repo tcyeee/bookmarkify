@@ -46,10 +46,12 @@ class LoginController(private val userService: UserServiceImpl) {
     @Operation(summary = "获取人机验证图案，返回base64")
     fun captchaImage(): ResultWrapper = userService.captchaImage(BaseUtils.uid())
 
+    @Throttle
     @PostMapping("captcha/sms")
     @Operation(summary = "校验人机验证码后发送短信验证码")
     fun sendSms(@RequestBody params: CaptchaSmsParams): Boolean = userService.sendSms(BaseUtils.uid(), params)
 
+    @Throttle
     @PostMapping("captcha/verifySms")
     @Operation(summary = "校验短信验证码并绑定手机号")
     fun verifySms(
@@ -61,6 +63,7 @@ class LoginController(private val userService: UserServiceImpl) {
     @Operation(summary = "发送邮箱验证码")
     fun sendEmail(@RequestBody params: SendEmailParams): Boolean = userService.sendEmail(BaseUtils.uid(), params.email)
 
+    @Throttle
     @PostMapping("captcha/verifyEmail")
     @Operation(summary = "校验邮箱验证码并绑定邮箱")
     fun verifyEmail(
