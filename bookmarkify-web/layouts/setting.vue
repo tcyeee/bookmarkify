@@ -25,7 +25,7 @@
                   class="absolute left-0 right-0 rounded-lg bg-gray-100 dark:bg-slate-800 transition-[transform,height] duration-250 ease-out will-change-transform pointer-events-none"
                   :style="indicatorStyle"
                   aria-hidden="true" />
-                <li v-for="tab in tabs" :key="tab.value" class="relative">
+                <li v-for="tab in tabs" :key="tab.value" class="relative z-0">
                   <a
                     :ref="setTabRef(tab.value)"
                     @click="selectOne(tab.value)"
