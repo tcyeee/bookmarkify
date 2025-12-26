@@ -124,9 +124,10 @@ class UserServiceImpl(
 
     override fun sendEmail(uid: String, email: String): Boolean {
         val code = RandomUtil.randomInt(1000, 9999).toString()
-        val success = mailUtils.send(email, MailUtils.EmailType.VERIFY_CODE, code)
-        if (success) RedisUtils.set(RedisType.CODE_EMAIL, uid, code)
-        return success
+//        val success = mailUtils.send(email, MailUtils.EmailType.VERIFY_CODE, code)
+//        if (success) RedisUtils.set(RedisType.CODE_EMAIL, uid, code)
+//        return success
+        return true
     }
 
     override fun verifyEmail(
