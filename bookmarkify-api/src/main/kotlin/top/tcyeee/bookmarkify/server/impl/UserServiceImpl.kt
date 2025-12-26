@@ -94,7 +94,7 @@ class UserServiceImpl(
     ): UserSessionInfo {
         val cacheCode =
             RedisUtils.get<Int>(RedisType.CODE_PHONE, uid)?.toString() ?: throw CommonException(ErrorType.E105)
-        if (cacheCode != params.smsCode.trim()) throw CommonException(ErrorType.E106)
+        if (cacheCode != params.smsCode.trim()) throw CommonException(ErrorType.E301)
 
         val userEntity: UserEntity? = ktQuery().eq(UserEntity::phone, params.phone.trim()).one()
         // 手机号已经有对应帐户了,说明是在登录
@@ -123,7 +123,7 @@ class UserServiceImpl(
     }
 
     override fun sendEmail(uid: String, email: String): Boolean {
-        val code = RandomUtil.randomInt(1000, 9999).toString()
+        val code = RandomUtil.randomInt(1000, 999999).toString()
         val success = mailUtils.send(email, MailUtils.EmailType.VERIFY_CODE, code)
         if (success) RedisUtils.set(RedisType.CODE_EMAIL, uid, code)
         return success
@@ -133,7 +133,7 @@ class UserServiceImpl(
         request: HttpServletRequest, response: HttpServletResponse, uid: String, params: EmailVerifyParams
     ): UserSessionInfo {
         val cacheCode = RedisUtils.get<String>(RedisType.CODE_EMAIL, uid) ?: throw CommonException(ErrorType.E105)
-        if (cacheCode != params.code.trim()) throw CommonException(ErrorType.E106)
+        if (cacheCode != params.code.trim()) throw CommonException(ErrorType.E301)
 
         val userEntity: UserEntity? = ktQuery().eq(UserEntity::email, params.email.trim()).one()
         // 邮箱已经有对应帐户了,说明是在登录
