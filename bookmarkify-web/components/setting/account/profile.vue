@@ -126,7 +126,6 @@ import AccountLogout from './AccountLogout.vue'
 import LoginDialog from './LoginDialog.vue'
 
 const userStore = useUserStore()
-const selectedMethod = ref<LoginMethod['key']>('phone')
 const accountStatus = computed<AuthStatusEnum | undefined>(() => userStore.authStatus)
 const account = computed<UserInfo | undefined>(() => userStore.account)
 const avatarUrl: Ref<string | undefined> = computed(() => userStore.account?.avatar?.currentName)

@@ -64,7 +64,7 @@
   </div>
 
   <div class="flex justify-center gap-3 w-full">
-    <button class="cy-btn cy-btn-wide cy-btn-lg mt-5 cy-btn-primary" @click="" :disabled="saving">开始登录</button>
+    <button class="cy-btn cy-btn-wide cy-btn-lg mt-5 cy-btn-primary" @click="startLogin" :disabled="saving">开始登录</button>
   </div>
 
   <!-- 第三方登录 -->
@@ -109,16 +109,24 @@
       </button>
     </div>
   </div>
+
+  <!-- 复用绑定组件作为登录流程 -->
+  <BindPhoneModal ref="phoneModalRef" :phone="form.phone" :disabled="saving" hideTrigger @success="handlePhoneSuccess" />
+  <BindEmailModal ref="emailModalRef" :email="form.email" :disabled="saving" hideTrigger @success="handleEmailSuccess" />
 </template>
 
 <script lang="ts" setup>
-import { ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import type { UserInfo, LoginMethod } from '@typing'
 import { useUserStore } from '@stores/user.store'
+import BindPhoneModal from './BindPhoneModal.vue'
+import BindEmailModal from './BindEmailModal.vue'
 
 const userStore = useUserStore()
 const selectedMethod = ref<LoginMethod['key']>('phone')
 const account = computed<UserInfo | undefined>(() => userStore.account)
+const phoneModalRef = ref<InstanceType<typeof BindPhoneModal>>()
+const emailModalRef = ref<InstanceType<typeof BindEmailModal>>()
 
 const form = reactive({
   nickName: '',
@@ -126,6 +134,32 @@ const form = reactive({
   email: '',
 })
 const saving = ref(false)
+
+async function startLogin() {
+  saving.value = true
+  try {
+    await nextTick()
+    if (selectedMethod.value === 'phone') {
+      phoneModalRef.value?.openDialog()
+    } else {
+      emailModalRef.value?.openDialog()
+    }
+  } finally {
+    saving.value = false
+  }
+}
+
+function handlePhoneSuccess(phone: string) {
+  form.phone = phone
+  selectedMethod.value = 'phone'
+  ElNotification.success({ message: '手机号登录成功（模拟）' })
+}
+
+function handleEmailSuccess(email: string) {
+  form.email = email
+  selectedMethod.value = 'email'
+  ElNotification.success({ message: '邮箱登录成功（模拟）' })
+}
 
 watch(
   account,
