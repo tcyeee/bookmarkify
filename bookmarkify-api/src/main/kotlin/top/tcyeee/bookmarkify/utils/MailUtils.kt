@@ -17,43 +17,38 @@ import top.tcyeee.bookmarkify.config.log
 @Component
 class MailUtils {
 
-    @Value("\${wechat.work.corpid}") private lateinit var corpid: String
+    @Value("\${wechat.work.corpid}")
+    private lateinit var corpid: String
 
-    @Value("\${wechat.work.corpsecret}") private lateinit var corpsecret: String
+    @Value("\${wechat.work.corpsecret}")
+    private lateinit var corpsecret: String
 
     enum class EmailType(val title: String, val content: String) {
         /* 验证码 */
         VERIFY_CODE("验证码", "您的验证码为: %s, 15分钟内有效"),
     }
 
+    /* 获取腾讯云邮TOKEN */
     private fun getAccessToken(): String {
-        RedisUtils.get<String>(RedisType.WECHAT_WORK_ACCESS_TOKEN, "system")?.let {
-            return it
-        }
-        val url =
-                "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=$corpid&corpsecret=$corpsecret"
+        RedisUtils.getConst<String>(RedisType.WECHAT_WORK_ACCESS_TOKEN)?.let { return it }
+        val url = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=$corpid&corpsecret=$corpsecret"
         val response = HttpUtil.get(url)
         val json = JSONUtil.parseObj(response)
-        if (json.getInt("errcode") != 0) {
-            throw CommonException(ErrorType.E216, "获取企业微信AccessToken失败: ${json.getStr("errmsg")}")
-        }
-        val token = json.getStr("access_token")
-        RedisUtils.set(RedisType.WECHAT_WORK_ACCESS_TOKEN, "system", token)
-        return token
+            if (json.getInt("errcode") != 0) throw CommonException(ErrorType.E217, json.getStr("errmsg"))
+        return json.getStr("access_token")
+            .also { RedisUtils.setConst(RedisType.WECHAT_WORK_ACCESS_TOKEN, it) }
     }
 
     fun send(to: String, type: EmailType, code: String): Boolean {
         try {
             val accessToken = getAccessToken()
-            val url =
-                    "https://qyapi.weixin.qq.com/cgi-bin/exmail/app/compose_send?access_token=$accessToken"
+            val url = "https://qyapi.weixin.qq.com/cgi-bin/exmail/app/compose_send?access_token=$accessToken"
 
-            val payload =
-                    mapOf(
-                            "to" to mapOf("emails" to listOf(to)),
-                            "subject" to type.title,
-                            "content" to String.format(type.content, code)
-                    )
+            val payload = mapOf(
+                "to" to mapOf("emails" to listOf(to)),
+                "subject" to type.title,
+                "content" to String.format(type.content, code)
+            )
 
             val response = HttpUtil.post(url, JSONUtil.toJsonStr(payload))
             val json = JSONUtil.parseObj(response)

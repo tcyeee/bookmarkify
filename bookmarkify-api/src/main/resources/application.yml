@@ -37,3 +37,10 @@ spring:
       max-request-size: 50MB    # 单次请求总大小50MB
       file-size-threshold: 2MB  # 可选：内存缓存阈值
       enabled: true             # 可选：开启上传支持
+
+wechat:
+  work:
+    # 微信企业邮箱-企业ID
+    corpid: ${BOOKMARKIFY_WECHAT_WORK_CORPID}
+    # 微信企业邮箱-自建应用 SECRET-CODE
+    corpsecret: ${BOOKMARKIFY_WECHAT_WORK_CORPSECRET}
