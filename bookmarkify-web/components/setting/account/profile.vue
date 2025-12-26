@@ -105,6 +105,7 @@
 
         <!-- 注销账户 -->
         <div
+          v-show="false"
           class="rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-rose-500/60 dark:bg-rose-500/10">
           <div class="flex items-center gap-3 text-rose-800 dark:text-rose-100">
             <span class="icon--memory-arrow-down-right-box icon-size-22 text-rose-500 dark:text-rose-300"></span>

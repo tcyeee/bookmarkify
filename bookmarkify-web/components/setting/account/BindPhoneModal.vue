@@ -64,6 +64,10 @@
                 @click="refreshCaptcha" />
             </div>
           </div>
+
+          <div v-if="captchaError" class="mt-2 text-sm text-red-500">
+            {{ captchaError }}
+          </div>
         </template>
 
         <!-- Step 2: SMS Code -->
@@ -163,6 +167,7 @@ const captchaImgBase64 = ref('') // 图形验证码
 
 const loading = ref(false)
 const sending = ref(false)
+const captchaError = ref('')
 const buttonText = computed(() => (props.phone ? '更换手机号' : '绑定手机号'))
 const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(form.phone.trim()))
 const isHumanValid = computed(() => form.captchaCode.trim().length === 5)
@@ -195,6 +200,7 @@ async function openDialog() {
   phoneTouched.value = false
   form.smsCode = ''
   form.captchaCode = ''
+  captchaError.value = ''
   if (props.phone) form.phone = props.phone
 
   // 请求获取人机验证码
@@ -240,6 +246,7 @@ function handleDialogClose() {
   form.smsCode = ''
   step.value = 1
   phoneTouched.value = false
+  captchaError.value = ''
 }
 
 onMounted(() => {
@@ -279,6 +286,9 @@ function onSmsInput(e: Event) {
 function onCaptchaInput(e: Event) {
   const target = e.target as HTMLInputElement
   form.captchaCode = target.value
+  if (captchaError.value) {
+    captchaError.value = ''
+  }
 }
 
 function deleteLastSmsDigit() {
@@ -313,6 +323,11 @@ async function sendSms() {
     await nextTick()
     smsCodeInputRef.value?.focus()
   } catch (error: any) {
+    if (error.code == 302) {
+      captchaError.value = error.msg || '图形验证码输入错误'
+      await refreshCaptcha()
+      return
+    }
     ElMessage.error(error?.message || '发送失败，请稍后重试')
   } finally {
     sending.value = false
