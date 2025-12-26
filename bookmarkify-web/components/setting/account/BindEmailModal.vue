@@ -1,6 +1,10 @@
 <template>
   <div class="flex items-center gap-2">
-    <button class="cy-btn cy-btn-ghost h-10 px-4 min-w-[104px]" :disabled="loading || disabled" @click="openDialog">
+    <button
+      v-if="!props.hideTrigger"
+      class="cy-btn cy-btn-ghost h-10 px-4 min-w-[104px]"
+      :disabled="loading || disabled"
+      @click="openDialog">
       <span v-if="loading">处理中...</span>
       <span v-else>{{ buttonText }}</span>
     </button>
@@ -103,7 +107,7 @@
 </template>
 
 <script lang="ts" setup>
-const props = defineProps<{ email?: string; disabled?: boolean }>()
+const props = defineProps<{ email?: string; disabled?: boolean; hideTrigger?: boolean }>()
 const emit = defineEmits<{ (e: 'success', email: string): void }>()
 
 const sysStore = useSysStore()
@@ -161,6 +165,8 @@ function closeDialog() {
   handleDialogClose()
   dialogRef.value.close()
 }
+
+defineExpose({ openDialog, closeDialog })
 
 async function submit() {
   if (!isEmailValid.value || !isEmailCodeValid.value) return

@@ -1,6 +1,10 @@
 <template>
   <div class="flex items-center gap-2">
-    <button class="cy-btn cy-btn-ghost h-10 px-4 min-w-[104px]" :disabled="loading || disabled" @click="openDialog">
+    <button
+      v-if="!props.hideTrigger"
+      class="cy-btn cy-btn-ghost h-10 px-4 min-w-[104px]"
+      :disabled="loading || disabled"
+      @click="openDialog">
       <span v-if="loading">处理中...</span>
       <span v-else>{{ buttonText }}</span>
     </button>
@@ -134,7 +138,7 @@
 
 <script lang="ts" setup>
 import { captchaImage } from '@api'
-const props = defineProps<{ phone?: string; disabled?: boolean }>()
+const props = defineProps<{ phone?: string; disabled?: boolean; hideTrigger?: boolean }>()
 const emit = defineEmits<{ (e: 'success', phone: string): void }>()
 
 const sysStore = useSysStore()
@@ -201,6 +205,8 @@ function closeDialog() {
   if (!import.meta.client || !dialogRef.value) return
   dialogRef.value.close()
 }
+
+defineExpose({ openDialog, closeDialog })
 
 async function submit() {
   if (!isPhoneValid.value || !isSmsValid.value) return
