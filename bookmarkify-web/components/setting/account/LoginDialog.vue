@@ -3,9 +3,9 @@
     class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
     <span class="icon--memory--alert icon-size-26"></span>
   </div>
-  <div class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2">未完成登录</div>
+  <div class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">未完成登录</div>
   <div class="text-slate-500 dark:text-slate-300 mb-4 text-sm">
-    请绑定手机号或邮箱完成登录，以便保障账号安全并支持跨设备同步。
+    请任选一种登录方式完成登录，以便保障账号安全并支持跨设备同步。
   </div>
 
   <div class="grid grid-cols-1 gap-3">
