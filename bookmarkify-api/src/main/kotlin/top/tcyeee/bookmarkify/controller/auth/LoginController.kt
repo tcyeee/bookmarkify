@@ -13,8 +13,9 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.CaptchaSmsParams
+import top.tcyeee.bookmarkify.entity.EmailVerifyParams
+import top.tcyeee.bookmarkify.entity.SendEmailParams
 import top.tcyeee.bookmarkify.entity.SmsVerifyParams
-import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.server.impl.UserServiceImpl
 import top.tcyeee.bookmarkify.utils.BaseUtils
@@ -50,11 +51,16 @@ class LoginController(private val userService: UserServiceImpl) {
     @PostMapping("captcha/verify")
     @Operation(summary = "校验短信验证码并绑定手机号")
     fun verifySms(
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-        @RequestBody params: SmsVerifyParams
+        request: HttpServletRequest, response: HttpServletResponse, @RequestBody params: SmsVerifyParams
     ): UserSessionInfo = userService.verifySms(request, response, BaseUtils.uid(), params)
 
-    // TODO 发送验证邮箱, 邮箱中包含4位验证码, 同时将验证码存入redis,限时15分钟
-    // TODO 验证邮箱
+    @PostMapping("captcha/email")
+    @Operation(summary = "发送邮箱验证码")
+    fun sendEmail(@RequestBody params: SendEmailParams): Boolean = userService.sendEmail(BaseUtils.uid(), params.email)
+
+    @PostMapping("captcha/verifyEmail")
+    @Operation(summary = "校验邮箱验证码并绑定邮箱")
+    fun verifyEmail(
+        request: HttpServletRequest, response: HttpServletResponse, @RequestBody params: EmailVerifyParams
+    ): UserSessionInfo = userService.verifyEmail(request, response, BaseUtils.uid(), params)
 }

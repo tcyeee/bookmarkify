@@ -11,6 +11,30 @@ spring:
       port: ${BOOKMARKIFY_REDIS_PORT}
       password: ${BOOKMARKIFY_REDIS_PASSWORD}
 
+  mail:
+    host: ${BOOKMARKIFY_MAIL_HOST}
+    port: ${BOOKMARKIFY_MAIL_PORT:465}
+    username: ${BOOKMARKIFY_MAIL_USERNAME}
+    password: ${BOOKMARKIFY_MAIL_PASSWORD}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            enable: true
+          socketFactory:
+            port: ${BOOKMARKIFY_MAIL_PORT:465}
+            class: javax.net.ssl.SSLSocketFactory
+
+wechat:
+  work:
+    corpid: ${WECHAT_WORK_CORPID}
+    corpsecret: ${WECHAT_WORK_CORPSECRET}
+
 config:
   # 这里必须是前端项目中/public/upload目录，否则图片无法正常读取
   img-path: ${BOOKMARKIFY_FILE_UPLOAD_DIR}
