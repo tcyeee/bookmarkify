@@ -26,4 +26,10 @@ interface IBookmarkService : IService<Bookmark> {
 
     /* 将网站标记为为离线 */
     fun offline(bookmark: Bookmark)
+
+    /**
+     * 对新用户设置书签
+     * @param uid uid
+     */
+    fun setDefaultBookmark(uid: String)
 }
