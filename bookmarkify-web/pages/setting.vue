@@ -8,7 +8,7 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import SettingAccount from '~/components/setting/account/index.vue'
+import AccountProfile from '~/components/setting/account/Profile.vue'
 import SettingBookmarkManage from '~/components/setting/BookmarkManage.vue'
 import SettingSettings from '~/components/setting/Settings.vue'
 
@@ -18,7 +18,7 @@ definePageMeta({
 })
 
 const sysStore = useSysStore()
-const components = [SettingAccount, SettingBookmarkManage, SettingSettings] as const
+const components = [AccountProfile, SettingBookmarkManage, SettingSettings] as const
 const currentComponent = computed(() => components[sysStore.settingTabIndex] ?? components[0])
 </script>
 

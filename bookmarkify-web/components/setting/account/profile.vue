@@ -86,9 +86,22 @@
         </div>
       </div>
 
+      <!-- 帐户操作 -->
       <div class="space-y-3 mt-20">
         <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">账号操作</div>
-        <AccountLogout />
+
+        <!-- 退出登录 -->
+        <div
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
+          <div class="flex items-center gap-3 text-slate-800 dark:text-slate-200">
+            <span class="icon--memory-arrow-down-right-box icon-size-22 text-slate-500 dark:text-slate-400"></span>
+            <div>
+              <div class="font-semibold">退出登录</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">仅退出当前设备登录，不影响账号数据。</div>
+            </div>
+          </div>
+          <AccountLogout />
+        </div>
 
         <!-- 注销账户 -->
         <div
@@ -115,7 +128,7 @@
 <script lang="ts" setup>
 import { ref, watch, type CSSProperties } from 'vue'
 import { updateUserInfo } from '@api'
-import type { UserInfo, LoginMethod } from '@typing'
+import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useUserStore } from '@stores/user.store'
 import { AuthStatusEnum } from '@typing'
@@ -146,21 +159,6 @@ const isDirty = computed(() => {
 const buttonWrapperStyle = computed(() => ({
   width: isDirty.value ? '190px' : '0px',
 }))
-
-const loginMethods: LoginMethod[] = [
-  {
-    key: 'phone',
-    label: '手机号验证登录',
-    icon: 'icon--memory-speaker',
-    description: '通过短信验证码快速登录',
-  },
-  {
-    key: 'email',
-    label: '邮箱验证码登录',
-    icon: 'icon--memory-email',
-    description: '适合常用邮箱用户',
-  },
-]
 
 const buttonStyle = computed<CSSProperties>(() => ({
   opacity: isDirty.value ? 1 : 0,
