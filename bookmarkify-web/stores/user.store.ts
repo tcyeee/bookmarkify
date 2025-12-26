@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { AuthStatusEnum, type UserFile, type UserInfo, type UserSetting } from '@typing'
-import { track, queryUserInfo, authLogout } from '@api'
+import { AuthStatusEnum, type EmailVerifyParams, type UserFile, type UserInfo, type UserSetting } from '@typing'
+import { track, queryUserInfo, authLogout, captchaVerifyEmail } from '@api'
 
 export const useUserStore = defineStore(
   'user',
@@ -19,6 +19,23 @@ export const useUserStore = defineStore(
       const hasAuth = account.value.verified != undefined && account.value.verified == true
       return hasAuth ? AuthStatusEnum.AUTHED : AuthStatusEnum.LOGGED
     })
+
+    /**
+     * 登录用户（邮箱+验证码）
+     */
+    async function loginWithEmail(params: EmailVerifyParams): Promise<UserInfo> {
+      loading.value = true
+      try {
+        const result = await captchaVerifyEmail(params)
+        account.value = { ...account.value, ...result }
+        authStatus.value = AuthStatusEnum.AUTHED
+        return result
+      } catch (err: any) {
+        return Promise.reject(err)
+      } finally {
+        loading.value = false
+      }
+    }
 
     /**
      * 获取用户信息（包含头像和设置信息）
@@ -70,7 +87,7 @@ export const useUserStore = defineStore(
       account.value = undefined
       navigateTo('/welcome')
     }
-    return { loginOrRegister, logout, account, refreshUserInfo, authStatus }
+    return { loginOrRegister, logout, account, refreshUserInfo, authStatus, loginWithEmail }
   },
   { persist: true }
 )

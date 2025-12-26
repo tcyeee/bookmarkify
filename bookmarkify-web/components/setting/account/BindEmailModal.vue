@@ -50,8 +50,7 @@
                 maxlength="6"
                 @input="onEmailCodeInput" />
 
-              <!-- 显示的6个方框 -->
-              <div class="flex gap-3 justify-center">
+              <div class="flex gap-3 justify-center items-center">
                 <div
                   v-for="i in 6"
                   :key="i"
@@ -64,6 +63,12 @@
                   ]">
                   {{ form.emailCode[i - 1] || '' }}
                 </div>
+                <button v-if="form.emailCode.length" type="button" @click="deleteLastEmailCodeDigit">
+                  <span class="icon--memory--arrow-left-box icon-size-20" />
+                </button>
+              </div>
+              <div v-if="emailCodeError" class="mt-2 text-sm text-red-500 text-center">
+                {{ emailCodeError }}
               </div>
             </div>
 
@@ -104,11 +109,12 @@
 </template>
 
 <script lang="ts" setup>
-import { captchaSendEmail } from '@api'
+import { captchaSendEmail, captchaVerifyEmail } from '@api'
 const props = defineProps<{ email?: string; disabled?: boolean; hideTrigger?: boolean }>()
 const emit = defineEmits<{ (e: 'success', email: string): void }>()
 
 const sysStore = useSysStore()
+const userStore = useUserStore()
 const dialogRef = ref<HTMLDialogElement>()
 const emailCodeInputRef = ref<HTMLInputElement>()
 
@@ -123,6 +129,7 @@ let timer: any = null
 
 const loading = ref(false)
 const sending = ref(false)
+const emailCodeError = ref('')
 const buttonText = computed(() => (props.email ? '更换邮箱' : '绑定邮箱'))
 const isEmailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
 const isEmailCodeValid = computed(() => /^\d{6}$/.test(form.emailCode.trim()))
@@ -168,22 +175,19 @@ defineExpose({ openDialog, closeDialog })
 
 async function submit() {
   if (!isEmailValid.value || !isEmailCodeValid.value) return
-  if (form.emailCode !== '000000') {
-    ElMessage.error('模拟校验失败，测试请输入 000000')
-    return
-  }
-  loading.value = true
-  const emailValue = form.email.trim()
-  try {
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    ElNotification.success({ message: '邮箱绑定成功（模拟）' })
-    emit('success', emailValue)
-    closeDialog()
-  } catch (error: any) {
-    ElMessage.error(error?.message || '邮箱绑定失败，请稍后重试')
-  } finally {
-    loading.value = false
-  }
+  userStore
+    .loginWithEmail({ email: form.email, code: form.emailCode })
+    .then(() => {
+      ElNotification.success({ message: '邮箱绑定成功' })
+      emit('success', form.email.trim())
+      closeDialog()
+    })
+    .catch((err: any) => {
+      if (err.code === 301) {
+        emailCodeError.value = err.msg
+        return
+      }
+    })
 }
 
 function handleDialogClose() {
@@ -194,6 +198,7 @@ function handleDialogClose() {
   form.email = ''
   form.emailCode = ''
   step.value = 1
+  emailCodeError.value = ''
 }
 
 onMounted(() => {
@@ -219,6 +224,9 @@ function onEmailCodeInput(e: Event) {
   const onlyDigits = target.value.replace(/\D/g, '').slice(0, 6)
   target.value = onlyDigits
   form.emailCode = onlyDigits
+  if (emailCodeError.value) {
+    emailCodeError.value = ''
+  }
 }
 
 function startCountdown() {
@@ -241,6 +249,7 @@ function stopCountdown() {
 
 async function sendEmailCode() {
   if (!canSendEmail.value) return
+  emailCodeError.value = ''
   sending.value = true
   try {
     await captchaSendEmail({ email: form.email })
@@ -258,7 +267,16 @@ async function sendEmailCode() {
 
 async function resendEmailCode() {
   if (countdown.value > 0) return
+  emailCodeError.value = ''
   await sendEmailCode()
+}
+
+function deleteLastEmailCodeDigit() {
+  if (!form.emailCode) return
+  form.emailCode = form.emailCode.slice(0, -1)
+  if (emailCodeError.value) {
+    emailCodeError.value = ''
+  }
 }
 
 function backToStep1() {

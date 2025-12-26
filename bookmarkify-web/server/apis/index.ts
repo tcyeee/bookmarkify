@@ -9,7 +9,7 @@ export const captchaSendSms = (params: t.CaptchaSmsParams) => http.post('/auth/c
 export const captchaVerifySms = (params: t.SmsVerifyParams) => http.post('/auth/captcha/verifySms', params) as Promise<t.UserInfo>
 
 export const captchaSendEmail = (params: t.CaptchaEmailParams) => http.post('/auth/captcha/email', params) as Promise<boolean>
-export const captchaVerifyEmail = (params: t.SmsVerifyParams) =>
+export const captchaVerifyEmail = (params: t.EmailVerifyParams) =>
   http.post('/auth/captcha/verifyEmail', params) as Promise<t.UserInfo>
 
 /* =========[ /bookmark ]========= */
