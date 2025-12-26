@@ -2,10 +2,7 @@
   <Command.Dialog :visible="visible" theme="custom">
     <template #header>
       <div class="flex items-center gap-2 px-4 pt-4">
-        <Command.Input
-          v-model:value="search"
-          placeholder="搜索或输入命令..."
-          class="flex-1 px-3 py-2 rounded-md bg-slate-100 dark:bg-slate-800 text-sm outline-none border border-transparent focus:border-slate-300 dark:focus:border-slate-600" />
+        <Command.Input v-model:value="search" placeholder="搜索或输入命令..." />
         <span class="text-xs text-slate-400">⌘K</span>
       </div>
     </template>
@@ -13,7 +10,7 @@
       <Command.List>
         <Command.Empty class="px-4 py-3 text-sm text-slate-400">未找到匹配的命令</Command.Empty>
         <Command.Group heading="常用操作">
-          <Command.Item v-for="item in items" :key="item.value" :data-value="item.value" :perform="() => handlePerform(item)">
+          <Command.Item v-for="item in items" :key="item.value" :data-value="item.value" @select="handleSelect">
             <div class="flex items-center justify-between px-4 py-2 text-sm">
               <div class="flex flex-col">
                 <span>{{ item.label }}</span>
@@ -114,8 +111,10 @@ function navigate(path: string) {
   navigateTo(path)
 }
 
-function handlePerform(item: PaletteItem) {
-  item.run()
+function handleSelect(payload: { value: string }) {
+  const target = items.find((item) => item.value === payload.value)
+  if (!target) return
+  target.run()
 }
 
 if (import.meta.client) {
