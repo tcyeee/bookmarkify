@@ -67,6 +67,8 @@ class LoginController(private val userService: UserServiceImpl) {
     @PostMapping("captcha/verifyEmail")
     @Operation(summary = "校验邮箱验证码并绑定邮箱")
     fun verifyEmail(
-        request: HttpServletRequest, response: HttpServletResponse, @RequestBody params: EmailVerifyParams
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        @RequestBody params: EmailVerifyParams
     ): UserSessionInfo = userService.verifyEmail(request, response, BaseUtils.uid(), params)
 }

@@ -40,6 +40,7 @@ class UserServiceImpl(
     private val projectConfig: ProjectConfig,
     private val smsService: SmsServiceImpl,
     private val mailUtils: MailUtils,
+    private val bookmarkService: BookmarkServiceImpl
 ) : IUserService, ServiceImpl<UserMapper, UserEntity>() {
 
     /**
@@ -66,8 +67,11 @@ class UserServiceImpl(
     ): UserSessionInfo = if (StpUtil.isLogin() && BaseUtils.user() != null) {
         BaseUtils.user()!!
     } else {
-        BaseUtils.sessionRegisterDeviceId(request, response, projectConfig).let(this::queryOrRegisterByDeviceId)
-            .also { StpUtil.login(it.id, true) }.authVO(StpUtil.getTokenValue()).writeToSession()
+        BaseUtils.sessionRegisterDeviceId(request, response, projectConfig)
+            .let(this::queryOrRegisterByDeviceId)
+            .also { bookmarkService.setDefaultBookmark(it.id) }
+            .also { StpUtil.login(it.id, true) }
+            .authVO(StpUtil.getTokenValue()).writeToSession()
     }
 
     override fun loginOut() {
@@ -82,46 +86,6 @@ class UserServiceImpl(
         return true
     }
 
-    /**
-     * 验证码登录/验证/绑定
-     *
-     * # 可能使用到该接口的情况:
-     * 1. 用户正在使用验证码登录 => 将当前临时账户和手机号所在帐户合并
-     * 2. 用户正在绑定/更换手机号 => 在Session中更新, 返回当前帐户信息
-     */
-    override fun verifySms(
-        request: HttpServletRequest, response: HttpServletResponse, uid: String, params: SmsVerifyParams
-    ): UserSessionInfo {
-        val cacheCode =
-            RedisUtils.get<Int>(RedisType.CODE_PHONE, uid)?.toString() ?: throw CommonException(ErrorType.E105)
-        if (cacheCode != params.smsCode.trim()) throw CommonException(ErrorType.E301)
-
-        val userEntity: UserEntity? = ktQuery().eq(UserEntity::phone, params.phone.trim()).one()
-        // 手机号已经有对应帐户了,说明是在登录
-        if (userEntity != null) {
-            // 先退出登录,然后重新注册Session
-            this.loginOut()
-            StpUtil.login(userEntity.id, true)
-
-            // TODO 检查是否有必要进行数据合并,临时账户中的信息保存一天时间,超出则不在提示用户
-
-            // 重新在session中存储UserInfo
-            return userEntity.authVO(StpUtil.getTokenValue()).writeToSession()
-        } else {
-            // 如果没有,则将手机号绑定到当前用户上
-            ktUpdate().eq(UserEntity::id, uid).set(UserEntity::phone, params.phone.trim())
-                .set(UserEntity::verified, true).update()
-
-            // 更新sesssion中的信息(加上手机号)
-            val result = BaseUtils.user() ?: throw CommonException(ErrorType.E215)
-            result.phone = params.phone.trim()
-            result.verified = true
-            result.writeToSession()
-
-            return result
-        }
-    }
-
     override fun sendEmail(uid: String, email: String): Boolean {
         val code = RandomUtil.randomInt(1000, 9999).toString()
         val success = mailUtils.send(email, MailUtils.EmailType.VERIFY_CODE, code)
@@ -129,36 +93,68 @@ class UserServiceImpl(
         return success
     }
 
+    override fun verifySms(
+        request: HttpServletRequest, response: HttpServletResponse, uid: String, params: SmsVerifyParams
+    ): UserSessionInfo {
+        return verifyCodeAndBind(uid = uid, redisType = RedisType.CODE_PHONE, getCacheCode = {
+            RedisUtils.get<Int>(RedisType.CODE_PHONE, uid)?.toString() ?: throw CommonException(ErrorType.E105)
+        }, inputCode = params.smsCode, findUser = {
+            ktQuery().eq(UserEntity::phone, params.phone.trim()).one()
+        }, bindToCurrentUser = {
+            ktUpdate().eq(UserEntity::id, uid).set(UserEntity::phone, params.phone.trim())
+                .set(UserEntity::verified, true).update()
+        }, updateSession = {
+            it.phone = params.phone.trim()
+            it.verified = true
+        })
+    }
+
     override fun verifyEmail(
         request: HttpServletRequest, response: HttpServletResponse, uid: String, params: EmailVerifyParams
     ): UserSessionInfo {
-        val cacheCode = RedisUtils.get<String>(RedisType.CODE_EMAIL, uid) ?: throw CommonException(ErrorType.E105)
-        if (cacheCode != params.code.trim()) throw CommonException(ErrorType.E301)
-
-        val userEntity: UserEntity? = ktQuery().eq(UserEntity::email, params.email.trim()).one()
-        // 邮箱已经有对应帐户了,说明是在登录
-        if (userEntity != null) {
-            // 先退出登录,然后重新注册Session
-            this.loginOut()
-            StpUtil.login(userEntity.id, true)
-
-            // 重新在session中存储UserInfo
-            return userEntity.authVO(StpUtil.getTokenValue()).writeToSession()
-        } else {
-            // 如果没有,则将邮箱绑定到当前用户上
+        return verifyCodeAndBind(uid = uid, redisType = RedisType.CODE_EMAIL, getCacheCode = {
+            RedisUtils.get<String>(RedisType.CODE_EMAIL, uid) ?: throw CommonException(ErrorType.E105)
+        }, inputCode = params.code, findUser = {
+            ktQuery().eq(UserEntity::email, params.email.trim()).one()
+        }, bindToCurrentUser = {
             ktUpdate().eq(UserEntity::id, uid).set(UserEntity::email, params.email.trim())
                 .set(UserEntity::verified, true).update()
+        }, updateSession = { it.email = params.email.trim(); it.verified = true })
+    }
 
-            // 清除Redis
-            RedisUtils.del(RedisType.CODE_EMAIL, uid)
+    /**
+     * 验证码登录/验证/绑定
+     *
+     * # 可能使用到该接口的情况:
+     * 1. 用户正在使用验证码登录 => 将当前临时账户和手机号所在帐户合并
+     * 2. 用户正在绑定/更换手机号 => 在Session中更新, 返回当前帐户信息
+     */
+    private fun verifyCodeAndBind(
+        uid: String,
+        redisType: RedisType,
+        getCacheCode: () -> String,
+        inputCode: String,
+        findUser: () -> UserEntity?,
+        bindToCurrentUser: (String) -> Unit,
+        updateSession: (UserSessionInfo) -> Unit
+    ): UserSessionInfo {
+        val cacheCode = getCacheCode()
+        if (cacheCode != inputCode.trim()) throw CommonException(ErrorType.E301)
+        RedisUtils.del(redisType, uid)
 
-            // 更新sesssion中的信息(加上邮箱)
-            val result = BaseUtils.user() ?: throw CommonException(ErrorType.E215)
-            result.email = params.email.trim()
-            result.verified = true
-            result.writeToSession()
-
-            return result
+        val userEntity = findUser()
+        return if (userEntity != null) {
+            // 有认证账户则重新登录
+            loginOut()
+            StpUtil.login(userEntity.id, true)
+            userEntity.authVO(StpUtil.getTokenValue()).writeToSession()
+        } else {
+            // 没认证账户则绑定到当前账户
+            bindToCurrentUser(uid)
+            val sessionUser = BaseUtils.user() ?: throw CommonException(ErrorType.E215)
+            updateSession(sessionUser)
+            sessionUser.writeToSession()
+            sessionUser
         }
     }
 

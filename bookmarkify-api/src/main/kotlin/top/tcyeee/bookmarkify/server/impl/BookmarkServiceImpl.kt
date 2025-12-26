@@ -60,6 +60,13 @@ class BookmarkServiceImpl(
         updateById(bookmark)
     }
 
+    override fun setDefaultBookmark(uid: String) {
+
+        // 找到
+
+        TODO("Not yet implemented")
+    }
+
     override fun checkAll() =
         ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
 
