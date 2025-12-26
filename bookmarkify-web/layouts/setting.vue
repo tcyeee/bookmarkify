@@ -52,7 +52,8 @@
 </template>
 
 <script lang="ts" setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { CSSProperties, ComponentPublicInstance } from 'vue'
 
 const sysStore = useSysStore()
 
@@ -102,8 +103,8 @@ function selectOne(index: number) {
   sysStore.settingTabIndex = index
 }
 
-const setTabRef = (key: number) => (el: Element | null) => {
-  const htmlEl = el as HTMLElement | null
+const setTabRef = (key: number) => (el: Element | ComponentPublicInstance | null) => {
+  const htmlEl = el instanceof HTMLElement ? el : null
   if (!htmlEl) {
     tabRefs.delete(key)
     return

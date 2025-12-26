@@ -109,26 +109,15 @@
     <div
       v-else
       class="rounded-2xl border border-dashed border-slate-300 bg-white/70 p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-      <div
-        class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-        <span class="icon--memory--alert icon-size-26"></span>
-      </div>
-      <div class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2">未完成验证</div>
-      <div class="text-slate-500 dark:text-slate-300 mb-4 text-sm">
-        请绑定手机号或邮箱完成验证，以便保障账号安全并支持跨设备同步。
-      </div>
-      <div class="flex justify-center gap-3">
-        <LoginDialog :disabled="saving" />
-        <button class="cy-btn cy-btn-ghost" @click="userStore.refreshUserInfo()" :disabled="saving">刷新状态</button>
-      </div>
+      <LoginDialog />
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, ref, watch, type CSSProperties, type Ref } from 'vue'
+import { ref, watch, type CSSProperties } from 'vue'
 import { updateUserInfo } from '@api'
-import type { UserInfo } from '@typing'
+import type { UserInfo, LoginMethod } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useUserStore } from '@stores/user.store'
 import { AuthStatusEnum } from '@typing'
@@ -139,7 +128,7 @@ import AccountLogout from './AccountLogout.vue'
 import LoginDialog from './LoginDialog.vue'
 
 const userStore = useUserStore()
-
+const selectedMethod = ref<LoginMethod['key']>('phone')
 const accountStatus = computed<AuthStatusEnum | undefined>(() => userStore.authStatus)
 const account = computed<UserInfo | undefined>(() => userStore.account)
 const avatarUrl: Ref<string | undefined> = computed(() => userStore.account?.avatar?.currentName)
@@ -160,6 +149,21 @@ const isDirty = computed(() => {
 const buttonWrapperStyle = computed(() => ({
   width: isDirty.value ? '190px' : '0px',
 }))
+
+const loginMethods: LoginMethod[] = [
+  {
+    key: 'phone',
+    label: '手机号验证登录',
+    icon: 'icon--memory-speaker',
+    description: '通过短信验证码快速登录',
+  },
+  {
+    key: 'email',
+    label: '邮箱验证码登录',
+    icon: 'icon--memory-email',
+    description: '适合常用邮箱用户',
+  },
+]
 
 const buttonStyle = computed<CSSProperties>(() => ({
   opacity: isDirty.value ? 1 : 0,
