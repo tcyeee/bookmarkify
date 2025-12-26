@@ -141,7 +141,7 @@
 </template>
 
 <script lang="ts" setup>
-import { captchaImage } from '@api'
+import { captchaImage, captchaSendSms } from '@api'
 const props = defineProps<{ phone?: string; disabled?: boolean; hideTrigger?: boolean }>()
 const emit = defineEmits<{ (e: 'success', phone: string): void }>()
 
@@ -311,10 +311,11 @@ async function sendSms() {
   if (!canSendSms.value) return
   sending.value = true
   try {
-    await new Promise((resolve) => setTimeout(resolve, 400))
-    ElNotification.success({ message: '已发送短信验证码（模拟，输入 0000 即可）' })
-    step.value = 2
-    startCountdown()
+    await captchaSendSms({ phone: form.phone, captcha: form.captchaCode }).then(() => {
+      step.value = 2
+      startCountdown()
+      ElNotification.success({ message: '已发送短信验证码' })
+    })
     await nextTick()
     smsCodeInputRef.value?.focus()
   } catch (error: any) {

@@ -7,7 +7,6 @@ export const authLogout = () => http.get('/auth/logout') as Promise<void>
 export const captchaImage = () => http.get('/auth/captcha/image') as Promise<string>
 export const captchaSendSms = (params: t.CaptchaSmsParams) => http.post('/auth/captcha/sms', params) as Promise<boolean>
 export const captchaVerifySms = (params: t.SmsVerifyParams) => http.post('/auth/captcha/verifySms', params) as Promise<t.UserInfo>
-
 export const captchaSendEmail = (params: t.CaptchaEmailParams) => http.post('/auth/captcha/email', params) as Promise<boolean>
 export const captchaVerifyEmail = (params: t.EmailVerifyParams) =>
   http.post('/auth/captcha/verifyEmail', params) as Promise<t.UserInfo>

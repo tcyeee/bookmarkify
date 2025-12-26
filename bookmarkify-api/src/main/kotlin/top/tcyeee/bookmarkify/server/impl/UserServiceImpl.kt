@@ -78,7 +78,7 @@ class UserServiceImpl(
     override fun sendSms(uid: String, params: CaptchaSmsParams): Boolean {
         val cache = RedisUtils.get<String>(RedisType.CAPTCHA_CODE, uid) ?: return false
         if (cache != params.captcha.trim()) return false
-        smsService.sendVerificationCode(params.phone)
+// TODO        smsService.sendVerificationCode(params.phone)
         return true
     }
 
