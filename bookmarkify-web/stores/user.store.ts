@@ -33,7 +33,6 @@ export const useUserStore = defineStore('user', {
     },
   },
 
-  // 业务动作（异步/同步方法）
   actions: {
     // 使用邮箱 + 验证码登录
     async loginWithEmail(params: EmailVerifyParams): Promise<UserInfo> {

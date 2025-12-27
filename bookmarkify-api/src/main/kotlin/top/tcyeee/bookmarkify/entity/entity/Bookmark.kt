@@ -22,14 +22,16 @@ import java.time.LocalDateTime
  */
 @TableName("bookmark")
 data class Bookmark(
+    /* URL相关 */
     @TableId var id: String,
-    @field:Max(200) @field:Schema(description = "书签URL主体") var urlHost: String, // sfz.uzuzuz.com.cn
-    @JsonIgnore @field:Schema(description = "书签完整URL(不带参数)") var urlPath: String, // /test/info
+    @field:Max(200) @field:Schema(description = "书签URL主体") var urlHost: String,       // sfz.uzuzuz.com.cn
+    @field:Schema(description = "书签完整URL(不带参数)") var urlPath: String,              // /test/info
+    @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
+    /* 其他 */
     @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
     @JsonIgnore @field:Schema(description = "书签评分0~10") var score: Int? = null,
     @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
-    @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String? = null, // http or https
     @field:Max(100) @field:Schema(description = "图标链接") var iconUrl: String? = null,
 
     @JsonIgnore @field:Schema(description = "是否失效") var isActivity: Boolean = false,

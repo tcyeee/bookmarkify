@@ -33,7 +33,7 @@ data class BookmarkUserLink(
         bookmarkId = item.bookmark.id,
         title = item.bookmark.title,
         description = item.bookmark.description,
-        urlFull = item.url.urlFull
+        urlFull = item.url.urlRaw
     )
 
     constructor(bookmarkUrl: BookmarkUrl, uid: String, bookmark: Bookmark) : this(
@@ -42,6 +42,6 @@ data class BookmarkUserLink(
         bookmarkId = bookmark.id,
         title = bookmark.title,
         description = bookmark.description,
-        urlFull = bookmarkUrl.urlFull,
+        urlFull = bookmarkUrl.urlRaw,
     )
 }

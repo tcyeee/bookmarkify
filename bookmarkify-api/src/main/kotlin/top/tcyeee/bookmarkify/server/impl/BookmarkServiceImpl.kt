@@ -31,6 +31,8 @@ class BookmarkServiceImpl(
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, Bookmark>() {
 
     override fun checkOne(bookmark: Bookmark, id: String) {
+        BookmarkUtils.parse(bookmark.rawUrl)
+
         checkOne(bookmark)
         val bookmarkShow: BookmarkShow = bookmarkUserLinkMapper.findOne(id)
         bookmarkShow.clean(projectConfig.imgPrefix)
@@ -65,23 +67,24 @@ class BookmarkServiceImpl(
         projectConfig.defaultBookmarkify.forEach { addOne(it, uid) }
     }
 
-    override fun checkAll() =
-        ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
+    override fun check(url: String) {
+        BookmarkUtils.parse(url)
+    }
+
+    override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
 
     override fun addOne(url: String, uid: String): HomeItemShow {
         val bookmarkUrl = BookmarkUrl(url)
-        val bookmark = findByHost(bookmarkUrl.urlHost) ?: Bookmark(bookmarkUrl).also { save(it) }
-
+        val bookmark =
+            ktQuery().eq(Bookmark::urlHost, bookmarkUrl.urlHost).one() ?: Bookmark(bookmarkUrl).also { save(it) }
         // 添加用户关联和桌面布局
         val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark)
         bookmarkUserLinkMapper.insert(userLink)
         val homeItem = HomeItem(uid, userLink.id)
         homeItemMapper.insert(homeItem)
-
         // 异步检查
         CompletableFuture.runAsync { this.checkOne(bookmark, userLink.id) }
         return HomeItemShow(homeItem.id, uid, bookmark.id)
     }
 
-    override fun findByHost(host: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, host).one()
 }
