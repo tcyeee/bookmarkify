@@ -47,7 +47,7 @@ object WebsiteParser {
      * @param urlRowStr 原版URL
      * @return 格式化URL
      */
-    private fun urlWrapper(urlRowStr: String): BookmarkUrlWrapper {
+    fun urlWrapper(urlRowStr: String): BookmarkUrlWrapper {
         if (urlRowStr.isBlank()) throw CommonException(ErrorType.E305)
         var urlStr = urlRowStr // 如果不是http://,或者htts://开始,则手动补全,默认Https
         if (!urlRowStr.matches(Regex("^https?://.*"))) urlStr = "https://$urlStr"

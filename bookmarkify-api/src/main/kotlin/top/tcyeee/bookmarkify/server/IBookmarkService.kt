@@ -30,5 +30,6 @@ interface IBookmarkService : IService<Bookmark> {
      * @param uid uid
      */
     fun setDefaultBookmark(uid: String)
+
     fun check(url: String)
 }

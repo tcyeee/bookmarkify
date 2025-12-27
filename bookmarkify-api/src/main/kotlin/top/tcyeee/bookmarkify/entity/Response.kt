@@ -5,7 +5,7 @@ import cn.hutool.core.util.EnumUtil
 import cn.hutool.core.util.StrUtil
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
-import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
+import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
 import top.tcyeee.bookmarkify.entity.entity.BackgroundType
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
@@ -16,19 +16,19 @@ import top.tcyeee.bookmarkify.entity.enums.FunctionType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 
-data class BookmarkAddOneParams(
-    @field:Schema(description = "添加的域名") var url: String,
-)
+//data class BookmarkAddOneParams(
+//    @field:Schema(description = "添加的域名") var url: String,
+//)
 
 data class BookmarkDetail(
     var bookmark: Bookmark,   // 公共书签
     var paths: List<String>,  // 路径  eg: /公共书签/娱乐/bilibili.com
-    var url: BookmarkUrl,     // 用于数据清洗
+    var url: BookmarkUrlWrapper,     // 用于数据清洗
     var bookmarkUserLinkId: String // 用户关联ID
 ) {
-    constructor(paths: List<String>, url: BookmarkUrl, addDate: String, name: String) : this(
-        bookmarkUserLinkId = "", bookmark = Bookmark(url, addDate, name), paths = paths, url = url
-    )
+//    constructor(paths: List<String>, url: BookmarkUrlWrapper, addDate: String, name: String) : this(
+//        bookmarkUserLinkId = "", bookmark = Bookmark(url, addDate, name), paths = paths, url = url
+//    )
 }
 
 data class BookmarkShow(

@@ -23,37 +23,18 @@ import java.time.temporal.ChronoUnit
 object BaseUtils {
     /* 用户相关方法 */
     fun uid(): String = user()?.uid ?: throw NullPointerException()
-    fun user(): UserSessionInfo? = StpUtil.getSession().get(SaSession.USER)
-        ?.let { UserSessionInfo(it) }
+    fun user(): UserSessionInfo? = StpUtil.getSession().get(SaSession.USER)?.let { UserSessionInfo(it) }
 
-    /**
-     * 在session中存储DeviceID,
-     *
-     * TODO 这里的DeviceID会存储到数据库,所以在切换账户的时候,需要清除,否则会出现数据污染
-     */
     fun sessionRegisterDeviceId(
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-        config: ProjectConfig
+        request: HttpServletRequest, response: HttpServletResponse, config: ProjectConfig
     ): String {
         // 在session中获取&生成设备ID
-        val deviceId = request.cookies
-            ?.find { it.name == config.uidCookieName }?.value
-            ?: IdUtil.fastUUID()
-
+        val deviceId = request.cookies?.find { it.name == config.uidCookieName }?.value ?: IdUtil.fastUUID()
         // 在session中存储设备ID
-        Cookie(config.uidCookieName, deviceId)
-            .apply { maxAge = config.uidCookieMaxAge; path = config.uidCookiePath }
+        Cookie(config.uidCookieName, deviceId).apply { maxAge = config.uidCookieMaxAge; path = config.uidCookiePath }
             .also { cookie -> response.addCookie(cookie) }
-
         return deviceId
     }
-
-    // 切换Session中的DeviceID
-    fun SessionreSetDeviceId(response: HttpServletResponse, config: ProjectConfig, deviceId: String) =
-        Cookie(config.uidCookieName, deviceId)
-            .apply { maxAge = config.uidCookieMaxAge; path = config.uidCookiePath }
-            .also { cookie -> response.addCookie(cookie) }
 }
 
 /* base64 to Md5 */

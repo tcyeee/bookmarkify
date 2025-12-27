@@ -19,7 +19,6 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IHomeItemService
 import top.tcyeee.bookmarkify.utils.BaseUtils
-import top.tcyeee.bookmarkify.utils.BookmarkUtils
 import java.util.function.Consumer
 import java.util.stream.Collectors
 
@@ -39,16 +38,14 @@ class BookmarksController(
     @Operation(summary = "我的书签")
     fun query(): List<HomeItemShow> = homeItemService.findShowByUid(BaseUtils.uid())
 
-    @PostMapping("/upload")
-    @Operation(summary = "书签上传", parameters = [Parameter(name = "file", description = "书签文件.html")])
-    fun upload(file: MultipartFile): List<BookmarkDetail> = updateBookmark(file, BaseUtils.uid())
+//    @PostMapping("/upload")
+//    @Operation(summary = "书签上传", parameters = [Parameter(name = "file", description = "书签文件.html")])
+//    fun upload(file: MultipartFile): List<BookmarkDetail> = updateBookmark(file, BaseUtils.uid())
 
     @PostMapping("/sort")
     @Operation(summary = "排序")
-    fun sort(@RequestBody params: List<HomeItemSortParams>): Boolean {
-        homeItemService.sort(params)
-        return true
-    }
+    fun sort(@RequestBody params: List<HomeItemSortParams>): Boolean = true
+        .also { homeItemService.sort(params) }
 
     @PostMapping("/delete")
     @Operation(summary = "删除(仅删除桌面排序)")
@@ -65,85 +62,4 @@ class BookmarksController(
     @SaIgnore
     @GetMapping("/check")
     fun check(@RequestParam url: String) = bookmarkService.check(url)
-
-
-    /**
-     * 整理上传的全部书签
-     *
-     * @param file 书签文件(chrome)
-     * @return 整理好的书签文件
-     */
-    private fun updateBookmark(file: MultipartFile, uid: String): List<BookmarkDetail> {
-        val allBookmarkDetail: List<BookmarkDetail> = BookmarkUtils.initChromeBookmark(file)
-
-        // 清洗拿到去重后的全局Bookmark,包含了原有的和新增的  key:host value:BookmarkDetail
-        val allBookmark: MutableMap<String, Bookmark> = HashMap()
-        allBookmarkDetail.forEach(
-            Consumer { item: BookmarkDetail -> allBookmark[item.url.urlHost] = item.bookmark })
-
-        // 找到数据库已经有的,移出掉,只留下所有需要新增的数据
-        val hasSave: List<Bookmark> = bookmarkService.ktQuery().`in`(Bookmark::urlHost, allBookmark.keys).list()
-        val hasSaveHost = hasSave.stream().map<Any>(Bookmark::urlHost).collect(Collectors.toSet())
-        allBookmark.keys.removeIf { o: String -> hasSaveHost.contains(o) }
-
-        // 存入所有书签
-        val collect: MutableList<Bookmark> = ArrayList(allBookmark.values)
-        collect.forEach(Consumer { bookmark: Bookmark -> bookmark.id = IdUtil.fastUUID() })
-        bookmarkService.saveBatch(collect)
-
-        // 新增书签组合成可供查询的Bookmark数据库key:host,将新增的ID返回到原始数据库
-        collect.addAll(hasSave)
-        val database: Map<String, Bookmark> = collect.associateBy { it.urlHost }
-
-        allBookmarkDetail.forEach(
-            Consumer { item: BookmarkDetail ->
-                val id: String = database[item.bookmark.urlHost]?.id.toString()
-                item.bookmark.id = id
-            })
-
-        // 存入用户-书签关联
-        val links: MutableList<BookmarkUserLink> = ArrayList()
-        allBookmarkDetail.forEach(
-            Consumer { item: BookmarkDetail ->
-                val userLink = BookmarkUserLink(item, uid)
-                item.bookmarkUserLinkId = userLink.id
-                links.add(userLink)
-            })
-        bookmarkUserLinkService.saveBatch(links)
-
-        // 存入桌面布局
-        val homeItems: List<HomeItem> = this.changeToItem(allBookmarkDetail, uid)
-        homeItemService.saveBatch(homeItems)
-
-        log.info("用户{}书签导入完成,共计导入{}条", uid, allBookmarkDetail.size)
-        return allBookmarkDetail
-    }
-
-    /**
-     * 整理出所有的桌面Items
-     *
-     * @param allBookmark 待整理
-     * @return 整理完成
-     */
-    private fun changeToItem(allBookmark: List<BookmarkDetail>, uid: String): List<HomeItem> {
-        val dirList: MutableMap<String, MutableList<String>> = HashMap() // 根据最后的目录整理书签, 结构为 目录名:用户-书签-IDS
-        val rootBookmarks: MutableList<HomeItem> = ArrayList() // 根路径书签
-
-        allBookmark.forEach(
-            Consumer { item: BookmarkDetail ->
-                /* 添加书签 */
-                if (item.paths.isEmpty()) {
-                    rootBookmarks.add(HomeItem(uid, item.bookmarkUserLinkId))
-                } else {
-                    val dirStr: String = item.paths.last()
-                    dirList.computeIfAbsent(dirStr) { ArrayList() }.add(item.bookmarkUserLinkId)
-                }
-            })
-
-        // 向目录中存放书签
-        dirList.forEach { (dirStr: String, bookmarkIds: MutableList<String>) ->
-            rootBookmarks.add(HomeItem(dirStr, uid))
-        }
-        return rootBookmarks
-    }
 }

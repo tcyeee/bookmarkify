@@ -161,3 +161,31 @@ import java.util.stream.Collectors
 //    log.info("用户{}书签导入完成,共计导入{}条", uid, allBookmarkDetail.size)
 //    return allBookmarkDetail
 //}
+
+///**
+// * 整理出所有的桌面Items
+// *
+// * @param allBookmark 待整理
+// * @return 整理完成
+// */
+//private fun changeToItem(allBookmark: List<BookmarkDetail>, uid: String): List<HomeItem> {
+//    val dirList: MutableMap<String, MutableList<String>> = HashMap() // 根据最后的目录整理书签, 结构为 目录名:用户-书签-IDS
+//    val rootBookmarks: MutableList<HomeItem> = ArrayList() // 根路径书签
+//
+//    allBookmark.forEach(
+//        Consumer { item: BookmarkDetail ->
+//            /* 添加书签 */
+//            if (item.paths.isEmpty()) {
+//                rootBookmarks.add(HomeItem(uid, item.bookmarkUserLinkId))
+//            } else {
+//                val dirStr: String = item.paths.last()
+//                dirList.computeIfAbsent(dirStr) { ArrayList() }.add(item.bookmarkUserLinkId)
+//            }
+//        })
+//
+//    // 向目录中存放书签
+//    dirList.forEach { (dirStr: String, bookmarkIds: MutableList<String>) ->
+//        rootBookmarks.add(HomeItem(dirStr, uid))
+//    }
+//    return rootBookmarks
+//}

@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Max
 import top.tcyeee.bookmarkify.entity.BookmarkDetail
-import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
+import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import java.time.LocalDateTime
 
 /**
@@ -36,12 +36,12 @@ data class BookmarkUserLink(
         urlFull = item.url.urlRaw
     )
 
-    constructor(bookmarkUrl: BookmarkUrl, uid: String, bookmark: Bookmark) : this(
+    constructor(bookmarkUrlWrapper: BookmarkUrlWrapper, uid: String, bookmark: Bookmark) : this(
         id = IdUtil.fastUUID(),
         uid = uid,
         bookmarkId = bookmark.id,
         title = bookmark.title,
         description = bookmark.description,
-        urlFull = bookmarkUrl.urlRaw,
+        urlFull = bookmarkUrlWrapper.urlRaw,
     )
 }
