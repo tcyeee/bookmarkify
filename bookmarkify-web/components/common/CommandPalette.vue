@@ -12,9 +12,9 @@
     <template #body>
       <Command.List class="pb-1">
         <Command.Empty class="px-4 py-3 text-sm text-slate-400">未找到匹配的命令</Command.Empty>
-        <Command.Group heading="常用操作">
+        <Command.Group v-for="[heading, groupItems] in groupEntries" :key="heading" :heading="heading">
           <Command.Item
-            v-for="item in items"
+            v-for="item in groupItems"
             :key="item.value"
             :data-value="item.value"
             @select="handleSelect"
@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useMagicKeys } from '@vueuse/core'
 import { Command } from 'vue-command-palette'
 
@@ -52,7 +52,8 @@ const visible = ref(false)
 const search = ref('')
 const userStore = useUserStore()
 
-const items: PaletteItem[] = [
+const groups: Map<string, PaletteItem[]> = new Map()
+groups.set('常用操作', [
   {
     value: 'toggle-theme',
     label: '切换主题模式',
@@ -78,6 +79,8 @@ const items: PaletteItem[] = [
       navigate('/setting')
     },
   },
+])
+groups.set('账号操作', [
   {
     value: 'logout',
     label: '退出登陆',
@@ -87,7 +90,10 @@ const items: PaletteItem[] = [
       close()
     },
   },
-]
+])
+
+const groupEntries = computed(() => Array.from(groups.entries()))
+const allItems = computed(() => groupEntries.value.flatMap(([, list]) => list))
 
 function open() {
   visible.value = true
@@ -119,7 +125,7 @@ function navigate(path: string) {
 }
 
 function handleSelect(payload: { value: string }) {
-  const target = items.find((item) => item.value === payload.value)
+  const target = allItems.value.find((item) => item.value === payload.value)
   if (!target) return
   target.run()
 }
