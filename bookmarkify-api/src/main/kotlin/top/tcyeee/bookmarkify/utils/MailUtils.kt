@@ -57,13 +57,13 @@ class MailUtils {
                 return true
             } else {
                 val errMsg = json.getStr("errmsg")
-                if (errMsg.startsWith("not allow to access from your ip")) throw CommonException(ErrorType.E108)
                 log.error("发送邮件失败: ${json.getStr("errmsg")}")
+                if (errMsg.startsWith("not allow to access from your ip")) throw CommonException(ErrorType.E108)
                 return false
             }
         } catch (e: Exception) {
-            if (e is CommonException) throw e
             log.error("发送邮件异常", e)
+            if (e is CommonException) throw e
             return false
         }
     }

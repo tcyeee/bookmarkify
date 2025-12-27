@@ -68,20 +68,21 @@ data class BookmarkShow(
 }
 
 data class HomeItemShow(
-    var id: String,
-    var uid: String,
-
+    @field:Schema(description = "ID") var id: String,
+    @field:Schema(description = "UID") var uid: String,
     @field:Schema(description = "序号") var sort: Int = 99,
     @field:Schema(description = "书签类型") var type: HomeItemType = HomeItemType.BOOKMARK,
 
-    var bookmarkId: String? = null,     // 用于新建书签时定位
-    var typeApp: BookmarkShow? = null,  // 书签信息
-    var typeDir: BookmarkDir? = null,   // 书签组信息
-    var typeFuc: FunctionType? = null,  // 系统功能入口
+    @field:Schema(description = "书签信息") var typeApp: BookmarkShow? = null,
+    @field:Schema(description = "书签组信息") var typeDir: BookmarkDir? = null,
+    @field:Schema(description = "系统功能入口") var typeFuc: FunctionType? = null,
+
+    @JsonIgnore var bookmarkId: String? = null,  // 用于新建书签时定位
 ) {
 
     constructor(item: HomeItem, database: Map<String, BookmarkShow>, imgPrefix: String) : this(
-        id = item.id, uid = item.uid
+        id = item.id,
+        uid = item.uid
     ) {
         BeanUtil.copyProperties(item, this)
         when (item.type) {
@@ -99,12 +100,10 @@ data class HomeItemShow(
 data class UserInfoShow(
     @field:Schema(description = "UID") var uid: String,
     @field:Schema(description = "用户名称") var nickName: String,
-    @field:Schema(description = "绑定的手机号") var phone: String? = null,
-    @field:Schema(description = "绑定的邮箱") var email: String? = null,
-    @JsonIgnore @field:Schema(description = "用户头像文件ID") var avatarFileId: String? = null,
-
     @field:Schema(description = "用户头像文件") var avatar: UserFile? = null,
     @field:Schema(description = "用户设置信息") var userSetting: UserSetting? = null,
+
+    @JsonIgnore @field:Schema(description = "用户头像文件ID") var avatarFileId: String? = null,
 ) {
     constructor(user: UserEntity) : this(uid = user.id, nickName = user.nickName) {
         BeanUtil.copyProperties(user, this)
