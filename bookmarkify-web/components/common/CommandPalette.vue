@@ -45,7 +45,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { useMagicKeys } from '@vueuse/core'
+import { useMagicKeys, onKeyStroke } from '@vueuse/core'
 import { Command } from 'vue-command-palette'
 
 const sysStore = useSysStore()
@@ -142,20 +142,17 @@ function handleSelect(payload: { value: string }) {
 
 if (import.meta.client) {
   const keys = useMagicKeys()
-  const CmdK = keys['Meta+K']
   const Esc = keys.Escape
-  watch(
-    () => CmdK?.value,
-    (pressed) => {
-      if (pressed) {
-        if (visible.value) {
-          close()
-        } else {
-          open()
-        }
-      }
+
+  onKeyStroke('k', (e) => {
+    if (!e.metaKey) return
+    if (visible.value) {
+      close()
+    } else {
+      open()
     }
-  )
+  })
+
   watch(
     () => Esc?.value,
     (pressed) => {
