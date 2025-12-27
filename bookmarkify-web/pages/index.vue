@@ -45,7 +45,6 @@ const data = reactive<{
 onMounted(async () => {
   sysStore.registerKeyEvent('Space', '/', () => sceneToggle('Space'))
   sysStore.registerKeyEvent('Escape', '/', () => sceneToggle('Escape'))
-  // TODO 刷新设置信息
 })
 
 const classFadeBg = computed(() => {
