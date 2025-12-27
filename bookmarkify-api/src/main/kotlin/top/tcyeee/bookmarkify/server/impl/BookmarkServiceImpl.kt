@@ -43,15 +43,15 @@ class BookmarkServiceImpl(
         log.trace("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
 
         /* 检查网站活性 */
-        val document: Document? = BookmarkUtils.getDocument(bookmark.rawUrl)
-        document ?: return offline(bookmark)
-
-        /* 保存网站标题,描述 */
-        bookmark.setTitle(document)
+//        val document: Document? = BookmarkUtils.getDocument(bookmark.rawUrl)
+//        document ?: return offline(bookmark)
+//
+//        /* 保存网站标题,描述 */
+//        bookmark.setTitle(document)
 
         /* 保存网站LOGO */
-        val iconStorePath = BookmarkUtils.getLogoUrl(document, projectConfig.imgPath, bookmark)
-        bookmark.setLogo(iconStorePath)
+//        val iconStorePath = BookmarkUtils.getLogoUrl(document, projectConfig.imgPath, bookmark)
+//        bookmark.setLogo(iconStorePath)
 
         updateById(bookmark)
     }
@@ -74,7 +74,7 @@ class BookmarkServiceImpl(
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
 
     override fun addOne(url: String, uid: String): HomeItemShow {
-        val bookmarkUrl = BookmarkUrl(url)
+        val bookmarkUrl = BookmarkUtils.parseUrl(url)
         val bookmark =
             ktQuery().eq(Bookmark::urlHost, bookmarkUrl.urlHost).one() ?: Bookmark(bookmarkUrl).also { save(it) }
         // 添加用户关联和桌面布局

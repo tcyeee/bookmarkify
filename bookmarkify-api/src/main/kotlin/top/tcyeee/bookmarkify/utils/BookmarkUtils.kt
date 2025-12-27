@@ -6,31 +6,69 @@ import cn.hutool.core.util.URLUtil
 import cn.hutool.core.util.XmlUtil
 import cn.hutool.http.HtmlUtil
 import cn.hutool.http.HttpUtil
+import cn.hutool.json.JSONObject
+import cn.hutool.json.JSONUtil
+import java.io.File
+import java.net.URL
+import java.nio.charset.StandardCharsets
+import java.util.*
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.exception.CommonException
+import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.BookmarkDetail
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
+import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
+import top.tcyeee.bookmarkify.entity.dto.WebManifest
+import top.tcyeee.bookmarkify.entity.dto.WebsiteHeaderInfo
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
-import java.io.File
-import java.io.IOException
-import java.nio.charset.StandardCharsets
-import java.util.*
 
 /**
  * @author tcyeee
  * @date 3/10/24 17:32
  */
 object BookmarkUtils {
-    fun parse(url: String): BookmarkDetail? {
-        val initUrl = BookmarkUrl(url)
 
-        // TODO 请求
+    fun parse(url: String): WebsiteHeaderInfo {
+        val fullUrl = this.parseUrl(url).urlFull
+        val doc = getDocument(fullUrl)
+        val info = WebsiteHeaderInfo(doc)
+        fillManifest(info)
+        return info
+    }
 
 
-        return null
+    private fun fillManifest(info: WebsiteHeaderInfo) {
+        info.manifestUrl?.let { mUrl ->
+            fetchManifest(mUrl)?.let { json ->
+                try {
+                    info.manifest = parseManifestJson(json)
+                } catch (e: Exception) {
+                    log.error("Failed to parse manifest from $mUrl", e)
+                }
+            }
+        }
+    }
+
+    private fun parseManifestJson(json: String): WebManifest {
+        val jsonObj = JSONUtil.parseObj(json)
+        return WebManifest(
+            name = jsonObj.getStr("name"),
+            shortName = jsonObj.getStr("short_name") ?: jsonObj.getStr("shortName"),
+            description = jsonObj.getStr("description"),
+            startUrl = jsonObj.getStr("start_url") ?: jsonObj.getStr("startUrl"),
+            display = jsonObj.getStr("display"),
+            backgroundColor = jsonObj.getStr("background_color") ?: jsonObj.getStr("backgroundColor"),
+            themeColor = jsonObj.getStr("theme_color") ?: jsonObj.getStr("themeColor"),
+            icons = jsonObj.getJSONArray("icons")?.mapNotNull {
+                if (it is JSONObject) {
+                    ManifestIcon(
+                        src = it.getStr("src"), sizes = it.getStr("sizes"), type = it.getStr("type")
+                    )
+                } else null
+            } ?: emptyList())
     }
 
     /**
@@ -73,7 +111,6 @@ object BookmarkUtils {
         return result
     }
 
-
     /**
      * 对A标签进行单独数据清洗
      *
@@ -91,18 +128,12 @@ object BookmarkUtils {
             url = element.getAttribute("HREF")
             addDate = element.getAttribute("ADD_DATE")
             name = element.textContent
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             log.error("A标签解析出错!,目标数据:{}", line2)
             return null
         }
 
-        val bookmarkUrlInfo: BookmarkUrl
-        try {
-            bookmarkUrlInfo = BookmarkUrl(url)
-        } catch (e: CommonException) {
-            return null
-        }
-        return BookmarkDetail(paths, bookmarkUrlInfo, addDate, name)
+        return BookmarkDetail(paths, parseUrl(url), addDate, name)
     }
 
     /**
@@ -143,14 +174,13 @@ object BookmarkUtils {
     /**
      * 将LOGO下载到本地
      *
-     * @param logoUrl  LOGO的线上地址
+     * @param logoUrl LOGO的线上地址
      * @param storeUrl 存储地址
      */
     private fun downloadLogo(logoUrl: String, storeUrl: String): Boolean = runCatching {
         HttpUtil.downloadFileFromUrl(logoUrl, File(storeUrl))
         log.info("[CHECK] 获取到了书签LOGO:{}", storeUrl)
     }.isSuccess
-
 
     /**
      * 从节点中解析图标LOGO
@@ -170,46 +200,28 @@ object BookmarkUtils {
     }
 
     /**
-     * 获取页面标题
+     * 格式化URL字符串
      *
-     * @param document 网站解析后信息
-     * @return 网站标题
+     * @param urlRowStr 原版URL
+     * @return 格式化URL
      */
-    fun getTitle(document: Document?): String? {
-        if (document == null) {
-            log.warn("[CHECK] 书签对应页面为空,无法获取标题!")
-            return null
-        }
-        if (StrUtil.isBlank(document.title())) {
-            log.warn("[CHECK] 书签对应页面标题为空!")
-            return null
-        }
+    fun parseUrl(urlRowStr: String): BookmarkUrl {
+        if (urlRowStr.isBlank()) throw CommonException(ErrorType.E305)
+        var urlStr = urlRowStr // 如果不是http://,或者htts://开始,则手动补全,默认Https
+        if (!urlRowStr.matches(Regex("^https?://.*"))) urlStr = "https://$urlStr"
 
-        log.info("[CHECK] 解析到了书签标题:{}", document.title())
-        return document.title()
-    }
-
-    /**
-     * 获取页面描述
-     *
-     * @param document 网站解析后信息
-     * @return 网站描述
-     */
-    fun getDescription(document: Document?): String? {
-        if (document == null) {
-            log.warn("[CHECK] 书签对应页面为空,无法获取描述!")
-            return null
+        val url: URL = runCatching { URLUtil.toUrlForHttp(urlStr) }.getOrElse {
+            throw CommonException(ErrorType.E303)
         }
-
-        val metaTags = document.select("meta[name=description]")
-        if (metaTags.isEmpty()) {
-            log.warn("[CHECK] 书签对应描述为空!")
-            return null
-        }
-
-        val content = Objects.requireNonNull(metaTags.first())?.attr("content")
-        log.info("[CHECK] 获取到了书签描述:{}", content)
-        return content
+        return BookmarkUrl(
+            urlScheme = url.protocol,
+            urlHost = url.authority,
+            urlQuery = url.query,
+            urlPath = url.path,
+            urlRaw = urlStr,
+            urlRoot = "${url.protocol}://${url.host}",
+            urlFull = "${url.protocol}://${url.host}${url.path}",
+        )
     }
 
     /**
@@ -218,12 +230,20 @@ object BookmarkUtils {
      * @param url 地址
      * @return 网站数据
      */
-    fun getDocument(url: String): Document? {
-        return try {
-            Jsoup.connect(url).timeout(10000).get()
-        } catch (e: IOException) {
-            log.info("[CHECK] 该网址无法正常解析, 标记此网站为离线: {}", url)
-            null
-        }
+    private fun getDocument(url: String): Document = runCatching {
+        Jsoup.connect(url).timeout(10000).ignoreHttpErrors(true) // 允许获取 4xx/5xx 页面，以便后续检测反爬虫特征
+            .get()
+    }.getOrElse { err ->
+        err.printStackTrace()
+        throw CommonException(ErrorType.E304, err.message ?: err.toString())
+    }
+
+    private fun fetchManifest(manifestUrl: String): String? {
+        return runCatching {
+            HttpUtil.createGet(manifestUrl).header(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            ).execute().body()
+        }.getOrNull()
     }
 }
