@@ -1,12 +1,10 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
-import org.jsoup.nodes.Document
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
-import top.tcyeee.bookmarkify.entity.dto.BookmarkUrl
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
@@ -14,8 +12,8 @@ import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
-import top.tcyeee.bookmarkify.utils.BookmarkUtils
 import top.tcyeee.bookmarkify.utils.SocketUtils
+import top.tcyeee.bookmarkify.utils.WebsiteParser
 import top.tcyeee.bookmarkify.utils.yesterday
 import java.util.concurrent.CompletableFuture
 
@@ -31,7 +29,7 @@ class BookmarkServiceImpl(
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, Bookmark>() {
 
     override fun checkOne(bookmark: Bookmark, id: String) {
-        BookmarkUtils.parse(bookmark.rawUrl)
+        WebsiteParser.parse(bookmark.rawUrl)
 
         checkOne(bookmark)
         val bookmarkShow: BookmarkShow = bookmarkUserLinkMapper.findOne(id)
@@ -68,13 +66,13 @@ class BookmarkServiceImpl(
     }
 
     override fun check(url: String) {
-        BookmarkUtils.parse(url)
+        WebsiteParser.parse(url)
     }
 
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
 
     override fun addOne(url: String, uid: String): HomeItemShow {
-        val bookmarkUrl = BookmarkUtils.parseUrl(url)
+        val bookmarkUrl = WebsiteParser.urlWrapper(url)
         val bookmark =
             ktQuery().eq(Bookmark::urlHost, bookmarkUrl.urlHost).one() ?: Bookmark(bookmarkUrl).also { save(it) }
         // 添加用户关联和桌面布局

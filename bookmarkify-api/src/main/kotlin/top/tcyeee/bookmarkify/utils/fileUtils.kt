@@ -30,14 +30,10 @@ enum class FileType(val limit: Int, val prefix: String, val defaultSuffix: Strin
 fun uploadFile(file: MultipartFile, fileBasePath: String, fileType: FileType): String {
     // 验证文件类型
     file.contentType?.startsWith(fileType.prefix)?.let { if (!it) throw CommonException(ErrorType.E103) }
-
     // 验证文件大小
     if (file.size > fileType.limit) throw CommonException(ErrorType.E104)
-
     val (dest, fileName) = getFileName(file, fileType, fileBasePath)
-
     saveFile(file, dest)
-
     return fileName
 }
 
@@ -55,13 +51,10 @@ private fun getFileName(
 ): Pair<File, String> {
     // 从原始文件名提取扩展名
     var ext = FileUtil.extName(file.originalFilename ?: fileType.defaultSuffix)
-
     // 安全验证：只允许字母、数字和部分安全字符，移除所有路径分隔符和特殊字符
     ext = ext.replace(Regex("[^a-zA-Z0-9]"), "").lowercase()
-
     // 如果清理后扩展名为空，使用默认扩展名
     if (ext.isEmpty()) ext = fileType.defaultSuffix
-
     // 验证扩展名长度（防止过长）
     if (ext.length > 10) ext = fileType.defaultSuffix
 
