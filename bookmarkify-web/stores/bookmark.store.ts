@@ -1,76 +1,62 @@
 import { defineStore } from 'pinia'
-import { ref, reactive } from 'vue'
 import { HomeItemType, type Bookmark, type HomeItem } from '@typing'
 import { bookmarksShowAll } from '@api'
 
-export const useBookmarkStore = defineStore(
-  'bookmarks',
-  () => {
-    // 用户桌面布局信息
-    const bookmarks = ref<Array<HomeItem> | undefined>(undefined)
-    // 当书签更新后的回调函数
-    const actions = reactive<Record<string, Function>>({})
+// 书签相关的 Pinia Store（负责桌面书签布局及其更新通知）
+export const useBookmarkStore = defineStore('bookmarks', {
+  state: () => ({
+    // 用户桌面布局信息（书签列表）
+    bookmarks: undefined as Array<HomeItem> | undefined,
+    // 当书签更新后的回调函数集合（key 为回调函数名）
+    actions: {} as Record<string, Function>,
+  }),
 
-    function sortData(res: Array<HomeItem>) {
+  actions: {
+    // 对书签列表按 sort 字段排序，保持原数组不被修改
+    sortData(res: Array<HomeItem>) {
       return !res || res.length === 0 ? [] : res.slice().sort((a, b) => a.sort - b.sort)
-    }
+    },
 
-    // async function get(): Promise<Array<HomeItem>> {
-    //   if (bookmarks.value === undefined) return await update()
-    //   return bookmarks.value
-    // }
-
-    async function update(): Promise<Array<HomeItem>> {
+    // 从后端拉取全部书签并更新本地缓存
+    async update(): Promise<Array<HomeItem>> {
       const res = await bookmarksShowAll()
-      bookmarks.value = sortData(res)
-      console.log(`[DEBUG]书签更新:${bookmarks.value?.length}`)
-      if (bookmarks.value === undefined) throw new Error('Bookmarks is undefined')
+      this.bookmarks = this.sortData(res)
+      console.log(`[DEBUG]书签更新:${this.bookmarks?.length}`)
+      if (this.bookmarks === undefined) throw new Error('Bookmarks is undefined')
 
-      trigger()
-      return bookmarks.value
-    }
+      // 触发所有监听书签变更的回调
+      this.trigger()
+      return this.bookmarks
+    },
 
-    function trigger() {
-      Object.values(actions).forEach((action) => action())
-    }
+    // 触发所有已注册的书签更新回调
+    trigger() {
+      Object.values(this.actions).forEach((action) => action())
+    },
 
-    function addAction(action: Function) {
-      actions[action.name] = action
-    }
+    // 注册一个在书签更新时需要执行的回调函数
+    addAction(action: Function) {
+      this.actions[action.name] = action
+    },
 
-    function addEmpty(item: HomeItem) {
+    // 在书签列表中临时插入一个“加载中”的占位项
+    addEmpty(item: HomeItem) {
       item.type = HomeItemType.LOADING
-      bookmarks.value?.push(item)
-      trigger()
-    }
+      this.bookmarks?.push(item)
+      this.trigger()
+    },
 
-    function updateOne(item: Bookmark) {
-      bookmarks.value?.forEach((it) => {
+    // 局部更新某一个书签的数据（通常由 WebSocket 推送触发）
+    updateOne(item: Bookmark) {
+      this.bookmarks?.forEach((it) => {
         if (it.bookmarkId === item.bookmarkId) {
           it.type = HomeItemType.BOOKMARK
           it.typeApp = item
         }
       })
-    }
-
-    function clearCache() {
-      localStorage.removeItem('bookmarks')
-    }
-
-    return {
-      bookmarks,
-      actions,
-      trigger,
-      addAction,
-      addEmpty,
-      updateOne,
-      update,
-      clearCache,
-    }
-  },
-  {
-    persist: {
-      storage: piniaPluginPersistedstate.localStorage(),
     },
-  }
-)
+  },
+
+  // 通过 pinia-plugin-persistedstate 将书签持久化到 localStorage
+  persist: { storage: piniaPluginPersistedstate.localStorage() },
+})

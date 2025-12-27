@@ -9,128 +9,128 @@ import {
 } from '@typing'
 import { track, queryUserInfo, authLogout, captchaVerifyEmail, captchaVerifySms } from '@api'
 
-export const useUserStore = defineStore(
-  'user',
-  () => {
-    /* 用户账户信息 */
-    const account = ref<UserInfo>()
-    /* 用户设置信息 */
-    const setting = ref<UserSetting>()
-    /* 用户头像 */
-    const avatar = ref<UserFile>()
-    /* 加载状态 */
-    const loading = ref<Boolean>(false)
-    /* 帐户状态：NONE、LOGGED、AUTHED */
-    const authStatus: Ref<AuthStatusEnum> = computed(() => {
-      if (account.value == undefined) return AuthStatusEnum.NONE
-      const hasAuth = account.value.verified != undefined && account.value.verified == true
-      return hasAuth ? AuthStatusEnum.AUTHED : AuthStatusEnum.LOGGED
-    })
+// 用户相关的 Pinia Store（账号信息、设置、头像、登录状态等）
+export const useUserStore = defineStore('user', {
+  // 存放用户相关状态
+  state: () => ({
+    // 用户基本信息（含 token 等）
+    account: undefined as UserInfo | undefined,
+    // 用户个性化设置
+    setting: undefined as UserSetting | undefined,
+    // 用户头像文件
+    avatar: undefined as UserFile | undefined,
+    // 通用加载状态（登录、拉取信息等异步请求时使用）
+    loading: false as boolean,
+  }),
 
-    /**
-     * 登录用户（邮箱+验证码）
-     */
-    async function loginWithEmail(params: EmailVerifyParams): Promise<UserInfo> {
-      loading.value = true
+  // 基于 state 派生出的计算属性
+  getters: {
+    // 当前账号认证状态：未登录 / 已登录未认证 / 已认证
+    authStatus(state): AuthStatusEnum {
+      if (state.account == undefined) return AuthStatusEnum.NONE
+      const hasAuth = state.account.verified != undefined && state.account.verified == true
+      return hasAuth ? AuthStatusEnum.AUTHED : AuthStatusEnum.LOGGED
+    },
+  },
+
+  // 业务动作（异步/同步方法）
+  actions: {
+    // 使用邮箱 + 验证码登录
+    async loginWithEmail(params: EmailVerifyParams): Promise<UserInfo> {
+      this.loading = true
       try {
         const result = await captchaVerifyEmail(params)
-        account.value = { ...account.value, ...result }
+        // 用接口返回结果合并当前账号信息，避免丢失已有字段
+        this.account = { ...this.account, ...result }
         return result
       } catch (err: any) {
         return Promise.reject(err)
       } finally {
-        loading.value = false
+        this.loading = false
       }
-    }
+    },
 
-    /**
-     * 登录用户（手机号+验证码）
-     */
-    async function loginWithPhone(params: SmsVerifyParams): Promise<UserInfo> {
-      loading.value = true
+    // 使用手机号 + 验证码登录
+    async loginWithPhone(params: SmsVerifyParams): Promise<UserInfo> {
+      this.loading = true
       try {
         const result = await captchaVerifySms(params)
-        account.value = { ...account.value, ...result }
-        authStatus.value = AuthStatusEnum.AUTHED
+        this.account = { ...this.account, ...result }
         return result
       } catch (err: any) {
         return Promise.reject(err)
       } finally {
-        loading.value = false
+        this.loading = false
       }
-    }
+    },
 
-    /**
-     * 获取用户信息（包含头像和设置信息）
-     */
-    async function refreshUserInfo(): Promise<UserInfo> {
-      loading.value = true
+    // 刷新用户信息（会重新从后端获取账号信息）
+    async refreshUserInfo(): Promise<UserInfo> {
+      this.loading = true
       try {
         const result = await queryUserInfo()
-        account.value = { ...account.value, ...result }
+        this.account = { ...this.account, ...result }
         return result
       } catch (err: any) {
+        // 202 表示用户信息/登录态过期，触发重新登录流程
         if (err.code == 202) {
-          await logout()
+          await this.logout()
           ElMessage.error('用户信息已过期,已重新登录,请刷新页面')
-          return await loginOrRegister()
+          return await this.loginOrRegister()
         }
         ElMessage.error(err.message || '刷新用户信息失败')
         throw err
       } finally {
-        loading.value = false
+        this.loading = false
       }
-    }
+    },
 
-    /**
-     * 登录或注册,每次请求均会刷新用户信息,仅在引导页允许注册
-     *
-     * @returns 用户信息+TOKEN（不含头像和设置信息）
-     */
-    async function loginOrRegister(): Promise<UserInfo> {
+    // 登录或注册（匿名访问时自动为用户创建账号并登录）
+    async loginOrRegister(): Promise<UserInfo> {
       console.log('DEBUG: 登录或者注册，刷新最新用户信息')
-      loading.value = true
+      this.loading = true
+      // track 会在后端创建/确认用户并返回最新的账号信息
       const user = await track()
-      loading.value = false
-      account.value = { ...account.value, ...user }
+      this.loading = false
+      this.account = { ...this.account, ...user }
       if (!user.token) return Promise.reject('登陆数据异常')
 
-      // 更新书签
+      // 登录成功后刷新书签数据
       const bookmarkStore = useBookmarkStore()
       bookmarkStore.update()
 
-      // 连接websocket
+      // 使用用户 token 连接 websocket
       const webSocketStore = useWebSocketStore()
       webSocketStore.connect(user.token)
 
-      // 更新用户信息
-      // refreshUserInfo()
-      return Promise.resolve(account.value)
-    }
+      // 返回当前账号信息（此时 state 中已是最新数据）
+      return Promise.resolve(this.account as UserInfo)
+    },
 
-    async function logout() {
+    // 退出登录：清理所有与用户相关的状态和连接
+    async logout() {
       console.log('DEBUG: 退出登陆')
+      // 通知后端注销登录状态
       await authLogout()
+
+      // 依次获取需要联动清理的其他 store
       const webSocketStore = useWebSocketStore()
-      webSocketStore.disconnect()
-      account.value = undefined
-
-      // 清理书签缓存
       const bookmarkStore = useBookmarkStore()
+      const sysStore = useSysStore()
+
+      // 断开 websocket 连接
+      webSocketStore.disconnect()
+      // 清空书签相关缓存
       bookmarkStore.$reset()
-
-      // 清理user缓存
-      account.value = undefined
-      setting.value = undefined
-      avatar.value = undefined
-      loading.value = false
-
+      // 清空系统状态（键盘事件、倒计时等）
+      sysStore.$reset()
+      // 重置当前用户 store（账号信息、设置、头像、loading 等）
+      this.$reset()
+      // 跳转回欢迎/登录引导页
       navigateTo('/welcome')
-    }
-
-    return { loginOrRegister, logout, account, refreshUserInfo, authStatus, loginWithEmail, loginWithPhone }
+    },
   },
-  {
-    persist: true,
-  }
-)
+
+  // 启用持久化插件，将用户信息存到本地（localStorage 等）
+  persist: true,
+})
