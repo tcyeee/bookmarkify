@@ -25,7 +25,7 @@ data class Bookmark(
     /* URL相关 */
     @TableId var id: String,
     @field:Max(200) @field:Schema(description = "书签URL主体") var urlHost: String,       // sfz.uzuzuz.com.cn
-    @field:Schema(description = "书签完整URL(不带参数)") var urlPath: String,              // /test/info
+    @field:Schema(description = "书签完整URL(不带参数)") var urlPath: String? = null,              // /test/info
     @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
     /* 其他 */
@@ -34,6 +34,7 @@ data class Bookmark(
     @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
     @field:Max(100) @field:Schema(description = "图标链接") var iconUrl: String? = null,
 
+    @JsonIgnore @field:Schema(description = "是否被成功解析") var parseFlag: Boolean = false,
     @JsonIgnore @field:Schema(description = "是否失效") var isActivity: Boolean = false,
     @field:Schema(description = "图标是否存在") var iconActivity: Boolean = false,
     @field:Schema(description = "是否可以启用大图标") var iconHd: Boolean = false,
@@ -73,10 +74,10 @@ data class Bookmark(
     }
 
     /* 根据网站解析文件,添加title,description */
-    fun setTitle(document: Document) {
-        this.isActivity = true
-        this.title = BookmarkUtils.getTitle(document)
-        this.description = BookmarkUtils.getDescription(document)
-        log.trace("[CHECK] 书签: ${this.rawUrl} 解析完成!")
-    }
+//    fun setTitle(document: Document) {
+//        this.isActivity = true
+//        this.title = BookmarkUtils.getTitle(document)
+//        this.description = BookmarkUtils.getDescription(document)
+//        log.trace("[CHECK] 书签: ${this.rawUrl} 解析完成!")
+//    }
 }
