@@ -32,7 +32,7 @@
               :shimmerWidth="100"
               class="inline-flex dark:text-black/50! items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 text-lg">
               <template v-if="startLoading">
-                <span class="icon--memory-rotate-counterclockwise icon-size-24 animate-spin"></span>
+                <span class="icon--memory-rotate-clockwise icon-size-24 animate-spin"></span>
                 <span>&emsp;处理中...</span>
               </template>
               <template v-else>
@@ -42,6 +42,7 @@
               </template>
             </ShimmerText>
           </div>
+          {{ userStore.authStatus }}
         </div>
 
         <!-- 查看更多按钮 -->
