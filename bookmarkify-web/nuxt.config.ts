@@ -1,7 +1,7 @@
 import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
-const siteUrl = process.env.NUXT_PUBLIC_SITE_URL || 'https://bookmarkify.app'
+const siteUrl = process.env.NUXT_PUBLIC_SITE_URL || 'https://bookmarkify.cc'
 const seoDescription =
   '集中收藏应用、工具与灵感；一键保存、智能分类与搜索、云端同步、书签活性检测，以及社区分享与发现，随时随地一触即达。'
 const seoKeywords = 'bookmarkify,书签鸭,书签管理,云端同步,一键收藏,智能分类,模糊搜索,书签检测,书签分享,社区发现,效率工具'
@@ -36,7 +36,7 @@ export default defineNuxtConfig({
         { name: 'twitter:image', content: `${siteUrl}/favicon.ico` },
       ],
       link: [
-        { rel: 'canonical', href: siteUrl },
+        { rel: 'canonical', href: `${siteUrl}/welcome` },
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
       ],
       script: [
