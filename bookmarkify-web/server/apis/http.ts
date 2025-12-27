@@ -98,7 +98,10 @@ async function resultCheck(result: Result<object>, request: Request): Promise<an
   }
 
   // 如果result.code是“1”开头，则需要提示
-  if (result.code.toString().startsWith('1')) ElMessage.error(`Oops, ${result.msg}`)
+  if (result.code.toString().startsWith('1')) {
+    ElMessage.error(`Oops, ${result.msg}`)
+    return Promise.reject(result)
+  }
   // 如果result.code是“3”开头,则不提示,直接返回
   if (result.code.toString().startsWith('3')) return Promise.reject(result)
 

@@ -62,6 +62,7 @@ class MailUtils {
                 return false
             }
         } catch (e: Exception) {
+            if (e is CommonException) throw e
             log.error("发送邮件异常", e)
             return false
         }

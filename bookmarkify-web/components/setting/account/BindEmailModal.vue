@@ -260,8 +260,6 @@ async function sendEmailCode() {
     startCountdown()
     await nextTick()
     emailCodeInputRef.value?.focus()
-  } catch (error: any) {
-    ElMessage.error(error?.message || '发送失败，请稍后重试')
   } finally {
     sending.value = false
   }

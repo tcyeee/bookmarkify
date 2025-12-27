@@ -35,53 +35,76 @@
 [command-dialog-mask] {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
+  padding: 1.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 60%) rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(16px);
   z-index: 99;
 }
 
 [command-dialog-wrapper] {
   width: 100%;
-  max-width: 32rem;
+  max-width: 34rem;
   margin: 0 auto;
-  border-radius: 1.3rem;
+  border-radius: 1.4rem;
   overflow: hidden;
-  box-shadow: 0 22px 45px rgba(15, 23, 42, 0.35);
-  background: white;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  box-shadow: 0 26px 60px rgba(15, 23, 42, 0.5);
+  background: linear-gradient(135deg, #ffffff, #f8fafc);
 }
 
 .dark [command-dialog-wrapper],
 [data-theme='dark'] [command-dialog-wrapper] {
-  background: rgba(15, 23, 42, 0.98);
+  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 55%) rgba(15, 23, 42, 0.98);
   border-color: rgba(30, 64, 175, 0.7);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.95);
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.95);
 }
 
 [command-dialog-header] {
   border-bottom: 1px solid rgba(148, 163, 184, 0.35);
-  padding: 0.75rem 1rem 0.5rem;
-  background: rgba(248, 250, 252, 0.96);
+  padding: 0.75rem 1rem 0.75rem;
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.96));
 }
 
 .dark [command-dialog-header],
 [data-theme='dark'] [command-dialog-header] {
-  background: rgba(15, 23, 42, 0.98);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.96));
   border-bottom-color: rgba(51, 65, 85, 0.95);
 }
 
 [command-dialog-body] {
-  padding: 1rem;
-  max-height: 18rem;
+  padding: 0.75rem 0.5rem 0.9rem;
+  max-height: 19rem;
   overflow-y: auto;
 }
 
+[command-dialog-body]::-webkit-scrollbar {
+  width: 6px;
+}
+
+[command-dialog-body]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[command-dialog-body]::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.7);
+  border-radius: 999px;
+}
+
+.dark [command-dialog-body]::-webkit-scrollbar-thumb,
+[data-theme='dark'] [command-dialog-body]::-webkit-scrollbar-thumb {
+  background-color: rgba(51, 65, 85, 0.9);
+}
+
 [command-group-heading] {
-  margin: 0.25rem 0.25rem 0.5rem 0.25rem;
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #a7a7a7;
+  margin: 0.5rem 0.75rem 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9ca3af;
   user-select: none;
 }
 
