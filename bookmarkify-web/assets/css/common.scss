@@ -112,3 +112,37 @@
 [data-theme='dark'] [command-group-heading] {
   color: #e2e8f0;
 }
+
+.command-dialog-enter-active [command-dialog-mask],
+.command-dialog-leave-active [command-dialog-mask] {
+  transition: opacity 0.2s ease-out;
+}
+
+.command-dialog-enter-active [command-dialog-wrapper],
+.command-dialog-leave-active [command-dialog-wrapper] {
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out, filter 0.2s ease-out;
+}
+
+.command-dialog-enter-from [command-dialog-mask],
+.command-dialog-leave-to [command-dialog-mask] {
+  opacity: 0;
+}
+
+.command-dialog-enter-to [command-dialog-mask],
+.command-dialog-leave-from [command-dialog-mask] {
+  opacity: 1;
+}
+
+.command-dialog-enter-from [command-dialog-wrapper],
+.command-dialog-leave-to [command-dialog-wrapper] {
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+  filter: blur(6px);
+}
+
+.command-dialog-enter-to [command-dialog-wrapper],
+.command-dialog-leave-from [command-dialog-wrapper] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
