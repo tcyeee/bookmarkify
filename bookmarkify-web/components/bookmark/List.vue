@@ -13,7 +13,7 @@
       @sort="sort"
       item-key="id">
       <template #item="item">
-        <div @contextmenu="onContextMenu($event, item.element)">
+        <div class="bookmark-item" @contextmenu="onContextMenu($event, item.element)">
           <BookmarkCellDir
             v-if="item.element.type == 'BOOKMARK_DIR'"
             :value="item.element.typeDir"
@@ -25,15 +25,15 @@
           <BookmarkCellLoading v-if="item.element.type == 'LOADING'" />
         </div>
       </template>
+      <template #footer>
+        <BookmarkAddOne @success="addOne" />
+      </template>
     </draggable>
 
     <!-- 二级菜单 -->
     <div v-if="data.subItemId" v-for="bookmark in data.subApps" :key="bookmark.bookmarkId">
       <BookmarkCellItem :value="bookmark" @click="openPage(bookmark)" />
     </div>
-
-    <!-- 一级菜单的添加 -->
-    <BookmarkAddOne v-show="!data.subItemId" @success="addOne" />
 
     <!-- 书签详情 -->
     <el-dialog v-model="data.bookmarkDetailDialog" class="bookmark-dialog-box" :show-close="false" width="600" top="25vh">
@@ -70,7 +70,7 @@ watchEffect(() => {
   sysStore.preventKeyEventsFlag = data.bookmarkDetailDialog
 })
 
-const dragOptions = ref({ animation: 300 })
+const dragOptions = ref({ animation: 300, draggable: '.bookmark-item' })
 
 function addOne(item: HomeItem) {
   bookmarkStore.addEmpty(item)
