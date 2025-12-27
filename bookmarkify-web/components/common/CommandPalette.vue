@@ -2,15 +2,23 @@
   <Command.Dialog :visible="visible" theme="custom">
     <template #header>
       <div class="flex items-center gap-2 px-4 pt-4">
-        <Command.Input v-model:value="search" placeholder="搜索或输入命令..." />
+        <Command.Input
+          class="w-full px-4 py-2 border border-slate-300 rounded-md dark:bg-[#020617] dark:border-[#1f2937] focus:border-[#94a3b8]"
+          v-model:value="search"
+          placeholder="搜索或输入命令..." />
         <span class="text-xs text-slate-400">⌘K</span>
       </div>
     </template>
     <template #body>
-      <Command.List>
+      <Command.List class="pb-1">
         <Command.Empty class="px-4 py-3 text-sm text-slate-400">未找到匹配的命令</Command.Empty>
         <Command.Group heading="常用操作">
-          <Command.Item v-for="item in items" :key="item.value" :data-value="item.value" @select="handleSelect">
+          <Command.Item
+            v-for="item in items"
+            :key="item.value"
+            :data-value="item.value"
+            @select="handleSelect"
+            class="cursor-pointer rounded-md hover:bg-[#f8fafc] dark:hover:bg-gray-800 aria-selected:bg-gray-200 dark:aria-selected:bg-gray-800">
             <div class="flex items-center justify-between px-4 py-2 text-sm">
               <div class="flex flex-col">
                 <span>{{ item.label }}</span>
@@ -49,7 +57,6 @@ const items: PaletteItem[] = [
     value: 'toggle-theme',
     label: '切换主题模式',
     hint: '在浅色和深色模式之间切换',
-    kbd: 'T',
     run: () => {
       toggleTheme()
       close()
