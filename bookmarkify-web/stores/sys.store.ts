@@ -1,137 +1,121 @@
 import { defaultGradientBackgrounds, defaultImageBackgrounds } from '@api'
 import type { BacGradientVO, UserFile } from '@typing'
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
 
-export const useSysStore = defineStore('sys', () => {
-  /* 阻止键盘事件开关 */
-  const preventKeyEventsFlag = ref(false)
-  /* 键盘事件 */
-  const keyEvents = ref<Map<string, Function>>()
-  /* 键盘事件上次触发时间(统一节流) */
-  const keyEventLastTriggered = ref(0)
-  /* 键盘事件触发间隔时间(毫秒) */
-  const keyEventInterval = 150
-  /* 设置标签页索引 */
-  const settingTabIndex = ref(0)
-  /* 添加书签对话框可见性 */
-  const addBookmarkDialogVisible = ref(false)
+// 系统级别的 Pinia Store（键盘事件、倒计时、系统背景等）
+export const useSysStore = defineStore('sys', {
+  // 存放系统相关状态
+  state: () => ({
+    // 是否阻止键盘事件（弹框等场景下关闭全局快捷键）
+    preventKeyEventsFlag: false,
+    // 已注册的键盘事件映射（keyCode + 路由路径 -> 回调函数）
+    keyEvents: null as Map<string, Function> | null,
+    // 上一次键盘事件触发时间，用于统一节流
+    keyEventLastTriggered: 0,
+    // 键盘事件触发的最小时间间隔（毫秒）
+    keyEventInterval: 150,
+    // 设置页当前选中的标签索引
+    settingTabIndex: 0,
+    // “添加书签”对话框是否可见
+    addBookmarkDialogVisible: false,
+    // 短信验证码倒计时秒数
+    smsCountdown: 0,
+    // 短信验证码倒计时计时器句柄
+    smsCountdownTimer: null as ReturnType<typeof setInterval> | null,
+    // 邮箱验证码倒计时秒数
+    emailCountdown: 0,
+    // 邮箱验证码倒计时计时器句柄
+    emailCountdownTimer: null as ReturnType<typeof setInterval> | null,
+    // 系统内置的图片背景列表
+    defaultImageBackgroundsList: [] as UserFile[],
+    // 系统内置的渐变背景列表
+    defaultGradientBackgroundsList: [] as BacGradientVO[],
+  }),
 
-  const smsCountdown = ref(0)
-  let smsCountdownTimer: ReturnType<typeof setInterval> | null = null
-  const emailCountdown = ref(0)
-  let emailCountdownTimer: ReturnType<typeof setInterval> | null = null
+  // 业务动作（异步/同步方法）
+  actions: {
+    // 拉取系统默认配置（包括默认背景图和渐变背景）
+    async refreshSystemConfig() {
+      ;[this.defaultImageBackgroundsList, this.defaultGradientBackgroundsList] = await Promise.all([
+        defaultImageBackgrounds(),
+        defaultGradientBackgrounds(),
+      ])
+    },
 
-  /* 系统默认图片背景 */
-  const defaultImageBackgroundsList = ref<UserFile[]>([])
-  /* 系统默认渐变背景 */
-  const defaultGradientBackgroundsList = ref<BacGradientVO[]>([])
+    // 触发键盘事件（在全局 keydown 监听中调用）
+    triggerKeyEvent(keyCode: string, triggerPath: string) {
+      const eventKey = this.eventName(keyCode, triggerPath)
 
-  // 更新系统配置信息
-  async function refreshSystemConfig() {
-    ;[defaultImageBackgroundsList.value, defaultGradientBackgroundsList.value] = await Promise.all([
-      defaultImageBackgrounds(),
-      defaultGradientBackgrounds(),
-    ])
-  }
+      // 全局禁止键盘事件时直接返回
+      if (this.preventKeyEventsFlag) return
+      if (!this.keyEvents || !this.keyEvents.has(eventKey)) return
 
-  /**
-   * 触发键盘事件(每次按下任意键自动触发该方法)
-   * @param keyCode 按键码
-   * @param triggerPath 触发路径
-   */
-  function triggerKeyEvent(keyCode: string, triggerPath: string) {
-    const eventKey = eventName(keyCode, triggerPath)
+      const now = Date.now()
+      // 使用统一节流间隔，避免连续触发
+      if (now - this.keyEventLastTriggered < this.keyEventInterval) return
 
-    if (preventKeyEventsFlag.value) return
-    if (!keyEvents.value || !keyEvents.value.has(eventKey)) return
+      this.keyEventLastTriggered = now
+      this.keyEvents.get(eventKey)?.call(null)
+    },
 
-    const now = Date.now()
-    if (now - keyEventLastTriggered.value < keyEventInterval) return
+    // 注册键盘事件，在某个页面/组件挂载时调用
+    registerKeyEvent(keyCode: string, triggerPath: string, triggerFunc: Function) {
+      const eventKey = this.eventName(keyCode, triggerPath)
 
-    keyEventLastTriggered.value = now
-    keyEvents.value.get(eventKey)?.call(null)
-  }
+      if (!this.keyEvents) this.keyEvents = new Map()
+      this.keyEvents.set(eventKey, triggerFunc)
+    },
 
-  /**
-   * 注册键盘事件
-   * @param keyCode 按键码
-   * @param triggerPath 触发页面限制路径
-   * @param triggerFunc 触发函数
-   */
-  function registerKeyEvent(keyCode: string, triggerPath: string, triggerFunc: Function) {
-    const eventKey = eventName(keyCode, triggerPath)
+    // 根据按键和页面路径拼接事件 key
+    eventName(keyCode: string, triggerPath: string) {
+      return keyCode + '-' + triggerPath
+    },
 
-    if (!keyEvents.value) keyEvents.value = new Map()
-    keyEvents.value.set(eventKey, triggerFunc)
-  }
+    // 切换是否阻止键盘事件
+    togglePreventKeyEventsFlag(value: boolean) {
+      this.preventKeyEventsFlag = value
+    },
 
-  function eventName(keyCode: string, triggerPath: string) {
-    return keyCode + '-' + triggerPath
-  }
+    // 启动短信验证码倒计时
+    startSmsCountdown(initial = 60) {
+      this.smsCountdown = initial
+      if (this.smsCountdownTimer !== null) clearInterval(this.smsCountdownTimer)
+      this.smsCountdownTimer = setInterval(() => {
+        this.smsCountdown--
+        if (this.smsCountdown <= 0) {
+          this.stopSmsCountdown()
+        }
+      }, 1000)
+    },
 
-  /**
-   * 切换阻止键盘事件开关
-   * @param value 开关值
-   */
-  function togglePreventKeyEventsFlag(value: boolean) {
-    preventKeyEventsFlag.value = value
-  }
-
-  function startSmsCountdown(initial = 60) {
-    smsCountdown.value = initial
-    if (smsCountdownTimer !== null) clearInterval(smsCountdownTimer)
-    smsCountdownTimer = setInterval(() => {
-      smsCountdown.value--
-      if (smsCountdown.value <= 0) {
-        stopSmsCountdown()
+    // 停止短信验证码倒计时并清零
+    stopSmsCountdown() {
+      if (this.smsCountdownTimer !== null) {
+        clearInterval(this.smsCountdownTimer)
+        this.smsCountdownTimer = null
       }
-    }, 1000)
-  }
+      this.smsCountdown = 0
+    },
 
-  function stopSmsCountdown() {
-    if (smsCountdownTimer !== null) {
-      clearInterval(smsCountdownTimer)
-      smsCountdownTimer = null
-    }
-    smsCountdown.value = 0
-  }
+    // 启动邮箱验证码倒计时
+    startEmailCountdown(initial = 10) {
+      this.emailCountdown = initial
+      if (this.emailCountdownTimer !== null) clearInterval(this.emailCountdownTimer)
+      this.emailCountdownTimer = setInterval(() => {
+        this.emailCountdown--
+        if (this.emailCountdown <= 0) {
+          this.stopEmailCountdown()
+        }
+      }, 1000)
+    },
 
-  function startEmailCountdown(initial = 10) {
-    emailCountdown.value = initial
-    if (emailCountdownTimer !== null) clearInterval(emailCountdownTimer)
-    emailCountdownTimer = setInterval(() => {
-      emailCountdown.value--
-      if (emailCountdown.value <= 0) {
-        stopEmailCountdown()
+    // 停止邮箱验证码倒计时并清零
+    stopEmailCountdown() {
+      if (this.emailCountdownTimer !== null) {
+        clearInterval(this.emailCountdownTimer)
+        this.emailCountdownTimer = null
       }
-    }, 1000)
-  }
-
-  function stopEmailCountdown() {
-    if (emailCountdownTimer !== null) {
-      clearInterval(emailCountdownTimer)
-      emailCountdownTimer = null
-    }
-    emailCountdown.value = 0
-  }
-
-  return {
-    preventKeyEventsFlag,
-    settingTabIndex,
-    addBookmarkDialogVisible,
-    smsCountdown,
-    emailCountdown,
-    defaultImageBackgroundsList,
-    defaultGradientBackgroundsList,
-    triggerKeyEvent,
-    registerKeyEvent,
-    refreshSystemConfig,
-    togglePreventKeyEventsFlag,
-    keyEventLastTriggered,
-    startSmsCountdown,
-    stopSmsCountdown,
-    startEmailCountdown,
-    stopEmailCountdown,
-  }
+      this.emailCountdown = 0
+    },
+  },
 })
