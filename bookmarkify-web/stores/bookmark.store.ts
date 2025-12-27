@@ -53,6 +53,10 @@ export const useBookmarkStore = defineStore(
       })
     }
 
+    function clearCache() {
+      localStorage.removeItem('bookmarks')
+    }
+
     return {
       bookmarks,
       actions,
@@ -61,7 +65,12 @@ export const useBookmarkStore = defineStore(
       addEmpty,
       updateOne,
       update,
+      clearCache,
     }
   },
-  { persist: piniaPluginPersistedstate.localStorage() }
+  {
+    persist: {
+      storage: piniaPluginPersistedstate.localStorage(),
+    },
+  }
 )

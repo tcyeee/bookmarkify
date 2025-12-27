@@ -92,13 +92,19 @@ export const useUserStore = defineStore('user', () => {
     const user = await track()
     loading.value = false
     account.value = { ...account.value, ...user }
+    if (!user.token) return Promise.reject('登陆数据异常')
 
-    // websocket
-    if (user.token) {
-      const webSocketStore = useWebSocketStore()
-      webSocketStore.connect(user.token)
-    }
-    return user
+    // 更新书签
+    const bookmarkStore = useBookmarkStore()
+    bookmarkStore.update()
+
+    // 连接websocket
+    const webSocketStore = useWebSocketStore()
+    webSocketStore.connect(user.token)
+
+    // 更新用户信息
+    refreshUserInfo()
+    return Promise.resolve(account.value)
   }
 
   async function logout() {
@@ -107,6 +113,11 @@ export const useUserStore = defineStore('user', () => {
     const webSocketStore = useWebSocketStore()
     webSocketStore.disconnect()
     account.value = undefined
+
+    // 清理书签
+    const bookmarkStore = useBookmarkStore()
+    bookmarkStore.clearCache()
+
     navigateTo('/welcome')
   }
   return { loginOrRegister, logout, account, refreshUserInfo, authStatus, loginWithEmail, loginWithPhone }
