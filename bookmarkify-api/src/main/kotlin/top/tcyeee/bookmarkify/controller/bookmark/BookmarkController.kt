@@ -45,7 +45,7 @@ class BookmarksController(
 
     @PostMapping("/sort")
     @Operation(summary = "排序")
-    fun sort(@RequestBody params: List<HomeItem>): Boolean = homeItemService.sort(params)
+    fun sort(@RequestBody params: List<HomeItem>): Boolean = true.also { homeItemService.sort(params) }
 
     @PostMapping("/delete")
     @Operation(summary = "删除(仅删除桌面排序)")

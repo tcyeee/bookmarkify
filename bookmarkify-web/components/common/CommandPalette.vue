@@ -83,7 +83,7 @@ groups.set('常用操作', [
   },
   {
     value: 'go-setting',
-    label: 'W前往设置',
+    label: '前往设置',
     hint: `打开设置页面${userStore.authStatus === 'NONE' ? ' (请先登陆)' : ''}`,
     run: () => {
       navigate('/setting')

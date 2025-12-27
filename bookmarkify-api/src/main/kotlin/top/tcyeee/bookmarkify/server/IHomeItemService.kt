@@ -17,7 +17,6 @@ interface IHomeItemService : IService<HomeItem> {
      */
     fun findShowByUid(uid: String): List<HomeItemShow>
 
-    fun findByUid(uid: String): List<HomeItem>?
 
     /**
      * 对桌面图标进行排序
@@ -25,7 +24,7 @@ interface IHomeItemService : IService<HomeItem> {
      * @param params 仅有ID-SORT
      * @return status
      */
-    fun sort(params: List<HomeItem>): Boolean
+    fun sort(params: List<HomeItem>)
 
     fun delete(params: List<String>)
 

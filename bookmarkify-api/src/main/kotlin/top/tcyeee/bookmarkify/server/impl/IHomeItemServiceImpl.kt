@@ -24,23 +24,17 @@ class IHomeItemServiceImpl(
     override fun findShowByUid(uid: String): List<HomeItemShow> {
         val dataMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.bookmarkUserLinkId.toString() }
 
-        val byUid = findByUid(uid) ?: return emptyList()
+        val byUid = ktQuery().eq(HomeItem::uid, uid)
+            .eq(HomeItem::deleted, false)
+            .orderByAsc(HomeItem::sort)
+            .list() ?: return emptyList()
+
         return byUid.map { HomeItemShow(it, dataMap, projectConfig.imgPrefix) }
     }
 
-    override fun findByUid(uid: String): List<HomeItem>? {
-        val result: List<HomeItem> =
-            ktQuery().eq(HomeItem::uid, uid).eq(HomeItem::deleted, java.lang.Boolean.FALSE).orderByAsc(HomeItem::sort)
-                .list()
-        return result.ifEmpty { null }
-    }
-
-    override fun sort(params: List<HomeItem>): Boolean {
-        params.forEach(Consumer { item: HomeItem ->
-            ktUpdate().set(HomeItem::sort, item.sort).eq(HomeItem::id, item.id).update()
-        })
-        return true
-    }
+    override fun sort(params: List<HomeItem>) = params.forEach(Consumer { item: HomeItem ->
+        ktUpdate().set(HomeItem::sort, item.sort).eq(HomeItem::id, item.id).update()
+    })
 
     override fun delete(params: List<String>) =
         params.forEach { ktUpdate().set(HomeItem::deleted, true).eq(HomeItem::id, it).update() }

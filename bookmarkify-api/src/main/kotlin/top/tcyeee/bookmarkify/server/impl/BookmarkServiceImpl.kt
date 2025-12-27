@@ -61,7 +61,8 @@ class BookmarkServiceImpl(
     }
 
     override fun setDefaultBookmark(uid: String) {
-        // 找到
+        // 获取配置信息
+        projectConfig.defaultBookmarkify.forEach { addOne(it, uid) }
     }
 
     override fun checkAll() =

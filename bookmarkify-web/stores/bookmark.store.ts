@@ -63,5 +63,5 @@ export const useBookmarkStore = defineStore(
       update,
     }
   },
-  { persist: true }
+  { persist: piniaPluginPersistedstate.localStorage() }
 )
