@@ -11,6 +11,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkAddOneParams
 import top.tcyeee.bookmarkify.entity.BookmarkDetail
 import top.tcyeee.bookmarkify.entity.BookmarkUpdataPrams
 import top.tcyeee.bookmarkify.entity.HomeItemShow
+import top.tcyeee.bookmarkify.entity.HomeItemSortParams
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
@@ -45,7 +46,10 @@ class BookmarksController(
 
     @PostMapping("/sort")
     @Operation(summary = "排序")
-    fun sort(@RequestBody params: List<HomeItem>): Boolean = true.also { homeItemService.sort(params) }
+    fun sort(@RequestBody params: List<HomeItemSortParams>): Boolean {
+        homeItemService.sort(params)
+        return true
+    }
 
     @PostMapping("/delete")
     @Operation(summary = "删除(仅删除桌面排序)")

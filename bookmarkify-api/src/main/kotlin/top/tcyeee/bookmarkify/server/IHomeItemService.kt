@@ -1,8 +1,8 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
-import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
+import top.tcyeee.bookmarkify.entity.HomeItemSortParams
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
 
 /**
@@ -24,11 +24,11 @@ interface IHomeItemService : IService<HomeItem> {
      * @param params 仅有ID-SORT
      * @return status
      */
-    fun sort(params: List<HomeItem>)
+    fun sort(params: List<HomeItemSortParams>)
 
     fun delete(params: List<String>)
 
-    fun copy(sourceUid: String, targetUid: String)
+    fun copy(sourceUid: String, targetUid: String): List<HomeItem?>?
 
     fun deleteOne(id: String): Boolean
 }

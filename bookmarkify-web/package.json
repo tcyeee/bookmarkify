@@ -26,7 +26,8 @@
     "typed.js": "^2.1.0",
     "vue": "latest",
     "vue-command-palette": "^0.2.3",
-    "vue-router": "latest"
+    "vue-router": "latest",
+    "vue-smart-widget": "^0.6.2"
   },
   "devDependencies": {
     "@element-plus/nuxt": "^1.1.4",
