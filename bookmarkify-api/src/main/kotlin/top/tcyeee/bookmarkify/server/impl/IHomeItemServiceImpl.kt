@@ -18,24 +18,20 @@ import java.util.function.Consumer
  */
 @Service
 class IHomeItemServiceImpl(
-    private val projectConfig: ProjectConfig,
-    private val bookmarkUserLinkMapper: BookmarkUserLinkMapper
+    private val projectConfig: ProjectConfig, private val bookmarkUserLinkMapper: BookmarkUserLinkMapper
 ) : IHomeItemService, ServiceImpl<HomeItemMapper, HomeItem>() {
 
     override fun findShowByUid(uid: String): List<HomeItemShow> {
-        val dataMap = createDataBaseByUid(uid)
-        val byUid = findByUid(uid) ?: return emptyList()
-        return byUid.map { item -> HomeItemShow(item, dataMap, projectConfig.imgPrefix) }
-    }
+        val dataMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.bookmarkUserLinkId.toString() }
 
-    private fun createDataBaseByUid(uid: String): Map<String, BookmarkShow> {
-        val bookmarks: List<BookmarkShow> = bookmarkUserLinkMapper.allBookmarkByUid(uid)
-        return bookmarks.associateBy { it.bookmarkUserLinkId.toString() }
+        val byUid = findByUid(uid) ?: return emptyList()
+        return byUid.map { HomeItemShow(it, dataMap, projectConfig.imgPrefix) }
     }
 
     override fun findByUid(uid: String): List<HomeItem>? {
-        val result: List<HomeItem> = ktQuery()
-            .eq(HomeItem::uid, uid).eq(HomeItem::deleted, java.lang.Boolean.FALSE).orderByAsc(HomeItem::sort).list()
+        val result: List<HomeItem> =
+            ktQuery().eq(HomeItem::uid, uid).eq(HomeItem::deleted, java.lang.Boolean.FALSE).orderByAsc(HomeItem::sort)
+                .list()
         return result.ifEmpty { null }
     }
 
@@ -49,8 +45,7 @@ class IHomeItemServiceImpl(
     override fun delete(params: List<String>) =
         params.forEach { ktUpdate().set(HomeItem::deleted, true).eq(HomeItem::id, it).update() }
 
-    override fun deleteOne(id: String): Boolean =
-        ktUpdate().eq(HomeItem::id, id).set(HomeItem::deleted, true).update()
+    override fun deleteOne(id: String): Boolean = ktUpdate().eq(HomeItem::id, id).set(HomeItem::deleted, true).update()
 
     @Transactional(rollbackFor = [Exception::class])
     override fun copy(sourceUid: String, targetUid: String) {
