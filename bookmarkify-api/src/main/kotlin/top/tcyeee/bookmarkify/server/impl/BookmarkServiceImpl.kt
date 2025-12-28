@@ -73,8 +73,8 @@ class BookmarkServiceImpl(
 
     override fun addOne(url: String, uid: String): HomeItemShow {
         val bookmarkUrl = WebsiteParser.urlWrapper(url)
-        val bookmark =
-            ktQuery().eq(Bookmark::urlHost, bookmarkUrl.urlHost).one() ?: Bookmark(bookmarkUrl).also { save(it) }
+        val bookmark = ktQuery().eq(Bookmark::urlHost, bookmarkUrl.urlHost).one()
+            ?: Bookmark(bookmarkUrl).also { save(it) }
         // 添加用户关联和桌面布局
         val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark)
         bookmarkUserLinkMapper.insert(userLink)
