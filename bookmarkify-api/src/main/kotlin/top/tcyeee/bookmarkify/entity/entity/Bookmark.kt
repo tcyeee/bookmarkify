@@ -17,17 +17,21 @@ import java.time.LocalDateTime
  */
 @TableName("bookmark")
 data class Bookmark(
+
     /* URL相关 */
     @TableId var id: String,
-    @field:Max(200) @field:Schema(description = "书签URL主体") var urlHost: String,       // sfz.uzuzuz.com.cn
-    @field:Schema(description = "书签完整URL(不带参数)") var urlPath: String? = null,              // /test/info
+    @field:Max(200) @field:Schema(description = "书签URL主体") var urlHost: String,      // sfz.uzuzuz.com.cn
+    @field:Schema(description = "路径URL(不带参数)") var urlPath: String? = null,         // /test/info
     @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
-    /* 其他 */
+    @field:Max(100) @field:Schema(description = "书签简称") var appName: String? = null,
     @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
     @JsonIgnore @field:Schema(description = "书签评分0~10") var score: Int? = null,
     @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
+
+    // 删除这个
     @field:Max(100) @field:Schema(description = "图标链接") var iconUrl: String? = null,
+    @field:Max(100) @field:Schema(description = "小图标base64") var iconBase64: String? = null,
 
     @JsonIgnore @field:Schema(description = "是否被成功解析") var parseFlag: Boolean = false,
     @JsonIgnore @field:Schema(description = "是否失效") var isActivity: Boolean = false,
@@ -37,11 +41,10 @@ data class Bookmark(
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "是否已经被删除") var deleted: Boolean = false,
 ) {
-//    val httpCommonIcoUrl get() = "${this.urlScheme}://${this.urlHost}/favicon.ico"
-//    val defaultIconUrl get() = "/favicon/${this.id}.ico"
     val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
 
     constructor(url: BookmarkUrlWrapper) : this(
+        title = url.urlHost,
         id = IdUtil.fastUUID(),
         urlHost = url.urlHost,
         urlScheme = url.urlScheme,
