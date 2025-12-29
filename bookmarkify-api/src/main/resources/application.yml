@@ -61,10 +61,7 @@ wechat:
 aliyun:
   oss:
     endpoint: ${BOOKMARKIFY_ALIYUN_OSS_ENDPOINT}
-#    access-key-id: ${BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_ID}
-#    access-key-secret: ${BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_SECRET}
+    access-key-id: ${BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_ID}
+    access-key-secret: ${BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_SECRET}
     bucket-name: ${BOOKMARKIFY_ALIYUN_OSS_BUCKET_NAME}
     domain-name: ${BOOKMARKIFY_FILE_UPLOAD_PREFIX} # 自定义域名 https://i.tcyeee.top
-
-    access-key-id: ${OSS_ACCESS_KEY_ID}
-    access-key-secret: ${OSS_ACCESS_KEY_SECRET}
