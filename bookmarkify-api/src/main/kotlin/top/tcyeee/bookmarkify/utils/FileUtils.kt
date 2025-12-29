@@ -13,6 +13,7 @@ import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 object FileUtils {
     fun initBookmarkImg(imgs: List<ManifestIcon>?) {
         if (imgs.isNullOrEmpty()) return
+
     }
 
     fun icoBase64(imgs: List<ManifestIcon>?): String? {
@@ -74,7 +75,7 @@ private fun getFileName(file: MultipartFile, fileType: FileType, fileBasePath: S
 }
 
 /**
- * 保存文件
+ * 保存文件到本地
  * @param file 文件
  * @param dest 文件存储路径
  */

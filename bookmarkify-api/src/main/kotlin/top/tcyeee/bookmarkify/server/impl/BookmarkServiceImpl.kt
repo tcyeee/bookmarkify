@@ -1,20 +1,24 @@
 package top.tcyeee.bookmarkify.server.impl
 
+import cn.hutool.core.util.ArrayUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.aspectj.util.FileUtil
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
+import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
+import top.tcyeee.bookmarkify.entity.enums.FileType
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.utils.FileUtils
+import top.tcyeee.bookmarkify.utils.OssUtils
 import top.tcyeee.bookmarkify.utils.SocketUtils
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 import top.tcyeee.bookmarkify.utils.yesterday
@@ -42,21 +46,30 @@ class BookmarkServiceImpl(
 
     override fun checkOne(bookmark: Bookmark) {
         log.trace("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
-        WebsiteParser.parse(bookmark)
-            // 保存网站LOGO
-            ?.also { FileUtils.initBookmarkImg(it.distinctIcons) }
+        val wrapper = WebsiteParser.parse(bookmark)
             // 填充bookmark基础信息
             ?.also { bookmark.initBaseInfo(it) }
             // 设置bokmark-ico base64信息
             ?.also { bookmark.iconBase64 = FileUtils.icoBase64(it.distinctIcons) }
             // 更新书签
-            ?.also { updateById(bookmark) }
+            ?.also { saveOrUpdate(bookmark) }
+
+        // 保存网站LOGO/OG图片
+        if (wrapper != null && ArrayUtil.isNotEmpty(wrapper)) {
+            // restore 文件
+            val list = OssUtils.restoreWebsiteLogo(wrapper.distinctIcons, bookmark.id)
+
+            // 存储到数据库
+            list.forEach {
+                log.trace(it.toString())
+            }
+        }
     }
 
     override fun check(rawUrl: String) {
-        val wrapper = runCatching { WebsiteParser.parse(rawUrl) }.getOrElse { err ->
-            err.message
-        }
+        WebsiteParser.urlWrapper(rawUrl)
+            .let { Bookmark(it) }
+            .let { checkOne(it) }
     }
 
 

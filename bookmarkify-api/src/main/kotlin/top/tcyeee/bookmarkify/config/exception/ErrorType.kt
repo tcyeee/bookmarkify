@@ -34,6 +34,7 @@ enum class ErrorType(var msg: String) {
     E214("阿里云短信发送失败"),
     E215("用户信息丢失"),
     E217("获取企业微信AccessToken失败"),
+    E218("ManifestIcon上传到OSS中途出错"),
 
 
     /* 极端错误 */

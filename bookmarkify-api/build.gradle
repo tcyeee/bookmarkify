@@ -42,6 +42,7 @@ dependencies {
     implementation 'cn.dev33:sa-token-spring-boot3-starter:1.40.0'
     implementation 'org.jetbrains.kotlin:kotlin-reflect'
     implementation 'com.aliyun:dysmsapi20170525:3.1.2'
+    implementation 'com.aliyun.oss:aliyun-sdk-oss:3.17.4'
     implementation 'org.postgresql:postgresql:42.7.2'
     implementation 'cn.dev33:sa-token-redis:1.40.0'
     implementation 'cn.hutool:hutool-all:5.8.25'
