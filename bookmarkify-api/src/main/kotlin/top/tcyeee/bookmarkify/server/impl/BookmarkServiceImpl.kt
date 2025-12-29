@@ -92,7 +92,7 @@ class BookmarkServiceImpl(
     fun Bookmark.toggleAntiCrawlerDetected(antiCrawlerDetected: Boolean) {
         this.antiCrawlerDetected = antiCrawlerDetected
         this.updateTime = LocalDateTime.now()
-        save(this)
+        saveOrUpdate(this)
     }
 
     // 获取配置信息

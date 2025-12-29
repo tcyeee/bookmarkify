@@ -80,6 +80,7 @@ class OssUtils {
 
             list.forEach { icon ->
                 if (icon.src.isNullOrBlank()) return@forEach
+                if (icon.src.endsWith(".ico")) return@forEach
                 runCatching {
                     restoreLogoImg(icon.src, bookmarkId)
                 }.getOrElse { err -> throw CommonException(ErrorType.E218, err.message) }.let { logoInfo ->
@@ -118,7 +119,7 @@ class OssUtils {
                 connection.connectTimeout = 5000
                 connection.readTimeout = 5000
 
-                // 检查LOGO大小
+                // 检查LOGO文件大小(不大于1MB)
                 val length = connection.contentLengthLong
                 if (length != -1L && length > fileType.limit) throw CommonException(ErrorType.E219, "length:${length}")
 
