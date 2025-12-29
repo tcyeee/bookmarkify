@@ -2,12 +2,12 @@ package top.tcyeee.bookmarkify.entity.dto
 
 /* 书签地址 */
 data class BookmarkUrlWrapper(
-    var urlRaw: String,    // https://tool.chinaz.com/linksTesting/list?url=bilibili.com&type=1
+    var urlRaw: String, // https://tool.chinaz.com/linksTesting/list?url=bilibili.com&type=1
     var urlScheme: String, // https
-    var urlHost: String,   // tool.chinaz.com
-    var urlRoot: String,   // https://tool.chinaz.com
-    var urlFull: String,   // https://tool.chinaz.com/linksTesting/list
-    var urlPath: String?,  // /linksTesting/list
+    var urlHost: String, // tool.chinaz.com
+    var urlRoot: String, // https://tool.chinaz.com
+    var urlFull: String, // https://tool.chinaz.com/linksTesting/list
+    var urlPath: String?, // /linksTesting/list
     var urlQuery: String?, // url=bilibili.com&type=1
 )
 
@@ -37,9 +37,16 @@ data class BookmarkWrapper(
     var customLink: Map<String, String> = emptyMap(), // 其他自定义或额外的 link 信息，方便扩展
     var manifest: WebManifest? = null, // 网站 Manifest 内容
     var antiCrawlerDetected: Boolean = false, // 是否检测到反爬虫/WAF
+    var distinctIcons: List<ManifestIcon>? = emptyList(), // 网站所有存在的图标
+) {
+    // 网站基础图标(.ico)是否存在
+    fun iconActivity(): Boolean = distinctIcons?.any {
+        it.sizes == "16x16" || it.src?.endsWith(".ico", ignoreCase = true) == true
+    } == true
 
-    var distinctIcons:List<ManifestIcon>? = emptyList(),// 网站所有存在的图标
-)
+    // 网站是否存在高清图标
+    fun iconHd(): Boolean = distinctIcons?.any { it.sizes != "16x16" && it.sizes != "og" } == true
+}
 
 /* Web Manifest 数据结构 */
 data class WebManifest(
@@ -54,8 +61,9 @@ data class WebManifest(
 )
 
 /* icon */
-data class ManifestIcon(val src: String? = null, val sizes: String? = null, val type: String? = null)
+data class ManifestIcon(
+    val src: String? = null, val sizes: String? = null, val type: String? = null
+)
 
 /* 预加载资源对象，包含 URL 及资源类型 */
 data class PreloadResource(val url: String, val asType: String? = null)
-

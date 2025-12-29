@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Max
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
+import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import java.time.LocalDateTime
 
 /**
@@ -24,6 +25,7 @@ data class Bookmark(
     @field:Schema(description = "路径URL(不带参数)") var urlPath: String? = null,         // /test/info
     @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
+    /* 基础信息 */
     @field:Max(100) @field:Schema(description = "书签简称") var appName: String? = null,
     @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
     @JsonIgnore @field:Schema(description = "书签评分0~10") var score: Int? = null,
@@ -32,11 +34,13 @@ data class Bookmark(
     // 删除这个
     @field:Max(100) @field:Schema(description = "图标链接") var iconUrl: String? = null,
     @field:Max(100) @field:Schema(description = "小图标base64") var iconBase64: String? = null,
-
-    @JsonIgnore @field:Schema(description = "是否被成功解析") var parseFlag: Boolean = false,
-    @JsonIgnore @field:Schema(description = "是否失效") var isActivity: Boolean = false,
     @field:Schema(description = "图标是否存在") var iconActivity: Boolean = false,
     @field:Schema(description = "是否可以启用大图标") var iconHd: Boolean = false,
+
+    @JsonIgnore @field:Schema(description = "是否失效") var parseFlag: Boolean = false,
+    @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
+    @JsonIgnore @field:Schema(description = "是否反爬") var antiCrawlerDetected: Boolean = false,
+
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "是否已经被删除") var deleted: Boolean = false,
@@ -50,17 +54,13 @@ data class Bookmark(
         urlPath = url.urlPath,
     )
 
-//    constructor(url: BookmarkUrlWrapper, addDate: String, name: String) : this(
-//        id = IdUtil.fastUUID(),
-//        urlHost = url.urlHost,
-//        urlScheme = url.urlScheme,
-//        urlPath = url.urlPath,
-//        title = name,
-//        createTime = if (StrUtil.isNotBlank(addDate)) LocalDateTimeUtil.of(addDate.toLong() * 1000) else LocalDateTime.now()
-//    )
-
-    fun checkActivity(isActivity: Boolean) {
-        this.isActivity = isActivity
+    fun initBaseInfo(wrapper: BookmarkWrapper) {
+        this.appName = null  // TODO 使用AI接入
+        this.title = wrapper.title
+        this.description = wrapper.description
+        this.iconActivity = wrapper.iconActivity()
+        this.iconHd = wrapper.iconHd()
+        this.antiCrawlerDetected = wrapper.antiCrawlerDetected
         this.updateTime = LocalDateTime.now()
     }
 }

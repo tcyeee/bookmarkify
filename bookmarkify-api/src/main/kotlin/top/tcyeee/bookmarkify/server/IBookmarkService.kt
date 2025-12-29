@@ -11,7 +11,7 @@ import top.tcyeee.bookmarkify.entity.entity.Bookmark
  */
 interface IBookmarkService : IService<Bookmark> {
     /**
-     * 检查书签信息
+     * 检查单条书签信息
      *
      * @param bookmark 检查的书签
      */
@@ -32,5 +32,5 @@ interface IBookmarkService : IService<Bookmark> {
      */
     fun setDefaultBookmark(uid: String)
 
-    fun check(url: String): BookmarkWrapper
+    fun check(rawUrl: String)
 }

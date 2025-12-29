@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
+import org.aspectj.util.FileUtil
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.BookmarkShow
@@ -13,6 +14,7 @@ import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.utils.FileUtils
 import top.tcyeee.bookmarkify.utils.SocketUtils
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 import top.tcyeee.bookmarkify.utils.yesterday
@@ -40,24 +42,24 @@ class BookmarkServiceImpl(
 
     override fun checkOne(bookmark: Bookmark) {
         log.trace("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
+        // 信息解析
+        WebsiteParser.parse(bookmark)
+        // 保存网站LOGO
+        FileUtils.initBookmarkImg(bookmark)
 
-        /* 检查网站活性 */
-//        val document: Document? = BookmarkUtils.getDocument(bookmark.rawUrl)
-//        document ?: return offline(bookmark)
-//
-//        /* 保存网站标题,描述 */
-//        bookmark.setTitle(document)
-
-        /* 保存网站LOGO */
-//        val iconStorePath = BookmarkUtils.getLogoUrl(document, projectConfig.imgPath, bookmark)
-//        bookmark.setLogo(iconStorePath)
 
         updateById(bookmark)
     }
 
+    override fun check(rawUrl: String) {
+        val wrapper = runCatching { WebsiteParser.parse(rawUrl) }.getOrElse { err ->
+            err.message
+        }
+    }
+
+
     override fun offline(bookmark: Bookmark) {
         bookmark.title = bookmark.urlHost
-        bookmark.checkActivity(false)
         updateById(bookmark)
     }
 
@@ -65,7 +67,6 @@ class BookmarkServiceImpl(
     override fun setDefaultBookmark(uid: String) =
         projectConfig.defaultBookmarkify.forEach { addOne(it, uid) }
 
-    override fun check(url: String):BookmarkWrapper = WebsiteParser.parse(url)
 
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
 
