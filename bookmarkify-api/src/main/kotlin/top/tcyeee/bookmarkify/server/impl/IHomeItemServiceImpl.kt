@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server.impl
 
+import cn.hutool.core.util.StrUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -24,17 +25,23 @@ class IHomeItemServiceImpl(private val bookmarkUserLinkMapper: BookmarkUserLinkM
     override fun findShowByUid(uid: String): List<HomeItemShow> {
         val dataMap = bookmarkUserLinkMapper.allBookmarkByUid(uid)
             .associateBy { it.bookmarkUserLinkId.toString() }
-        return this.getByUid(uid).map { HomeItemShow(it, dataMap) }.also { this.setIconHd(it) }
+        return this.getByUid(uid)
+            .map { HomeItemShow(it, dataMap) }
+            .also { this.setIconHd(it) }
     }
 
     private fun setIconHd(list: List<HomeItemShow>) {
         list.forEach {
             if (it.type != HomeItemType.BOOKMARK) return@forEach
-            if (it.typeApp?.hdSize == null) return@forEach
 
-            val objectKey = "${FileType.WEBSITE_LOGO.folder}/${it.typeApp!!.bookmarkId}/${it.typeApp?.hdSize}.png"
-            it.typeApp?.iconHdUrl = OssUtils.getPrivateUrl(objectKey)
-            if (it.typeApp?.iconHdUrl != null) it.typeApp?.iconBase64 = null
+            // 设置大图URL
+            if (it.typeApp?.hdSize != null) {
+                val objectKey = "${FileType.WEBSITE_LOGO.folder}/${it.typeApp!!.bookmarkId}/${it.typeApp?.hdSize}.png"
+                it.typeApp?.iconHdUrl = OssUtils.getPrivateUrl(objectKey)
+                if (it.typeApp?.iconHdUrl != null) it.typeApp?.iconBase64 = null
+            }
+            // 设置备用title
+            if (StrUtil.isBlank(it.typeApp?.title)) it.typeApp?.title = it.typeApp?.urlHost
         }
     }
 
