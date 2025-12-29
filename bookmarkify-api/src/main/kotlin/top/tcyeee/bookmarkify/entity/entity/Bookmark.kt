@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Max
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
+import top.tcyeee.bookmarkify.utils.FileUtils
 import java.io.Serializable
 import java.time.LocalDateTime
 
@@ -49,11 +50,12 @@ data class Bookmark(
     )
 
     fun initBaseInfo(wrapper: BookmarkWrapper) {
-        this.appName = null  // TODO 使用AI接入
+        this.appName = wrapper.name  // TODO 使用AI将title中的信息简化
         this.title = wrapper.title
         this.description = wrapper.description
         this.antiCrawlerDetected = wrapper.antiCrawlerDetected
         this.updateTime = LocalDateTime.now()
+        this.iconBase64 = FileUtils.icoBase64(wrapper.distinctIcons, this.rawUrl)
     }
 }
 

@@ -25,6 +25,7 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                b.is_activity                                AS isActivity,
                b.icon_base64                                AS iconBase64,
                b.url_host                                   AS urlHost,
+               b.app_name                                   AS appName,
                c.height                                     AS hdSize
             FROM bookmarkify.bookmark_user_link a
                      LEFT JOIN bookmarkify.bookmark b

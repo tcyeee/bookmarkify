@@ -38,6 +38,7 @@ enum class ErrorType(var msg: String) {
     E219("图片文件大小超出限制"),
     E220("读取原始线上图片时出错"),
     E221("生成OSS限时链接错误"),
+    E222("未能读取到Manifest"),
 
 
     /* 极端错误 */
