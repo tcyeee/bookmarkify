@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.utils
 
+import cn.hutool.core.util.StrUtil
 import cn.hutool.core.util.URLUtil
 import cn.hutool.http.HttpUtil
 import cn.hutool.json.JSONObject
@@ -8,14 +9,14 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
-import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.dto.*
 import java.net.URL
 
 /** 网站信息解析器 负责从 URL 获取 Document 并解析出 WebsiteHeaderInfo */
 object WebsiteParser {
     /** 解析 URL 并返回网站头信息 */
-    fun parse(url: String): BookmarkWrapper = urlWrapper(url).let { this.getDocument(it) } // 爬取
+    fun parse(url: String): BookmarkWrapper = urlWrapper(url)
+        .let { this.getDocument(it) } // 爬取
         .let { this.parseDocument(it) } // 解析基础信息
         .also { this.fillManifest(it) } // 解析Manifest
         .also { this.initLogo(it) } // 解析网站图片(LOGO/OG)
@@ -174,13 +175,19 @@ object WebsiteParser {
     }
 
     private fun fillManifest(info: BookmarkWrapper) {
-        info.manifestUrl?.let { mUrl ->
-            fetchManifest(mUrl)?.let { json ->
-                info.manifest = runCatching { parseManifestJson(json) }.getOrElse { err ->
-                    log.error("Failed to parse manifest from $mUrl", err)
-                    throw err
-                }
+        if (StrUtil.isBlank(info.manifestUrl)) return
+
+        fetchManifest(info.manifestUrl!!)?.let { json ->
+            info.manifest = runCatching { parseManifestJson(json) }.getOrElse {
+                it.printStackTrace()
+                throw CommonException(ErrorType.E222, "Failed to parse manifest from ${info.manifestUrl}, $it")
             }
+        }
+
+        // 整理manifest中的信息
+        if (info.manifest != null) {
+            info.name = info.manifest?.name
+            if (StrUtil.isBlank(info.description)) info.description = info.manifest?.description
         }
     }
 

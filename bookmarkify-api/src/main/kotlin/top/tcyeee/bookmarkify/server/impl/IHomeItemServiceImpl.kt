@@ -42,6 +42,7 @@ class IHomeItemServiceImpl(private val bookmarkUserLinkMapper: BookmarkUserLinkM
             }
             // 设置备用title
             if (StrUtil.isBlank(it.typeApp?.title)) it.typeApp?.title = it.typeApp?.urlHost
+            if (StrUtil.isNotEmpty(it.typeApp?.appName)) it.typeApp?.title = it.typeApp?.appName
         }
     }
 

@@ -53,10 +53,8 @@ class BookmarkServiceImpl(
             if (it.message.toString().contains("304")) bookmark.toggleActivity(false)
             return
         }
-            // 填充bookmark基础信息
+            // 填充bookmark基础信息 以及 bokmark-ico-base64信息
             .also { bookmark.initBaseInfo(it) }
-            // 设置bokmark-ico base64信息
-            .also { bookmark.iconBase64 = FileUtils.icoBase64(it.distinctIcons, bookmark.rawUrl) }
             // 更新书签
             .also { this.saveOrUpdate(bookmark) }
             // 保存网站LOGO/OG图片到OSS和数据库

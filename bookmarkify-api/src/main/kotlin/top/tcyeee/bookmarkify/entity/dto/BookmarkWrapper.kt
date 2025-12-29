@@ -13,6 +13,7 @@ data class BookmarkUrlWrapper(
 
 /* 页面请求头 */
 data class BookmarkWrapper(
+    var name: String? = null,// APP标题
     var title: String? = null, // 网页标题，<title> 标签内容，通常用于浏览器标签页显示
     var charset: String? = null, // 页面编码，通常是 "utf-8" 等，来自 <meta charset>
     var keywords: String? = null, // 页面关键词，用于SEO，来自 <meta name="keywords">
