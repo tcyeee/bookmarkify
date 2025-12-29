@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
+import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
@@ -60,14 +61,11 @@ class BookmarkServiceImpl(
         updateById(bookmark)
     }
 
-    override fun setDefaultBookmark(uid: String) {
-        // 获取配置信息
+    // 获取配置信息
+    override fun setDefaultBookmark(uid: String) =
         projectConfig.defaultBookmarkify.forEach { addOne(it, uid) }
-    }
 
-    override fun check(url: String) {
-        WebsiteParser.parse(url)
-    }
+    override fun check(url: String):BookmarkWrapper = WebsiteParser.parse(url)
 
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
 

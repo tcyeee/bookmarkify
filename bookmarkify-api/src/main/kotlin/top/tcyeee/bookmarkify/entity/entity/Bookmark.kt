@@ -44,7 +44,6 @@ data class Bookmark(
     val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
 
     constructor(url: BookmarkUrlWrapper) : this(
-        title = url.urlHost,
         id = IdUtil.fastUUID(),
         urlHost = url.urlHost,
         urlScheme = url.urlScheme,
