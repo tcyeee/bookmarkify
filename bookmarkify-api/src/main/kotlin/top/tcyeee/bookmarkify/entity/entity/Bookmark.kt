@@ -34,7 +34,7 @@ data class Bookmark(
 
     /* 状态信息 */
     @JsonIgnore @field:Schema(description = "是否反爬") var antiCrawlerDetected: Boolean = false,
-    @JsonIgnore @field:Schema(description = "是否失效") var isActivity: Boolean = false,
+    @JsonIgnore @field:Schema(description = "是否失效") var isActivity: Boolean = true,
     @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
