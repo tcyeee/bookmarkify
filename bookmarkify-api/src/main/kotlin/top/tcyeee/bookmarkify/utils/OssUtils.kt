@@ -85,10 +85,10 @@ class OssUtils {
          * 转存LOGO图片
          *
          * @param url 在线文件地址
-         * @param customPath 自定义文件路径（不包含后缀，若为空则自动生成）
+         * @param customPath 自定义文件路径（不包含后缀）
          * @return 文件访问 URL 和 文件大小
          */
-        fun restoreLogoImg(url: String, customPath: String? = null): Pair<String, Long> {
+        fun restoreLogoImg(url: String, customPath: String): Pair<String, Long> {
             val fileType = FileType.WEBSITE_LOGO
             try {
                 // 打开网络连接
@@ -112,14 +112,8 @@ class OssUtils {
                     // 去除可能的查询参数
                     if (suffix.contains("?")) suffix = suffix.substringBefore("?")
 
-                    val fileName =
-                        if (!customPath.isNullOrBlank()) {
-                            if (FileUtil.extName(customPath).equals(suffix, ignoreCase = true))
-                                customPath
-                            else "$customPath.$suffix"
-                        } else {
-                            "${fileType.folder}/${UUID.randomUUID()}.$suffix"
-                        }
+                    val fileName = if (FileUtil.extName(customPath).equals(suffix, ignoreCase = true))
+                        customPath else "$customPath.$suffix"
 
                     ossClient.putObject(bucket, fileName, inputStream)
                     val objectUrl = "$domain/$fileName"
