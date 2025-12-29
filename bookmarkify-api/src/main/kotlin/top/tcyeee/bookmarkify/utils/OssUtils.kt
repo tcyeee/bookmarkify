@@ -63,7 +63,7 @@ class OssUtils {
             list.forEach { icon ->
                 if (icon.src.isNullOrBlank()) return@forEach
                 val customPath = "${FileType.WEBSITE_LOGO.folder}/$bookmarkId/${icon.size()}"
-                runCatching { restore(FileType.WEBSITE_LOGO, icon.src, customPath) }
+                runCatching { restoreLogoImg(icon.src, customPath) }
                     .getOrElse { err -> throw CommonException(ErrorType.E218, err.message) }
                     .let { (url, fileSize) ->
                         result.add(
@@ -82,14 +82,14 @@ class OssUtils {
         }
 
         /**
-         * 转存文件
+         * 转存LOGO图片
          *
-         * @param fileType 文件类型
          * @param url 在线文件地址
          * @param customPath 自定义文件路径（不包含后缀，若为空则自动生成）
          * @return 文件访问 URL 和 文件大小
          */
-        fun restore(fileType: FileType, url: String, customPath: String? = null): Pair<String, Long> {
+        fun restoreLogoImg(url: String, customPath: String? = null): Pair<String, Long> {
+            val fileType = FileType.WEBSITE_LOGO
             try {
                 // 打开网络连接
                 val connection = URI.create(url).toURL().openConnection()
@@ -97,11 +97,9 @@ class OssUtils {
                 connection.connectTimeout = 5000
                 connection.readTimeout = 5000
 
-                // 检查文件大小
-                val contentLength = connection.contentLengthLong
-                if (contentLength != -1L && contentLength > fileType.limit) {
-                    throw RuntimeException("File size exceeds limit: ${fileType.limit}")
-                }
+                // 检查LOGO大小
+                val length = connection.contentLengthLong
+                if (length != -1L && length > fileType.limit) throw CommonException(ErrorType.E219, "length:${length}")
 
                 // 获取输入流
                 return connection.getInputStream().use { inputStream ->
@@ -125,12 +123,12 @@ class OssUtils {
 
                     ossClient.putObject(bucket, fileName, inputStream)
                     val objectUrl = "$domain/$fileName"
-                    log.info("[DEBUG] 文件存储成功: $objectUrl")
-                    Pair(objectUrl, if (contentLength != -1L) contentLength else 0L)
+                    log.info("[DEBUG] 网站LOGO存储成功: $objectUrl")
+                    Pair(objectUrl, if (length != -1L) length else 0L)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                throw RuntimeException("文件${url}存储OSS失败", e)
+                throw RuntimeException("网站LOGO${url}存储OSS失败", e)
             }
         }
 
