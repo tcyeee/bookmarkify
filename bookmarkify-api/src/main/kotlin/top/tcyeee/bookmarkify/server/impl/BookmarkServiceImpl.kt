@@ -34,7 +34,7 @@ class BookmarkServiceImpl(
 
     override fun checkOne(rawUrl: String) =
         WebsiteParser.urlWrapper(rawUrl)
-            .let { this.getByUrl(it.urlHost) ?: Bookmark(it) }
+            .let { this.getByHost(it.urlHost) ?: Bookmark(it) }
             .let { this.checkOne(it) }
 
     override fun checkOne(bookmark: Bookmark, bookmarkUserLinkId: String) {
@@ -84,32 +84,29 @@ class BookmarkServiceImpl(
         if (toInsert.isNotEmpty()) websiteLogoService.saveBatch(toInsert)
     }
 
-    private fun getByUrl(urlHost: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, urlHost).one()
-
-    override fun offline(bookmark: Bookmark) {
-        bookmark.title = bookmark.urlHost
-        updateById(bookmark)
-    }
+    private fun getByHost(urlHost: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, urlHost).one()
 
     // 获取配置信息
     override fun setDefaultBookmark(uid: String) =
         projectConfig.defaultBookmarkify.forEach { addOne(it, uid) }
 
-    override fun checkAll() =
-        ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
+    override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
 
     override fun addOne(url: String, uid: String): HomeItemShow {
         val bookmarkUrl = WebsiteParser.urlWrapper(url)
-        val bookmark =
-            ktQuery().eq(Bookmark::urlHost, bookmarkUrl.urlHost).one()
-                ?: Bookmark(bookmarkUrl).also { save(it) }
+        val bookmark = this.getByHost(bookmarkUrl.urlHost) ?: Bookmark(bookmarkUrl).also { save(it) }
+
         // 添加用户关联和桌面布局
         val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark)
         bookmarkUserLinkMapper.insert(userLink)
+
         val homeItem = HomeItem(uid, userLink.id)
         homeItemMapper.insert(homeItem)
+
         // 异步检查
         CompletableFuture.runAsync { this.checkOne(bookmark, userLink.id) }
+
+        // 返回临时网站信息
         return HomeItemShow(homeItem.id, uid, bookmark.id)
     }
 }

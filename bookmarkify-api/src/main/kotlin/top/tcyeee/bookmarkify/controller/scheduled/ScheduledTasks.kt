@@ -15,7 +15,5 @@ class ScheduledTasks(
 ) {
     @Description("每天凌晨2点执行")
     @Scheduled(cron = "0 0 2 * * ?")
-    fun runTaskWithCron() {
-        bookmarkService.checkAll()
-    }
+    fun runTaskWithCron() = bookmarkService.checkAll()
 }
