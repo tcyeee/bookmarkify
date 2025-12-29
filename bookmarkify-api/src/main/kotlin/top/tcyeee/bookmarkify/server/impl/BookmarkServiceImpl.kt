@@ -50,6 +50,7 @@ class BookmarkServiceImpl(
 
         runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
             if (it.message.toString().contains("403")) bookmark.toggleAntiCrawlerDetected(true)
+            if (it.message.toString().contains("304")) bookmark.toggleActivity(false)
             return
         }
             // 填充bookmark基础信息
@@ -91,6 +92,12 @@ class BookmarkServiceImpl(
 
     fun Bookmark.toggleAntiCrawlerDetected(antiCrawlerDetected: Boolean) {
         this.antiCrawlerDetected = antiCrawlerDetected
+        this.updateTime = LocalDateTime.now()
+        saveOrUpdate(this)
+    }
+
+    fun Bookmark.toggleActivity(activity: Boolean) {
+        this.isActivity = activity
         this.updateTime = LocalDateTime.now()
         saveOrUpdate(this)
     }

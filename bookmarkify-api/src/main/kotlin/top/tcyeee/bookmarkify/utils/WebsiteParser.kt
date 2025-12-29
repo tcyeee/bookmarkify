@@ -15,8 +15,7 @@ import java.net.URL
 /** 网站信息解析器 负责从 URL 获取 Document 并解析出 WebsiteHeaderInfo */
 object WebsiteParser {
     /** 解析 URL 并返回网站头信息 */
-    fun parse(url: String): BookmarkWrapper = urlWrapper(url)
-        .let { this.getDocument(it) } // 爬取
+    fun parse(url: String): BookmarkWrapper = urlWrapper(url).let { this.getDocument(it) } // 爬取
         .let { this.parseDocument(it) } // 解析基础信息
         .also { this.fillManifest(it) } // 解析Manifest
         .also { this.initLogo(it) } // 解析网站图片(LOGO/OG)
@@ -33,7 +32,7 @@ object WebsiteParser {
         if (!urlRowStr.matches(Regex("^https?://.*"))) urlStr = "https://$urlStr"
 
         val url: URL = runCatching { URLUtil.toUrlForHttp(urlStr) }.getOrElse {
-            throw CommonException(ErrorType.E303)
+            throw CommonException(ErrorType.E303, "${ErrorType.E303.code()}:${it.message}")
         }
 
         return BookmarkUrlWrapper(
