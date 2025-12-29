@@ -39,15 +39,7 @@ data class BookmarkWrapper(
     var antiCrawlerDetected: Boolean = false, // 是否检测到反爬虫/WAF
     var distinctIcons: List<ManifestIcon>? = emptyList(), // 网站所有存在的图标(统一为线上地址)
     var baseUrl: String? = null, // 网站基础地址(用于解析相对路径)
-) {
-    // 网站基础图标(.ico)是否存在
-    fun iconActivity(): Boolean = distinctIcons?.any {
-        it.sizes == "16x16" || it.src?.endsWith(".ico", ignoreCase = true) == true
-    } == true
-
-    // 网站是否存在高清图标
-    fun iconHd(): Boolean = distinctIcons?.any { it.sizes != "16x16" && it.sizes != "og" } == true
-}
+)
 
 /* Web Manifest 数据结构 */
 data class WebManifest(

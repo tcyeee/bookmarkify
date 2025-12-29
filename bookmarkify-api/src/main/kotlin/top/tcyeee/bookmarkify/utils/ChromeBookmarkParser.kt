@@ -1,7 +1,6 @@
 import cn.hutool.core.util.IdUtil
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.log
-import top.tcyeee.bookmarkify.entity.BookmarkDetail
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.entity.HomeItem

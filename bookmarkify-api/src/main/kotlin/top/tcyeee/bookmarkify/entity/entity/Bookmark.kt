@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Max
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
+import java.io.Serializable
 import java.time.LocalDateTime
 
 /**
@@ -28,22 +29,15 @@ data class Bookmark(
     /* 基础信息 */
     @field:Max(100) @field:Schema(description = "书签简称") var appName: String? = null,
     @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
-    @JsonIgnore @field:Schema(description = "书签评分0~10") var score: Int? = null,
     @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
-
-    // 删除这个
-    @field:Max(100) @field:Schema(description = "图标链接") var iconUrl: String? = null,
     @field:Max(100) @field:Schema(description = "小图标base64") var iconBase64: String? = null,
-    @field:Schema(description = "图标是否存在") var iconActivity: Boolean = false,
-    @field:Schema(description = "是否可以启用大图标") var iconHd: Boolean = false,
 
-    @JsonIgnore @field:Schema(description = "是否失效") var parseFlag: Boolean = false,
-    @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
+    /* 状态信息 */
     @JsonIgnore @field:Schema(description = "是否反爬") var antiCrawlerDetected: Boolean = false,
-
+    @JsonIgnore @field:Schema(description = "是否失效") var isActivity: Boolean = false,
+    @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
-    @JsonIgnore @field:Schema(description = "是否已经被删除") var deleted: Boolean = false,
 ) {
     val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
 
@@ -58,9 +52,52 @@ data class Bookmark(
         this.appName = null  // TODO 使用AI接入
         this.title = wrapper.title
         this.description = wrapper.description
-        this.iconActivity = wrapper.iconActivity()
-        this.iconHd = wrapper.iconHd()
         this.antiCrawlerDetected = wrapper.antiCrawlerDetected
         this.updateTime = LocalDateTime.now()
     }
+}
+
+
+@TableName("bookmark_user_link")
+data class BookmarkUserLink(
+    @TableId var id: String,
+    @field:Max(40) @field:Schema(description = "用户ID") var uid: String,
+    @field:Max(40) @field:Schema(description = "书签ID") var bookmarkId: String,
+    @field:Max(200) @field:Schema(description = "书签标题(用户写的)") var title: String?,
+    @field:Max(1000) @field:Schema(description = "书签备注(用户写的)") var description: String?,
+    @field:Max(1000) @field:Schema(description = "书签完整URL(带参数)") var urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
+
+    @JsonIgnore @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
+    @JsonIgnore @field:Schema(description = "是否删除") var deleted: Boolean = false,
+) {
+
+    constructor(bookmarkUrlWrapper: BookmarkUrlWrapper, uid: String, bookmark: Bookmark) : this(
+        id = IdUtil.fastUUID(),
+        uid = uid,
+        bookmarkId = bookmark.id,
+        title = bookmark.title,
+        description = bookmark.description,
+        urlFull = bookmarkUrlWrapper.urlRaw,
+    )
+}
+
+@TableName("website_logo")
+data class WebsiteLogoEntity(
+    @TableId @field:Schema(description = "文件ID") val id: String = IdUtil.fastUUID(),
+    @field:Schema(description = "LOGO所属BookmrkID") val bookmarkId: String,
+    @field:Schema(description = "LOGO大小(单位:字节)") val size: Long,
+    @field:Schema(description = "LOGO高度(单位:Pix)") val height: Int,
+    @field:Schema(description = "LOGO宽度(单位:Pix)") val width: Int,
+    @field:Schema(description = "LOGO文件后缀") val suffix: String,
+    @field:Schema(description = "LOGO创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
+    @field:Schema(description = "LOGO更新时间") val updateTime: LocalDateTime = LocalDateTime.now(),
+    @field:Schema(description = "是否为OG展示图") val isOgImg: Boolean = false
+) : Serializable {
+    /* 通过图标属性判断是否为同样的图标 */
+    fun isSame(newLogo: WebsiteLogoEntity): Boolean =
+        this.size == newLogo.size &&
+                this.width == newLogo.width &&
+                this.height == newLogo.height &&
+                this.suffix == newLogo.suffix &&
+                this.isOgImg == newLogo.isOgImg
 }

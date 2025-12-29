@@ -23,7 +23,7 @@ object WebsiteParser {
     /** 解析 Bookmark 并返回网站头信息 */
     fun parse(bookmark: Bookmark): BookmarkWrapper? =
         runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse { err ->
-            bookmark.parseFlag = false
+            bookmark.isActivity = false
             bookmark.parseErrMsg = err.message
             return null
         }

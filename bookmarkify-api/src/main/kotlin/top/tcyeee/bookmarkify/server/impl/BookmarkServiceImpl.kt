@@ -42,7 +42,6 @@ class BookmarkServiceImpl(
 
         checkOne(bookmark)
         val bookmarkShow: BookmarkShow = bookmarkUserLinkMapper.findOne(bookmarkUserLinkId)
-        bookmarkShow.clean(projectConfig.imgPrefix)
         SocketUtils.updateBookmark(bookmarkShow.uid!!, bookmarkShow)
     }
 
@@ -88,7 +87,7 @@ class BookmarkServiceImpl(
 
     // 获取配置信息
     override fun setDefaultBookmark(uid: String) =
-        projectConfig.defaultBookmarkify.forEach { addOne(it, uid) }
+        projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
 
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
 

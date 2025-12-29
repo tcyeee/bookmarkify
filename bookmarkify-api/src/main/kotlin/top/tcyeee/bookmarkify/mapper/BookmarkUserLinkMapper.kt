@@ -16,20 +16,27 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
 
     @Select(
         """
-            select a.uid           as uid,
-                   b.id            as bookmarkId,
-                   a.id            as bookmarkUserLinkId,
-                   a.title         as userTitle,
-                   a.description   as userDescription,
-                   b.title         as baseTitle,
-                   b.description   as baseDescription,
-                   b.is_activity   as isActivity,
-                   b.icon_activity as iconActivity,
-                   b.icon_hd       as iconHd,
-                   a.url_full      as urlFull,
-                   b.icon_url      as iconUrl
-            from bookmarkify.bookmark_user_link a
-                     left join bookmarkify.bookmark b on a.bookmark_id = b.id
+            SELECT a.bookmark_id                            AS bookmarkId,
+               a.id                                         AS bookmarkUserLinkId,
+               a.url_full                                   AS urlFull,
+               CONCAT(b.url_scheme,'://', b.url_host, b.url_path) AS urlBase,
+               COALESCE(a.title, b.title)                   AS title,
+               COALESCE(a.description, b.description)       AS description,
+               b.is_activity                                AS isActivity,
+               b.icon_base64                                AS iconBase64,
+               c.height                                     AS hdSize
+            FROM bookmarkify.bookmark_user_link a
+                     LEFT JOIN bookmarkify.bookmark b
+                               ON a.bookmark_id = b.id
+                     LEFT JOIN LATERAL (
+                SELECT wl.height
+                FROM bookmarkify.website_logo wl
+                WHERE wl.bookmark_id = a.bookmark_id
+                  AND wl.is_og_img IS FALSE
+                  AND wl.height >= 180
+                ORDER BY wl.height
+                LIMIT 1
+                ) c ON TRUE
             where a.uid = #{uid}
             """
     )
@@ -38,21 +45,29 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
 
     @Select(
         """
-            select a.uid           as uid,
-                   b.id            as bookmarkId,
-                   a.id            as bookmarkUserLinkId,
-                   a.title         as userTitle,
-                   a.description   as userDescription,
-                   b.title         as baseTitle,
-                   b.description   as baseDescription,
-                   b.is_activity   as isActivity,
-                   b.icon_activity as iconActivity,
-                   b.icon_hd       as iconHd,
-                   a.url_full      as urlFull,
-                   b.icon_url      as iconUrl
-            from bookmarkify.bookmark_user_link a
-                     left join bookmarkify.bookmark b on a.bookmark_id = b.id
+            SELECT a.bookmark_id                                AS bookmarkId,
+                   a.id                                         AS bookmarkUserLinkId,
+                   a.url_full                                   AS urlFull,
+                   CONCAT(b.url_scheme,'://', b.url_host, b.url_path) AS urlBase,
+                   COALESCE(a.title, b.title)                   AS title,
+                   COALESCE(a.description, b.description)       AS description,
+                   b.is_activity                                AS isActivity,
+                   b.icon_base64                                AS iconBase64,
+                   c.height                                     AS hdSize
+            FROM bookmarkify.bookmark_user_link a
+                     LEFT JOIN bookmarkify.bookmark b
+                               ON a.bookmark_id = b.id
+                     LEFT JOIN LATERAL (
+                SELECT wl.height
+                FROM bookmarkify.website_logo wl
+                WHERE wl.bookmark_id = a.bookmark_id
+                  AND wl.is_og_img IS FALSE
+                  AND wl.height >= 180
+                ORDER BY wl.height
+                LIMIT 1
+                ) c ON TRUE
             where a.id = #{id}
+            limit 1
             """
     )
     @Description("查看用户的单个书签")

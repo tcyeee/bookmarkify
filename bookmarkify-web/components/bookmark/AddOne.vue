@@ -1,6 +1,8 @@
 <template>
   <div>
-    <div class="bookmark-icon" @click="sysStore.addBookmarkDialogVisible = true">
+    <div
+      class="h-20 w-20 rounded-2xl bg-white flex justify-center items-center"
+      @click="sysStore.addBookmarkDialogVisible = true">
       <span class="icon--add icon-size-35 text-gray-400" />
     </div>
 

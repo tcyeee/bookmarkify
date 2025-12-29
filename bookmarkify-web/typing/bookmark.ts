@@ -52,16 +52,13 @@ export interface BookmarkSortParams {
 }
 
 export interface Bookmark {
-  uid: string
   bookmarkId: string
   bookmarkUserLinkId: string
-
-  isActivity: string
-  urlFull: string
   title: string
   description: string
-
-  iconActivity: boolean
-  iconHd: boolean
-  iconUrlFull: string
+  urlFull: string
+  urlBase: string
+  iconBase64: string
+  hdSize: string
+  isActivity: boolean
 }
