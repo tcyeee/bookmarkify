@@ -4,42 +4,80 @@ import cn.hutool.core.util.URLUtil
 import cn.hutool.http.HttpUtil
 import cn.hutool.json.JSONObject
 import cn.hutool.json.JSONUtil
+import java.net.URL
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
+import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.dto.PreloadResource
 import top.tcyeee.bookmarkify.entity.dto.WebManifest
-import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
-import java.net.URL
 
-/**
- * 网站信息解析器
- * 负责从 URL 获取 Document 并解析出 WebsiteHeaderInfo
- */
+/** 网站信息解析器 负责从 URL 获取 Document 并解析出 WebsiteHeaderInfo */
 object WebsiteParser {
 
+    /** 解析 URL 并返回网站头信息 */
+    fun parse(url: String): BookmarkWrapper =
+        urlWrapper(url)
+            .let { this.getDocument(it) } // 爬取
+            .let { this.parseDocument(it) } // 解析基础信息
+            .also { this.fillManifest(it) } // 解析Mainfest
+            .also { this.initLogo(it) }
+
     /**
-     * 解析 URL 并返回网站头信息
+     * 获21212网站图片
+     * @param info 网站信息
+     * @return 网站所有不同格式和大小的图标文件, 包含favicon.ico
      */
-    fun parse(url: String): BookmarkWrapper = urlWrapper(url)
-        .let { this.getDocument(it) }
-        .let { this.parseDocument(it) }
-        .also { this.fillManifest(it) }
+    private fun initLogo(info: BookmarkWrapper) {
+        val icons = mutableListOf<ManifestIcon>()
+
+        // 1. Manifest Icons
+        info.manifest?.icons?.let { icons.addAll(it) }
+
+        // 2. Apple Touch Icons
+        info.appleTouchIcons.forEach { (size, url) ->
+            icons.add(ManifestIcon(src = url, sizes = size, type = "image/png"))
+        }
+
+        // 3. Favicons
+        info.faviconUrls.forEach { url ->
+            val type = when {
+                url.endsWith(".ico", ignoreCase = true) -> "image/x-icon"
+                url.endsWith(".png", ignoreCase = true) -> "image/png"
+                url.endsWith(".svg", ignoreCase = true) -> "image/svg+xml"
+                url.endsWith(".jpg", ignoreCase = true) || url.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
+                else -> null
+            }
+            icons.add(ManifestIcon(src = url, sizes = "16x16", type = type))
+        }
+
+        // 4. OG Image
+        info.ogImage?.let { url -> icons.add(ManifestIcon(src = url, sizes = "og", type = null)) }
+
+        // Deduplicate
+        val distinctIcons = icons.distinctBy { it.src }
+
+        // Update manifest
+        info.manifest = (info.manifest ?: WebManifest()).copy(icons = distinctIcons)
+        info.distinctIcons = distinctIcons
+    }
 
     /**
      * 爬取网站信息
      * @param urlWrapper 网站url包装类
      */
-    private fun getDocument(urlWrapper: BookmarkUrlWrapper): Document = runCatching {
-        Jsoup.connect(urlWrapper.urlFull).timeout(10000).ignoreHttpErrors(true).get()
-    }.getOrElse { err ->
-        err.printStackTrace()
-        throw CommonException(ErrorType.E304, err.message ?: err.toString())
-    }
+    private fun getDocument(urlWrapper: BookmarkUrlWrapper): Document =
+        runCatching {
+            Jsoup.connect(urlWrapper.urlFull).timeout(10000).ignoreHttpErrors(true).get()
+        }
+            .getOrElse { err ->
+                err.printStackTrace()
+                throw CommonException(ErrorType.E304, err.message ?: err.toString())
+            }
 
     /**
      * 格式化URL字符串
@@ -55,6 +93,7 @@ object WebsiteParser {
         val url: URL = runCatching { URLUtil.toUrlForHttp(urlStr) }.getOrElse {
             throw CommonException(ErrorType.E303)
         }
+
         return BookmarkUrlWrapper(
             urlScheme = url.protocol,
             urlHost = url.authority,
@@ -66,11 +105,7 @@ object WebsiteParser {
         )
     }
 
-
-    /**
-     * 从 Document 解析 WebsiteHeaderInfo
-     * 将原 DTO 中的构造函数逻辑迁移至此
-     */
+    /** 从 Document 解析 WebsiteHeaderInfo 将原 DTO 中的构造函数逻辑迁移至此 */
     private fun parseDocument(document: Document): BookmarkWrapper {
         val info = BookmarkWrapper()
         info.title = document.title()
@@ -99,54 +134,73 @@ object WebsiteParser {
         info.dnsPrefetchUrls = getLinkHrefs(document, "dns-prefetch")
         info.styleSheets = getLinkHrefs(document, "stylesheet")
         info.scriptPrefetchUrls =
-            document.select("link[rel=prefetch][as=script]").map { it.attr("abs:href") }.filter { it.isNotBlank() }
+            document.select("link[rel=prefetch][as=script]")
+                .map { it.attr("abs:href") }
+                .filter { it.isNotBlank() }
 
         // Favicons (icon, shortcut icon, apple-touch-icon, etc.)
-        info.faviconUrls = document.select("link[rel~=(?i)^(shortcut|icon|shortcut icon)$]").map { it.attr("abs:href") }
-            .filter { it.isNotBlank() }.distinct()
+        info.faviconUrls =
+            document.select("link[rel~=(?i)^(shortcut|icon|shortcut icon)$]")
+                .map { it.attr("abs:href") }
+                .filter { it.isNotBlank() }
+                .distinct()
 
         // Complex structures
-        info.appleTouchIcons = document.select("link[rel=apple-touch-icon]").associate {
-            val sizes = it.attr("sizes")
-            (sizes.ifBlank { "default" }) to it.attr("abs:href")
-        }
+        info.appleTouchIcons =
+            document.select("link[rel=apple-touch-icon]").associate {
+                val sizes = it.attr("sizes")
+                (sizes.ifBlank { "default" }) to it.attr("abs:href")
+            }
 
         info.preloadResources =
-            document.select("link[rel=preload]").map { PreloadResource(it.attr("abs:href"), it.attr("as")) }
+            document.select("link[rel=preload]")
+                .map { PreloadResource(it.attr("abs:href"), it.attr("as")) }
                 .filter { it.url.isNotBlank() }
 
         // Custom Meta (Exclude known standard names)
-        val standardMetaNames = setOf(
-            "viewport",
-            "renderer",
-            "copyright",
-            "referrer",
-            "keywords",
-            "description",
-            "application-name",
-            "author",
-            "generator"
-        )
-        info.customMeta = document.select("meta[name]").toList().filter {
-            !standardMetaNames.contains(it.attr("name").lowercase()) && it.attr("content").isNotBlank()
-        }.associate { it.attr("name") to it.attr("content") }
+        val standardMetaNames =
+            setOf(
+                "viewport",
+                "renderer",
+                "copyright",
+                "referrer",
+                "keywords",
+                "description",
+                "application-name",
+                "author",
+                "generator"
+            )
+        info.customMeta =
+            document.select("meta[name]")
+                .toList()
+                .filter {
+                    !standardMetaNames.contains(it.attr("name").lowercase()) &&
+                            it.attr("content").isNotBlank()
+                }
+                .associate { it.attr("name") to it.attr("content") }
 
         // Custom Link (Exclude known rels)
-        val standardLinkRels = setOf(
-            "canonical",
-            "manifest",
-            "preconnect",
-            "dns-prefetch",
-            "stylesheet",
-            "preload",
-            "prefetch",
-            "icon",
-            "shortcut icon",
-            "apple-touch-icon"
-        )
-        info.customLink = document.select("link[rel]").toList().filter {
-            !standardLinkRels.contains(it.attr("rel").lowercase()) && it.attr("href").isNotBlank()
-        }.associate { it.attr("rel") to it.attr("abs:href") }
+        val standardLinkRels =
+            setOf(
+                "canonical",
+                "manifest",
+                "preconnect",
+                "dns-prefetch",
+                "stylesheet",
+                "preload",
+                "prefetch",
+                "icon",
+                "shortcut icon",
+                "apple-touch-icon"
+            )
+        info.customLink =
+            document.select("link[rel]")
+                .toList()
+                .filter {
+                    !standardLinkRels.contains(it.attr("rel").lowercase()) &&
+                            it.attr("href").isNotBlank()
+                }
+                .associate { it.attr("rel") to it.attr("abs:href") }
 
         return info
     }
@@ -165,27 +219,30 @@ object WebsiteParser {
         val text = doc.text().lowercase()
 
         // 1. Common WAF Titles
-        val wafTitles = listOf(
-            "just a moment...",
-            "attention required",
-            "security check",
-            "ddos-guard",
-            "bitmitigate",
-            "shieldsquare",
-            "human verification"
-        )
+        val wafTitles =
+            listOf(
+                "just a moment...",
+                "attention required",
+                "security check",
+                "ddos-guard",
+                "bitmitigate",
+                "shieldsquare",
+                "human verification"
+            )
         if (wafTitles.any { title.contains(it) }) return true
 
         // 2. EdgeOne / Generic JS Challenge (Short body, script only, no visible content)
         if (title.isBlank() && doc.body().text().isBlank() && doc.select("script").isNotEmpty()) {
             val scriptContent = doc.select("script").html()
-            if (scriptContent.contains("document.cookie") || scriptContent.contains("location.href")) {
+            if (scriptContent.contains("document.cookie") || scriptContent.contains("location.href")
+            ) {
                 return true
             }
         }
 
         // 3. Cloudflare specific text
-        if (text.contains("please enable cookies") && text.contains("security by cloudflare")) return true
+        if (text.contains("please enable cookies") && text.contains("security by cloudflare"))
+            return true
 
         return false
     }
@@ -204,11 +261,15 @@ object WebsiteParser {
 
     private fun fetchManifest(manifestUrl: String): String? {
         return runCatching {
-            HttpUtil.createGet(manifestUrl).header(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            ).execute().body()
-        }.getOrNull()
+            HttpUtil.createGet(manifestUrl)
+                .header(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                )
+                .execute()
+                .body()
+        }
+            .getOrNull()
     }
 
     private fun parseManifestJson(json: String): WebManifest {
@@ -219,14 +280,14 @@ object WebsiteParser {
             description = jsonObj.getStr("description"),
             startUrl = jsonObj.getStr("start_url") ?: jsonObj.getStr("startUrl"),
             display = jsonObj.getStr("display"),
-            backgroundColor = jsonObj.getStr("background_color") ?: jsonObj.getStr("backgroundColor"),
+            backgroundColor = jsonObj.getStr("background_color")
+                ?: jsonObj.getStr("backgroundColor"),
             themeColor = jsonObj.getStr("theme_color") ?: jsonObj.getStr("themeColor"),
             icons = jsonObj.getJSONArray("icons")?.mapNotNull {
                 if (it is JSONObject) {
-                    ManifestIcon(
-                        src = it.getStr("src"), sizes = it.getStr("sizes"), type = it.getStr("type")
-                    )
+                    ManifestIcon(src = it.getStr("src"), sizes = it.getStr("sizes"), type = it.getStr("type"))
                 } else null
-            } ?: emptyList())
+            } ?: emptyList()
+        )
     }
 }

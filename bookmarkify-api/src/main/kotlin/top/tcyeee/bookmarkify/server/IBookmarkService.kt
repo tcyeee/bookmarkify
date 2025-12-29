@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.entity.HomeItemShow
+import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
 
 /**
@@ -31,5 +32,5 @@ interface IBookmarkService : IService<Bookmark> {
      */
     fun setDefaultBookmark(uid: String)
 
-    fun check(url: String)
+    fun check(url: String): BookmarkWrapper
 }

@@ -1,21 +1,13 @@
 package top.tcyeee.bookmarkify.entity.dto
 
-/**
- * 表示网站 <head> 中常见信息的实体类
- *
- * @author tcyeee
- * @date 12/27/25 16:42
- */
-
-
 /* 书签地址 */
 data class BookmarkUrlWrapper(
-    var urlRaw: String, // https://tool.chinaz.com/linksTesting/list?url=bilibili.com&type=1
+    var urlRaw: String,    // https://tool.chinaz.com/linksTesting/list?url=bilibili.com&type=1
     var urlScheme: String, // https
-    var urlHost: String, // tool.chinaz.com
-    var urlRoot: String, // https://tool.chinaz.com
-    var urlFull: String, // https://tool.chinaz.com/linksTesting/list
-    var urlPath: String?, // /linksTesting/list
+    var urlHost: String,   // tool.chinaz.com
+    var urlRoot: String,   // https://tool.chinaz.com
+    var urlFull: String,   // https://tool.chinaz.com/linksTesting/list
+    var urlPath: String?,  // /linksTesting/list
     var urlQuery: String?, // url=bilibili.com&type=1
 )
 
@@ -44,7 +36,9 @@ data class BookmarkWrapper(
     var customMeta: Map<String, String> = emptyMap(), // 其他自定义或额外的 meta 信息，如自定义属性或扩展字段
     var customLink: Map<String, String> = emptyMap(), // 其他自定义或额外的 link 信息，方便扩展
     var manifest: WebManifest? = null, // 网站 Manifest 内容
-    var antiCrawlerDetected: Boolean = false // 是否检测到反爬虫/WAF
+    var antiCrawlerDetected: Boolean = false, // 是否检测到反爬虫/WAF
+
+    var distinctIcons:List<ManifestIcon>? = emptyList(),// 网站所有存在的图标
 )
 
 /* Web Manifest 数据结构 */
@@ -59,13 +53,9 @@ data class WebManifest(
     val icons: List<ManifestIcon> = emptyList()
 )
 
-data class ManifestIcon(
-    val src: String? = null, val sizes: String? = null, val type: String? = null
-)
+/* icon */
+data class ManifestIcon(val src: String? = null, val sizes: String? = null, val type: String? = null)
 
 /* 预加载资源对象，包含 URL 及资源类型 */
-data class PreloadResource(
-    val url: String, // 资源URL
-    val asType: String? = null // 资源类型，例如 "script", "style", "image"
-)
+data class PreloadResource(val url: String, val asType: String? = null)
 
