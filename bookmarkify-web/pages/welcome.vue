@@ -42,7 +42,6 @@
               </template>
             </ShimmerText>
           </div>
-          {{ userStore.authStatus }}
         </div>
 
         <!-- 查看更多按钮 -->
