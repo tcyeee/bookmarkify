@@ -21,15 +21,12 @@ import top.tcyeee.bookmarkify.entity.entity.Bookmark
 object WebsiteParser {
 
     /** 解析 Bookmark 并返回网站头信息 */
-    fun parse(bookmark: Bookmark): Bookmark {
-        val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse { err ->
+    fun parse(bookmark: Bookmark): BookmarkWrapper? =
+        runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse { err ->
             bookmark.parseFlag = false
             bookmark.parseErrMsg = err.message
-            return bookmark
+            return null
         }
-        bookmark.initBaseInfo(wrapper)
-        return bookmark
-    }
 
     /** 解析 URL 并返回网站头信息 */
     fun parse(url: String): BookmarkWrapper = urlWrapper(url).let { this.getDocument(it) } // 爬取
@@ -145,16 +142,31 @@ object WebsiteParser {
             document.select("link[rel=preload]").map { PreloadResource(it.attr("abs:href"), it.attr("as")) }
                 .filter { it.url.isNotBlank() }
         val standardMetaNames = setOf(
-            "viewport", "renderer", "copyright", "referrer", "keywords",
-            "description", "application-name", "author", "generator"
+            "viewport",
+            "renderer",
+            "copyright",
+            "referrer",
+            "keywords",
+            "description",
+            "application-name",
+            "author",
+            "generator"
         )
         info.customMeta = document.select("meta[name]").toList().filter {
             !standardMetaNames.contains(it.attr("name").lowercase()) && it.attr("content").isNotBlank()
         }.associate { it.attr("name") to it.attr("content") }
         // Custom Link (Exclude known rels)
         val standardLinkRels = setOf(
-            "canonical", "manifest", "preconnect", "dns-prefetch", "shortcut icon",
-            "stylesheet", "preload", "prefetch", "icon", "apple-touch-icon"
+            "canonical",
+            "manifest",
+            "preconnect",
+            "dns-prefetch",
+            "shortcut icon",
+            "stylesheet",
+            "preload",
+            "prefetch",
+            "icon",
+            "apple-touch-icon"
         )
         info.customLink = document.select("link[rel]").toList().filter {
             !standardLinkRels.contains(it.attr("rel").lowercase()) && it.attr("href").isNotBlank()

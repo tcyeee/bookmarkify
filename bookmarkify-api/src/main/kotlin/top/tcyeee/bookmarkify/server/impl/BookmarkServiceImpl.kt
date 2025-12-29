@@ -42,13 +42,15 @@ class BookmarkServiceImpl(
 
     override fun checkOne(bookmark: Bookmark) {
         log.trace("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
-        // 信息解析
         WebsiteParser.parse(bookmark)
-        // 保存网站LOGO
-        FileUtils.initBookmarkImg(bookmark)
-
-
-        updateById(bookmark)
+            // 保存网站LOGO
+            ?.also { FileUtils.initBookmarkImg(it.distinctIcons) }
+            // 填充bookmark基础信息
+            ?.also { bookmark.initBaseInfo(it) }
+            // 设置bokmark-ico base64信息
+            ?.also { bookmark.iconBase64 = FileUtils.icoBase64(it.distinctIcons) }
+            // 更新书签
+            ?.also { updateById(bookmark) }
     }
 
     override fun check(rawUrl: String) {
