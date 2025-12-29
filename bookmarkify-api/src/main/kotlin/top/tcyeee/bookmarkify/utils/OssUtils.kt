@@ -36,14 +36,14 @@ class OssUtils {
     @Value("\${aliyun.oss.bucket-name}")
     private lateinit var bucketName: String
 
-    @Value("\${aliyun.oss.domain:}")
-    private lateinit var domainConfig: String
+    @Value("\${aliyun.oss.domain-name}")
+    private lateinit var domainName: String
 
     @PostConstruct
     fun init() {
         ossClient = OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret)
         bucket = bucketName
-        initDomain(endpoint, domainConfig, bucketName)
+        initDomain(endpoint, domainName, bucketName)
     }
 
     @PreDestroy
