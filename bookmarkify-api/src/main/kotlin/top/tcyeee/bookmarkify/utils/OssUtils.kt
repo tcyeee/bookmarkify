@@ -37,7 +37,7 @@ class OssUtils {
     private lateinit var bucketName: String
 
     @Value("\${aliyun.oss.domain:}")
-    private var domainConfig: String = ""
+    private lateinit var domainConfig: String
 
     @PostConstruct
     fun init() {
@@ -56,7 +56,7 @@ class OssUtils {
         private lateinit var ossClient: OSS
         private lateinit var bucket: String
         private lateinit var domain: String
-        private var customDomain: String = ""
+        private lateinit var customDomain: String
 
         fun initDomain(endpoint: String, domainConfig: String, bucketName: String) {
             val protocol = if (endpoint.startsWith("https://")) "https://" else "http://"
