@@ -78,15 +78,12 @@ object WebsiteParser {
      * @return 网站所有不同格式和大小的图标文件, 包含favicon.ico
      */
     private fun initLogo(info: BookmarkWrapper) {
-        val rootUrl = info.canonicalUrl ?: info.manifestUrl?.let {
-            runCatching { URLUtil.url(it) }.getOrNull()?.let { u -> "${u.protocol}://${u.host}" }
-        } ?: info.baseUrl
 
         fun String.normalize(): String? {
             if (this.isBlank()) return null
             return runCatching {
                 if (this.startsWith("http")) this
-                else rootUrl?.let { URLUtil.completeUrl(it, this) }
+                else info.baseUrl?.let { URLUtil.completeUrl(it, this) }
             }.getOrNull()
         }
 
