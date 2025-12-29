@@ -31,7 +31,6 @@ config:
   uid-cookie-max-age: 315360000   # 10 年（秒）
   default-bookmarkify:
     - 'https://xiaohongshu.com'
-    - 'https://douban.com'
     - 'https://www.guokr.com'
     - 'https://www.163.com'
     - 'https://www.gamersky.com'
