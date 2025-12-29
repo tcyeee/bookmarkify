@@ -37,6 +37,7 @@ enum class ErrorType(var msg: String) {
     E218("ManifestIcon上传到OSS中途出错"),
     E219("图片文件大小超出限制"),
     E220("读取原始线上图片时出错"),
+    E221("生成OSS限时链接错误"),
 
 
     /* 极端错误 */

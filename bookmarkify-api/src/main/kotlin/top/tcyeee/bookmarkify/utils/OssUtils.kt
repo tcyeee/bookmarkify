@@ -5,7 +5,9 @@ import com.aliyun.oss.OSS
 import com.aliyun.oss.OSSClientBuilder
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
+import java.io.ByteArrayInputStream
 import java.net.URI
+import javax.imageio.ImageIO
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -14,8 +16,6 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
 import top.tcyeee.bookmarkify.entity.enums.FileType
-import java.io.ByteArrayInputStream
-import javax.imageio.ImageIO
 
 /**
  * @author tcyeee
@@ -36,14 +36,14 @@ class OssUtils {
     @Value("\${aliyun.oss.bucket-name}")
     private lateinit var bucketName: String
 
+    @Value("\${aliyun.oss.domain:}")
+    private var domainConfig: String = ""
+
     @PostConstruct
     fun init() {
         ossClient = OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret)
         bucket = bucketName
-        // 处理 endpoint 格式，确保存储正确的域名
-        val protocol = if (endpoint.startsWith("https://")) "https://" else "http://"
-        val rawEndpoint = endpoint.removePrefix(protocol)
-        domain = "$protocol$bucketName.$rawEndpoint"
+        initDomain(endpoint, domainConfig, bucketName)
     }
 
     @PreDestroy
@@ -56,27 +56,47 @@ class OssUtils {
         private lateinit var ossClient: OSS
         private lateinit var bucket: String
         private lateinit var domain: String
+        private var customDomain: String = ""
 
-        fun restoreWebsiteLogo(list: List<ManifestIcon>?, bookmarkId: String): List<WebsiteLogoEntity> {
+        fun initDomain(endpoint: String, domainConfig: String, bucketName: String) {
+            val protocol = if (endpoint.startsWith("https://")) "https://" else "http://"
+            if (domainConfig.isNotBlank()) {
+                val d = if (domainConfig.startsWith("http")) domainConfig
+                else "$protocol$domainConfig"
+                domain = d.removeSuffix("/")
+                customDomain = domain
+            } else {
+                val rawEndpoint = endpoint.removePrefix(protocol)
+                domain = "$protocol$bucketName.$rawEndpoint"
+                customDomain = ""
+            }
+        }
+
+        fun restoreWebsiteLogo(
+            list: List<ManifestIcon>?, bookmarkId: String
+        ): List<WebsiteLogoEntity> {
             val result = mutableListOf<WebsiteLogoEntity>()
             if (list.isNullOrEmpty()) return result
 
             list.forEach { icon ->
                 if (icon.src.isNullOrBlank()) return@forEach
                 val customPath = "${FileType.WEBSITE_LOGO.folder}/$bookmarkId/${icon.size()}"
-                runCatching { restoreLogoImg(icon.src, customPath) }
-                    .getOrElse { err -> throw CommonException(ErrorType.E218, err.message) }.let { logoInfo ->
-                        result.add(
-                            WebsiteLogoEntity(
-                                bookmarkId = bookmarkId,
-                                size = logoInfo.size,
-                                width = if (logoInfo.width > 0) logoInfo.width else icon.size(),
-                                height = if (logoInfo.height > 0) logoInfo.height else icon.size(),
-                                suffix = FileUtil.extName(logoInfo.url) ?: "png",
-                                isOgImg = icon.isOg()
-                            )
+                runCatching {
+                    restoreLogoImg(icon.src, customPath)
+                }.getOrElse { err -> throw CommonException(ErrorType.E218, err.message) }.let { logoInfo ->
+                    result.add(
+                        WebsiteLogoEntity(
+                            bookmarkId = bookmarkId,
+                            size = logoInfo.size,
+                            width = if (logoInfo.width > 0) logoInfo.width
+                            else icon.size(),
+                            height = if (logoInfo.height > 0) logoInfo.height
+                            else icon.size(),
+                            suffix = FileUtil.extName(logoInfo.url) ?: "png",
+                            isOgImg = icon.isOg()
                         )
-                    }
+                    )
+                }
             }
             return result
         }
@@ -144,17 +164,23 @@ class OssUtils {
         }
 
         /**
-         * 删除文件
+         * 获取私有文件的签名URL
          *
-         * @param fileName 文件名（包含路径）
+         * @param objectName 文件路径
+         * @param expirationMillis 过期时间（毫秒），默认1小时
+         * @return 签名URL
          */
-        fun delete(fileName: String) {
-            try {
-                ossClient.deleteObject(bucket, fileName)
-                log.info("File deleted successfully: $fileName")
+        fun getPrivateUrl(objectName: String, expirationMillis: Long = 3600 * 1000): String {
+            return try {
+                val expiration = java.util.Date(System.currentTimeMillis() + expirationMillis)
+                val url = ossClient.generatePresignedUrl(bucket, objectName, expiration)
+                if (customDomain.isNotBlank()) {
+                    "$customDomain${url.path}?${url.query}"
+                } else {
+                    url.toString()
+                }
             } catch (e: Exception) {
-                log.error("Failed to delete file from OSS", e)
-                throw RuntimeException("OSS delete failed", e)
+                throw CommonException(ErrorType.E221, e.message)
             }
         }
     }

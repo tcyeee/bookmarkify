@@ -14,8 +14,6 @@ import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 
 data class BookmarkShow(
-    @JsonIgnore var uid: String? = null,
-
     @field:Schema(description = "关联书签ID") var bookmarkId: String? = null,
     @field:Schema(description = "关联用户自定义信息ID") var bookmarkUserLinkId: String? = null,
     @field:Schema(description = "书签标题") var title: String? = null,
@@ -23,8 +21,12 @@ data class BookmarkShow(
     @field:Schema(description = "完整url") var urlFull: String? = null,
     @field:Schema(description = "基础url") var urlBase: String? = null,
     @field:Schema(description = "小图标") var iconBase64: String? = null,
-    @field:Schema(description = "大图标") var hdSize: String? = null,
     @field:Schema(description = "网站活性") var isActivity: Boolean? = null,
+
+    @JsonIgnore @field:Schema(description = "用户ID") var uid: String? = null,
+    @JsonIgnore @field:Schema(description = "大图标") var hdSize: String? = null,
+
+    @field:Schema(description = "大图标OSS地址,带权限") var iconHdUrl: String? = null,
 )
 
 data class HomeItemShow(

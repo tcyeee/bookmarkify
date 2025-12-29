@@ -59,6 +59,6 @@ export interface Bookmark {
   urlFull: string
   urlBase: string
   iconBase64: string
-  hdSize: string
+  iconHdUrl: string
   isActivity: boolean
 }
