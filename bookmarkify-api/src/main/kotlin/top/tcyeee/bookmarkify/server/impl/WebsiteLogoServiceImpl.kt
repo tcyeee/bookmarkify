@@ -13,4 +13,8 @@ import top.tcyeee.bookmarkify.server.IWebsiteLogoService
  * @date 12/29/25 15:05
  */
 @Service
-class WebsiteLogoServiceImpl : IWebsiteLogoService, ServiceImpl<WebsiteLogoMapper, WebsiteLogoEntity>()
+class WebsiteLogoServiceImpl : IWebsiteLogoService, ServiceImpl<WebsiteLogoMapper, WebsiteLogoEntity>() {
+    override fun findByBookmarkId(id: String): List<WebsiteLogoEntity> {
+        return ktQuery().eq(WebsiteLogoEntity::bookmarkId, id).list()
+    }
+}

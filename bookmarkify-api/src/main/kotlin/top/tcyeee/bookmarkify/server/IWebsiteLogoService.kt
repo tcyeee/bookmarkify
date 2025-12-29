@@ -9,4 +9,6 @@ import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
  * @author tcyeee
  * @date 12/29/25 15:05
  */
-interface IWebsiteLogoService : IService<WebsiteLogoEntity>
+interface IWebsiteLogoService : IService<WebsiteLogoEntity> {
+    fun findByBookmarkId(id: String): List<WebsiteLogoEntity>
+}
