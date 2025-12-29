@@ -5,7 +5,7 @@
       :class="data.isDev ? 'border-4 border-dashed border-red-200' : ''">
       <BookmarkLogo :bookmark="props.value" />
     </div>
-    <div class="w-18 text-sm mt-[0.3rem] text-white opacity-90 truncate text-center">{{ value.title || value.urlFull }}</div>
+    <div class="w-18 text-sm mt-[0.3rem] text-white opacity-90 truncate text-center">{{ value.title || value.urlBase }}</div>
   </div>
 </template>
 

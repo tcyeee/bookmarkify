@@ -24,7 +24,8 @@ data class BookmarkShow(
     @field:Schema(description = "网站活性") var isActivity: Boolean? = null,
 
     @JsonIgnore @field:Schema(description = "用户ID") var uid: String? = null,
-    @JsonIgnore @field:Schema(description = "大图标") var hdSize: String? = null,
+    @JsonIgnore @field:Schema(description = "大图尺寸") var hdSize: String? = null,
+    @JsonIgnore @field:Schema(description = "Host(用于拿不到name的情况下最后显示Title)") var urlHost: String? = null,
 
     @field:Schema(description = "大图标OSS地址,带权限") var iconHdUrl: String? = null,
 )
