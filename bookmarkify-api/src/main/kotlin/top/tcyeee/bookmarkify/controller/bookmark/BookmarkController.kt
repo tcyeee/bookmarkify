@@ -51,5 +51,5 @@ class BookmarksController(
 
     @SaIgnore
     @GetMapping("/check")
-    fun check(@RequestParam url: String) = bookmarkService.check(url)
+    fun check(@RequestParam url: String) = bookmarkService.checkOne(url)
 }
