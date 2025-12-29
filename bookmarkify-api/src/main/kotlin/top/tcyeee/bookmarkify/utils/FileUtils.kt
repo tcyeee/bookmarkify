@@ -5,8 +5,14 @@ import cn.hutool.core.util.IdUtil
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import java.io.File
 
+object FileUtils {
+    fun initBookmarkImg(bookmark: Bookmark) {
+
+    }
+}
 
 /**
  * 文件类型
