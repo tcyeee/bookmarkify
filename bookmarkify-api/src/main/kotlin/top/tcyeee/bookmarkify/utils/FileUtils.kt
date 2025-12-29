@@ -11,17 +11,12 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 
 object FileUtils {
-    fun initBookmarkImg(imgs: List<ManifestIcon>?) {
-        if (imgs.isNullOrEmpty()) return
 
-    }
-
-    fun icoBase64(imgs: List<ManifestIcon>?): String? {
-        if (imgs.isNullOrEmpty()) return null
-        val icon = imgs.firstOrNull { it.sizes == "16x16" || it.src?.endsWith(".ico", ignoreCase = true) == true }
-            ?: return null
-        val url = icon.src ?: return null
-        return runCatching { HttpUtil.downloadBytes(url).let { Base64.encode(it) } }.getOrNull()
+    // 找到Base64图标
+    fun icoBase64(imgs: List<ManifestIcon>?, rawUrl: String): String? {
+        val icon = imgs?.firstOrNull { it.sizes == "16x16" || it.src?.endsWith(".ico", ignoreCase = true) == true }
+            ?: ManifestIcon(src = "${rawUrl}/favicon.ico")
+        return runCatching { HttpUtil.downloadBytes(icon.src)?.let { Base64.encode(it) } }.getOrNull()
     }
 }
 
@@ -29,7 +24,6 @@ object FileUtils {
 enum class FileType(val limit: Int, val prefix: String, val defaultSuffix: String, val folder: String) {
     AVATAR(5 * 1024 * 1024, "image/", "jpg", "avatar"),
     BACKGROUND(10 * 1024 * 1024, "image/", "jpg", "background"),
-    WEBSITE_LOGO(1 * 1024 * 1024, "image/", "png", "website"),
 }
 
 /**

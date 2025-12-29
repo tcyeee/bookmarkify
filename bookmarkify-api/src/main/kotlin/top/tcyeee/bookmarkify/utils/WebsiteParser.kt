@@ -4,30 +4,16 @@ import cn.hutool.core.util.URLUtil
 import cn.hutool.http.HttpUtil
 import cn.hutool.json.JSONObject
 import cn.hutool.json.JSONUtil
-import java.net.URL
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.log
-import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
-import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
-import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
-import top.tcyeee.bookmarkify.entity.dto.PreloadResource
-import top.tcyeee.bookmarkify.entity.dto.WebManifest
-import top.tcyeee.bookmarkify.entity.entity.Bookmark
+import top.tcyeee.bookmarkify.entity.dto.*
+import java.net.URL
 
 /** 网站信息解析器 负责从 URL 获取 Document 并解析出 WebsiteHeaderInfo */
 object WebsiteParser {
-
-    /** 解析 Bookmark 并返回网站头信息 */
-    fun parse(bookmark: Bookmark): BookmarkWrapper? =
-        runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse { err ->
-            bookmark.isActivity = false
-            bookmark.parseErrMsg = err.message
-            return null
-        }
-
     /** 解析 URL 并返回网站头信息 */
     fun parse(url: String): BookmarkWrapper = urlWrapper(url)
         .let { this.getDocument(it) } // 爬取

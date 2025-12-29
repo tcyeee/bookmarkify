@@ -33,7 +33,7 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                 FROM bookmarkify.website_logo wl
                 WHERE wl.bookmark_id = a.bookmark_id
                   AND wl.is_og_img IS FALSE
-                  AND wl.height >= 180
+                  AND wl.height >= 150
                 ORDER BY wl.height
                 LIMIT 1
                 ) c ON TRUE

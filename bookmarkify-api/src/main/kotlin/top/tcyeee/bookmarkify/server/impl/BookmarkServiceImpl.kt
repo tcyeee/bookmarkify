@@ -47,15 +47,19 @@ class BookmarkServiceImpl(
 
     override fun checkOne(bookmark: Bookmark) {
         log.trace("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
-        WebsiteParser.parse(bookmark)
+
+        runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
+            if (it.message.toString().contains("403")) bookmark.toggleAntiCrawlerDetected(true)
+            return
+        }
             // 填充bookmark基础信息
-            ?.also { bookmark.initBaseInfo(it) }
+            .also { bookmark.initBaseInfo(it) }
             // 设置bokmark-ico base64信息
-            ?.also { bookmark.iconBase64 = FileUtils.icoBase64(it.distinctIcons) }
+            .also { bookmark.iconBase64 = FileUtils.icoBase64(it.distinctIcons, bookmark.rawUrl) }
             // 更新书签
-            ?.also { this.saveOrUpdate(bookmark) }
+            .also { this.saveOrUpdate(bookmark) }
             // 保存网站LOGO/OG图片到OSS和数据库
-            ?.also { this.saveOrUpdateLogo(it, bookmark.id) }
+            .also { this.saveOrUpdateLogo(it, bookmark.id) }
     }
 
     /**
@@ -84,6 +88,12 @@ class BookmarkServiceImpl(
     }
 
     private fun getByHost(urlHost: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, urlHost).one()
+
+    fun Bookmark.toggleAntiCrawlerDetected(antiCrawlerDetected: Boolean) {
+        this.antiCrawlerDetected = antiCrawlerDetected
+        this.updateTime = LocalDateTime.now()
+        save(this)
+    }
 
     // 获取配置信息
     override fun setDefaultBookmark(uid: String) =
