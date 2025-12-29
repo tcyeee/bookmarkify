@@ -77,30 +77,45 @@ object WebsiteParser {
      * @return 网站所有不同格式和大小的图标文件, 包含favicon.ico
      */
     private fun initLogo(info: BookmarkWrapper) {
-        val icons = mutableListOf<ManifestIcon>()
+        val rootUrl = info.canonicalUrl ?: info.manifestUrl?.let {
+            runCatching { URLUtil.url(it) }.getOrNull()?.let { u -> "${u.protocol}://${u.host}" }
+        } ?: info.baseUrl
 
-        // 1. Manifest Icons
-        info.manifest?.icons?.let { icons.addAll(it) }
-
-        // 2. Apple Touch Icons
-        info.appleTouchIcons.forEach { (size, url) ->
-            icons.add(ManifestIcon(src = url, sizes = size, type = "image/png"))
+        fun String.normalize(): String? {
+            if (this.isBlank()) return null
+            return runCatching {
+                if (this.startsWith("http")) this
+                else rootUrl?.let { URLUtil.completeUrl(it, this) }
+            }.getOrNull()
         }
 
-        // 3. Favicons
-        info.faviconUrls.forEach { url ->
-            val type = when {
-                url.endsWith(".ico", ignoreCase = true) -> "image/x-icon"
-                url.endsWith(".png", ignoreCase = true) -> "image/png"
-                url.endsWith(".svg", ignoreCase = true) -> "image/svg+xml"
-                url.endsWith(".jpg", ignoreCase = true) || url.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
-                else -> null
+        val icons = buildList {
+            // 1. Manifest Icons
+            info.manifest?.icons?.forEach { icon -> icon.src?.normalize()?.let { add(icon.copy(src = it)) } }
+            // 2. Apple Touch Icons
+            info.appleTouchIcons.forEach { (size, url) ->
+                url.normalize()?.let { add(ManifestIcon(src = it, sizes = size, type = "image/png")) }
             }
-            icons.add(ManifestIcon(src = url, sizes = "16x16", type = type))
-        }
 
-        // 4. OG Image
-        info.ogImage?.let { url -> icons.add(ManifestIcon(src = url, sizes = "og", type = null)) }
+            // 3. Favicons
+            info.faviconUrls.forEach { url ->
+                url.normalize()?.let { normUrl ->
+                    val type = when {
+                        normUrl.endsWith(".ico", true) -> "image/x-icon"
+                        normUrl.endsWith(".png", true) -> "image/png"
+                        normUrl.endsWith(".svg", true) -> "image/svg+xml"
+                        normUrl.endsWith(".jpg", true) || normUrl.endsWith(".jpeg", true) -> "image/jpeg"
+                        else -> null
+                    }
+                    add(ManifestIcon(src = normUrl, sizes = "16x16", type = type))
+                }
+            }
+
+            // 4. OG Image
+            info.ogImage?.normalize()?.let {
+                add(ManifestIcon(src = it, sizes = "og", type = null))
+            }
+        }
 
         // Deduplicate
         val distinctIcons = icons.distinctBy { it.src }
@@ -113,6 +128,7 @@ object WebsiteParser {
     /** 从 Document 解析 WebsiteHeaderInfo 将原 DTO 中的构造函数逻辑迁移至此 */
     private fun parseDocument(document: Document): BookmarkWrapper {
         val info = BookmarkWrapper()
+        info.baseUrl = document.baseUri()
         info.title = document.title()
         info.charset = document.charset().name()
         info.antiCrawlerDetected = detectAntiCrawler(document)
