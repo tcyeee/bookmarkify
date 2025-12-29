@@ -2,27 +2,23 @@ package top.tcyeee.bookmarkify.server.impl
 
 import cn.hutool.core.util.ArrayUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
-import org.aspectj.util.FileUtil
+import java.time.LocalDateTime
+import java.util.concurrent.CompletableFuture
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
-import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
-import top.tcyeee.bookmarkify.entity.enums.FileType
+import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
-import top.tcyeee.bookmarkify.utils.FileUtils
-import top.tcyeee.bookmarkify.utils.OssUtils
-import top.tcyeee.bookmarkify.utils.SocketUtils
-import top.tcyeee.bookmarkify.utils.WebsiteParser
-import top.tcyeee.bookmarkify.utils.yesterday
-import java.util.concurrent.CompletableFuture
+import top.tcyeee.bookmarkify.server.IWebsiteLogoService
+import top.tcyeee.bookmarkify.utils.*
 
 /**
  * @author tcyeee
@@ -32,7 +28,8 @@ import java.util.concurrent.CompletableFuture
 class BookmarkServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
     private val homeItemMapper: HomeItemMapper,
-    private val projectConfig: ProjectConfig
+    private val projectConfig: ProjectConfig,
+    private val websiteLogoService: IWebsiteLogoService
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, Bookmark>() {
 
     override fun checkOne(bookmark: Bookmark, id: String) {
@@ -46,32 +43,43 @@ class BookmarkServiceImpl(
 
     override fun checkOne(bookmark: Bookmark) {
         log.trace("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
-        val wrapper = WebsiteParser.parse(bookmark)
+        WebsiteParser.parse(bookmark)
             // 填充bookmark基础信息
             ?.also { bookmark.initBaseInfo(it) }
             // 设置bokmark-ico base64信息
             ?.also { bookmark.iconBase64 = FileUtils.icoBase64(it.distinctIcons) }
             // 更新书签
-            ?.also { saveOrUpdate(bookmark) }
+            ?.also { this.saveOrUpdate(bookmark) }
+            // 保存网站LOGO/OG图片到数据库
+            ?.also { this.saveOrUpdateLogo(it, bookmark.id) }
+    }
 
-        // 保存网站LOGO/OG图片
-        if (wrapper != null && ArrayUtil.isNotEmpty(wrapper)) {
-            // restore 文件
-            val list = OssUtils.restoreWebsiteLogo(wrapper.distinctIcons, bookmark.id)
+    /**
+     * 保存网站LOGO/OG图片到数据库
+     *
+     * @param wrapper 爬取到的网页
+     * @param bookmarkId 书签ID
+     */
+    private fun saveOrUpdateLogo(wrapper: BookmarkWrapper?, bookmarkId: String) {
+        if (wrapper == null || ArrayUtil.isEmpty(wrapper)) return
 
-            // 存储到数据库
-            list.forEach {
-                log.trace(it.toString())
-            }
+        val logolistNew = OssUtils.restoreWebsiteLogo(wrapper.distinctIcons, bookmarkId)
+        val logoListOld = websiteLogoService.findByBookmarkId(bookmarkId)
+
+        val toUpdate = mutableListOf<WebsiteLogoEntity>()
+        val toInsert = mutableListOf<WebsiteLogoEntity>()
+
+        logolistNew.forEach { it ->
+            logoListOld.find { old -> old.isSame(it) }
+                ?.let { toUpdate.add(it.copy(updateTime = LocalDateTime.now())) }
+                ?: toInsert.add(it)
         }
+
+        if (toUpdate.isNotEmpty()) websiteLogoService.updateBatchById(toUpdate)
+        if (toInsert.isNotEmpty()) websiteLogoService.saveBatch(toInsert)
     }
 
-    override fun check(rawUrl: String) {
-        WebsiteParser.urlWrapper(rawUrl)
-            .let { Bookmark(it) }
-            .let { checkOne(it) }
-    }
-
+    override fun check(rawUrl: String) = checkOne(Bookmark(WebsiteParser.urlWrapper(rawUrl)))
 
     override fun offline(bookmark: Bookmark) {
         bookmark.title = bookmark.urlHost
@@ -82,13 +90,14 @@ class BookmarkServiceImpl(
     override fun setDefaultBookmark(uid: String) =
         projectConfig.defaultBookmarkify.forEach { addOne(it, uid) }
 
-
-    override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
+    override fun checkAll() =
+        ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
 
     override fun addOne(url: String, uid: String): HomeItemShow {
         val bookmarkUrl = WebsiteParser.urlWrapper(url)
-        val bookmark = ktQuery().eq(Bookmark::urlHost, bookmarkUrl.urlHost).one()
-            ?: Bookmark(bookmarkUrl).also { save(it) }
+        val bookmark =
+            ktQuery().eq(Bookmark::urlHost, bookmarkUrl.urlHost).one()
+                ?: Bookmark(bookmarkUrl).also { save(it) }
         // 添加用户关联和桌面布局
         val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark)
         bookmarkUserLinkMapper.insert(userLink)
@@ -98,5 +107,4 @@ class BookmarkServiceImpl(
         CompletableFuture.runAsync { this.checkOne(bookmark, userLink.id) }
         return HomeItemShow(homeItem.id, uid, bookmark.id)
     }
-
 }

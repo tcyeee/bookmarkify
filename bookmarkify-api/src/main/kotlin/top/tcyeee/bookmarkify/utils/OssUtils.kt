@@ -73,7 +73,7 @@ class OssUtils {
                                 width = icon.size(),
                                 height = icon.size(),
                                 suffix = FileUtil.extName(url) ?: "png",
-                                isOgImg = icon.sizes?.equals("og", ignoreCase = true) == true
+                                isOgImg = icon.isOg()
                             )
                         )
                     }

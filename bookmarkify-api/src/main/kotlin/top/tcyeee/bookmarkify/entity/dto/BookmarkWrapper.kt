@@ -70,6 +70,8 @@ data class ManifestIcon(
         return sizes.split(Regex("\\s+")).mapNotNull { s -> s.split(Regex("[xX]")).firstOrNull()?.toIntOrNull() }
             .maxOrNull() ?: 0
     }
+
+    fun isOg() = sizes?.equals("og", ignoreCase = true) == true
 }
 
 /* 预加载资源对象，包含 URL 及资源类型 */
