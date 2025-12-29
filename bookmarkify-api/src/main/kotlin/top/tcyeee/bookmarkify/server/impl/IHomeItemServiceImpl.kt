@@ -22,17 +22,19 @@ class IHomeItemServiceImpl(private val bookmarkUserLinkMapper: BookmarkUserLinkM
     ServiceImpl<HomeItemMapper, HomeItem>() {
 
     override fun findShowByUid(uid: String): List<HomeItemShow> {
-        val dataMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy {
-            it.bookmarkUserLinkId.toString()
-        }
+        val dataMap = bookmarkUserLinkMapper.allBookmarkByUid(uid)
+            .associateBy { it.bookmarkUserLinkId.toString() }
         return this.getByUid(uid).map { HomeItemShow(it, dataMap) }.also { this.setIconHd(it) }
     }
 
     private fun setIconHd(list: List<HomeItemShow>) {
         list.forEach {
             if (it.type != HomeItemType.BOOKMARK) return@forEach
-            val objectKey = "${FileType.WEBSITE_LOGO.folder}/${it.bookmarkId}/${it.typeApp?.hdSize}.png"
+            if (it.typeApp?.hdSize == null) return@forEach
+
+            val objectKey = "${FileType.WEBSITE_LOGO.folder}/${it.typeApp!!.bookmarkId}/${it.typeApp?.hdSize}.png"
             it.typeApp?.iconHdUrl = OssUtils.getPrivateUrl(objectKey)
+            if (it.typeApp?.iconHdUrl != null) it.typeApp?.iconBase64 = null
         }
     }
 
