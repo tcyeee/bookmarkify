@@ -6,7 +6,6 @@ import com.aliyun.oss.OSSClientBuilder
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import java.net.URI
-import java.util.UUID
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -15,6 +14,8 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
 import top.tcyeee.bookmarkify.entity.enums.FileType
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
 
 /**
  * @author tcyeee
@@ -62,17 +63,15 @@ class OssUtils {
 
             list.forEach { icon ->
                 if (icon.src.isNullOrBlank()) return@forEach
-                val customPath = "${FileType.WEBSITE_LOGO.folder}/$bookmarkId/${icon.size()}"
-                runCatching { restoreLogoImg(icon.src, customPath) }
-                    .getOrElse { err -> throw CommonException(ErrorType.E218, err.message) }
-                    .let { (url, fileSize) ->
+                runCatching { restoreLogoImg(icon.src, bookmarkId) }
+                    .getOrElse { err -> throw CommonException(ErrorType.E218, err.message) }.let { logoInfo ->
                         result.add(
                             WebsiteLogoEntity(
                                 bookmarkId = bookmarkId,
-                                size = fileSize,
-                                width = icon.size(),
-                                height = icon.size(),
-                                suffix = FileUtil.extName(url) ?: "png",
+                                size = logoInfo.size,
+                                width = if (logoInfo.width > 0) logoInfo.width else icon.size(),
+                                height = if (logoInfo.height > 0) logoInfo.height else icon.size(),
+                                suffix = FileUtil.extName(logoInfo.url) ?: "png",
                                 isOgImg = icon.isOg()
                             )
                         )
@@ -81,14 +80,16 @@ class OssUtils {
             return result
         }
 
+        data class LogoInfo(val url: String, val size: Long, val width: Int, val height: Int)
+
         /**
          * 转存LOGO图片
          *
          * @param url 在线文件地址
-         * @param customPath 自定义文件路径（不包含后缀）
+         * @param bookmarkId 书签ID
          * @return 文件访问 URL 和 文件大小
          */
-        fun restoreLogoImg(url: String, customPath: String): Pair<String, Long> {
+        fun restoreLogoImg(url: String, bookmarkId: String): LogoInfo {
             val fileType = FileType.WEBSITE_LOGO
             try {
                 // 打开网络连接
@@ -103,6 +104,21 @@ class OssUtils {
 
                 // 获取输入流
                 return connection.getInputStream().use { inputStream ->
+                    val bytes = inputStream.readBytes()
+                    if (bytes.size > fileType.limit) throw CommonException(ErrorType.E219, "length:${bytes.size}")
+                    var width = 0
+                    var height = 0
+                    try {
+                        val img = ImageIO.read(ByteArrayInputStream(bytes))
+                        if (img != null) {
+                            width = img.width
+                            height = img.height
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        throw CommonException(ErrorType.E220, e.message)
+                    }
+
                     // 生成文件名
                     var suffix = FileUtil.extName(url)
                     if (suffix.isNullOrBlank()) {
@@ -112,13 +128,16 @@ class OssUtils {
                     // 去除可能的查询参数
                     if (suffix.contains("?")) suffix = suffix.substringBefore("?")
 
-                    val fileName = if (FileUtil.extName(customPath).equals(suffix, ignoreCase = true))
-                        customPath else "$customPath.$suffix"
+                    val imgName = if (height == width) width else "OG"
+                    val customPath = "${fileType.folder}/$bookmarkId/${imgName}"
 
-                    ossClient.putObject(bucket, fileName, inputStream)
+                    val fileName = if (FileUtil.extName(customPath).equals(suffix, ignoreCase = true)) customPath
+                    else "$customPath.$suffix"
+
+                    ossClient.putObject(bucket, fileName, ByteArrayInputStream(bytes))
                     val objectUrl = "$domain/$fileName"
                     log.info("[DEBUG] 网站LOGO存储成功: $objectUrl")
-                    Pair(objectUrl, if (length != -1L) length else 0L)
+                    LogoInfo(objectUrl, bytes.size.toLong(), width, height)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

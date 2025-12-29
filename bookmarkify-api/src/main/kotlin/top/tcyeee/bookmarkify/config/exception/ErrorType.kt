@@ -36,6 +36,7 @@ enum class ErrorType(var msg: String) {
     E217("获取企业微信AccessToken失败"),
     E218("ManifestIcon上传到OSS中途出错"),
     E219("图片文件大小超出限制"),
+    E220("读取原始线上图片时出错"),
 
 
     /* 极端错误 */

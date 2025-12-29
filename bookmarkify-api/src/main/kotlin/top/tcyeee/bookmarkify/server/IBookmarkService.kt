@@ -14,9 +14,11 @@ interface IBookmarkService : IService<Bookmark> {
      * 检查单条书签信息
      *
      * @param bookmark 检查的书签
+     * @param bookmarkUserLinkId 书签和用户的关联ID
      */
+    fun checkOne(bookmark: Bookmark, bookmarkUserLinkId: String)
     fun checkOne(bookmark: Bookmark)
-    fun checkOne(bookmark: Bookmark, id: String)
+    fun checkOne(rawUrl: String)
 
     /* 每天检查数据库所有书签活性 */
     fun checkAll()
@@ -31,6 +33,4 @@ interface IBookmarkService : IService<Bookmark> {
      * @param uid uid
      */
     fun setDefaultBookmark(uid: String)
-
-    fun check(rawUrl: String)
 }

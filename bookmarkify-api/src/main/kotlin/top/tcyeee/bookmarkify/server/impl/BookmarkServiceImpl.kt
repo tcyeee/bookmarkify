@@ -29,14 +29,19 @@ class BookmarkServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
     private val homeItemMapper: HomeItemMapper,
     private val projectConfig: ProjectConfig,
-    private val websiteLogoService: IWebsiteLogoService
+    private val websiteLogoService: IWebsiteLogoService,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, Bookmark>() {
 
-    override fun checkOne(bookmark: Bookmark, id: String) {
+    override fun checkOne(rawUrl: String) =
+        WebsiteParser.urlWrapper(rawUrl)
+            .let { this.getByUrl(it.urlHost) ?: Bookmark(it) }
+            .let { this.checkOne(it) }
+
+    override fun checkOne(bookmark: Bookmark, bookmarkUserLinkId: String) {
         WebsiteParser.parse(bookmark.rawUrl)
 
         checkOne(bookmark)
-        val bookmarkShow: BookmarkShow = bookmarkUserLinkMapper.findOne(id)
+        val bookmarkShow: BookmarkShow = bookmarkUserLinkMapper.findOne(bookmarkUserLinkId)
         bookmarkShow.clean(projectConfig.imgPrefix)
         SocketUtils.updateBookmark(bookmarkShow.uid!!, bookmarkShow)
     }
@@ -50,7 +55,7 @@ class BookmarkServiceImpl(
             ?.also { bookmark.iconBase64 = FileUtils.icoBase64(it.distinctIcons) }
             // 更新书签
             ?.also { this.saveOrUpdate(bookmark) }
-            // 保存网站LOGO/OG图片到数据库
+            // 保存网站LOGO/OG图片到OSS和数据库
             ?.also { this.saveOrUpdateLogo(it, bookmark.id) }
     }
 
@@ -79,7 +84,7 @@ class BookmarkServiceImpl(
         if (toInsert.isNotEmpty()) websiteLogoService.saveBatch(toInsert)
     }
 
-    override fun check(rawUrl: String) = checkOne(Bookmark(WebsiteParser.urlWrapper(rawUrl)))
+    private fun getByUrl(urlHost: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, urlHost).one()
 
     override fun offline(bookmark: Bookmark) {
         bookmark.title = bookmark.urlHost
