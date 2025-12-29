@@ -2,13 +2,10 @@ package top.tcyeee.bookmarkify.entity
 
 import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.EnumUtil
-import cn.hutool.core.util.StrUtil
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
-import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
 import top.tcyeee.bookmarkify.entity.entity.BackgroundType
-import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
 import top.tcyeee.bookmarkify.entity.entity.UserFile
@@ -16,56 +13,19 @@ import top.tcyeee.bookmarkify.entity.enums.FunctionType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 
-//data class BookmarkAddOneParams(
-//    @field:Schema(description = "添加的域名") var url: String,
-//)
-
-data class BookmarkDetail(
-    var bookmark: Bookmark,   // 公共书签
-    var paths: List<String>,  // 路径  eg: /公共书签/娱乐/bilibili.com
-    var url: BookmarkUrlWrapper,     // 用于数据清洗
-    var bookmarkUserLinkId: String // 用户关联ID
-) {
-//    constructor(paths: List<String>, url: BookmarkUrlWrapper, addDate: String, name: String) : this(
-//        bookmarkUserLinkId = "", bookmark = Bookmark(url, addDate, name), paths = paths, url = url
-//    )
-}
-
 data class BookmarkShow(
-    var uid: String? = null,
-    var bookmarkId: String? = null,
-    var bookmarkUserLinkId: String? = null,
+    @JsonIgnore var uid: String? = null,
 
+    @field:Schema(description = "关联书签ID") var bookmarkId: String? = null,
+    @field:Schema(description = "关联用户自定义信息ID") var bookmarkUserLinkId: String? = null,
     @field:Schema(description = "书签标题") var title: String? = null,
     @field:Schema(description = "书签备注") var description: String? = null,
-    @field:Schema(description = "完整链接路径") var urlFull: String? = null,
-
-    @field:Schema(description = "是否失效") var isActivity: Boolean = false,
-    @field:Schema(description = "图标是否存在") var iconActivity: Boolean = false,
-    @field:Schema(description = "是否可以启用大图标") var iconHd: Boolean = false,
-    @field:Schema(description = "图标地址") var iconUrlFull: String? = null,
-
-    /* 计算属性 */
-    @JsonIgnore var iconUrl: String? = null,
-    @JsonIgnore var userTitle: String? = null,
-    @JsonIgnore var userDescription: String? = null,
-    @JsonIgnore var baseTitle: String? = null,
-    @JsonIgnore var baseDescription: String? = null,
-) {
-
-    /**
-     * 数据清洗初始化
-     *
-     * @param imgPrefix 图标前缀
-     * @return 书签数据
-     */
-    fun clean(imgPrefix: String): BookmarkShow {
-        this.iconUrlFull = if (this.iconActivity) imgPrefix + iconUrl else null
-        this.title = if (StrUtil.isBlank(this.userTitle)) this.baseTitle else this.userTitle
-        this.description = if (StrUtil.isBlank(this.userDescription)) this.baseDescription else this.userDescription
-        return this
-    }
-}
+    @field:Schema(description = "完整url") var urlFull: String? = null,
+    @field:Schema(description = "基础url") var urlBase: String? = null,
+    @field:Schema(description = "小图标") var iconBase64: String? = null,
+    @field:Schema(description = "大图标") var hdSize: String? = null,
+    @field:Schema(description = "网站活性") var isActivity: Boolean? = null,
+)
 
 data class HomeItemShow(
     @field:Schema(description = "ID") var id: String,
@@ -80,14 +40,13 @@ data class HomeItemShow(
     @JsonIgnore var bookmarkId: String? = null,  // 用于新建书签时定位
 ) {
 
-    constructor(item: HomeItem, database: Map<String, BookmarkShow>, imgPrefix: String) : this(
-        id = item.id,
-        uid = item.uid
+    constructor(item: HomeItem, database: Map<String, BookmarkShow>) : this(
+        id = item.id, uid = item.uid
     ) {
         BeanUtil.copyProperties(item, this)
         when (item.type) {
             HomeItemType.BOOKMARK_DIR -> this.typeDir = BookmarkDir(database, item.bookmarkDirJson)
-            HomeItemType.BOOKMARK -> this.typeApp = database[item.bookmarkUserLinkId]?.clean(imgPrefix)
+            HomeItemType.BOOKMARK -> this.typeApp = database[item.bookmarkUserLinkId]
             HomeItemType.FUNCTION -> this.typeFuc = EnumUtil.getEnumAt(FunctionType::class.java, item.functionId ?: 0)
         }
     }
