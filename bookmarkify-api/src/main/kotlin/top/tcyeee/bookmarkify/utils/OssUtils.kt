@@ -80,9 +80,8 @@ class OssUtils {
 
             list.forEach { icon ->
                 if (icon.src.isNullOrBlank()) return@forEach
-                val customPath = "${FileType.WEBSITE_LOGO.folder}/$bookmarkId/${icon.size()}"
                 runCatching {
-                    restoreLogoImg(icon.src, customPath)
+                    restoreLogoImg(icon.src, bookmarkId)
                 }.getOrElse { err -> throw CommonException(ErrorType.E218, err.message) }.let { logoInfo ->
                     result.add(
                         WebsiteLogoEntity(
@@ -107,10 +106,10 @@ class OssUtils {
          * 转存LOGO图片
          *
          * @param url 在线文件地址
-         * @param customPath 自定义文件路径（不包含后缀）
+         * @param bookmarkId 书签ID
          * @return 文件访问 URL 和 文件大小
          */
-        fun restoreLogoImg(url: String, customPath: String): LogoInfo {
+        fun restoreLogoImg(url: String, bookmarkId: String): LogoInfo {
             val fileType = FileType.WEBSITE_LOGO
             try {
                 // 打开网络连接
@@ -132,8 +131,7 @@ class OssUtils {
                     try {
                         val img = ImageIO.read(ByteArrayInputStream(bytes))
                         if (img != null) {
-                            width = img.width
-                            height = img.height
+                            width = img.width; height = img.height
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -148,6 +146,9 @@ class OssUtils {
                     }
                     // 去除可能的查询参数
                     if (suffix.contains("?")) suffix = suffix.substringBefore("?")
+
+                    val iconName = if (width == height) height else "og"
+                    val customPath = "${FileType.WEBSITE_LOGO.folder}/$bookmarkId/${iconName}"
 
                     val fileName = if (FileUtil.extName(customPath).equals(suffix, ignoreCase = true)) customPath
                     else "$customPath.$suffix"

@@ -9,7 +9,7 @@ enum class FileType(
     val folder: String,     // 文件保存位置(oss下的文件夹路径)
     var type: String,       // 文件类型限制
 ) {
-    AVATAR(5 * 1024 * 1024, "apps/bookmarkfiy/avatar", "image/"),
-    BACKGROUND(10 * 1024 * 1024, "apps/bookmarkfiy/background", "image/"),
-    WEBSITE_LOGO(1 * 1024 * 1024, "apps/bookmarkfiy/website", "image/"),
+    AVATAR(5 * 1024 * 1024, "apps/bookmarkify/avatar", "image/"),
+    BACKGROUND(10 * 1024 * 1024, "apps/bookmarkify/background", "image/"),
+    WEBSITE_LOGO(1 * 1024 * 1024, "apps/bookmarkify/website", "image/"),
 }
