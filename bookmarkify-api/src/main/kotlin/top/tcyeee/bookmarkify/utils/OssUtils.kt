@@ -82,7 +82,7 @@ class OssUtils {
          * @param bookmarkId 书签ID(用于添加文件夹)
          * @return 返回最大的LOGO信息
          */
-        fun restoreWebsiteLogoAndOg(list: List<ManifestIcon>?, bookmarkId: String): WebsiteLogoEntity {
+        fun restoreWebsiteLogoAndOg(list: List<ManifestIcon>?, bookmarkId: String): WebsiteLogoEntity? {
             if (list.isNullOrEmpty()) throw CommonException(ErrorType.E999)
 
             // 存储OG
@@ -90,13 +90,13 @@ class OssUtils {
             if (ogs.isNotEmpty()) runCatching { restoreImg(FileType.WEBSITE_OG, ogs.first().src!!, bookmarkId) }
 
             // 找到最大的那个LOGO
-            val maxmalIcon: ManifestIcon = list.filterNot { it.isOg() }
+            val maximalIcon: ManifestIcon = list.filterNot { it.isOg() }
                 .filterNot { it.src.isNullOrBlank() }
                 .filterNot { it.src!!.endsWith(".ico") }
-                .maxBy { it.size() }
+                .maxByOrNull { it.size() } ?: return null
 
             // 存储LOGO并返回
-            return runCatching { restoreImg(FileType.WEBSITE_LOGO, maxmalIcon.src!!, bookmarkId) }
+            return runCatching { restoreImg(FileType.WEBSITE_LOGO, maximalIcon.src!!, bookmarkId) }
                 .getOrElse { throw CommonException(ErrorType.E218, it.message) }
                 .let { logoInfo ->
                     WebsiteLogoEntity(

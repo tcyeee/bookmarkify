@@ -52,5 +52,6 @@ class BookmarksController(
 
     @SaIgnore
     @GetMapping("/check")
-    fun queryOne(@RequestParam url: String): BookmarkShow = bookmarkService.queryOne(url)
+    fun queryOne(@RequestParam url: String) =
+        bookmarkService.addOne(url, "6a5775f7-e0ed-4883-aba5-06e001386c6d")
 }
