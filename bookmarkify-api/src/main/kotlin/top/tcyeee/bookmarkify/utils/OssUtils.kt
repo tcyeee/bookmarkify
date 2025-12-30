@@ -6,17 +6,19 @@ import com.aliyun.oss.OSSClientBuilder
 import com.aliyun.oss.model.GeneratePresignedUrlRequest
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
-import java.io.ByteArrayInputStream
-import java.net.URI
-import javax.imageio.ImageIO
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.entity.dto.ImgInfo
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
 import top.tcyeee.bookmarkify.entity.enums.FileType
+import java.io.ByteArrayInputStream
+import java.io.InputStream
+import java.net.URI
+import javax.imageio.ImageIO
 
 /**
  * @author tcyeee
@@ -73,97 +75,105 @@ class OssUtils {
             }
         }
 
-        fun restoreWebsiteLogo(list: List<ManifestIcon>?, bookmarkId: String): List<WebsiteLogoEntity> {
-            val result = mutableListOf<WebsiteLogoEntity>()
-            if (list.isNullOrEmpty()) return result
+        /**
+         * 将线上地址转存到OSS
+         * 1.只存储尺寸最大的那个
+         * @param list 包含LOGO和OG的List
+         * @param bookmarkId 书签ID(用于添加文件夹)
+         * @return 返回最大的LOGO信息
+         */
+        fun restoreWebsiteLogoAndOg(list: List<ManifestIcon>?, bookmarkId: String): WebsiteLogoEntity {
+            if (list.isNullOrEmpty()) throw CommonException(ErrorType.E999)
+            // 存储OG
+            list.filter { it.isOg() }.filterNot { it.src.isNullOrBlank() }.first()
+                .also { runCatching { restoreImg(FileType.WEBSITE_OG, it.src!!, bookmarkId) } }
 
-            list.forEach { icon ->
-                if (icon.src.isNullOrBlank()) return@forEach
-                if (icon.src.endsWith(".ico")) return@forEach
-                runCatching {
-                    restoreLogoImg(icon.src, bookmarkId)
-                }.getOrElse { err -> throw CommonException(ErrorType.E218, err.message) }.let { logoInfo ->
-                    result.add(
-                        WebsiteLogoEntity(
-                            bookmarkId = bookmarkId,
-                            size = logoInfo.size,
-                            width = if (logoInfo.width > 0) logoInfo.width
-                            else icon.size(),
-                            height = if (logoInfo.height > 0) logoInfo.height
-                            else icon.size(),
-                            suffix = FileUtil.extName(logoInfo.url) ?: "png",
-                            isOgImg = icon.isOg()
-                        )
+            // 找到最大的那个LOGO
+            val maxmalIcon: ManifestIcon = list.filterNot { it.isOg() }
+                .filterNot { it.src.isNullOrBlank() }
+                .filterNot { it.src!!.endsWith(".ico") }
+                .maxBy { it.size() }
+
+            // 存储LOGO并返回
+            return runCatching { restoreImg(FileType.WEBSITE_LOGO, maxmalIcon.src!!, bookmarkId) }
+                .getOrElse { err -> throw CommonException(ErrorType.E218, err.message) }
+                .let { logoInfo ->
+                    WebsiteLogoEntity(
+                        bookmarkId = bookmarkId,
+                        size = logoInfo.size,
+                        width = logoInfo.width,
+                        height = logoInfo.width,
+                        suffix = FileUtil.extName(logoInfo.url) ?: "png",
+                        isOgImg = false
                     )
                 }
-            }
-            return result
-        }
 
-        data class LogoInfo(val url: String, val size: Long, val width: Int, val height: Int)
+        }
 
         /**
-         * 转存LOGO图片
-         *
-         * @param url 在线文件地址
-         * @param bookmarkId 书签ID
-         * @return 文件访问 URL 和 文件大小
+         * 文件存储 当前只编写了图片文件
+         * @param fileType 文件类型
+         * @param url 文件线上地址
+         * @param bookmarkId 书签ID(用于添加文件夹)
          */
-        fun restoreLogoImg(url: String, bookmarkId: String): LogoInfo {
-            val fileType = FileType.WEBSITE_LOGO
-            try {
-                // 打开网络连接
-                val connection = URI.create(url).toURL().openConnection()
-                // 设置超时
-                connection.connectTimeout = 5000
-                connection.readTimeout = 5000
+        fun restoreImg(fileType: FileType, url: String, bookmarkId: String): ImgInfo {
+            val connection = runCatching { URI.create(url).toURL().openConnection() }
+                .getOrElse { throw CommonException(ErrorType.E223, it.message) }
+                .apply { connectTimeout = 5000; readTimeout = 5000 }
 
-                // 检查LOGO文件大小(不大于1MB)
-                val length = connection.contentLengthLong
-                if (length != -1L && length > fileType.limit) throw CommonException(ErrorType.E219, "length:${length}")
+            // 限制文件大小
+            val length = connection.contentLengthLong
+            if (length != -1L && length > fileType.limit) throw CommonException(ErrorType.E219, "length:${length}")
 
-                // 获取输入流
-                return connection.getInputStream().use { inputStream ->
-                    val bytes = inputStream.readBytes()
-                    if (bytes.size > fileType.limit) throw CommonException(ErrorType.E219, "length:${bytes.size}")
-                    var width = 0
-                    var height = 0
-                    try {
-                        val img = ImageIO.read(ByteArrayInputStream(bytes))
-                        if (img != null) {
-                            width = img.width
-                            height = img.height
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        throw CommonException(ErrorType.E220, e.message)
-                    }
-
-                    // 生成文件名
-                    var suffix = FileUtil.extName(url)
-                    if (suffix.isNullOrBlank()) {
-                        val contentType = connection.contentType
-                        suffix = if (contentType?.contains("image") == true) "png" else "tmp"
-                    }
-                    // 去除可能的查询参数
-                    if (suffix.contains("?")) suffix = suffix.substringBefore("?")
-
-                    val iconName = if (width == height) height else "og"
-                    val customPath = "${FileType.WEBSITE_LOGO.folder}/$bookmarkId/${iconName}"
-
-                    val fileName = if (FileUtil.extName(customPath).equals(suffix, ignoreCase = true)) customPath
-                    else "$customPath.$suffix"
-
-                    ossClient.putObject(bucket, fileName, ByteArrayInputStream(bytes))
-                    val objectUrl = "$domain/$fileName"
-                    log.info("[DEBUG] 网站LOGO存储成功! Bucket:$bucket; FileName:$fileName, Fullurl:$objectUrl")
-                    LogoInfo(objectUrl, bytes.size.toLong(), width, height)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                throw RuntimeException("网站LOGO${url}存储OSS失败", e)
+            return connection.getInputStream().use {
+                this.uploadImg(it, fileType, url, bookmarkId)
             }
         }
+
+
+        /**
+         * @param inputStream 文件流
+         * @param fileType 文件类型(用于确定文件夹)
+         * @param url 文件线上地址
+         */
+        fun uploadImg(inputStream: InputStream, fileType: FileType, url: String, bookmarkId: String): ImgInfo {
+            if (fileType.isImg()) throw CommonException(ErrorType.E999)
+            val bytes = inputStream.readBytes()
+                .also { if (it.size > fileType.limit) throw CommonException(ErrorType.E219) }
+
+            // 则检查图片的长和宽(后续用于重命名)
+            val img: Pair<Int, Int> = runCatching { ImageIO.read(ByteArrayInputStream(bytes)) }
+                .getOrElse { throw CommonException(ErrorType.E220, it.message) }
+                .let { Pair(it.width, it.height) }
+
+            val path = buildString {
+                append(domain)
+                append("/")
+                append(fileType.folder)
+                append("/")
+                append(bookmarkId)
+                append("/")
+                append(if (img.first == img.second) img.first else "OG")
+                append(".")
+                append(FileUtil.extName(url)?.substringBefore("?") ?: throw CommonException(ErrorType.E225))
+            }
+
+            return this.upload(inputStream, path)
+                .let { ImgInfo(it, bytes.size.toLong(), img.first, img.second) }
+        }
+
+        /**
+         * @param inputStream 文件流
+         * @param path 文件的最终存储地址(包含名称和后缀) eg /logo/dkgy-hfauw-ekadfa/og.png
+         * return 最终线上地址
+         */
+        private fun upload(inputStream: InputStream, path: String): String {
+            runCatching { ossClient.putObject(bucket, path, inputStream) }
+                .getOrElse { throw CommonException(ErrorType.E224, it.message) }
+            return "$domain/$path"
+                .also { log.info("[DEBUG] OSS存储成功! Bucket:$bucket; FileName:$path") }
+        }
+
 
         /**
          * 获取私有文件的签名URL
@@ -186,8 +196,20 @@ class OssUtils {
             }
         }
 
-        fun getLogo(bookmarkId: String, maxmalSize: Int, size: Int): String =
-            buildString {
+
+        /**
+         * 获取带缩放参数的私有图片签名URL
+         *
+         * @param bookmarkId 书签地址
+         * @param maxmalSize 最大尺寸(文件名称)
+         * @param size 格式化后的宽&高
+         * @param expirationMillis 过期时间（毫秒），默认1小时
+         * @return 签名URL
+         */
+        fun getLogoUrl(
+            bookmarkId: String, maxmalSize: Int, size: Int, expirationMillis: Long = 3600 * 1000
+        ): String {
+            val objectName = buildString {
                 append(customDomain)
                 append(FileType.WEBSITE_LOGO.folder)
                 append("/")
@@ -195,19 +217,7 @@ class OssUtils {
                 append("/")
                 append(maxmalSize)
                 append(".png")
-            }.let { getLogo(it, size) }
-
-        /**
-         * 获取带缩放参数的私有图片签名URL
-         *
-         * @param objectName 文件路径
-         * @param size 宽&高
-         * @param expirationMillis 过期时间（毫秒），默认1小时
-         * @return 签名URL
-         */
-        fun getLogo(
-            objectName: String, size: Int, expirationMillis: Long = 3600 * 1000
-        ): String {
+            }
             return try {
                 val expiration = java.util.Date(System.currentTimeMillis() + expirationMillis)
                 val request = GeneratePresignedUrlRequest(bucket, objectName)
