@@ -4,7 +4,6 @@ import cn.hutool.core.io.FileUtil
 import com.aliyun.oss.OSS
 import com.aliyun.oss.OSSClientBuilder
 import com.aliyun.oss.model.GeneratePresignedUrlRequest
-import com.aliyun.oss.model.PutObjectResult
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
@@ -87,7 +86,7 @@ class OssUtils {
             if (list.isNullOrEmpty()) throw CommonException(ErrorType.E999)
 
             // 存储OG
-            val ogs = list.filter { it.isOg() }.filterNot { it.src.isNullOrBlank() };
+            val ogs = list.filter { it.isOg() }.filterNot { it.src.isNullOrBlank() }
             if (ogs.isNotEmpty()) runCatching { restoreImg(FileType.WEBSITE_OG, ogs.first().src!!, bookmarkId) }
 
             // 找到最大的那个LOGO
@@ -173,28 +172,6 @@ class OssUtils {
                 .also { log.info("[DEBUG] OSS存储成功! Bucket:$bucket; FileName:$path") }
 
         /**
-         * 获取私有文件的签名URL
-         *
-         * @param objectName 文件路径
-         * @param expirationMillis 过期时间（毫秒），默认1小时
-         * @return 签名URL
-         */
-        fun getPrivateUrl(objectName: String, expirationMillis: Long = 3600 * 1000): String {
-            return try {
-                val expiration = java.util.Date(System.currentTimeMillis() + expirationMillis)
-                val url = ossClient.generatePresignedUrl(bucket, objectName, expiration)
-                if (customDomain.isNotBlank()) {
-                    "$customDomain${url.path}?${url.query}"
-                } else {
-                    url.toString()
-                }
-            } catch (e: Exception) {
-                throw CommonException(ErrorType.E221, e.message)
-            }
-        }
-
-
-        /**
          * 获取带缩放参数的私有图片签名URL
          *
          * @param bookmarkId 书签地址
@@ -207,7 +184,6 @@ class OssUtils {
             bookmarkId: String, maxmalSize: Int, size: Int, expirationMillis: Long = 3600 * 1000
         ): String {
             val objectName = buildString {
-                append(customDomain)
                 append(FileType.WEBSITE_LOGO.folder)
                 append("/")
                 append(bookmarkId)
@@ -221,8 +197,8 @@ class OssUtils {
                 request.expiration = expiration
 
                 val style = StringBuilder("image/resize,m_lfit")
-                style.append(",w_$size")
-                style.append(",h_$size")
+                style.append(",w_${maxmalSize.coerceAtMost(size)}")
+                style.append(",h_${maxmalSize.coerceAtMost(size)}")
                 request.process = style.toString()
 
                 val url = ossClient.generatePresignedUrl(request)

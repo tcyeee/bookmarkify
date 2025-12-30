@@ -7,7 +7,6 @@ import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.HomeItemSortParams
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
-import top.tcyeee.bookmarkify.entity.enums.FileType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
@@ -31,18 +30,17 @@ class IHomeItemServiceImpl(private val bookmarkUserLinkMapper: BookmarkUserLinkM
     }
 
     private fun setIconHd(list: List<HomeItemShow>) {
-        list.forEach {
-            if (it.type != HomeItemType.BOOKMARK) return@forEach
+        list.forEach { item ->
+            if (item.type != HomeItemType.BOOKMARK) return@forEach
 
             // 设置大图URL
-            if (it.typeApp?.hdSize != null) {
-                val objectKey = "${FileType.WEBSITE_LOGO.folder}/${it.typeApp!!.bookmarkId}/${it.typeApp?.hdSize}.png"
-                it.typeApp?.iconHdUrl = OssUtils.getPrivateUrl(objectKey)
-                if (it.typeApp?.iconHdUrl != null) it.typeApp?.iconBase64 = null
-            }
+            if (item.typeApp?.isHd == true) OssUtils.getLogoUrl(item.typeApp!!.bookmarkId!!, item.typeApp!!.hdSize, 256)
+                .also { item.typeApp?.iconHdUrl = it }
+                .also { if (it.isNotEmpty()) item.typeApp?.iconBase64 = null }
+
             // 设置备用title
-            if (StrUtil.isBlank(it.typeApp?.title)) it.typeApp?.title = it.typeApp?.urlHost
-            if (StrUtil.isNotEmpty(it.typeApp?.appName)) it.typeApp?.title = it.typeApp?.appName
+            if (StrUtil.isBlank(item.typeApp?.title)) item.typeApp?.title = item.typeApp?.urlHost
+            if (StrUtil.isNotEmpty(item.typeApp?.appName)) item.typeApp?.title = item.typeApp?.appName
         }
     }
 
