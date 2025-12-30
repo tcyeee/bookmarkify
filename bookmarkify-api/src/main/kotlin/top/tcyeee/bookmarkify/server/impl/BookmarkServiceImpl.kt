@@ -43,8 +43,7 @@ class BookmarkServiceImpl(
             .also { SocketUtils.updateBookmark(it.uid!!, it) }.let { }
 
     private fun parseBookmark(bookmark: Bookmark) {
-        log.trace("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
-
+        log.warn("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
         runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
             if (it.message.toString().contains("403")) bookmark.toggleAntiCrawlerDetected(true)
             if (it.message.toString().contains("304")) bookmark.toggleActivity(false)
@@ -62,14 +61,6 @@ class BookmarkServiceImpl(
     override fun setDefaultBookmark(uid: String) =
         projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
 
-    override fun queryOne(url: String): BookmarkShow {
-//        val logo = OssUtils.getLogo("23a12a7b-6bd6-4e02-bc9e-d28fcc33b9aa", 20)
-        return getByHost(WebsiteParser.urlWrapper(url).urlHost)
-            ?.let { bookmarkUserLinkMapper.findOne(it.id) }
-//            ?.also { it.iconHdUrl = logo }
-            ?: throw CommonException(ErrorType.E109)
-    }
-
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::parseBookmark)
 
     override fun addOne(url: String, uid: String): HomeItemShow {
@@ -85,7 +76,7 @@ class BookmarkServiceImpl(
 
         this.parseAndNotice(bookmark, userLink.id)
         // 异步检查
-//        CompletableFuture.runAsync { this.checkOne(bookmark, userLink.id) }
+//        CompletableFuture.runAsync { this.parseAndNotice(bookmark, userLink.id) }
 
         // 返回临时网站信息
         return HomeItemShow(homeItem.id, uid, bookmark.id)
@@ -100,13 +91,13 @@ class BookmarkServiceImpl(
      * @param bookmark 书签信息
      */
     private fun saveOrUpdateLogo(wrapper: BookmarkWrapper?, bookmark: Bookmark) {
-        if (wrapper == null || ArrayUtil.isEmpty(wrapper)) return
+        if (wrapper?.distinctIcons.isNullOrEmpty()) return
 
         OssUtils.restoreWebsiteLogoAndOg(wrapper.distinctIcons, bookmark.id)
             // 更新/保存LOGO到数据库
-            .also { websiteLogoService.updateMaximalLogoByBookmarkId(it) }
+            ?.also { websiteLogoService.updateMaximalLogoByBookmarkId(it) }
             // 更新/保存最大图标信息
-            .also { bookmark.setMaximalLogoSize(it.width) }
+            ?.also { bookmark.setMaximalLogoSize(it.width) }
     }
 
     private fun getByHost(urlHost: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, urlHost).one()
