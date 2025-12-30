@@ -58,14 +58,19 @@ data class WebManifest(
 data class ManifestIcon(
     val src: String? = null, val sizes: String? = null, val type: String? = null
 ) {
+    // LOGO的变长
     fun size(): Int {
         if (sizes.isNullOrBlank() || sizes.equals("og", ignoreCase = true)) return 0
         return sizes.split(Regex("\\s+")).mapNotNull { s -> s.split(Regex("[xX]")).firstOrNull()?.toIntOrNull() }
             .maxOrNull() ?: 0
     }
 
+    // 是否是OG(宽屏分享图片)
     fun isOg() = sizes?.equals("og", ignoreCase = true) == true
 }
 
 /* 预加载资源对象，包含 URL 及资源类型 */
 data class PreloadResource(val url: String, val asType: String? = null)
+
+// 图片文件
+data class ImgInfo(val url: String, val size: Long, val width: Int, val height: Int)

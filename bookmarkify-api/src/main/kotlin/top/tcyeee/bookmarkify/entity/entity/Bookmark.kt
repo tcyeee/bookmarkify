@@ -84,6 +84,7 @@ data class BookmarkUserLink(
     )
 }
 
+// ICON or OG
 @TableName("website_logo")
 data class WebsiteLogoEntity(
     @TableId @field:Schema(description = "文件ID") val id: String = IdUtil.fastUUID(),
@@ -95,12 +96,4 @@ data class WebsiteLogoEntity(
     @field:Schema(description = "LOGO创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "LOGO更新时间") val updateTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "是否为OG展示图") val isOgImg: Boolean = false
-) : Serializable {
-    /* 通过图标属性判断是否为同样的图标 */
-    fun isSame(newLogo: WebsiteLogoEntity): Boolean =
-        this.size == newLogo.size &&
-                this.width == newLogo.width &&
-                this.height == newLogo.height &&
-                this.suffix == newLogo.suffix &&
-                this.isOgImg == newLogo.isOgImg
-}
+) : Serializable

@@ -39,13 +39,12 @@ class BookmarkServiceImpl(
             .let { this.getByHost(it.urlHost) ?: Bookmark(it) }
             .let { this.checkOne(it) }
 
-    override fun checkOne(bookmark: Bookmark, bookmarkUserLinkId: String) {
-        WebsiteParser.parse(bookmark.rawUrl)
-
+    override fun checkOne(bookmark: Bookmark, bookmarkUserLinkId: String) =
         checkOne(bookmark)
-        val bookmarkShow: BookmarkShow = bookmarkUserLinkMapper.findOne(bookmarkUserLinkId)
-        SocketUtils.updateBookmark(bookmarkShow.uid!!, bookmarkShow)
-    }
+            // 更新用户布局
+            .let { bookmarkUserLinkMapper.findOne(bookmarkUserLinkId) }
+            // 通知到前端
+            .also { SocketUtils.updateBookmark(it.uid!!, it) }.let { }
 
     override fun checkOne(bookmark: Bookmark) {
         log.trace("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
@@ -73,24 +72,11 @@ class BookmarkServiceImpl(
     private fun saveOrUpdateLogo(wrapper: BookmarkWrapper?, bookmark: Bookmark) {
         if (wrapper == null || ArrayUtil.isEmpty(wrapper)) return
 
-        val newLogos = OssUtils.restoreWebsiteLogo(wrapper.distinctIcons, bookmark.id)
-        val oldLogos = websiteLogoService.findByBookmarkId(bookmark.id)
-
-        val toUpdate = mutableListOf<WebsiteLogoEntity>()
-        val toInsert = mutableListOf<WebsiteLogoEntity>()
-
-        newLogos.forEach { it ->
-            oldLogos.find { old -> old.isSame(it) }
-                ?.let { toUpdate.add(it.copy(updateTime = LocalDateTime.now())) }
-                ?: toInsert.add(it)
-        }
-
-        if (toUpdate.isNotEmpty()) websiteLogoService.updateBatchById(toUpdate)
-        if (toInsert.isNotEmpty()) websiteLogoService.saveBatch(toInsert)
-
-        // 拼接logolistNew和logoListOld, 找到最大尺寸的LOGO(list.size),保存尺寸信息
-        (newLogos + oldLogos).asSequence().filterNot { it.isOgImg }.map { it.height }.maxOrNull() ?: 0
-            .also { bookmark.setMaximalLogoSize(it) }
+        OssUtils.restoreWebsiteLogoAndOg(wrapper.distinctIcons, bookmark.id)
+            // 更新/保存LOGO到数据库
+            .also { websiteLogoService.updateMaximalLogoByBookmarkId(it) }
+            // 更新/保存最大图标信息
+            .also { bookmark.setMaximalLogoSize(it.width) }
     }
 
     private fun getByHost(urlHost: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, urlHost).one()

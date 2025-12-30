@@ -11,4 +11,5 @@ import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
  */
 interface IWebsiteLogoService : IService<WebsiteLogoEntity> {
     fun findByBookmarkId(id: String): List<WebsiteLogoEntity>
+    fun updateMaximalLogoByBookmarkId(entity: WebsiteLogoEntity)
 }

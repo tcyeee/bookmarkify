@@ -11,5 +11,8 @@ enum class FileType(
 ) {
     AVATAR(5 * 1024 * 1024, "bookmarkify/avatar", "image/"),
     BACKGROUND(10 * 1024 * 1024, "bookmarkify/background", "image/"),
-    WEBSITE_LOGO(1 * 1024 * 1024, "bookmarkify/website", "image/"),
+    WEBSITE_LOGO(1 * 1024 * 1024, "bookmarkify/logo", "image/"),
+    WEBSITE_OG(5 * 1024 * 1024, "bookmarkify/og", "image/");
+
+    fun isImg() = this.type == "image/"
 }

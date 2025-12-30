@@ -17,4 +17,18 @@ class WebsiteLogoServiceImpl : IWebsiteLogoService, ServiceImpl<WebsiteLogoMappe
     override fun findByBookmarkId(id: String): List<WebsiteLogoEntity> {
         return ktQuery().eq(WebsiteLogoEntity::bookmarkId, id).list()
     }
+
+    override fun updateMaximalLogoByBookmarkId(entity: WebsiteLogoEntity) {
+        this.deleteLogoByBookmarkIdAndSize(entity.bookmarkId, entity.width)
+        save(entity)
+    }
+
+    private fun deleteLogoByBookmarkIdAndSize(bookmarkId: String, size: Int): WebsiteLogoEntity? =
+        ktQuery()
+            .eq(WebsiteLogoEntity::bookmarkId, bookmarkId)
+            .eq(WebsiteLogoEntity::width, size)
+            .eq(WebsiteLogoEntity::height, size)
+            .eq(WebsiteLogoEntity::isOgImg, false)
+            .one()
+            ?.also { removeById(it.id) }
 }
