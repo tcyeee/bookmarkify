@@ -157,7 +157,8 @@ class OssUtils {
                 append(".")
                 append(FileUtil.extName(url)?.substringBefore("?") ?: throw CommonException(ErrorType.E225))
             }
-                .also { this.upload(inputStream, it) }
+                // 重新构造输入流，避免前面的 readBytes 导致流已被读完
+                .also { this.upload(ByteArrayInputStream(bytes), it) }
                 .let { ImgInfo("$domain/$it", bytes.size.toLong(), img.first, img.second) }
         }
 
