@@ -2,8 +2,6 @@ package top.tcyeee.bookmarkify.server.impl
 
 import cn.hutool.core.util.ArrayUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
-import java.time.LocalDateTime
-import java.util.concurrent.CompletableFuture
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
@@ -14,13 +12,16 @@ import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
-import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IWebsiteLogoService
-import top.tcyeee.bookmarkify.utils.*
+import top.tcyeee.bookmarkify.utils.OssUtils
+import top.tcyeee.bookmarkify.utils.SocketUtils
+import top.tcyeee.bookmarkify.utils.WebsiteParser
+import top.tcyeee.bookmarkify.utils.yesterday
+import java.time.LocalDateTime
 
 /**
  * @author tcyeee
@@ -34,19 +35,14 @@ class BookmarkServiceImpl(
     private val websiteLogoService: IWebsiteLogoService,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, Bookmark>() {
 
-    override fun checkOne(rawUrl: String) =
-        WebsiteParser.urlWrapper(rawUrl)
-            .let { this.getByHost(it.urlHost) ?: Bookmark(it) }
-            .let { this.checkOne(it) }
-
-    override fun checkOne(bookmark: Bookmark, bookmarkUserLinkId: String) =
-        checkOne(bookmark)
+    override fun parseAndNotice(bookmark: Bookmark, bookmarkUserLinkId: String) =
+        parseBookmark(bookmark)
             // 更新用户布局
             .let { bookmarkUserLinkMapper.findOne(bookmarkUserLinkId) }
             // 通知到前端
             .also { SocketUtils.updateBookmark(it.uid!!, it) }.let { }
 
-    override fun checkOne(bookmark: Bookmark) {
+    private fun parseBookmark(bookmark: Bookmark) {
         log.trace("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
 
         runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
@@ -61,6 +57,40 @@ class BookmarkServiceImpl(
             // 保存网站LOGO/OG图片到OSS和数据库
             .also { this.saveOrUpdateLogo(it, bookmark) }
     }
+
+    // 获取配置信息
+    override fun setDefaultBookmark(uid: String) =
+        projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
+
+    override fun queryOne(url: String): BookmarkShow {
+//        val logo = OssUtils.getLogo("23a12a7b-6bd6-4e02-bc9e-d28fcc33b9aa", 20)
+        return getByHost(WebsiteParser.urlWrapper(url).urlHost)
+            ?.let { bookmarkUserLinkMapper.findOne(it.id) }
+//            ?.also { it.iconHdUrl = logo }
+            ?: throw CommonException(ErrorType.E109)
+    }
+
+    override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::parseBookmark)
+
+    override fun addOne(url: String, uid: String): HomeItemShow {
+        val bookmarkUrl = WebsiteParser.urlWrapper(url)
+        val bookmark = this.getByHost(bookmarkUrl.urlHost) ?: Bookmark(bookmarkUrl).also { save(it) }
+
+        // 添加用户关联和桌面布局
+        val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark)
+        bookmarkUserLinkMapper.insert(userLink)
+
+        val homeItem = HomeItem(uid, userLink.id)
+        homeItemMapper.insert(homeItem)
+
+        this.parseAndNotice(bookmark, userLink.id)
+        // 异步检查
+//        CompletableFuture.runAsync { this.checkOne(bookmark, userLink.id) }
+
+        // 返回临时网站信息
+        return HomeItemShow(homeItem.id, uid, bookmark.id)
+    }
+
 
     /**
      * 保存网站LOGO/OG图片到数据库
@@ -98,37 +128,5 @@ class BookmarkServiceImpl(
         this.isActivity = true
         this.updateTime = LocalDateTime.now()
         saveOrUpdate(this)
-    }
-
-    // 获取配置信息
-    override fun setDefaultBookmark(uid: String) =
-        projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
-
-    override fun queryOne(url: String): BookmarkShow {
-//        val logo = OssUtils.getLogo("23a12a7b-6bd6-4e02-bc9e-d28fcc33b9aa", 20)
-        return getByHost(WebsiteParser.urlWrapper(url).urlHost)
-            ?.let { bookmarkUserLinkMapper.findOne(it.id) }
-//            ?.also { it.iconHdUrl = logo }
-            ?: throw CommonException(ErrorType.E109)
-    }
-
-    override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
-
-    override fun addOne(url: String, uid: String): HomeItemShow {
-        val bookmarkUrl = WebsiteParser.urlWrapper(url)
-        val bookmark = this.getByHost(bookmarkUrl.urlHost) ?: Bookmark(bookmarkUrl).also { save(it) }
-
-        // 添加用户关联和桌面布局
-        val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark)
-        bookmarkUserLinkMapper.insert(userLink)
-
-        val homeItem = HomeItem(uid, userLink.id)
-        homeItemMapper.insert(homeItem)
-
-        // 异步检查
-        CompletableFuture.runAsync { this.checkOne(bookmark, userLink.id) }
-
-        // 返回临时网站信息
-        return HomeItemShow(homeItem.id, uid, bookmark.id)
     }
 }

@@ -4,6 +4,7 @@ import cn.hutool.core.io.FileUtil
 import com.aliyun.oss.OSS
 import com.aliyun.oss.OSSClientBuilder
 import com.aliyun.oss.model.GeneratePresignedUrlRequest
+import com.aliyun.oss.model.PutObjectResult
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
@@ -84,9 +85,10 @@ class OssUtils {
          */
         fun restoreWebsiteLogoAndOg(list: List<ManifestIcon>?, bookmarkId: String): WebsiteLogoEntity {
             if (list.isNullOrEmpty()) throw CommonException(ErrorType.E999)
+
             // 存储OG
-            list.filter { it.isOg() }.filterNot { it.src.isNullOrBlank() }.first()
-                .also { runCatching { restoreImg(FileType.WEBSITE_OG, it.src!!, bookmarkId) } }
+            val ogs = list.filter { it.isOg() }.filterNot { it.src.isNullOrBlank() };
+            if (ogs.isNotEmpty()) runCatching { restoreImg(FileType.WEBSITE_OG, ogs.first().src!!, bookmarkId) }
 
             // 找到最大的那个LOGO
             val maxmalIcon: ManifestIcon = list.filterNot { it.isOg() }
@@ -96,7 +98,7 @@ class OssUtils {
 
             // 存储LOGO并返回
             return runCatching { restoreImg(FileType.WEBSITE_LOGO, maxmalIcon.src!!, bookmarkId) }
-                .getOrElse { err -> throw CommonException(ErrorType.E218, err.message) }
+                .getOrElse { throw CommonException(ErrorType.E218, it.message) }
                 .let { logoInfo ->
                     WebsiteLogoEntity(
                         bookmarkId = bookmarkId,
@@ -137,7 +139,7 @@ class OssUtils {
          * @param url 文件线上地址
          */
         fun uploadImg(inputStream: InputStream, fileType: FileType, url: String, bookmarkId: String): ImgInfo {
-            if (fileType.isImg()) throw CommonException(ErrorType.E999)
+            if (!fileType.isImg()) throw CommonException(ErrorType.E999)
             val bytes = inputStream.readBytes()
                 .also { if (it.size > fileType.limit) throw CommonException(ErrorType.E219) }
 
@@ -146,9 +148,7 @@ class OssUtils {
                 .getOrElse { throw CommonException(ErrorType.E220, it.message) }
                 .let { Pair(it.width, it.height) }
 
-            val path = buildString {
-                append(domain)
-                append("/")
+            return buildString {
                 append(fileType.folder)
                 append("/")
                 append(bookmarkId)
@@ -157,9 +157,8 @@ class OssUtils {
                 append(".")
                 append(FileUtil.extName(url)?.substringBefore("?") ?: throw CommonException(ErrorType.E225))
             }
-
-            return this.upload(inputStream, path)
-                .let { ImgInfo(it, bytes.size.toLong(), img.first, img.second) }
+                .also { this.upload(inputStream, it) }
+                .let { ImgInfo("$domain/$it", bytes.size.toLong(), img.first, img.second) }
         }
 
         /**
@@ -167,13 +166,10 @@ class OssUtils {
          * @param path 文件的最终存储地址(包含名称和后缀) eg /logo/dkgy-hfauw-ekadfa/og.png
          * return 最终线上地址
          */
-        private fun upload(inputStream: InputStream, path: String): String {
+        private fun upload(inputStream: InputStream, path: String) =
             runCatching { ossClient.putObject(bucket, path, inputStream) }
                 .getOrElse { throw CommonException(ErrorType.E224, it.message) }
-            return "$domain/$path"
                 .also { log.info("[DEBUG] OSS存储成功! Bucket:$bucket; FileName:$path") }
-        }
-
 
         /**
          * 获取私有文件的签名URL

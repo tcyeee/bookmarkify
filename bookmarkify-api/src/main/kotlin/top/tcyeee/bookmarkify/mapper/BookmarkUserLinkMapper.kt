@@ -17,6 +17,7 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
     @Select(
         """
             SELECT a.bookmark_id                            AS bookmarkId,
+               a.uid                                        AS uid,
                a.id                                         AS bookmarkUserLinkId,
                a.url_full                                   AS urlFull,
                CONCAT(b.url_scheme,'://', b.url_host, b.url_path) AS urlBase,
@@ -48,6 +49,7 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
     @Select(
         """
             SELECT a.bookmark_id                            AS bookmarkId,
+               a.uid                                        AS uid,
                a.id                                         AS bookmarkUserLinkId,
                a.url_full                                   AS urlFull,
                CONCAT(b.url_scheme,'://', b.url_host, b.url_path) AS urlBase,
