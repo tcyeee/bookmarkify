@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.net.URI
 import javax.imageio.ImageIO
+import kotlin.text.substringBefore
 
 /**
  * @author tcyeee
@@ -90,7 +91,8 @@ class OssUtils {
             if (ogs.isNotEmpty()) runCatching { restoreImg(FileType.WEBSITE_OG, ogs.first().src!!, bookmarkId) }
 
             // 找到最大的那个LOGO
-            val maximalIcon: ManifestIcon = list.filterNot { it.isOg() }
+            val maximalIcon: ManifestIcon = list
+                .filterNot { it.isOg() }
                 .filterNot { it.src.isNullOrBlank() }
                 .filterNot { it.src!!.endsWith(".ico") }
                 .maxByOrNull { it.size() } ?: return null
