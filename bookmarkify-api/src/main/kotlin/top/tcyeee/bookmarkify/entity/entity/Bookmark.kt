@@ -31,7 +31,8 @@ data class Bookmark(
     @field:Max(100) @field:Schema(description = "书签简称") var appName: String? = null,
     @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
     @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
-    @field:Max(100) @field:Schema(description = "小图标base64") var iconBase64: String? = null,
+    @field:Schema(description = "小图标base64") var iconBase64: String? = null,
+    @field:Schema(description = "最大LOGO尺寸") var maximalLogoSize: Int = 0,
 
     /* 状态信息 */
     @JsonIgnore @field:Schema(description = "是否反爬") var antiCrawlerDetected: Boolean = false,

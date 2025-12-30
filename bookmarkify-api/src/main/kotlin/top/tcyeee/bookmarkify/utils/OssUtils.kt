@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.utils
 import cn.hutool.core.io.FileUtil
 import com.aliyun.oss.OSS
 import com.aliyun.oss.OSSClientBuilder
+import com.aliyun.oss.model.GeneratePresignedUrlRequest
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import java.io.ByteArrayInputStream
@@ -72,9 +73,7 @@ class OssUtils {
             }
         }
 
-        fun restoreWebsiteLogo(
-            list: List<ManifestIcon>?, bookmarkId: String
-        ): List<WebsiteLogoEntity> {
+        fun restoreWebsiteLogo(list: List<ManifestIcon>?, bookmarkId: String): List<WebsiteLogoEntity> {
             val result = mutableListOf<WebsiteLogoEntity>()
             if (list.isNullOrEmpty()) return result
 
@@ -132,7 +131,8 @@ class OssUtils {
                     try {
                         val img = ImageIO.read(ByteArrayInputStream(bytes))
                         if (img != null) {
-                            width = img.width; height = img.height
+                            width = img.width
+                            height = img.height
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -156,7 +156,7 @@ class OssUtils {
 
                     ossClient.putObject(bucket, fileName, ByteArrayInputStream(bytes))
                     val objectUrl = "$domain/$fileName"
-                    log.info("[DEBUG] 网站LOGO存储成功: $objectUrl")
+                    log.info("[DEBUG] 网站LOGO存储成功! Bucket:$bucket; FileName:$fileName, Fullurl:$objectUrl")
                     LogoInfo(objectUrl, bytes.size.toLong(), width, height)
                 }
             } catch (e: Exception) {
@@ -176,6 +176,49 @@ class OssUtils {
             return try {
                 val expiration = java.util.Date(System.currentTimeMillis() + expirationMillis)
                 val url = ossClient.generatePresignedUrl(bucket, objectName, expiration)
+                if (customDomain.isNotBlank()) {
+                    "$customDomain${url.path}?${url.query}"
+                } else {
+                    url.toString()
+                }
+            } catch (e: Exception) {
+                throw CommonException(ErrorType.E221, e.message)
+            }
+        }
+
+        fun getLogo(bookmarkId: String, maxmalSize: Int, size: Int): String =
+            buildString {
+                append(customDomain)
+                append(FileType.WEBSITE_LOGO.folder)
+                append("/")
+                append(bookmarkId)
+                append("/")
+                append(maxmalSize)
+                append(".png")
+            }.let { getLogo(it, size) }
+
+        /**
+         * 获取带缩放参数的私有图片签名URL
+         *
+         * @param objectName 文件路径
+         * @param size 宽&高
+         * @param expirationMillis 过期时间（毫秒），默认1小时
+         * @return 签名URL
+         */
+        fun getLogo(
+            objectName: String, size: Int, expirationMillis: Long = 3600 * 1000
+        ): String {
+            return try {
+                val expiration = java.util.Date(System.currentTimeMillis() + expirationMillis)
+                val request = GeneratePresignedUrlRequest(bucket, objectName)
+                request.expiration = expiration
+
+                val style = StringBuilder("image/resize,m_lfit")
+                style.append(",w_$size")
+                style.append(",h_$size")
+                request.process = style.toString()
+
+                val url = ossClient.generatePresignedUrl(request)
                 if (customDomain.isNotBlank()) {
                     "$customDomain${url.path}?${url.query}"
                 } else {

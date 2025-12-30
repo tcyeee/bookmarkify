@@ -47,15 +47,17 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
 
     @Select(
         """
-            SELECT a.bookmark_id                                AS bookmarkId,
-                   a.id                                         AS bookmarkUserLinkId,
-                   a.url_full                                   AS urlFull,
-                   CONCAT(b.url_scheme,'://', b.url_host, b.url_path) AS urlBase,
-                   COALESCE(a.title, b.title)                   AS title,
-                   COALESCE(a.description, b.description)       AS description,
-                   b.is_activity                                AS isActivity,
-                   b.icon_base64                                AS iconBase64,
-                   c.height                                     AS hdSize
+            SELECT a.bookmark_id                            AS bookmarkId,
+               a.id                                         AS bookmarkUserLinkId,
+               a.url_full                                   AS urlFull,
+               CONCAT(b.url_scheme,'://', b.url_host, b.url_path) AS urlBase,
+               COALESCE(a.title, b.title)                   AS title,
+               COALESCE(a.description, b.description)       AS description,
+               b.is_activity                                AS isActivity,
+               b.icon_base64                                AS iconBase64,
+               b.url_host                                   AS urlHost,
+               b.app_name                                   AS appName,
+               c.height                                     AS hdSize
             FROM bookmarkify.bookmark_user_link a
                      LEFT JOIN bookmarkify.bookmark b
                                ON a.bookmark_id = b.id
