@@ -67,8 +67,9 @@ object WebsiteParser {
         fun String.normalize(): String? {
             if (this.isBlank()) return null
             return runCatching {
-                if (this.startsWith("http")) this
+                val fullUrl = if (this.startsWith("http")) this
                 else info.baseUrl?.let { URLUtil.completeUrl(it, this) }
+                fullUrl?.substringBefore('?')
             }.getOrNull()
         }
 
