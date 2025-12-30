@@ -44,7 +44,11 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
     @ExceptionHandler(Exception::class)
     fun handleException(e: Exception, request: HttpServletRequest): ResultWrapper {
         return when (e) {
-            is CommonException -> error(e.errorType, e.customMessage ?: e.errorType.msg)
+            is CommonException -> {
+                e.printStackTrace()
+                error(e.errorType, e.customMessage ?: e.errorType.msg)
+            }
+
             is NullPointerException, is HttpMessageNotReadableException -> print(ErrorType.E102, e, request)
             is MethodArgumentNotValidException -> {
                 val fieldError = e.fieldError ?: return print(ErrorType.E999, e, request)
