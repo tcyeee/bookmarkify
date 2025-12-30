@@ -49,8 +49,7 @@ export const useBookmarkStore = defineStore('bookmarks', {
     // 局部更新某一个书签的数据（通常由 WebSocket 推送触发）
     updateOne(item: Bookmark) {
       this.bookmarks?.forEach((it) => {
-        if (it.bookmarkId === item.bookmarkId) {
-          it.type = HomeItemType.BOOKMARK
+        if (it.type === HomeItemType.BOOKMARK && it.typeApp.bookmarkId === item.bookmarkId) {
           it.typeApp = item
         }
       })

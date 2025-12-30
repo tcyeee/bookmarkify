@@ -22,6 +22,7 @@ import top.tcyeee.bookmarkify.utils.SocketUtils
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 import top.tcyeee.bookmarkify.utils.yesterday
 import java.time.LocalDateTime
+import java.util.concurrent.CompletableFuture
 
 /**
  * @author tcyeee
@@ -74,9 +75,8 @@ class BookmarkServiceImpl(
         val homeItem = HomeItem(uid, userLink.id)
         homeItemMapper.insert(homeItem)
 
-        this.parseAndNotice(bookmark, userLink.id)
         // 异步检查
-//        CompletableFuture.runAsync { this.parseAndNotice(bookmark, userLink.id) }
+        CompletableFuture.runAsync { this.parseAndNotice(bookmark, userLink.id) }
 
         // 返回临时网站信息
         return HomeItemShow(homeItem.id, uid, bookmark.id)

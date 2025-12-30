@@ -50,9 +50,7 @@ import type { HomeItem, Bookmark, BookmarkSortParams } from '@typing'
 const sysStore = useSysStore()
 const bookmarkStore = useBookmarkStore()
 
-const props = defineProps<{
-  data: Array<HomeItem>
-}>()
+const props = defineProps<{ data: Array<HomeItem> }>()
 
 const data = reactive<{
   subApps?: Array<Bookmark>
