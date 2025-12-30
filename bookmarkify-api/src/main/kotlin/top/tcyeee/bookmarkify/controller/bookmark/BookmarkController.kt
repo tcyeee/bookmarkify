@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaIgnore
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
+import top.tcyeee.bookmarkify.entity.BookmarkShow
 
 import top.tcyeee.bookmarkify.entity.BookmarkUpdataPrams
 import top.tcyeee.bookmarkify.entity.HomeItemShow
@@ -51,5 +52,5 @@ class BookmarksController(
 
     @SaIgnore
     @GetMapping("/check")
-    fun check(@RequestParam url: String) = bookmarkService.checkOne(url)
+    fun queryOne(@RequestParam url: String): BookmarkShow = bookmarkService.queryOne(url)
 }

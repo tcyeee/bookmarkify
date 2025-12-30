@@ -6,6 +6,8 @@ import java.time.LocalDateTime
 import java.util.concurrent.CompletableFuture
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
+import top.tcyeee.bookmarkify.config.exception.CommonException
+import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
@@ -58,32 +60,37 @@ class BookmarkServiceImpl(
             // 更新书签
             .also { this.saveOrUpdate(bookmark) }
             // 保存网站LOGO/OG图片到OSS和数据库
-            .also { this.saveOrUpdateLogo(it, bookmark.id) }
+            .also { this.saveOrUpdateLogo(it, bookmark) }
     }
 
     /**
      * 保存网站LOGO/OG图片到数据库
+     * 1.找到最大尺寸的LOGO重命名为logo.png
      *
      * @param wrapper 爬取到的网页
-     * @param bookmarkId 书签ID
+     * @param bookmark 书签信息
      */
-    private fun saveOrUpdateLogo(wrapper: BookmarkWrapper?, bookmarkId: String) {
+    private fun saveOrUpdateLogo(wrapper: BookmarkWrapper?, bookmark: Bookmark) {
         if (wrapper == null || ArrayUtil.isEmpty(wrapper)) return
 
-        val logolistNew = OssUtils.restoreWebsiteLogo(wrapper.distinctIcons, bookmarkId)
-        val logoListOld = websiteLogoService.findByBookmarkId(bookmarkId)
+        val newLogos = OssUtils.restoreWebsiteLogo(wrapper.distinctIcons, bookmark.id)
+        val oldLogos = websiteLogoService.findByBookmarkId(bookmark.id)
 
         val toUpdate = mutableListOf<WebsiteLogoEntity>()
         val toInsert = mutableListOf<WebsiteLogoEntity>()
 
-        logolistNew.forEach { it ->
-            logoListOld.find { old -> old.isSame(it) }
+        newLogos.forEach { it ->
+            oldLogos.find { old -> old.isSame(it) }
                 ?.let { toUpdate.add(it.copy(updateTime = LocalDateTime.now())) }
                 ?: toInsert.add(it)
         }
 
         if (toUpdate.isNotEmpty()) websiteLogoService.updateBatchById(toUpdate)
         if (toInsert.isNotEmpty()) websiteLogoService.saveBatch(toInsert)
+
+        // 拼接logolistNew和logoListOld, 找到最大尺寸的LOGO(list.size),保存尺寸信息
+        (newLogos + oldLogos).asSequence().filterNot { it.isOgImg }.map { it.height }.maxOrNull() ?: 0
+            .also { bookmark.setMaximalLogoSize(it) }
     }
 
     private fun getByHost(urlHost: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, urlHost).one()
@@ -100,9 +107,24 @@ class BookmarkServiceImpl(
         saveOrUpdate(this)
     }
 
+    fun Bookmark.setMaximalLogoSize(maximal: Int) {
+        this.maximalLogoSize = maximal
+        this.isActivity = true
+        this.updateTime = LocalDateTime.now()
+        saveOrUpdate(this)
+    }
+
     // 获取配置信息
     override fun setDefaultBookmark(uid: String) =
         projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
+
+    override fun queryOne(url: String): BookmarkShow {
+//        val logo = OssUtils.getLogo("23a12a7b-6bd6-4e02-bc9e-d28fcc33b9aa", 20)
+        return getByHost(WebsiteParser.urlWrapper(url).urlHost)
+            ?.let { bookmarkUserLinkMapper.findOne(it.id) }
+//            ?.also { it.iconHdUrl = logo }
+            ?: throw CommonException(ErrorType.E109)
+    }
 
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::checkOne)
 
