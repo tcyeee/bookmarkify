@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.entity
 
 import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.EnumUtil
+import cn.hutool.core.util.StrUtil
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
@@ -12,6 +13,7 @@ import top.tcyeee.bookmarkify.entity.entity.UserFile
 import top.tcyeee.bookmarkify.entity.enums.FunctionType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
+import top.tcyeee.bookmarkify.utils.OssUtils
 
 data class BookmarkShow(
     @field:Schema(description = "关联书签ID") var bookmarkId: String? = null,
@@ -31,6 +33,21 @@ data class BookmarkShow(
     @field:Schema(description = "大图标OSS地址,带权限") var iconHdUrl: String? = null,
 ) {
     val isHd: Boolean get() = hdSize > 50
+
+    /**
+     * 设置大图LOGO还有备用Title
+     */
+    fun initLogo() {
+        // 为图片添加签名
+        if (isHd) OssUtils.getLogoUrl(bookmarkId!!, hdSize, 256)
+            .also { iconHdUrl = it }
+            .also { if (it.isNotEmpty()) iconBase64 = null }
+
+        // 设置备用title
+        title = appName
+            ?.takeIf { it.isNotBlank() } ?: title
+            ?.takeIf { it.isNotBlank() } ?: urlHost
+    }
 }
 
 data class HomeItemShow(
@@ -46,9 +63,7 @@ data class HomeItemShow(
     @JsonIgnore var bookmarkId: String? = null,  // 用于新建书签时定位
 ) {
 
-    constructor(item: HomeItem, database: Map<String, BookmarkShow>) : this(
-        id = item.id, uid = item.uid
-    ) {
+    constructor(item: HomeItem, database: Map<String, BookmarkShow>) : this(id = item.id, uid = item.uid) {
         BeanUtil.copyProperties(item, this)
         when (item.type) {
             HomeItemType.BOOKMARK_DIR -> this.typeDir = BookmarkDir(database, item.bookmarkDirJson)
@@ -59,6 +74,12 @@ data class HomeItemShow(
 
     constructor(id: String, uid: String, bookmarkId: String) : this(
         id, uid, bookmarkId = bookmarkId, type = HomeItemType.BOOKMARK
+    )
+
+    constructor(uid: String, itemId: String, bookmarkShow: BookmarkShow) : this(
+        id = itemId,
+        uid = uid,
+        typeApp = bookmarkShow
     )
 }
 

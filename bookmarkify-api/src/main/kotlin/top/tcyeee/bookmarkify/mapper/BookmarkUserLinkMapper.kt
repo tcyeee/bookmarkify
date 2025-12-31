@@ -77,5 +77,5 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
             """
     )
     @Description("查看用户的单个书签")
-    fun findOne(id: String): BookmarkShow
+    fun findShowById(id: String): BookmarkShow
 }

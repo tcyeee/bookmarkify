@@ -12,7 +12,6 @@ import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
-import top.tcyeee.bookmarkify.server.IHomeItemService
 import top.tcyeee.bookmarkify.server.IWebsiteLogoService
 import top.tcyeee.bookmarkify.utils.OssUtils
 import top.tcyeee.bookmarkify.utils.SocketUtils
@@ -31,19 +30,16 @@ class BookmarkServiceImpl(
     private val homeItemMapper: HomeItemMapper,
     private val projectConfig: ProjectConfig,
     private val websiteLogoService: IWebsiteLogoService,
-    private val itemService: IHomeItemService,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, Bookmark>() {
 
-    override fun parseAndNotice(bookmark: Bookmark, bookmarkUserLinkId: String) =
-        parseBookmark(bookmark)
-            // 更新用户布局
-            .let { bookmarkUserLinkMapper.findOne(bookmarkUserLinkId) }
-            // 通知到前端
-            .also { SocketUtils.updateBookmark(it.uid!!, it) }.let { }
+    override fun parseAndNotice(bookmark: Bookmark, bookmarkUserLinkId: String) = parseBookmark(bookmark)
+        // 更新用户布局
+        .let { bookmarkUserLinkMapper.findShowById(bookmarkUserLinkId) }
+        // 通知到前端
+        .also { SocketUtils.updateBookmark(it.uid!!, it) }.let { }
 
     // 获取配置信息
-    override fun setDefaultBookmark(uid: String) =
-        projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
+    override fun setDefaultBookmark(uid: String) = projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
 
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::parseBookmark)
 
@@ -61,13 +57,12 @@ class BookmarkServiceImpl(
         // 异步检查 书签如果没有高清icon, 并且updatetime已经超过一天再检查
         if (bookmark.maximalLogoSize == 0 && bookmark.updateTime.isBefore(yesterday())) {
             CompletableFuture.runAsync { this.parseAndNotice(bookmark, userLink.id) }
-        } else {
-            // TODO 如果无需更新书签,则直接将旧书签打包为桌面元素返回
-            itemService.initBookmarkItem(homeItem.id, bookmark)
             return HomeItemShow(homeItem.id, uid, bookmark.id)
         }
-        // 返回临时网站信息
-        return HomeItemShow(homeItem.id, uid, bookmark.id)
+
+        // 如果无需更新书签,则直接将旧书签打包为桌面元素返回
+        return bookmarkUserLinkMapper.findShowById(userLink.id)
+            .let { HomeItemShow(uid, homeItem.id, it.also { it.initLogo() }) }
     }
 
     private fun parseBookmark(bookmark: Bookmark) {

@@ -1,6 +1,5 @@
 package top.tcyeee.bookmarkify.server.impl
 
-import cn.hutool.core.util.StrUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -12,7 +11,6 @@ import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IHomeItemService
-import top.tcyeee.bookmarkify.utils.OssUtils
 
 /**
  * @author tcyeee
@@ -48,15 +46,7 @@ class IHomeItemServiceImpl(
     private fun setIconHd(list: List<HomeItemShow>) {
         list.forEach { item ->
             if (item.type != HomeItemType.BOOKMARK) return@forEach
-
-            // 设置大图URL
-            if (item.typeApp?.isHd == true) OssUtils.getLogoUrl(item.typeApp!!.bookmarkId!!, item.typeApp!!.hdSize, 256)
-                .also { item.typeApp?.iconHdUrl = it }
-                .also { if (it.isNotEmpty()) item.typeApp?.iconBase64 = null }
-
-            // 设置备用title
-            if (StrUtil.isBlank(item.typeApp?.title)) item.typeApp?.title = item.typeApp?.urlHost
-            if (StrUtil.isNotEmpty(item.typeApp?.appName)) item.typeApp?.title = item.typeApp?.appName
+            item.typeApp!!.initLogo()
         }
     }
 
