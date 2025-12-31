@@ -71,7 +71,11 @@ watchEffect(() => {
 const dragOptions = ref({ animation: 300, draggable: '.bookmark-item' })
 
 function addOne(item: HomeItem) {
-  bookmarkStore.addEmpty(item)
+  if(item.typeApp!=null){
+    bookmarkStore.bookmarks.push(item);
+  }else{
+    bookmarkStore.addEmpty(item)
+  }
 }
 
 function openDir(item: HomeItem) {

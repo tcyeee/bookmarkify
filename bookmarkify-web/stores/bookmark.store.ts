@@ -6,7 +6,7 @@ import { bookmarksShowAll } from '@api'
 export const useBookmarkStore = defineStore('bookmarks', {
   state: () => ({
     // 用户桌面布局信息（书签列表）
-    bookmarks: undefined as Array<HomeItem> | undefined,
+    bookmarks: [] as Array<HomeItem>,
   }),
 
   actions: {

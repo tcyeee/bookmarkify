@@ -13,7 +13,7 @@ export const captchaVerifyEmail = (params: t.EmailVerifyParams) =>
 
 /* =========[ /bookmark ]========= */
 export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<Array<t.HomeItem>>
-export const bookmarksAddOne = (url: string) => http.get('/bookmark/addOne', url) as Promise<t.HomeItem>
+export const bookmarksAddOne = (url: string) => http.get('/bookmark/addOne', { url: url }) as Promise<t.HomeItem>
 export const bookmarksSort = (params: Array<t.BookmarkSortParams>) => http.post('/bookmark/sort', params) as Promise<boolean>
 export const bookmarksDel = (params: Array<string>) => http.post('/bookmark/delete', params) as Promise<boolean>
 export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post('/bookmark/update', params) as Promise<t.Bookmark>
