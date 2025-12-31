@@ -73,6 +73,7 @@ class BookmarkServiceImpl(
 
         // 异步检查 书签如果没有高清icon, 并且updateTime已经超过一天再检查
         if (bookmark.checkFlag) CompletableFuture.runAsync {
+            parseBookmark(bookmark)
             bookmarkUserLinkMapper.findShowById(userLink.id)
                 .let { HomeItemShow(uid, homeItem.id, it.also { it.initLogo() }) }
                 .also { SocketUtils.homeItemUpdate(uid, it) }
