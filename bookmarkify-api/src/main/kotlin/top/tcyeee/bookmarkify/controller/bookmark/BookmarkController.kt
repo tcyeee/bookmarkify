@@ -29,7 +29,6 @@ class BookmarksController(
 ) {
 
     // 通过书签简称/标题/描述/根域名,搜索书签
-    @Throttle
     @Operation(summary = "按照名称搜索")
     @PostMapping("/search")
     fun search(@RequestParam name: String): List<Bookmark> = bookmarkService.search(name)
