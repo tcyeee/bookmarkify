@@ -35,7 +35,7 @@ class BookmarksController(
 
     @Throttle(500)
     @PostMapping("/query")
-    @Operation(summary = "我的书签")
+    @Operation(summary = "我的桌面布局")
     fun query(): List<HomeItemShow> = homeItemService.findShowByUid(BaseUtils.uid())
 
 //    @PostMapping("/upload")

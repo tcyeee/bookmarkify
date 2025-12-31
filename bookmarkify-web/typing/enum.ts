@@ -30,7 +30,7 @@ export enum HomeItemType {
 }
 
 export enum SocketTypes {
-  BOOKMARK_UPDATE_ONE = 'BOOKMARK_UPDATE_ONE',
+  HOME_ITEM_UPDATE = 'HOME_ITEM_UPDATE',
 }
 
 export enum AuthStatusEnum {

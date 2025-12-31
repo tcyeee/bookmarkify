@@ -5,5 +5,5 @@ package top.tcyeee.bookmarkify.config.websocket
  * @date 3/15/25 20:56
  */
 enum class SocketMsgType {
-    BOOKMARK_UPDATE_ONE
+    HOME_ITEM_UPDATE,
 }

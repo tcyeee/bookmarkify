@@ -32,13 +32,6 @@ class BookmarkServiceImpl(
     private val websiteLogoService: IWebsiteLogoService,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, Bookmark>() {
 
-    override fun parseAndNotice(bookmark: Bookmark, bookmarkUserLinkId: String) =
-        parseBookmark(bookmark)
-            // 更新用户布局
-            .let { bookmarkUserLinkMapper.findShowById(bookmarkUserLinkId) }
-            // 通知到前端
-            .also { SocketUtils.updateBookmark(it.uid!!, it) }.let { }
-
     // 获取配置信息
     override fun setDefaultBookmark(uid: String) = projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
 
@@ -75,12 +68,15 @@ class BookmarkServiceImpl(
         val homeItem = HomeItem(uid, userLink.id).also { homeItemMapper.insert(it) }
 
         // 异步检查 书签如果没有高清icon, 并且updateTime已经超过一天再检查
-        if (bookmark.checkFlag) CompletableFuture.runAsync { this.parseAndNotice(bookmark, userLink.id) }
-            .also { return HomeItemShow(homeItem.id, uid, bookmark.id) }
+        if (bookmark.checkFlag) CompletableFuture.runAsync {
+            bookmarkUserLinkMapper.findShowById(userLink.id)
+                .let { HomeItemShow(uid, homeItem.id, it.also { it.initLogo() }) }
+                .also { SocketUtils.homeItemUpdate(uid, it) }
+        }.also { return HomeItemShow(homeItem.id, uid, bookmark.id) }
 
         // 如果无需更新书签,则直接将旧书签打包为桌面元素返回
         return bookmarkUserLinkMapper.findShowById(userLink.id)
-            .let { HomeItemShow(uid, homeItem.id, it.also { it.initLogo() }) }
+            .let { HomeItemShow(uid, homeItem.id, it.initLogo()) }
     }
 
     private fun parseBookmark(bookmark: Bookmark) {
