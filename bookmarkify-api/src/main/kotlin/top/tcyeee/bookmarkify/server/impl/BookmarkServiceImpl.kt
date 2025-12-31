@@ -75,8 +75,10 @@ class BookmarkServiceImpl(
         val homeItem = HomeItem(uid, userLink.id)
         homeItemMapper.insert(homeItem)
 
-        // 异步检查
-        CompletableFuture.runAsync { this.parseAndNotice(bookmark, userLink.id) }
+        // 异步检查 书签如果没有高清icon, 并且updatetime已经超过一天再检查
+        if (bookmark.maximalLogoSize == 0 && bookmark.updateTime.isBefore(yesterday())) {
+            CompletableFuture.runAsync { this.parseAndNotice(bookmark, userLink.id) }
+        }
 
         // 返回临时网站信息
         return HomeItemShow(homeItem.id, uid, bookmark.id)
