@@ -31,12 +31,14 @@ export const useBookmarkStore = defineStore('bookmarks', {
 
     // 触发所有已注册的书签更新回调
     trigger() {
+      console.log(`触发所有书签更新回调,当前回调数量: ${Object.keys(this.actions).length}`)
       Object.values(this.actions).forEach((action) => action())
     },
 
     // 注册一个在书签更新时需要执行的回调函数
-    addAction(action: Function) {
-      this.actions[action.name] = action
+    addAction(name: string, action: Function) {
+      this.actions[name] = action
+      console.log(`注册书签更新回调: ${name},当前回调数量: ${Object.keys(this.actions).length}`)
     },
 
     // 在书签列表中临时插入一个“加载中”的占位项
@@ -48,11 +50,42 @@ export const useBookmarkStore = defineStore('bookmarks', {
 
     // 局部更新某一个书签的数据（通常由 WebSocket 推送触发）
     updateOne(item: Bookmark) {
+      let updated = false
+
       this.bookmarks?.forEach((it) => {
         if (it.type === HomeItemType.BOOKMARK && it.typeApp.bookmarkId === item.bookmarkId) {
+          console.log('[DEBUG] 收到后端更新请求')
           it.typeApp = item
+          updated = true
+        }
+
+        if (it.type === HomeItemType.LOADING && it.typeApp.bookmarkId === item.bookmarkId) {
+          console.log('[DEBUG] 收到后端更新请求(占位书签替换)')
+          it.typeApp = item
+          it.type = HomeItemType.BOOKMARK
+          updated = true
+        }
+
+        if (it.type === HomeItemType.BOOKMARK_DIR) {
+          const dirList = it.typeDir.bookmarkList
+          for (const bookmark of dirList) {
+            if (bookmark.bookmarkId === item.bookmarkId) {
+              console.log('[DEBUG] 收到后端更新请求(目录内书签)')
+              bookmark.title = item.title
+              bookmark.description = item.description
+              bookmark.urlFull = item.urlFull
+              bookmark.urlBase = item.urlBase
+              bookmark.iconBase64 = item.iconBase64
+              bookmark.iconHdUrl = item.iconHdUrl
+              bookmark.isActivity = item.isActivity
+              updated = true
+              break
+            }
+          }
         }
       })
+
+      if (updated) this.trigger()
     },
   },
 

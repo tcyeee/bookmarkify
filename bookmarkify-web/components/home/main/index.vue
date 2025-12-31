@@ -20,8 +20,13 @@ const data = reactive<{
 
 onMounted(() => {
   // 当书签更新后，更新数据
-  storeBookmark.addAction(() => {
+  storeBookmark.addAction('updateBookmarkList', () => {
+    console.log('[DEBUG] 书签列表更新')
+    console.log('===========')
+    console.log(data.bookmarkList == storeBookmark.bookmarks)
     data.bookmarkList = storeBookmark.bookmarks || []
+    console.log(data.bookmarkList == storeBookmark.bookmarks)
+    console.log('===========')
   })
 })
 </script>
