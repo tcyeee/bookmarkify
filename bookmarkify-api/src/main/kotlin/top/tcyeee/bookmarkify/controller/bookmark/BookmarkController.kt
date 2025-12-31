@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.config.throttle.Throttle
+import top.tcyeee.bookmarkify.entity.BookmarkShow
 
 import top.tcyeee.bookmarkify.entity.BookmarkUpdataPrams
 import top.tcyeee.bookmarkify.entity.HomeItemShow
@@ -28,10 +29,14 @@ class BookmarksController(
     private val homeItemService: IHomeItemService,
 ) {
 
-    // 通过书签简称/标题/描述/根域名,搜索书签
-    @Operation(summary = "按照名称搜索")
+    @Operation(summary = "通过书签简称/标题/描述/根域名,搜索书签")
     @PostMapping("/search")
     fun search(@RequestParam name: String): List<Bookmark> = bookmarkService.search(name)
+
+    @Throttle(500)
+    @Operation(summary = "查看我的全部书签")
+    @PostMapping("/list")
+    fun list(): List<BookmarkShow> = bookmarkService.list(BaseUtils.uid())
 
     @Throttle(500)
     @PostMapping("/query")

@@ -56,7 +56,6 @@ class BookmarkServiceImpl(
             .let { HomeItemShow(uid, homeItem.id, it.also { it.initLogo() }) }
     }
 
-
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::parseBookmark)
 
     override fun addOne(url: String, uid: String): HomeItemShow {
