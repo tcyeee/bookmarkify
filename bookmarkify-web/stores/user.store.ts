@@ -119,12 +119,17 @@ export const useUserStore = defineStore('user', {
 
       // 断开 websocket 连接
       webSocketStore.disconnect()
-      // 清空书签相关缓存
       bookmarkStore.$reset()
-      // 清空系统状态（键盘事件、倒计时等）
       sysStore.$reset()
-      // 重置当前用户 store（账号信息、设置、头像、loading 等）
       this.$reset()
+
+      // 在未知情况下, $reset会失效, 所以这里手动清除
+      bookmarkStore.homeItems = []
+      this.account = undefined
+      this.setting = undefined
+      this.avatar = undefined
+      this.loading = false
+
       // 跳转回欢迎/登录引导页
       navigateTo('/welcome')
     },
