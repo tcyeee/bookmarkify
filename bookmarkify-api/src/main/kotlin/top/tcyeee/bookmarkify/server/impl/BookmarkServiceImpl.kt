@@ -54,7 +54,7 @@ class BookmarkServiceImpl(
         val homeItem = HomeItem(uid, userLink.id)
         homeItemMapper.insert(homeItem)
 
-        // 异步检查 书签如果没有高清icon, 并且updatetime已经超过一天再检查
+        // 异步检查 书签如果没有高清icon, 并且updateTime已经超过一天再检查
         if (bookmark.maximalLogoSize == 0 && bookmark.updateTime.isBefore(yesterday())) {
             CompletableFuture.runAsync { this.parseAndNotice(bookmark, userLink.id) }
             return HomeItemShow(homeItem.id, uid, bookmark.id)
@@ -72,7 +72,7 @@ class BookmarkServiceImpl(
             if (it.message.toString().contains("304")) bookmark.toggleActivity(false)
             return
         }
-            // 填充bookmark基础信息 以及 bokmark-ico-base64信息
+            // 填充bookmark基础信息 以及 bookmark-ico-base64信息
             .also { bookmark.initBaseInfo(it) }
             // 更新书签
             .also { this.saveOrUpdate(bookmark) }
