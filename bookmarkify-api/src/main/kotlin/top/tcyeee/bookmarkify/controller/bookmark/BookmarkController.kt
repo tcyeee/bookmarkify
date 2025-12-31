@@ -33,7 +33,6 @@ class BookmarksController(
     @PostMapping("/search")
     fun search(@RequestParam name: String): List<Bookmark> = bookmarkService.search(name)
 
-
     @Throttle(500)
     @PostMapping("/query")
     @Operation(summary = "我的书签")
