@@ -47,6 +47,7 @@ class BookmarkServiceImpl(
             .or().like(Bookmark::title, name)
             .or().like(Bookmark::description, name)
             .or().like(Bookmark::urlHost, name)
+            .last("limit 5")
             .list()
 
     override fun linkOne(bookmarkId: String, uid: String): HomeItemShow {
