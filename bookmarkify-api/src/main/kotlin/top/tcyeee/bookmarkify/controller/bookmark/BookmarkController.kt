@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.config.throttle.Throttle
+import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 
 import top.tcyeee.bookmarkify.entity.BookmarkUpdataPrams
@@ -36,7 +37,8 @@ class BookmarksController(
     @Throttle(500)
     @Operation(summary = "查看我的全部书签")
     @PostMapping("/list")
-    fun list(): List<BookmarkShow> = bookmarkService.list(BaseUtils.uid())
+    fun list(@RequestBody params: AllOfMyBookmarkParams): List<BookmarkShow> =
+        bookmarkService.allOfMyBookmark(BaseUtils.uid(), params)
 
     @Throttle(500)
     @PostMapping("/query")

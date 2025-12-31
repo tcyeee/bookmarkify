@@ -10,24 +10,12 @@ import java.io.Serializable
  * @date 2019/11/13 15:21
  */
 @Schema(description = "分页基础类")
-class PageBean : Serializable {
+open class PageBean : Serializable {
     @Schema(description = "当前页，默认1")
     private var currentPage = 1
 
     @Schema(description = "每页数量，默认10")
     private var pageSize = 10
 
-    /**
-     * 返回用于Mybatis plus的分页参数
-     *
-     * @return 分页参数
-     */
-    fun <T> page(): Page<T> {
-        return Page(currentPage.toLong(), pageSize.toLong())
-    }
-
-    companion object {
-        @Serial
-        private var serialVersionUID = -6165567294525365157L
-    }
+    fun <T> page(): Page<T> = Page(currentPage.toLong(), pageSize.toLong())
 }

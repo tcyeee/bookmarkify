@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.entity
 
 import io.swagger.v3.oas.annotations.media.Schema
+import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.entity.BackgroundType
 
 
@@ -16,6 +17,10 @@ data class GradientConfigParams(
     @field:Schema(description = "渐变色数组，至少2个颜色") var colors: List<String> = emptyList(),
     @field:Schema(description = "渐变方向角度，默认135") var direction: Int = 135,
 )
+
+class AllOfMyBookmarkParams(
+    @field:Schema(description = "搜索信息") var name: String? = null,
+) : PageBean()
 
 data class CaptchaSmsParams(val phone: String, val captcha: String)
 data class SmsVerifyParams(val phone: String, val smsCode: String)

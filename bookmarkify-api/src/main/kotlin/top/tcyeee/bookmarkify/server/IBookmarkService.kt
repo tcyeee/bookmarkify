@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
+import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
@@ -24,4 +25,5 @@ interface IBookmarkService : IService<Bookmark> {
 
     fun search(name: String): List<Bookmark>
     fun linkOne(bookmarkId: String, uid: String): HomeItemShow
+    fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow>
 }
