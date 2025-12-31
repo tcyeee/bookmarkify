@@ -64,10 +64,9 @@ export const useWebSocketStore = defineStore('socket', {
       // 接收消息处理
       this.socket.onmessage = (event) => {
         const message = JSON.parse(event.data) as SocketMessage
-        console.log('[WebSocket] 收到消息:', message.type)
-
         // 针对书签单条更新的推送，直接更新本地书签 store
         if (message.type === SocketTypes.BOOKMARK_UPDATE_ONE) {
+          console.log('[WebSocket] 收到书签更新消息:', message.data)
           const bookmarkStore = useBookmarkStore()
           bookmarkStore.updateOne(message.data)
         }
