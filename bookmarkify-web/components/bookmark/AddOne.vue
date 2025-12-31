@@ -71,7 +71,7 @@ function addOne() {
     data.notice = '你输入的网址看起来有点怪...'
   }
 
-  bookmarksAddOne({ url: data.input }).then((res: HomeItem) => {
+  bookmarksAddOne(data.input).then((res: HomeItem) => {
     emit('success', res)
     data.notice = '添加成功!'
     data.input = undefined
