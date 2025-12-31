@@ -23,7 +23,7 @@ data class Bookmark(
 
     /* URL相关 */
     @TableId var id: String,
-    @field:Max(200) @field:Schema(description = "书签URL主体") var urlHost: String,      // sfz.uzuzuz.com.cn
+    @field:Max(200) @field:Schema(description = "书签根域名") var urlHost: String,      // sfz.uzuzuz.com.cn
     @field:Schema(description = "路径URL(不带参数)") var urlPath: String? = null,         // /test/info
     @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
