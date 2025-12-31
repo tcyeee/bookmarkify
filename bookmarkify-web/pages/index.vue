@@ -1,20 +1,25 @@
 <template>
   <div class="overflow-hidden select-none w-screen h-screen">
     <!-- 内容信息 -->
-    <div class="absolute w-screen h-screen z-1">
+    <div class="absolute inset-0 z-1 flex flex-col items-center">
       <!-- 时间信息 -->
       <HomeTimeStr
         :class="classFadeDate"
         @click="sceneToggle()"
-        class="text-[5rem] text-white opacity-80 text-center font-bold z-0" />
+        class="mt-6 sm:mt-10 text-[5rem] text-white opacity-80 text-center font-bold z-0 px-4" />
 
       <!-- 内容页面 -->
-      <Home
-        :status="data.appView"
-        class="absolute top-[30%] left-4 right-4 sm:left-6 sm:right-6 md:left-[12%] md:right-[12%] lg:left-[18%] lg:right-[18%]" />
+      <div class="mt-3 flex-1 w-full flex justify-center items-start">
+        <Transition name="fade-main">
+          <div v-if="data.appView"
+            class="w-full max-w-6xl px-4 sm:px-6 lg:px-12 mt-8 sm:mt-12 md:mt-16">
+            <LaunchpadList />
+          </div>
+        </Transition>
+      </div>
 
       <!-- 去设置 -->
-      <div class="fixed bottom-0">
+      <div class="fixed left-0 bottom-0 px-4 pb-4">
         <SettingButton @home-click="sceneToggle()" />
       </div>
     </div>
@@ -175,5 +180,16 @@ function sceneToggle(key?: string) {
 /* 播放APP动画-OUT */
 .animate-fade-date-out {
   animation: index-date-out 0.3s forwards;
+}
+
+.fade-main-enter-active,
+.fade-main-leave-active {
+  transition: all 100ms ease-in-out;
+}
+
+.fade-main-enter-from,
+.fade-main-leave-to {
+  transform: scale(1.2);
+  opacity: 0;
 }
 </style>
