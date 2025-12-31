@@ -32,17 +32,19 @@ class BookmarkServiceImpl(
     private val websiteLogoService: IWebsiteLogoService,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, Bookmark>() {
 
-    override fun parseAndNotice(bookmark: Bookmark, bookmarkUserLinkId: String) = parseBookmark(bookmark)
-        // 更新用户布局
-        .let { bookmarkUserLinkMapper.findShowById(bookmarkUserLinkId) }
-        // 通知到前端
-        .also { SocketUtils.updateBookmark(it.uid!!, it) }.let { }
+    override fun parseAndNotice(bookmark: Bookmark, bookmarkUserLinkId: String) =
+        parseBookmark(bookmark)
+            // 更新用户布局
+            .let { bookmarkUserLinkMapper.findShowById(bookmarkUserLinkId) }
+            // 通知到前端
+            .also { SocketUtils.updateBookmark(it.uid!!, it) }.let { }
 
     // 获取配置信息
     override fun setDefaultBookmark(uid: String) = projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
 
     override fun search(name: String): List<Bookmark> =
         ktQuery()
+            .eq(Bookmark::isActivity, true)
             .like(Bookmark::appName, name)
             .or().like(Bookmark::title, name)
             .or().like(Bookmark::description, name)
@@ -85,11 +87,14 @@ class BookmarkServiceImpl(
 
     private fun parseBookmark(bookmark: Bookmark) {
         log.warn("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
-        runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
-            if (it.message.toString().contains("403")) bookmark.toggleAntiCrawlerDetected(true)
-            if (it.message.toString().contains("304")) bookmark.toggleActivity(false)
-            return
-        }
+        runCatching { WebsiteParser.parse(bookmark.rawUrl) }
+            .getOrElse {
+                if (it.message.toString().contains("403")) bookmark.antiCrawlerDetected = true
+                bookmark.isActivity = false
+                saveOrUpdate(bookmark)
+                it.printStackTrace()
+                return
+            }
             // 填充bookmark基础信息 以及 bookmark-ico-base64信息
             .also { bookmark.initBaseInfo(it) }
             // 更新书签
@@ -116,18 +121,6 @@ class BookmarkServiceImpl(
     }
 
     private fun getByHost(urlHost: String): Bookmark? = ktQuery().eq(Bookmark::urlHost, urlHost).one()
-
-    fun Bookmark.toggleAntiCrawlerDetected(antiCrawlerDetected: Boolean) {
-        this.antiCrawlerDetected = antiCrawlerDetected
-        this.updateTime = LocalDateTime.now()
-        saveOrUpdate(this)
-    }
-
-    fun Bookmark.toggleActivity(activity: Boolean) {
-        this.isActivity = activity
-        this.updateTime = LocalDateTime.now()
-        saveOrUpdate(this)
-    }
 
     fun Bookmark.setMaximalLogoSize(maximal: Int) {
         this.maximalLogoSize = maximal
