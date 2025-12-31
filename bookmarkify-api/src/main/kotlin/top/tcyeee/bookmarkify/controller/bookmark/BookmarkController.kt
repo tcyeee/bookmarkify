@@ -4,7 +4,7 @@ import cn.dev33.satoken.annotation.SaIgnore
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
-import top.tcyeee.bookmarkify.entity.BookmarkShow
+import top.tcyeee.bookmarkify.config.throttle.Throttle
 
 import top.tcyeee.bookmarkify.entity.BookmarkUpdataPrams
 import top.tcyeee.bookmarkify.entity.HomeItemShow
@@ -26,6 +26,8 @@ class BookmarksController(
     private val bookmarkService: IBookmarkService,
     private val homeItemService: IHomeItemService,
 ) {
+
+    @Throttle(500)
     @PostMapping("/query")
     @Operation(summary = "我的书签")
     fun query(): List<HomeItemShow> = homeItemService.findShowByUid(BaseUtils.uid())
@@ -42,14 +44,17 @@ class BookmarksController(
     @Operation(summary = "删除(仅删除桌面排序)")
     fun delete(@RequestBody params: List<String>) = params.forEach(homeItemService::deleteOne)
 
+    @Throttle
     @PostMapping("/update")
     @Operation(summary = "修改")
     fun update(@RequestBody params: BookmarkUpdataPrams): Boolean = bookmarkUserLinkService.updateOne(params)
 
+    @Throttle
     @GetMapping("/addOne")
     @Operation(summary = "添加书签")
     fun addOne(@RequestParam url: String) = bookmarkService.addOne(url, BaseUtils.uid())
 
+    @Throttle
     @SaIgnore
     @GetMapping("/check")
     fun queryOne(@RequestParam url: String) =
