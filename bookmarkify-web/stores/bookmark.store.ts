@@ -29,18 +29,12 @@ export const useBookmarkStore = defineStore('bookmarks', {
       this.homeItems?.push(item)
     },
 
-
     // 局部更新某一个桌面布局Item（通常由 WebSocket 推送触发）
-    updateOne(item: Bookmark) {
-      // 使用 splice 替换数组元素，确保产生新的响应式引用，通知到视图层
-      // const index = this.bookmarks?.findIndex(
-      //   (it) => it.type === HomeItemType.BOOKMARK && it.typeApp.bookmarkId === item.bookmarkId
-      // )
-      // if (index !== undefined && index >= 0 && this.bookmarks) {
-      //   const current = this.bookmarks[index]
-      //   if (!current) return
-      //   this.bookmarks.splice(index, 1, { ...current, typeApp: { ...item } })
-      // }
+    updateOneBookmarkCell(item: HomeItem) {
+      const index = this.homeItems?.findIndex((it) => it.id === item.id)
+      if (index !== undefined && index >= 0 && this.homeItems) {
+        this.homeItems.splice(index, 1, { ...item })
+      }
     },
   },
 

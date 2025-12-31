@@ -37,7 +37,7 @@ data class BookmarkShow(
     /**
      * 设置大图LOGO还有备用Title
      */
-    fun initLogo() {
+    fun initLogo(): BookmarkShow {
         // 为图片添加签名
         if (isHd) OssUtils.getLogoUrl(bookmarkId!!, hdSize, 256)
             .also { iconHdUrl = it }
@@ -47,6 +47,7 @@ data class BookmarkShow(
         title = appName
             ?.takeIf { it.isNotBlank() } ?: title
             ?.takeIf { it.isNotBlank() } ?: urlHost
+        return this
     }
 }
 

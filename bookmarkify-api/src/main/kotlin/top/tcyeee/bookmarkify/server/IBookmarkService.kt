@@ -11,14 +11,6 @@ import top.tcyeee.bookmarkify.entity.entity.Bookmark
  * @date 3/10/24 15:45
  */
 interface IBookmarkService : IService<Bookmark> {
-    /**
-     * 检查单条书签信息
-     *
-     * @param bookmark 检查的书签
-     * @param bookmarkUserLinkId 书签和用户的关联ID
-     */
-    fun parseAndNotice(bookmark: Bookmark, bookmarkUserLinkId: String)
-
     /* 每天检查数据库所有书签活性 */
     fun checkAll()
 

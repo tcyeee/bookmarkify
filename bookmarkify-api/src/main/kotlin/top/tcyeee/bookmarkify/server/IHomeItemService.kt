@@ -3,7 +3,6 @@ package top.tcyeee.bookmarkify.server
 import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.HomeItemSortParams
-import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
 
 /**
@@ -17,7 +16,6 @@ interface IHomeItemService : IService<HomeItem> {
      * @param uid user id
      */
     fun findShowByUid(uid: String): List<HomeItemShow>
-
 
     /**
      * 对桌面图标进行排序
