@@ -9,7 +9,7 @@
         class="text-[5rem] text-white opacity-80 text-center font-bold z-0" />
 
       <!-- 内容页面 -->
-      <HomeMain :status="data.appView" class="absolute left-[10%] right-[10%] top-[30%]" />
+      <Home :status="data.appView" class="absolute left-[10%] right-[10%] top-[30%]" />
 
       <!-- 去设置 -->
       <div class="fixed bottom-0">

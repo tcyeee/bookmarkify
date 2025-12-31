@@ -14,30 +14,30 @@
       item-key="id">
       <template #item="item">
         <div class="bookmark-item" @contextmenu="onContextMenu($event, item.element)">
-          <BookmarkCellDir
+          <LaunchpadCellBookmark
             v-if="item.element.type == 'BOOKMARK_DIR'"
             :value="item.element.typeDir"
             @click="openDir(item.element)" />
-          <BookmarkCellItem
+          <LaunchpadCellBookmark
             v-if="item.element.type == 'BOOKMARK'"
             :value="item.element.typeApp"
             @click="openPage(item.element.typeApp)" />
-          <BookmarkCellLoading v-if="item.element.type == 'LOADING'" />
+          <LaunchpadCellBookmarkLoading v-if="item.element.type == 'LOADING'" />
         </div>
       </template>
       <template #footer>
-        <BookmarkAddOne @success="addBookmark" />
+        <LaunchpadAddOne @success="addBookmark" />
       </template>
     </draggable>
 
     <!-- 二级菜单 -->
     <div v-if="data.subItemId" v-for="bookmark in data.subApps" :key="bookmark.bookmarkId">
-      <BookmarkCellItem :value="bookmark" @click="openPage(bookmark)" />
+      <LaunchpadCellBookmark :value="bookmark" @click="openPage(bookmark)" />
     </div>
 
     <!-- 书签详情 -->
     <el-dialog v-model="data.bookmarkDetailDialog" class="bookmark-dialog-box" :show-close="false" width="600" top="25vh">
-      <BookmarkDetail v-if="data.bookmarkDetail" :data="data.bookmarkDetail" />
+      <LaunchpadDetail v-if="data.bookmarkDetail" :data="data.bookmarkDetail" />
     </el-dialog>
   </div>
 </template>
