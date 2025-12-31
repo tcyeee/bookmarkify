@@ -1,12 +1,8 @@
 package top.tcyeee.bookmarkify.server.impl
 
-import cn.hutool.core.util.ArrayUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
-import top.tcyeee.bookmarkify.config.exception.CommonException
-import top.tcyeee.bookmarkify.config.exception.ErrorType
-import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
@@ -43,21 +39,6 @@ class BookmarkServiceImpl(
             // 通知到前端
             .also { SocketUtils.updateBookmark(it.uid!!, it) }.let { }
 
-    private fun parseBookmark(bookmark: Bookmark) {
-        log.warn("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
-        runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
-            if (it.message.toString().contains("403")) bookmark.toggleAntiCrawlerDetected(true)
-            if (it.message.toString().contains("304")) bookmark.toggleActivity(false)
-            return
-        }
-            // 填充bookmark基础信息 以及 bokmark-ico-base64信息
-            .also { bookmark.initBaseInfo(it) }
-            // 更新书签
-            .also { this.saveOrUpdate(bookmark) }
-            // 保存网站LOGO/OG图片到OSS和数据库
-            .also { this.saveOrUpdateLogo(it, bookmark) }
-    }
-
     // 获取配置信息
     override fun setDefaultBookmark(uid: String) =
         projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
@@ -84,6 +65,20 @@ class BookmarkServiceImpl(
         return HomeItemShow(homeItem.id, uid, bookmark.id)
     }
 
+    private fun parseBookmark(bookmark: Bookmark) {
+        log.warn("[CHECK] 开始解析域名:{}...${bookmark.rawUrl}")
+        runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
+            if (it.message.toString().contains("403")) bookmark.toggleAntiCrawlerDetected(true)
+            if (it.message.toString().contains("304")) bookmark.toggleActivity(false)
+            return
+        }
+            // 填充bookmark基础信息 以及 bokmark-ico-base64信息
+            .also { bookmark.initBaseInfo(it) }
+            // 更新书签
+            .also { this.saveOrUpdate(bookmark) }
+            // 保存网站LOGO/OG图片到OSS和数据库
+            .also { this.saveOrUpdateLogo(it, bookmark) }
+    }
 
     /**
      * 保存网站LOGO/OG图片到数据库
