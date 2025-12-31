@@ -1,5 +1,5 @@
 <template>
-  <div class="overflow-hidden select-none">
+  <div class="overflow-hidden select-none w-screen h-screen">
     <!-- 内容信息 -->
     <div class="absolute w-screen h-screen z-1">
       <!-- 时间信息 -->
@@ -9,7 +9,9 @@
         class="text-[5rem] text-white opacity-80 text-center font-bold z-0" />
 
       <!-- 内容页面 -->
-      <Home :status="data.appView" class="absolute left-[10%] right-[10%] top-[30%]" />
+      <Home
+        :status="data.appView"
+        class="absolute top-[30%] left-4 right-4 sm:left-6 sm:right-6 md:left-[12%] md:right-[12%] lg:left-[18%] lg:right-[18%]" />
 
       <!-- 去设置 -->
       <div class="fixed bottom-0">

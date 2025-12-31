@@ -90,17 +90,17 @@ groups.set('常用操作', [
     },
   },
 ])
-// groups.set('账号操作', [
-//   {
-//     value: 'logout',
-//     label: '退出登陆',
-//     hint: '退出当前账号',
-//     run: async () => {
-//       await userStore.logout()
-//       close()
-//     },
-//   },
-// ])
+groups.set('账号操作', [
+  {
+    value: 'logout',
+    label: '退出登陆',
+    hint: '退出当前账号',
+    run: async () => {
+      await userStore.logout()
+      close()
+    },
+  },
+])
 
 const groupEntries = computed(() => Array.from(groups.entries()))
 const allItems = computed(() => groupEntries.value.flatMap(([, list]) => list))
