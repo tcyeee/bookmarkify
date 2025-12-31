@@ -2,5 +2,6 @@
   "cSpell.words": [
     "baomidou",
     "mybatisplus"
-  ]
+  ],
+  "java.configuration.updateBuildConfiguration": "interactive"
 }
