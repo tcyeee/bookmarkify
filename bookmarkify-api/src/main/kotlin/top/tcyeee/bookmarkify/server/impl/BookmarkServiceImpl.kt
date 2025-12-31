@@ -75,10 +75,8 @@ class BookmarkServiceImpl(
         val homeItem = HomeItem(uid, userLink.id).also { homeItemMapper.insert(it) }
 
         // 异步检查 书签如果没有高清icon, 并且updateTime已经超过一天再检查
-        if (bookmark.maximalLogoSize == 0 && bookmark.updateTime.isBefore(yesterday())) {
-            CompletableFuture.runAsync { this.parseAndNotice(bookmark, userLink.id) }
-            return HomeItemShow(homeItem.id, uid, bookmark.id)
-        }
+        if (bookmark.checkFlag) CompletableFuture.runAsync { this.parseAndNotice(bookmark, userLink.id) }
+            .also { return HomeItemShow(homeItem.id, uid, bookmark.id) }
 
         // 如果无需更新书签,则直接将旧书签打包为桌面元素返回
         return bookmarkUserLinkMapper.findShowById(userLink.id)
@@ -90,6 +88,7 @@ class BookmarkServiceImpl(
         runCatching { WebsiteParser.parse(bookmark.rawUrl) }
             .getOrElse {
                 if (it.message.toString().contains("403")) bookmark.antiCrawlerDetected = true
+                bookmark.parseErrMsg = it.message.toString()
                 bookmark.isActivity = false
                 saveOrUpdate(bookmark)
                 it.printStackTrace()
