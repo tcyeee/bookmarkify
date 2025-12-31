@@ -3,6 +3,8 @@ package top.tcyeee.bookmarkify.server.impl
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
+import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
+import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
@@ -55,6 +57,9 @@ class BookmarkServiceImpl(
         return bookmarkUserLinkMapper.findShowById(userLink.id)
             .let { HomeItemShow(uid, homeItem.id, it.also { it.initLogo() }) }
     }
+
+    override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow> =
+        bookmarkUserLinkMapper.allBookmarkByUid(uid).onEach { it.initLogo() }
 
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::parseBookmark)
 
