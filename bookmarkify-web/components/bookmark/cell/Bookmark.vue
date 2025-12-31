@@ -3,20 +3,42 @@
     <div
       class="w-app h-app rounded-xl bg-gray-100 center shadow overflow-hidden"
       :class="data.isDev ? 'border-4 border-dashed border-red-200' : ''">
-      <BookmarkLogo :bookmark="props.value" />
+      <div class="h-20 w-20 rounded-2xl bg-white flex justify-center items-center">
+        <img v-if="props.value.iconHdUrl && !hdError" :src="props.value.iconHdUrl" alt="" @error="onHdError" />
+        <img
+          v-else-if="!iconError"
+          class="w-8 h-8"
+          :src="`data:image/png;base64,${props.value.iconBase64}`"
+          alt=""
+          @error="onIconError" />
+        <img v-else class="w-8 h-8" src="/avatar/default.png" alt="" />
+      </div>
     </div>
-    <div class="w-18 text-sm mt-[0.3rem] text-white opacity-90 truncate text-center">{{ value.title || value.urlBase }}</div>
+    <div class="w-18 text-sm mt-[0.3rem] text-white opacity-90 truncate text-center">
+      {{ props.value.title || props.value.urlBase }}
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { onMounted, reactive, ref } from 'vue'
 import type { Bookmark } from '@typing'
 const props = defineProps<{ value: Bookmark }>()
 const data = reactive<{ isDev: boolean }>({ isDev: false })
+const hdError = ref(false)
+const iconError = ref(false)
 
 onMounted(() => {
   data.isDev = isLocalhostOrIP(props.value.urlFull)
 })
+
+function onHdError() {
+  hdError.value = true
+}
+
+function onIconError() {
+  iconError.value = true
+}
 
 function isLocalhostOrIP(url: string): boolean {
   // 定义匹配 localhost 或者 IP 地址的正则表达式
