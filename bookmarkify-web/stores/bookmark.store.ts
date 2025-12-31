@@ -2,11 +2,10 @@ import { defineStore } from 'pinia'
 import { HomeItemType, type Bookmark, type HomeItem } from '@typing'
 import { bookmarksShowAll } from '@api'
 
-// 书签相关的 Pinia Store（负责桌面书签布局及其更新通知）
+
 export const useBookmarkStore = defineStore('bookmarks', {
   state: () => ({
-    // 用户桌面布局信息（书签列表）
-    bookmarks: [] as Array<HomeItem>,
+    homeItems: [] as Array<HomeItem>,  // 用户桌面布局信息
   }),
 
   actions: {
@@ -15,27 +14,33 @@ export const useBookmarkStore = defineStore('bookmarks', {
       return !res || res.length === 0 ? [] : res.slice().sort((a, b) => a.sort - b.sort)
     },
 
-    // 从后端拉取全部书签并更新本地缓存
+    // 从后端拉取全部桌面布局信息并更新本地缓存
     async update(): Promise<Array<HomeItem>> {
       const res = await bookmarksShowAll()
-      this.bookmarks = this.sortData(res)
-      console.log(`[DEBUG]书签更新:${this.bookmarks?.length}`)
-      if (this.bookmarks === undefined) throw new Error('Bookmarks is undefined')
-
-      return this.bookmarks
+      this.homeItems = this.sortData(res)
+      console.log(`[DEBUG]桌面布局全部信息更新:${this.homeItems?.length}`)
+      if (this.homeItems === undefined) throw new Error('Bookmarks is undefined')
+      return this.homeItems
     },
 
-    // 局部更新某一个书签的数据（通常由 WebSocket 推送触发）
+    // 在书签列表中临时插入一个“加载中”的占位项
+    addEmpty(item: HomeItem) {
+      item.type = HomeItemType.LOADING
+      this.homeItems?.push(item)
+    },
+
+
+    // 局部更新某一个桌面布局Item（通常由 WebSocket 推送触发）
     updateOne(item: Bookmark) {
       // 使用 splice 替换数组元素，确保产生新的响应式引用，通知到视图层
-      const index = this.bookmarks?.findIndex(
-        (it) => it.type === HomeItemType.BOOKMARK && it.typeApp.bookmarkId === item.bookmarkId
-      )
-      if (index !== undefined && index >= 0 && this.bookmarks) {
-        const current = this.bookmarks[index]
-        if (!current) return
-        this.bookmarks.splice(index, 1, { ...current, typeApp: { ...item } })
-      }
+      // const index = this.bookmarks?.findIndex(
+      //   (it) => it.type === HomeItemType.BOOKMARK && it.typeApp.bookmarkId === item.bookmarkId
+      // )
+      // if (index !== undefined && index >= 0 && this.bookmarks) {
+      //   const current = this.bookmarks[index]
+      //   if (!current) return
+      //   this.bookmarks.splice(index, 1, { ...current, typeApp: { ...item } })
+      // }
     },
   },
 
