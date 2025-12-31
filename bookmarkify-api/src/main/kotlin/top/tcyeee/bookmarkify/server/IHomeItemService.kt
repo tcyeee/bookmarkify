@@ -32,12 +32,4 @@ interface IHomeItemService : IService<HomeItem> {
     fun copy(sourceUid: String, targetUid: String): List<HomeItem?>?
 
     fun deleteOne(id: String): Boolean
-
-    /**
-     * 初始化一个包含书签的桌面元素
-     * @param itemId 元素id
-     * @param bookmark 书签信息
-     * @return 桌面元素
-     */
-    fun initBookmarkItem(itemId: String, bookmark: Bookmark)
 }
