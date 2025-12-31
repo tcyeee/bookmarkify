@@ -1,8 +1,6 @@
 <template>
   <div>
-    <div
-      class="h-20 w-20 rounded-2xl bg-white flex justify-center items-center"
-      @click="sysStore.addBookmarkDialogVisible = true">
+    <div class="h-20 w-20 rounded-2xl bg-white flex justify-center items-center" @click="sysStore.addBookmarkDialogVisible = true">
       <span class="icon--add icon-size-35 text-gray-400" />
     </div>
 
@@ -10,6 +8,23 @@
       <div class="cy-modal-box min-h-100">
         <!-- Button for create bookmark -->
         <div class="fixed bottom-8 left-8 right-8">
+          <transition name="el-fade-in">
+            <div v-if="searchResults.length > 0 && data.input" class="mb-4 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg max-h-60 overflow-y-auto p-2 border border-gray-100">
+              <div v-for="item in searchResults" :key="item.id" class="flex items-center gap-3 p-2 hover:bg-gray-100/80 cursor-pointer rounded-lg transition-colors" @click="selectBookmark(item)">
+                <img v-if="item.iconBase64" :src="`data:image/png;base64,${item.iconBase64}`" class="w-8 h-8 rounded-full object-cover shadow-sm" />
+                <div v-else class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shadow-sm">
+                  <span class="icon--earth text-gray-400" />
+                </div>
+                <div class="flex flex-col overflow-hidden flex-1">
+                  <span class="text-sm font-bold truncate text-gray-800">{{
+                    item.title || item.appName || item.urlHost
+                  }}</span>
+                  <span class="text-xs text-gray-500 truncate">{{ item.description || item.urlHost }}</span>
+                </div>
+              </div>
+            </div>
+          </transition>
+
           <transition name="el-fade-in">
             <div v-if="data.notice" class="cy-chat cy-chat-start mb-4">
               <div class="cy-chat-bubble">{{ data.notice }}</div>
@@ -32,10 +47,26 @@
 </template>
 
 <script lang="ts" setup>
-import { bookmarksAddOne } from '@api'
+import { bookmarksAddOne, bookmarksSearch, bookmarksLinkOne } from '@api'
 import type { HomeItem } from '@typing'
+import { useDebounceFn } from '@vueuse/core'
 
 const sysStore = useSysStore()
+
+const searchResults = ref<any[]>([])
+
+const handleSearch = useDebounceFn(async (val: string) => {
+  if (!val) {
+    searchResults.value = []
+    return
+  }
+  try {
+    const res = await bookmarksSearch(val)
+    searchResults.value = res || []
+  } catch (e) {
+    console.error(e)
+  }
+}, 500)
 
 // 监测到添加书签窗口的显示与否
 watchEffect(() => {
@@ -83,9 +114,26 @@ function addOne() {
 }
 
 function checkInput() {
-  if (!data.input) return
+  if (!data.input) {
+    searchResults.value = []
+    return
+  }
   data.urlIsTrue = isUrl(data.input)
   if (data.urlIsTrue) data.notice = undefined
+  handleSearch(data.input)
+}
+
+function selectBookmark(item: any) {
+  bookmarksLinkOne(item.id).then((res: HomeItem) => {
+    emit('success', res)
+    data.notice = '关联成功!'
+    data.input = undefined
+    searchResults.value = []
+    setTimeout(() => {
+      data.notice = undefined
+      sysStore.addBookmarkDialogVisible = false
+    }, 500)
+  })
 }
 
 function isUrl(url: string): boolean {
