@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Max
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.utils.FileUtils
+import top.tcyeee.bookmarkify.utils.yesterday
 import java.io.Serializable
 import java.time.LocalDateTime
 
@@ -36,12 +37,15 @@ data class Bookmark(
 
     /* 状态信息 */
     @JsonIgnore @field:Schema(description = "是否反爬") var antiCrawlerDetected: Boolean = false,
-    @JsonIgnore @field:Schema(description = "是否失效") var isActivity: Boolean = true,
+    @JsonIgnore @field:Schema(description = "网站是否活跃") var isActivity: Boolean = false,
     @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
-    @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
+    @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
 ) {
     val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
+
+    // 检查标签,这里为true,说明这个书签需要被检查了
+    val checkFlag get() = updateTime?.isBefore(yesterday()) ?: true
 
     constructor(url: BookmarkUrlWrapper) : this(
         id = IdUtil.fastUUID(),
@@ -60,7 +64,6 @@ data class Bookmark(
     }
 }
 
-
 @TableName("bookmark_user_link")
 data class BookmarkUserLink(
     @TableId var id: String,
@@ -73,7 +76,6 @@ data class BookmarkUserLink(
     @JsonIgnore @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "是否删除") var deleted: Boolean = false,
 ) {
-
     constructor(bookmarkUrlWrapper: BookmarkUrlWrapper, uid: String, bookmark: Bookmark) : this(
         id = IdUtil.fastUUID(),
         uid = uid,
