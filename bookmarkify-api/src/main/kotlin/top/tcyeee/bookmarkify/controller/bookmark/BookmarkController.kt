@@ -9,6 +9,7 @@ import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.BookmarkUpdataPrams
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.HomeItemSortParams
+import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IHomeItemService
@@ -26,6 +27,13 @@ class BookmarksController(
     private val bookmarkService: IBookmarkService,
     private val homeItemService: IHomeItemService,
 ) {
+
+    // 通过书签简称/标题/描述/根域名,搜索书签
+    @Throttle
+    @Operation(summary = "按照名称搜索")
+    @PostMapping("/search")
+    fun search(@RequestParam name: String): List<Bookmark> = bookmarkService.search(name)
+
 
     @Throttle(500)
     @PostMapping("/query")

@@ -41,6 +41,15 @@ class BookmarkServiceImpl(
     // 获取配置信息
     override fun setDefaultBookmark(uid: String) = projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
 
+    override fun search(name: String): List<Bookmark> =
+        ktQuery()
+            .like(Bookmark::appName, name)
+            .or().like(Bookmark::title, name)
+            .or().like(Bookmark::description, name)
+            .or().like(Bookmark::urlHost, name)
+            .list()
+
+
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::parseBookmark)
 
     override fun addOne(url: String, uid: String): HomeItemShow {
