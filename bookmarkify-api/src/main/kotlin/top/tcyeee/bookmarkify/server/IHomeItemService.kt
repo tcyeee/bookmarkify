@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server
 import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.HomeItemSortParams
+import top.tcyeee.bookmarkify.entity.entity.Bookmark
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
 
 /**
@@ -31,4 +32,12 @@ interface IHomeItemService : IService<HomeItem> {
     fun copy(sourceUid: String, targetUid: String): List<HomeItem?>?
 
     fun deleteOne(id: String): Boolean
+
+    /**
+     * 初始化一个包含书签的桌面元素
+     * @param itemId 元素id
+     * @param bookmark 书签信息
+     * @return 桌面元素
+     */
+    fun initBookmarkItem(itemId: String, bookmark: Bookmark)
 }

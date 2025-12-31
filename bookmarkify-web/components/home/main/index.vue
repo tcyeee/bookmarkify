@@ -1,33 +1,24 @@
 <template>
   <Transition name="fade-main">
-    <BookmarkList v-if="status" :data="data.bookmarkList" class="mx-20 sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-280" />
+    <BookmarkList v-if="status" :data="bookmarkList" class="mx-20 sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-280" />
   </Transition>
 </template>
 
 <script lang="ts" setup>
+import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import { type HomeItem } from '@typing'
 const storeBookmark = useBookmarkStore()
+const { bookmarks } = storeToRefs(storeBookmark)
+const bookmarkList = computed<Array<HomeItem>>(() => bookmarks.value || [])
 
 defineProps<{
   status: boolean
 }>()
 
-const data = reactive<{
-  bookmarkList: Array<HomeItem>
-}>({
-  bookmarkList: storeBookmark.bookmarks || [],
-})
-
 onMounted(() => {
-  // 当书签更新后，更新数据
-  storeBookmark.addAction('updateBookmarkList', () => {
-    console.log('[DEBUG] 书签列表更新')
-    console.log('===========')
-    console.log(data.bookmarkList == storeBookmark.bookmarks)
-    data.bookmarkList = storeBookmark.bookmarks || []
-    console.log(data.bookmarkList == storeBookmark.bookmarks)
-    console.log('===========')
-  })
+  // 首次挂载时拉取一次书签列表
+  storeBookmark.update()
 })
 </script>
 

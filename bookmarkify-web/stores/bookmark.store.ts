@@ -7,8 +7,6 @@ export const useBookmarkStore = defineStore('bookmarks', {
   state: () => ({
     // 用户桌面布局信息（书签列表）
     bookmarks: undefined as Array<HomeItem> | undefined,
-    // 当书签更新后的回调函数集合（key 为回调函数名）
-    actions: {} as Record<string, Function>,
   }),
 
   actions: {
@@ -24,27 +22,13 @@ export const useBookmarkStore = defineStore('bookmarks', {
       console.log(`[DEBUG]书签更新:${this.bookmarks?.length}`)
       if (this.bookmarks === undefined) throw new Error('Bookmarks is undefined')
 
-      // 触发所有监听书签变更的回调
-      this.trigger()
       return this.bookmarks
-    },
-
-    // 触发所有已注册的书签更新回调
-    trigger() {
-      Object.values(this.actions).forEach((action) => action())
-    },
-
-    // 注册一个在书签更新时需要执行的回调函数
-    addAction(name: string, action: Function) {
-      this.actions[name] = action
-      console.log(`注册书签更新回调: ${name},当前回调数量: ${Object.keys(this.actions).length}`)
     },
 
     // 在书签列表中临时插入一个“加载中”的占位项
     addEmpty(item: HomeItem) {
       item.type = HomeItemType.LOADING
       this.bookmarks?.push(item)
-      this.trigger()
     },
 
     // 局部更新某一个书签的数据（通常由 WebSocket 推送触发）
