@@ -1,33 +1,14 @@
 <template>
   <Transition name="fade-main">
-    <BookmarkList v-if="status" :data="bookmarkList" class="mx-20 sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-280" />
+    <BookmarkList v-if="status" class="mx-20 sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-280" />
   </Transition>
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
-import { storeToRefs } from 'pinia'
-import { type HomeItem } from '@typing'
-
-const storeBookmark = useBookmarkStore()
-const { bookmarks } = storeToRefs(storeBookmark)
-const bookmarkList = computed<Array<HomeItem>>(() => bookmarks.value || [])
-
-defineProps<{
-  status: boolean
-}>()
-
-onMounted(() => {
-  // 首次挂载时拉取一次书签列表
-  storeBookmark.update()
-})
+defineProps<{  status: boolean}>()
 </script>
 
 <style scoped>
-/*
-  进入和离开动画可以使用不同
-  持续时间和速度曲线。
-*/
 .fade-main-enter-active,
 .fade-main-leave-active {
   transition: all 100ms ease-in-out;

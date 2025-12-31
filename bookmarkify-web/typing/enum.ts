@@ -26,7 +26,6 @@ export enum HomeItemType {
   BOOKMARK = 'BOOKMARK',
   BOOKMARK_DIR = 'BOOKMARK_DIR',
   SETTING = 'SETTING',
-  LOADING = 'LOADING',
 }
 
 export enum SocketTypes {

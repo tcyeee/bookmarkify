@@ -25,19 +25,17 @@ export const useBookmarkStore = defineStore('bookmarks', {
       return this.bookmarks
     },
 
-    // 在书签列表中临时插入一个“加载中”的占位项
-    addEmpty(item: HomeItem) {
-      item.type = HomeItemType.LOADING
-      this.bookmarks?.push(item)
-    },
-
     // 局部更新某一个书签的数据（通常由 WebSocket 推送触发）
     updateOne(item: Bookmark) {
-      this.bookmarks?.forEach((it) => {
-        if (it.type === HomeItemType.BOOKMARK && it.typeApp.bookmarkId === item.bookmarkId) {
-          it.typeApp = item
-        }
-      })
+      // 使用 splice 替换数组元素，确保产生新的响应式引用，通知到视图层
+      const index = this.bookmarks?.findIndex(
+        (it) => it.type === HomeItemType.BOOKMARK && it.typeApp.bookmarkId === item.bookmarkId
+      )
+      if (index !== undefined && index >= 0 && this.bookmarks) {
+        const current = this.bookmarks[index]
+        if (!current) return
+        this.bookmarks.splice(index, 1, { ...current, typeApp: { ...item } })
+      }
     },
   },
 
