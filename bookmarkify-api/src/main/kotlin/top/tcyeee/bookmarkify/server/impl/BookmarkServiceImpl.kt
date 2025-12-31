@@ -49,6 +49,17 @@ class BookmarkServiceImpl(
             .or().like(Bookmark::urlHost, name)
             .list()
 
+    override fun linkOne(bookmarkId: String, uid: String): HomeItemShow {
+        val userLink = this.findById(bookmarkId)
+            .let { BookmarkUserLink(it, uid) }
+            .also { bookmarkUserLinkMapper.insert(it) }
+
+        val homeItem = HomeItem(uid, userLink.id).also { homeItemMapper.insert(it) }
+
+        return bookmarkUserLinkMapper.findShowById(userLink.id)
+            .let { HomeItemShow(uid, homeItem.id, it.also { it.initLogo() }) }
+    }
+
 
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::parseBookmark)
 
@@ -57,11 +68,8 @@ class BookmarkServiceImpl(
         val bookmark = this.getByHost(bookmarkUrl.urlHost) ?: Bookmark(bookmarkUrl).also { save(it) }
 
         // 添加用户关联和桌面布局
-        val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark)
-        bookmarkUserLinkMapper.insert(userLink)
-
-        val homeItem = HomeItem(uid, userLink.id)
-        homeItemMapper.insert(homeItem)
+        val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark).also { bookmarkUserLinkMapper.insert(it) }
+        val homeItem = HomeItem(uid, userLink.id).also { homeItemMapper.insert(it) }
 
         // 异步检查 书签如果没有高清icon, 并且updateTime已经超过一天再检查
         if (bookmark.maximalLogoSize == 0 && bookmark.updateTime.isBefore(yesterday())) {
@@ -126,4 +134,6 @@ class BookmarkServiceImpl(
         this.updateTime = LocalDateTime.now()
         saveOrUpdate(this)
     }
+
+    fun findById(bookmarkId: String): Bookmark = requireNotNull(ktQuery().eq(Bookmark::id, bookmarkId).one())
 }

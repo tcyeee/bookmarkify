@@ -82,6 +82,15 @@ data class BookmarkUserLink(
         description = bookmark.description,
         urlFull = bookmarkUrlWrapper.urlRaw,
     )
+
+    constructor(bookmark: Bookmark, uid: String) : this(
+        id = IdUtil.fastUUID(),
+        uid = uid,
+        bookmarkId = bookmark.id,
+        title = bookmark.title,
+        description = bookmark.description,
+        urlFull = bookmark.rawUrl,
+    )
 }
 
 // ICON or OG

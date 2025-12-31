@@ -31,4 +31,5 @@ interface IBookmarkService : IService<Bookmark> {
     fun setDefaultBookmark(uid: String)
 
     fun search(name: String): List<Bookmark>
+    fun linkOne(bookmarkId: String, uid: String): HomeItemShow
 }
