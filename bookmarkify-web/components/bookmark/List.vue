@@ -26,7 +26,7 @@
         </div>
       </template>
       <template #footer>
-        <BookmarkAddOne @success="addOne" />
+        <BookmarkAddOne @success="addBookmark" />
       </template>
     </draggable>
 
@@ -50,7 +50,7 @@ import type { HomeItem, Bookmark, BookmarkSortParams } from '@typing'
 const sysStore = useSysStore()
 const bookmarkStore = useBookmarkStore()
 
-const pageData = computed<Array<HomeItem>>(() => bookmarkStore.bookmarks || [])
+const pageData = computed<Array<HomeItem>>(() => bookmarkStore.homeItems || [])
 
 const data = reactive<{
   subApps?: Array<Bookmark>
@@ -67,8 +67,12 @@ watchEffect(() => {
 
 const dragOptions = ref({ animation: 300, draggable: '.bookmark-item' })
 
-function addOne(item: HomeItem) {
-    bookmarkStore.bookmarks.push(item);
+function addBookmark(item: HomeItem) {
+  if(item.typeApp!=null){
+    bookmarkStore.homeItems.push(item);
+  }else{
+    bookmarkStore.addEmpty(item)
+  }
 }
 
 function openDir(item: HomeItem) {
@@ -80,7 +84,7 @@ function openDir(item: HomeItem) {
   })
 }
 
-function openPage(bookmark: Bookmark) {
+function openPage(bookmark: Bookmark) { 
   window.open(bookmark.urlFull, '_blank')
 }
 
