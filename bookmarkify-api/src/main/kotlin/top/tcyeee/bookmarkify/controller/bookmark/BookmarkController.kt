@@ -62,6 +62,10 @@ class BookmarksController(
     @Operation(summary = "添加书签")
     fun addOne(@RequestParam url: String) = bookmarkService.addOne(url, BaseUtils.uid())
 
+    @GetMapping("/linkOne")
+    @Operation(summary = "关联书签")
+    fun linkOne(@RequestParam bookmarkId: String) = bookmarkService.linkOne(bookmarkId, BaseUtils.uid())
+
     @Throttle
     @SaIgnore
     @GetMapping("/check")
