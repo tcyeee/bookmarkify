@@ -24,18 +24,20 @@
       <div class="text-xs text-slate-400 break-all">{{ detail.urlBase }}</div>
     </div>
 
-    <div>
-      <span class="cy-label-text block mb-2">书签名称</span>
-      <input
-        v-model="form.title"
-        type="text"
-        maxlength="150"
-        :disabled="saving"
-        placeholder="请输入书签名称"
-        class="mt-1 h-12 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-slate-500 dark:focus:ring-slate-600"
-        @blur="save"
-      />
-    </div>
+    <ActionInput
+      v-model="form.title"
+      label="书签名称"
+      placeholder="请输入书签名称"
+      :max-length="150"
+      :dirty="isDirty"
+      :busy="saving"
+      :disabled="saving"
+      primary-text="保存"
+      primary-loading-text="保存中..."
+      secondary-text="取消"
+      @primary="save"
+      @secondary="resetForm"
+    />
 
     <div>
       <span class="cy-label-text block mb-2">书签描述</span>
@@ -45,11 +47,6 @@
       </div>
     </div>
 
-    <div class="flex justify-end">
-      <button class="btn btn-primary btn-sm" :disabled="saving" @click="save">
-        {{ saving ? '保存中...' : '保存' }}
-      </button>
-    </div>
   </div>
 </template>
 
@@ -57,14 +54,14 @@
 import type { Bookmark, BookmarkUpdatePrams } from '@typing'
 import { bookmarksUpdate } from '@api'
 import { computed, reactive, ref, watch } from 'vue'
+import ActionInput from '../common/ActionInput.vue'
 
 const props = defineProps<{ data: Bookmark | null }>()
 
 const detail = computed(() => props.data)
 const saving = ref(false)
-const form = reactive({
-  title: '',
-})
+const form = reactive({ title: '' })
+const isDirty = computed(() => form.title.trim() !== (detail.value?.title || ''))
 
 const hdError = ref(false)
 const iconError = ref(false)
@@ -81,7 +78,7 @@ watch(
 )
 
 async function save() {
-  if (!detail.value || saving.value) return
+  if (!detail.value || saving.value || !isDirty.value) return
 
   const params: BookmarkUpdatePrams = {
     linkId: detail.value.bookmarkUserLinkId,
@@ -99,6 +96,11 @@ async function save() {
   } finally {
     saving.value = false
   }
+}
+
+function resetForm() {
+  if (!detail.value) return
+  form.title = detail.value.title || ''
 }
 
 function onHdError() {
