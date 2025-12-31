@@ -7,7 +7,7 @@
     <draggable
       class="flex flex-wrap flex-start gap-12"
       v-show="!data.subItemId"
-      v-model="data.pageData"
+      v-model="pageData"
       v-bind="dragOptions"
       group="people"
       @sort="sort"
@@ -50,32 +50,25 @@ import type { HomeItem, Bookmark, BookmarkSortParams } from '@typing'
 const sysStore = useSysStore()
 const bookmarkStore = useBookmarkStore()
 
-const props = defineProps<{ data: Array<HomeItem> }>()
+const pageData = computed<Array<HomeItem>>(() => bookmarkStore.bookmarks || [])
 
 const data = reactive<{
   subApps?: Array<Bookmark>
   subItemId?: string
-  pageData?: Array<HomeItem>
   bookmarkDetailDialog: boolean
   bookmarkDetail?: Bookmark
 }>({
-  pageData: props.data,
   bookmarkDetailDialog: false,
 })
 
 watchEffect(() => {
-  data.pageData = props.data
   sysStore.preventKeyEventsFlag = data.bookmarkDetailDialog
 })
 
 const dragOptions = ref({ animation: 300, draggable: '.bookmark-item' })
 
 function addOne(item: HomeItem) {
-  if(item.typeApp!=null){
     bookmarkStore.bookmarks.push(item);
-  }else{
-    bookmarkStore.addEmpty(item)
-  }
 }
 
 function openDir(item: HomeItem) {
@@ -118,14 +111,14 @@ function clickDetail(item: HomeItem) {
 function delOne(item: HomeItem) {
   bookmarksDel([item.id])
 
-  const index: number = data.pageData?.findIndex((a) => a.id == item.id) || -1
-  if (index !== -1) data.pageData?.splice(index, 1)
+  const index: number = pageData.value?.findIndex((a) => a.id == item.id) || -1
+  if (index !== -1) pageData.value?.splice(index, 1)
 }
 
 // 重新排序
 function sort() {
   let params: Array<BookmarkSortParams> = []
-  data.pageData?.forEach((item) => {
+  pageData.value?.forEach((item) => {
     params.push({ id: item.id, sort: params.length })
   })
   bookmarksSort(params)
