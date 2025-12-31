@@ -91,14 +91,6 @@ function openPage(bookmark: Bookmark) {
   window.open(bookmark.urlFull, '_blank')
 }
 
-function backTopLayer() {
-  data.subItemId = undefined
-  window.scrollTo({
-    top: 0,
-    behavior: 'smooth', // 平滑滚动到顶部，可选
-  })
-}
-
 function getClickMenu(item: HomeItem) {
   return [
     {

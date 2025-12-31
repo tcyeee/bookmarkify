@@ -8,6 +8,7 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { type HomeItem } from '@typing'
+
 const storeBookmark = useBookmarkStore()
 const { bookmarks } = storeToRefs(storeBookmark)
 const bookmarkList = computed<Array<HomeItem>>(() => bookmarks.value || [])

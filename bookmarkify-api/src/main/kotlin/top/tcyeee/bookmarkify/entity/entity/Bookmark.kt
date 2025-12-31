@@ -56,6 +56,7 @@ data class Bookmark(
 
     fun initBaseInfo(wrapper: BookmarkWrapper) {
         this.appName = wrapper.name  // TODO 使用AI将title中的信息简化
+        this.isActivity = true
         this.title = wrapper.title
         this.description = wrapper.description
         this.antiCrawlerDetected = wrapper.antiCrawlerDetected
