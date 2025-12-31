@@ -4,7 +4,23 @@
     <div class="text-sm text-slate-500 break-all">{{ detail.urlFull }}</div>
 
     <div class="flex items-center gap-4">
-      <img :src="iconSrc" class="w-20 h-20 rounded-2xl shadow-lg" />
+      <div class="h-20 w-20 rounded-2xl bg-white flex justify-center items-center shadow-lg overflow-hidden">
+        <img
+          v-if="detail.iconHdUrl && !hdError"
+          :src="detail.iconHdUrl"
+          alt="bookmark icon"
+          class="w-full h-full object-contain"
+          @error="onHdError"
+        />
+        <img
+          v-else-if="!iconError"
+          class="w-10 h-10"
+          :src="iconBase64"
+          alt="bookmark icon"
+          @error="onIconError"
+        />
+        <img v-else class="w-10 h-10" src="/avatar/default.png" alt="bookmark icon" />
+      </div>
       <div class="text-xs text-slate-400 break-all">{{ detail.urlBase }}</div>
     </div>
 
@@ -23,15 +39,10 @@
 
     <div>
       <span class="cy-label-text block mb-2">书签描述</span>
-      <textarea
-        v-model="form.description"
-        maxlength="2000"
-        rows="4"
-        :disabled="saving"
-        placeholder="请输入书签描述"
-        class="textarea textarea-bordered w-full min-h-[120px] focus:outline-none"
-        @blur="save"
-      />
+      <div
+        class="rounded-xl border border-slate-200 bg-linear-to-br from-slate-50 via-white to-slate-100 px-4 py-3 text-sm text-slate-700 leading-relaxed min-h-[96px] whitespace-pre-wrap shadow-sm dark:border-slate-700 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 dark:text-slate-100">
+        {{ detail.description || '暂无描述' }}
+      </div>
     </div>
 
     <div class="flex justify-end">
@@ -53,18 +64,18 @@ const detail = computed(() => props.data)
 const saving = ref(false)
 const form = reactive({
   title: '',
-  description: '',
 })
 
-const iconSrc = computed(
-  () => detail.value?.iconHdUrl || (detail.value as any)?.iconUrlFull || detail.value?.iconBase64 || ''
-)
+const hdError = ref(false)
+const iconError = ref(false)
+const iconBase64 = computed(() => `data:image/png;base64,${detail.value?.iconBase64 || ''}`)
 
 watch(
   () => detail.value,
   (val) => {
     form.title = val?.title || ''
-    form.description = val?.description || ''
+    hdError.value = false
+    iconError.value = false
   },
   { immediate: true }
 )
@@ -75,7 +86,7 @@ async function save() {
   const params: BookmarkUpdatePrams = {
     linkId: detail.value.bookmarkUserLinkId,
     title: form.title.trim(),
-    description: form.description.trim(),
+    description: detail.value.description?.trim() || '',
   }
 
   saving.value = true
@@ -88,6 +99,14 @@ async function save() {
   } finally {
     saving.value = false
   }
+}
+
+function onHdError() {
+  hdError.value = true
+}
+
+function onIconError() {
+  iconError.value = true
 }
 </script>
 

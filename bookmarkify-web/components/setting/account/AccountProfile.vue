@@ -22,36 +22,18 @@
 
       <div class="space-y-3 mt-20">
         <div class="text-lg font-semibold text-slate-800 dark:text-slate-100 py-3">基本信息</div>
-        <div class="flex items-end gap-3">
-          <label class="block flex-1 min-w-0">
-            <span class="text-sm text-slate-600 dark:text-slate-300">昵称</span>
-            <input
-              v-model="form.nickName"
-              type="text"
-              maxlength="20"
-              placeholder="请输入昵称"
-              class="mt-1 h-12 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-slate-500 dark:focus:ring-slate-600" />
-          </label>
-          <div
-            class="overflow-hidden transition-[width] duration-200 ease-out flex justify-end gap-2"
-            :style="buttonWrapperStyle">
-            <button
-              class="cy-btn cy-btn-accent h-12 px-5 min-w-24 transition duration-180 ease-out"
-              :style="buttonStyle"
-              @click="saveProfile"
-              :disabled="saving">
-              <span v-if="saving">保存中...</span>
-              <span v-else>保存</span>
-            </button>
-            <button
-              class="cy-btn cy-btn-ghost h-12 px-4 min-w-20 transition duration-180 ease-out"
-              :style="buttonStyle"
-              @click="resetForm"
-              :disabled="saving">
-              取消
-            </button>
-          </div>
-        </div>
+        <ActionInput
+          v-model="form.nickName"
+          label="昵称"
+          placeholder="请输入昵称"
+          :max-length="20"
+          :dirty="isDirty"
+          :busy="saving"
+          primary-text="保存"
+          primary-loading-text="保存中..."
+          secondary-text="取消"
+          @primary="saveProfile"
+          @secondary="resetForm" />
       </div>
 
       <div class="space-y-3 mt-20">
@@ -140,7 +122,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, watch, type CSSProperties } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { updateUserInfo } from '@api'
 import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
@@ -151,6 +133,7 @@ import BindPhoneModal from './BindPhoneModal.vue'
 import BindEmailModal from './BindEmailModal.vue'
 import AccountLogout from './AccountLogout.vue'
 import LoginDialog from './LoginDialog.vue'
+import ActionInput from '../../common/ActionInput.vue'
 
 const userStore = useUserStore()
 const accountStatus = computed<AuthStatusEnum | undefined>(() => userStore.authStatus)
@@ -192,16 +175,6 @@ const isDirty = computed(() => {
   const emailChanged = form.email !== (account.value?.email || '')
   return nicknameChanged || phoneChanged || emailChanged
 })
-const buttonWrapperStyle = computed(() => ({
-  width: isDirty.value ? '190px' : '0px',
-}))
-
-const buttonStyle = computed<CSSProperties>(() => ({
-  opacity: isDirty.value ? 1 : 0,
-  transform: isDirty.value ? 'translateX(0)' : 'translateX(10px)',
-  pointerEvents: isDirty.value ? 'auto' : 'none',
-}))
-
 const form = reactive({
   nickName: '',
   phone: '',
