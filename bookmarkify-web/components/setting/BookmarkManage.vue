@@ -61,40 +61,59 @@
         <div v-else-if="!bookmarks.length" class="rounded-md border border-dashed border-slate-200 dark:border-slate-800 px-4 py-6 text-sm text-slate-600 dark:text-slate-300">
           尚未发现你的书签，可以先通过上方导入或在主页添加。
         </div>
-        <div v-else class="space-y-3">
-          <div
-            v-for="bookmark in bookmarks"
-            :key="bookmark.bookmarkUserLinkId || bookmark.bookmarkId"
-            class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 p-4 transition-colors"
-          >
-            <div class="flex items-center gap-3">
-              <div class="h-10 w-10 rounded-md bg-white/70 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
-                <img
-                  class="h-full w-full object-contain"
-                  :src="`data:image/png;base64,${bookmark.iconBase64}`"
-                  :alt="bookmark.title"
-                />
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="text-base font-medium text-slate-900 dark:text-slate-100 truncate">{{ bookmarkTitle(bookmark) }}</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ bookmarkUrl(bookmark) }}</div>
-              </div>
-              <span
-                class="rounded-full px-3 py-1 text-xs font-medium"
-                :class="
-                  bookmark.isActivity
-                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
-                    : 'bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
-                "
+        <div
+          v-else
+          class="mt-2 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/40"
+        >
+          <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+            <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-300">
+              <tr>
+                <th scope="col" class="px-4 py-2 text-left font-medium">书签</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-100">
+              <tr
+                v-for="bookmark in bookmarks"
+                :key="bookmark.bookmarkUserLinkId || bookmark.bookmarkId"
+                class="hover:bg-slate-50 dark:hover:bg-slate-900/70 transition-colors"
               >
-                {{ bookmark.isActivity ? '正常' : '待检查' }}
-              </span>
-            </div>
-            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300 line-clamp-2 wrap-break-word">
-              {{ bookmark.description || '暂无描述' }}
-            </p>
-
-          </div>
+                <td class="px-4 py-2 align-middle">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <div
+                      class="relative h-7 w-7 shrink-0 rounded-md bg-white/70 dark:bg-slate-800 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-700"
+                    >
+                      <span
+                        class="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-white dark:ring-slate-900"
+                        :class="bookmark.isActivity ? 'bg-emerald-500' : 'bg-rose-500'"
+                        aria-hidden="true"
+                      />
+                      <div class="h-7 w-7 overflow-hidden rounded-md">
+                        <img
+                          class="h-full w-full object-contain"
+                          :src="`data:image/png;base64,${bookmark.iconBase64}`"
+                          :alt="bookmark.title"
+                        />
+                      </div>
+                    </div>
+                    <div class="min-w-0">
+                      <a
+                        class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate hover:text-sky-600 dark:hover:text-sky-400"
+                        :title="bookmark.description || bookmark.urlFull || bookmark.title"
+                        :href="bookmark.urlFull"
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        {{ bookmark.title }}
+                      </a>
+                      <div class="text-xs text-slate-500 dark:text-slate-400 truncate" :title="bookmark.urlBase">
+                        {{ bookmark.urlBase || '—' }}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -191,18 +210,6 @@ async function handleImport() {
   }
 }
 
-function bookmarkTitle(bookmark: Bookmark) {
-  return bookmark.title || bookmark.urlBase || '未命名书签'
-}
-
-function bookmarkUrl(bookmark: Bookmark) {
-  return bookmark.urlFull || bookmark.urlBase || '#'
-}
-
-function bookmarkInitial(bookmark: Bookmark) {
-  return bookmarkTitle(bookmark).slice(0, 1).toUpperCase()
-}
-
 async function fetchBookmarks() {
   bookmarksLoading.value = true
   bookmarkError.value = ''
@@ -224,14 +231,6 @@ function handleSearchBookmarks() {
 function handleResetSearch() {
   keyword.value = ''
   fetchBookmarks()
-}
-
-function copyUrl(url: string) {
-  if (!url || url === '#') return
-  navigator.clipboard.writeText(url).then(
-    () => ElMessage.success('已复制到剪贴板'),
-    () => ElMessage.error('复制失败，请手动复制')
-  )
 }
 
 onMounted(fetchBookmarks)
