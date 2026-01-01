@@ -36,7 +36,5 @@ export const useBookmarkStore = defineStore('homeItems', {
       }
     },
   },
-
-  // 通过 pinia-plugin-persistedstate 将书签持久化到 localStorage
   persist: { storage: piniaPluginPersistedstate.localStorage() },
 })

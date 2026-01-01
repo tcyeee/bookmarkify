@@ -127,10 +127,9 @@ export const useUserStore = defineStore('user', {
         this.$reset()
 
         // 显式清除持久化存储，防止被 hydrate 再写回
-        if (process.client) {
+        if (import.meta.client) {
           localStorage.removeItem('homeItems')
           localStorage.removeItem('user')
-          // 兼容后端/其他逻辑写入的 user cookie
           document.cookie = 'user=; Max-Age=0; path=/'
         }
 
@@ -139,7 +138,5 @@ export const useUserStore = defineStore('user', {
       }
     },
   },
-
-  // 启用持久化插件，将用户信息存到本地（localStorage 等）
-  persist: true,
+  persist: { storage: piniaPluginPersistedstate.localStorage() },
 })
