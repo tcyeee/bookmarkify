@@ -40,7 +40,7 @@ class LoginController(private val userService: UserServiceImpl) {
     @Throttle
     @GetMapping("/logout")
     @Operation(summary = "退出登录")
-    fun logout() = userService.loginOut()
+    fun logout(response: HttpServletResponse) = userService.loginOut(response)
 
     @GetMapping("captcha/image")
     @Operation(summary = "获取人机验证图案，返回base64")
