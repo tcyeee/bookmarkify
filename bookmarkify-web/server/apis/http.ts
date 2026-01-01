@@ -63,7 +63,7 @@ export default class http {
     const userStore = useUserStore()
 
     // 除了Login，其他都需要token
-    if (method != 'GET' && !path.startsWith('/auth/') && !userStore.account?.token) userStore.loginOrRegister()
+    if (method != 'GET' && !path.startsWith('/auth/') && !userStore.account?.token) await userStore.loginOrRegister()
 
     // 创建请求
     console.log(`[API] ${method}::${path}`)

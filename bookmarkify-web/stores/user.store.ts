@@ -109,22 +109,34 @@ export const useUserStore = defineStore('user', {
     // 退出登录：清理所有与用户相关的状态和连接
     async logout() {
       console.log('DEBUG: 退出登陆')
-      // 通知后端注销登录状态
-      await authLogout()
-
       // 依次获取需要联动清理的其他 store
       const webSocketStore = useWebSocketStore()
       const bookmarkStore = useBookmarkStore()
       const sysStore = useSysStore()
 
-      // 断开 websocket 连接
-      webSocketStore.disconnect()
-      bookmarkStore.$reset()
-      sysStore.$reset()
-      this.$reset()
+      try {
+        // 通知后端注销登录状态（失败也继续本地清理）
+        await authLogout()
+      } catch (err) {
+        console.error('authLogout failed, continue cleanup', err)
+      } finally {
+        // 断开 websocket 连接
+        webSocketStore.disconnect()
+        bookmarkStore.$reset()
+        sysStore.$reset()
+        this.$reset()
 
-      // 跳转回欢迎/登录引导页
-      navigateTo('/welcome')
+        // 显式清除持久化存储，防止被 hydrate 再写回
+        if (process.client) {
+          localStorage.removeItem('homeItems')
+          localStorage.removeItem('user')
+          // 兼容后端/其他逻辑写入的 user cookie
+          document.cookie = 'user=; Max-Age=0; path=/'
+        }
+
+        // 跳转回欢迎/登录引导页
+        navigateTo('/welcome')
+      }
     },
   },
 
