@@ -1,71 +1,48 @@
 <template>
-  <div class="space-y-2 text-slate-900 dark:text-slate-100 transition-colors">
-    <h3 class="pb-5 text-xl font-semibold text-slate-900 dark:text-slate-100 transition-colors">导入 Chrome 书签</h3>
-
-    <div class="bg-white dark:bg-slate-950/80 transition-colors">
-      <div class="flex flex-wrap items-center gap-3">
-        <label class="cy-btn cy-btn-soft cursor-pointer flex items-center gap-2">
-          <input ref="fileInputRef" type="file" accept=".html,.htm" class="hidden" @change="handleFileChange" />
-          <span class="icon--memory-upload icon-size-22"></span>
-          <span>选择书签文件</span>
-        </label>
-
-        <button class="cy-btn cy-btn-accent" :disabled="!selectedFile || importing" @click="handleImport">
-          <span v-if="importing">导入中...</span>
-          <span v-else>开始导入</span>
-        </button>
-
-        <button v-if="selectedFile" class="cy-btn cy-btn-ghost" :disabled="importing" @click="handleReset">清除选择</button>
+  <div class="space-y-3 text-slate-900 dark:text-slate-100 transition-colors">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h3 class="text-xl font-semibold">书签管理</h3>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">导入 Chrome 书签并快速检索当前账号的链接。</p>
       </div>
-
-      <div class="mt-3 text-sm text-slate-600 dark:text-slate-300 transition-colors">
-        <span v-if="selectedFile">已选择：{{ selectedFile.name }}</span>
-        <span v-else>尚未选择文件</span>
-      </div>
-
-      <ul
-        class="mt-4 pl-5 list-disc space-y-1 text-sm text-slate-600 dark:text-slate-300 transition-colors marker:text-slate-500 dark:marker:text-slate-400">
-        <li>打开 Chrome 设置 &gt; 书签管理器 &gt; 右上角「⋮」&gt; 导出书签。</li>
-        <li>将导出的 `.html` 文件在此处选择并导入。</li>
-        <li>导入过程中不会覆盖你已有的书签，仅做合并。</li>
-      </ul>
-
-      <div v-if="statusMessage" class="mt-4 rounded-md px-4 py-3 text-sm transition-colors" :class="statusClass">
-        {{ statusMessage }}
-      </div>
+      <label
+        class="cy-btn cy-btn-accent flex items-center gap-2 cursor-pointer"
+        :class="{ 'opacity-70 pointer-events-none': importing }"
+      >
+        <input ref="fileInputRef" type="file" accept=".html,.htm" class="hidden" :disabled="importing" @change="handleFileChange" />
+        <span class="icon--memory-upload icon-size-20"></span>
+        <span>{{ importing ? '导入中…' : '导入书签' }}</span>
+      </label>
     </div>
 
-    <h3 class="pt-8 pb-3 text-xl font-semibold text-slate-900 dark:text-slate-100 transition-colors">管理我的书签</h3>
-
-    <div class="bg-white dark:bg-slate-950/80 transition-colors">
-      <div class="flex flex-wrap items-center gap-3 justify-between">
-        <div class="flex flex-wrap items-center gap-2">
-          <input
-            v-model="keyword"
-            type="text"
-            placeholder="输入标题、描述或域名搜索"
-            class="cy-input cy-input-sm min-w-[220px]"
-            :disabled="bookmarksLoading"
-            @keyup.enter="handleSearchBookmarks"
-          />
-          <button class="cy-btn cy-btn-soft" :disabled="bookmarksLoading" @click="handleSearchBookmarks">搜索</button>
-          <button class="cy-btn cy-btn-ghost" :disabled="bookmarksLoading" @click="handleResetSearch">重置</button>
-        </div>
+    <div class="bg-white dark:bg-slate-950/80 transition-colors rounded-lg border border-slate-200 dark:border-slate-800">
+      <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 px-4 py-3">
+        <input
+          v-model="keyword"
+          type="text"
+          placeholder="输入标题、描述或域名搜索"
+          class="cy-input cy-input-sm min-w-[220px] flex-1"
+          :disabled="bookmarksLoading"
+          @keyup.enter="handleSearchBookmarks"
+        />
+        <button class="cy-btn cy-btn-soft" :disabled="bookmarksLoading" @click="handleSearchBookmarks">搜索</button>
+        <button class="cy-btn cy-btn-ghost" :disabled="bookmarksLoading" @click="handleResetSearch">重置</button>
       </div>
 
-      <div class="mt-4">
+      <div v-if="statusMessage" class="mx-4 mt-3 rounded-md px-4 py-3 text-sm transition-colors" :class="statusClass">
+        {{ statusMessage }}
+      </div>
+
+      <div class="p-4">
         <div v-if="bookmarksLoading" class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
           <span class="icon--loading icon-size-18 animate-spin" />
           <span>正在加载书签...</span>
         </div>
         <div v-else-if="!bookmarks.length" class="rounded-md border border-dashed border-slate-200 dark:border-slate-800 px-4 py-6 text-sm text-slate-600 dark:text-slate-300">
-          尚未发现你的书签，可以先通过上方导入或在主页添加。
+          尚未发现你的书签，可以先导入或在主页添加。
         </div>
-        <div
-          v-else
-          class="mt-2 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/40"
-        >
-          <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+        <div v-else class="mt-1 overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm bg-white/60 dark:bg-slate-900/40 rounded-lg">
             <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-300">
               <tr>
                 <th scope="col" class="px-4 py-2 text-left font-medium">书签</th>
@@ -117,7 +94,7 @@
         </div>
       </div>
 
-      <div v-if="bookmarkError" class="mt-4 rounded-md bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200 px-4 py-3 text-sm">
+      <div v-if="bookmarkError" class="mx-4 mb-4 rounded-md bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200 px-4 py-3 text-sm">
         {{ bookmarkError }}
       </div>
     </div>
@@ -138,7 +115,7 @@ const bookmarkError = ref('')
 const bookmarks = ref<Bookmark[]>([])
 const keyword = ref('')
 
-function handleFileChange(event: Event) {
+async function handleFileChange(event: Event) {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
 
@@ -161,15 +138,8 @@ function handleFileChange(event: Event) {
   }
 
   selectedFile.value = file
-}
 
-function handleReset() {
-  selectedFile.value = null
-  statusMessage.value = ''
-  statusType.value = 'default'
-  if (fileInputRef.value) {
-    fileInputRef.value.value = ''
-  }
+  await handleImport()
 }
 
 const statusClass = computed(() =>
@@ -207,6 +177,10 @@ async function handleImport() {
     statusType.value = 'error'
   } finally {
     importing.value = false
+    selectedFile.value = null
+    if (fileInputRef.value) {
+      fileInputRef.value.value = ''
+    }
   }
 }
 
