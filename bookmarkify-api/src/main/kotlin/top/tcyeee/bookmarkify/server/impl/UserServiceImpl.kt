@@ -53,7 +53,8 @@ class UserServiceImpl(
         avatar = fileMapper.selectById(this.avatarFileId)
         userSetting = queryUserSetting(uid)
     } ?: run {
-        this.loginOut()
+        StpUtil.getSession().clear()
+        StpUtil.logout()
         throw CommonException(ErrorType.E202)
     }
 
@@ -68,10 +69,8 @@ class UserServiceImpl(
     ): UserSessionInfo = if (StpUtil.isLogin() && BaseUtils.user() != null) {
         BaseUtils.user()!!
     } else {
-        BaseUtils.sessionRegisterDeviceId(request, response, projectConfig)
-            .let(this::queryOrRegisterByDeviceId)
-            .also { bookmarkService.setDefaultBookmark(it.id) }
-            .also { StpUtil.login(it.id, true) }
+        BaseUtils.sessionRegisterDeviceId(request, response, projectConfig).let(this::queryOrRegisterByDeviceId)
+            .also { bookmarkService.setDefaultBookmark(it.id) }.also { StpUtil.login(it.id, true) }
             .authVO(StpUtil.getTokenValue()).writeToSession()
     }
 
@@ -79,9 +78,7 @@ class UserServiceImpl(
         // 清除session
         StpUtil.getSession().clear()
         StpUtil.logout()
-        // 清除cookie
-        Cookie(projectConfig.uidCookieName, "").apply { maxAge = 0; path = "/" }
-            .also { response.addCookie(it) }
+        Cookie(projectConfig.uidCookieName, "").apply { maxAge = 0; path = "/" }.also { response.addCookie(it) }
     }
 
     override fun sendSms(uid: String, params: CaptchaSmsParams): Boolean {
@@ -148,9 +145,10 @@ class UserServiceImpl(
         RedisUtils.del(redisType, uid)
 
         val userEntity = findUser()
+        // 用户正在使用验证码登录
         return if (userEntity != null) {
-            // 有认证账户则重新登录
-            loginOut()
+            StpUtil.logout()
+            StpUtil.getSession().clear()
             StpUtil.login(userEntity.id, true)
             userEntity.authVO(StpUtil.getTokenValue()).writeToSession()
         } else {
