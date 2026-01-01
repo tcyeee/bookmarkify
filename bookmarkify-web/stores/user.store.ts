@@ -130,7 +130,7 @@ export const useUserStore = defineStore('user', {
         if (import.meta.client) {
           localStorage.removeItem('homeItems')
           localStorage.removeItem('user')
-          document.cookie = 'user=; Max-Age=0; path=/'
+          document.cookie = 'user=;deviceUid=; Max-Age=0; path=/'
         }
 
         // 跳转回欢迎/登录引导页
