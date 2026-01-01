@@ -31,7 +31,7 @@ interface IUserService : IService<UserEntity> {
      */
     fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo
 
-    fun loginOut()
+    fun loginOut(response: HttpServletResponse)
 
     /**
      * 获取用户本人信息，如果数据库没有，则需要同步注册此人的TOKEN

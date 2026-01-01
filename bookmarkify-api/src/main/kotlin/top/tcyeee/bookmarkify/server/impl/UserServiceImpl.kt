@@ -5,6 +5,7 @@ import cn.hutool.captcha.CaptchaUtil
 import cn.hutool.core.util.RandomUtil
 import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
+import jakarta.servlet.http.Cookie
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.stereotype.Service
@@ -74,9 +75,13 @@ class UserServiceImpl(
             .authVO(StpUtil.getTokenValue()).writeToSession()
     }
 
-    override fun loginOut() {
+    override fun loginOut(response: HttpServletResponse) {
+        // 清除session
         StpUtil.getSession().clear()
         StpUtil.logout()
+        // 清除cookie
+        Cookie(projectConfig.uidCookieName, "").apply { maxAge = 0; path = "/" }
+            .also { response.addCookie(it) }
     }
 
     override fun sendSms(uid: String, params: CaptchaSmsParams): Boolean {
