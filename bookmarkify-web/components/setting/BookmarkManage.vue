@@ -34,15 +34,90 @@
         {{ statusMessage }}
       </div>
     </div>
+
+    <h3 class="pt-8 pb-3 text-xl font-semibold text-slate-900 dark:text-slate-100 transition-colors">管理我的书签</h3>
+
+    <div class="bg-white dark:bg-slate-950/80 transition-colors">
+      <div class="flex flex-wrap items-center gap-3 justify-between">
+        <div class="flex flex-wrap items-center gap-2">
+          <input
+            v-model="keyword"
+            type="text"
+            placeholder="输入标题、描述或域名搜索"
+            class="cy-input cy-input-sm min-w-[220px]"
+            :disabled="bookmarksLoading"
+            @keyup.enter="handleSearchBookmarks"
+          />
+          <button class="cy-btn cy-btn-soft" :disabled="bookmarksLoading" @click="handleSearchBookmarks">搜索</button>
+          <button class="cy-btn cy-btn-ghost" :disabled="bookmarksLoading" @click="handleResetSearch">重置</button>
+        </div>
+      </div>
+
+      <div class="mt-4">
+        <div v-if="bookmarksLoading" class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <span class="icon--loading icon-size-18 animate-spin" />
+          <span>正在加载书签...</span>
+        </div>
+        <div v-else-if="!bookmarks.length" class="rounded-md border border-dashed border-slate-200 dark:border-slate-800 px-4 py-6 text-sm text-slate-600 dark:text-slate-300">
+          尚未发现你的书签，可以先通过上方导入或在主页添加。
+        </div>
+        <div v-else class="space-y-3">
+          <div
+            v-for="bookmark in bookmarks"
+            :key="bookmark.bookmarkUserLinkId || bookmark.bookmarkId"
+            class="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 p-4 transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-md bg-white/70 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+                <img
+                  class="h-full w-full object-contain"
+                  :src="`data:image/png;base64,${bookmark.iconBase64}`"
+                  :alt="bookmark.title"
+                />
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-base font-medium text-slate-900 dark:text-slate-100 truncate">{{ bookmarkTitle(bookmark) }}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ bookmarkUrl(bookmark) }}</div>
+              </div>
+              <span
+                class="rounded-full px-3 py-1 text-xs font-medium"
+                :class="
+                  bookmark.isActivity
+                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+                    : 'bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
+                "
+              >
+                {{ bookmark.isActivity ? '正常' : '待检查' }}
+              </span>
+            </div>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300 line-clamp-2 wrap-break-word">
+              {{ bookmark.description || '暂无描述' }}
+            </p>
+
+          </div>
+        </div>
+      </div>
+
+      <div v-if="bookmarkError" class="mt-4 rounded-md bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200 px-4 py-3 text-sm">
+        {{ bookmarkError }}
+      </div>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { bookmarksList } from '@api'
+import type { Bookmark } from '@typing'
+
 const fileInputRef = ref<HTMLInputElement>()
 const selectedFile = ref<File | null>(null)
 const importing = ref(false)
 const statusMessage = ref('')
 const statusType = ref<'default' | 'success' | 'error'>('default')
+const bookmarksLoading = ref(false)
+const bookmarkError = ref('')
+const bookmarks = ref<Bookmark[]>([])
+const keyword = ref('')
 
 function handleFileChange(event: Event) {
   const target = event.target as HTMLInputElement
@@ -115,4 +190,49 @@ async function handleImport() {
     importing.value = false
   }
 }
+
+function bookmarkTitle(bookmark: Bookmark) {
+  return bookmark.title || bookmark.urlBase || '未命名书签'
+}
+
+function bookmarkUrl(bookmark: Bookmark) {
+  return bookmark.urlFull || bookmark.urlBase || '#'
+}
+
+function bookmarkInitial(bookmark: Bookmark) {
+  return bookmarkTitle(bookmark).slice(0, 1).toUpperCase()
+}
+
+async function fetchBookmarks() {
+  bookmarksLoading.value = true
+  bookmarkError.value = ''
+  try {
+    const payload = keyword.value.trim() ? { name: keyword.value.trim() } : {}
+    const res = await bookmarksList(payload)
+    bookmarks.value = res ?? []
+  } catch (error: any) {
+    bookmarkError.value = error?.msg || error?.message || '获取书签失败，请稍后重试。'
+  } finally {
+    bookmarksLoading.value = false
+  }
+}
+
+function handleSearchBookmarks() {
+  fetchBookmarks()
+}
+
+function handleResetSearch() {
+  keyword.value = ''
+  fetchBookmarks()
+}
+
+function copyUrl(url: string) {
+  if (!url || url === '#') return
+  navigator.clipboard.writeText(url).then(
+    () => ElMessage.success('已复制到剪贴板'),
+    () => ElMessage.error('复制失败，请手动复制')
+  )
+}
+
+onMounted(fetchBookmarks)
 </script>
