@@ -2,8 +2,7 @@ import { defineStore } from 'pinia'
 import { HomeItemType, type HomeItem } from '@typing'
 import { bookmarksShowAll } from '@api'
 
-
-export const useBookmarkStore = defineStore('homeItem', {
+export const useBookmarkStore = defineStore('homeItems', {
   state: () => ({
     homeItems: [] as Array<HomeItem>,  // 用户桌面布局信息
   }),

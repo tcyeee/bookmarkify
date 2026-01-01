@@ -123,13 +123,6 @@ export const useUserStore = defineStore('user', {
       sysStore.$reset()
       this.$reset()
 
-      // 在未知情况下, $reset会失效, 所以这里手动清除
-      bookmarkStore.homeItems = []
-      this.account = undefined
-      this.setting = undefined
-      this.avatar = undefined
-      this.loading = false
-
       // 跳转回欢迎/登录引导页
       navigateTo('/welcome')
     },
