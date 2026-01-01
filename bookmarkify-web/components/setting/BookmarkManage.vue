@@ -6,13 +6,7 @@
       <div class="flex flex-wrap items-center gap-3">
         <label class="cy-btn cy-btn-soft cursor-pointer flex items-center gap-2">
           <input ref="fileInputRef" type="file" accept=".html,.htm" class="hidden" @change="handleFileChange" />
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
+          <span class="icon--memory-upload icon-size-22"></span>
           <span>选择书签文件</span>
         </label>
 

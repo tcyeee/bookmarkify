@@ -4,7 +4,7 @@
       <div class="px-4 pt-4 pb-3">
         <div class="relative">
           <span
-            class="icon--memory--search icon-size-25 pointer-events-none absolute inset-y-3 left-3 text-slate-400 dark:text-slate-500"></span>
+            class="icon--memory-search icon-size-25 pointer-events-none absolute inset-y-3 left-3 text-slate-400 dark:text-slate-500"></span>
           <Command.Input
             class="w-full rounded-lg border border-slate-200 bg-white/80 px-11 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-900/60"
             v-model:value="search"
