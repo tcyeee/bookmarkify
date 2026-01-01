@@ -138,5 +138,7 @@ export const useUserStore = defineStore('user', {
       }
     },
   },
-  persist: { storage: piniaPluginPersistedstate.localStorage() },
+  // 这里不使用local storage 是因为如果使用会导致每次
+  // 刷新重新加载信息需要一定的时间, 导致登陆状态丢失
+  persist: true,
 })

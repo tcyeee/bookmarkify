@@ -10,6 +10,12 @@ export interface BookmarksAddOneParams {
   url: string
 }
 
+export interface BookmarkListParams {
+  name?: string
+  currentPage?: number
+  pageSize?: number
+}
+
 export interface BookmarkTag {
   id: string
   name: string

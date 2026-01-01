@@ -2,7 +2,6 @@ package top.tcyeee.bookmarkify.entity
 
 import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.EnumUtil
-import cn.hutool.core.util.StrUtil
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
@@ -41,7 +40,6 @@ data class BookmarkShow(
         // 为图片添加签名
         if (isHd) OssUtils.getLogoUrl(bookmarkId!!, hdSize, 256)
             .also { iconHdUrl = it }
-            .also { if (it.isNotEmpty()) iconBase64 = null }
 
         // 设置备用title
         title = appName
