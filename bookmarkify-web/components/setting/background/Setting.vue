@@ -75,7 +75,10 @@ function initGradientConfig() {
   }
 }
 
-onMounted(initGradientConfig)
+onMounted(async () => {
+  initGradientConfig()
+  await sysStore.refreshSystemConfig()
+})
 
 watch(
   () => props.backgroundConfig,
