@@ -4,10 +4,7 @@
       :background-path="previewUrl || (currentType === BackgroundType.IMAGE ? backgroundPath : null)"
       :background-config="previewConfig" />
 
-    <TypeSelector v-model="currentType" class="w-full max-w-2xl" />
-
     <GradientConfig
-      v-if="currentType === BackgroundType.GRADIENT"
       class="w-full max-w-2xl"
       :colors="gradientColors"
       :direction="gradientDirection"
@@ -20,7 +17,6 @@
       @reset="handleReset" />
 
     <ImageUploader
-      v-else
       class="w-full max-w-2xl"
       :preview-url="previewUrl"
       :background-path="backgroundPath"
@@ -42,7 +38,6 @@ import { imageConfig } from '@config/image.config'
 import BackgroundPreview from './Preview.vue'
 import GradientConfig from '../background/GradientConfig.vue'
 import ImageUploader from '../background/ImageUploader.vue'
-import TypeSelector from '../background/TypeSelector.vue'
 
 const sysStore = useSysStore()
 const userStore = useUserStore()
@@ -125,10 +120,12 @@ watch(
 )
 
 function setGradientColors(colors: string[]) {
+  currentType.value = BackgroundType.GRADIENT
   gradientColors.value = colors
 }
 
 function setGradientDirection(direction: number) {
+  currentType.value = BackgroundType.GRADIENT
   gradientDirection.value = direction
 }
 
@@ -146,6 +143,7 @@ async function saveGradient() {
       bacColorDirection: gradientDirection.value,
     }
     emit('update', bacSettingVO)
+    currentType.value = BackgroundType.GRADIENT
 
     ElNotification.success({ message: '渐变背景保存成功' })
   } catch (error: any) {
@@ -173,6 +171,7 @@ function handleFileChange(event: Event) {
   }
 
   selectedFile.value = file
+  currentType.value = BackgroundType.IMAGE
 
   const reader = new FileReader()
   reader.onload = (e) => {
@@ -198,6 +197,7 @@ async function handleUpload() {
     }
 
     emit('update', newConfig)
+    currentType.value = BackgroundType.IMAGE
     ElNotification.success({ message: '背景上传成功' })
 
     previewUrl.value = null
