@@ -43,7 +43,7 @@ const logoStyle = computed(() =>
   shouldUseBase64.value
     ? {
         backgroundColor: backgroundColor.value,
-        backgroundImage: 'linear-gradient(rgba(255,255,255,0.18), rgba(255,255,255,0.18))',
+        backgroundImage: 'linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.58))',
       }
     : undefined,
 )
