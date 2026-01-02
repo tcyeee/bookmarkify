@@ -31,6 +31,7 @@ data class BackSettingParams(
 )
 
 data class GradientConfigParams(
+    @field:Schema(description = "自定义渐变ID（编辑时必填）") var id: String? = null,
     @field:Schema(description = "渐变色数组，至少2个颜色") var colors: List<String> = emptyList(),
     @field:Schema(description = "渐变方向角度，默认135") var direction: Int = 135,
 )

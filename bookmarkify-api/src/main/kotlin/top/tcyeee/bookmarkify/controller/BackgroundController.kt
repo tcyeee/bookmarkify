@@ -10,7 +10,6 @@ import top.tcyeee.bookmarkify.entity.BackSettingParams
 import top.tcyeee.bookmarkify.entity.DefaultBackgroundsResponse
 import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.server.IUserService
-import top.tcyeee.bookmarkify.server.impl.BackgroundConfigServiceImpl
 import top.tcyeee.bookmarkify.server.impl.BackgroundGradientServiceImpl
 import top.tcyeee.bookmarkify.server.impl.BackgroundImageServiceImpl
 import top.tcyeee.bookmarkify.utils.BaseUtils
@@ -26,7 +25,6 @@ class BackgroundController(
     private val userService: IUserService,
     private val imageBackgroundService: BackgroundImageServiceImpl,
     private val gradientBackgroundService: BackgroundGradientServiceImpl,
-    private val backgroundConfigService: BackgroundConfigServiceImpl
 ) {
 
     @GetMapping("/default")
@@ -55,12 +53,23 @@ class BackgroundController(
     fun updateBacColor(@RequestBody params: GradientConfigParams): Boolean =
         userService.addBacColor(params, BaseUtils.uid())
 
+    @DeleteMapping("gradient/{id}")
+    @Operation(summary = "删除自定义渐变背景")
+    fun deleteGradient(@PathVariable id: String): Boolean =
+        gradientBackgroundService.deleteUserGradient(BaseUtils.uid(), id)
+
+    @DeleteMapping("image/{id}")
+    @Operation(summary = "删除自定义图片背景")
+    fun deleteImage(@PathVariable id: String): Boolean =
+        imageBackgroundService.deleteUserImage(BaseUtils.uid(), id)
+
+    @PostMapping("gradient/update")
+    @Operation(summary = "修改自定义渐变背景")
+    fun updateGradient(@RequestBody params: GradientConfigParams): Boolean =
+        gradientBackgroundService.updateUserGradient(BaseUtils.uid(), params)
+
     @PostMapping("selectBackground")
     @Operation(summary = "在已有的渐变色背景和图片背景中选择主页背景")
-    fun bacSetting(@RequestBody params: BackSettingParams): Boolean = userService.bacSetting(params, BaseUtils.uid())
-
-    @GetMapping("background/reset")
-    @Operation(summary = "重制背景图片")
-    fun bacReset(): Boolean = backgroundConfigService.deleteByUid(BaseUtils.uid())
-
+    fun bacSetting(@RequestBody params: BackSettingParams): Boolean =
+        userService.bacSetting(params, BaseUtils.uid())
 }
