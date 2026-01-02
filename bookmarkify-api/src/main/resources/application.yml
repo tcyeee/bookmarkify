@@ -29,6 +29,7 @@ config:
   uid-cookie-name: 'deviceUid'    # 匿名用户 cookie 名称
   uid-cookie-path: "/"            # 匿名用户 cookie 路径
   uid-cookie-max-age: 315360000   # 10 年（秒）
+  max-custom-background-count: 5  # 自定义背景（图片/渐变）最大数量
   default-bookmarkify:
     - 'https://xiaohongshu.com'
     - 'https://www.guokr.com'
@@ -40,6 +41,9 @@ config:
     - 'https://zhihu.com'
     - 'https://sspai.com'
     - 'https://bilibili.com'
+  default-background-image:
+    - 'bac/default_1.jpg'
+    - 'bac/default_2.png'
   default-background-gradient:
     - gradient:
         - "#a69f9f"

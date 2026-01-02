@@ -21,6 +21,7 @@ data class ProjectConfig(
     var uidCookieMaxAge: Int,     // 匿名用户 cookie 过期时间（秒）
     var defaultBookmarkify: Array<String>,     // 匿名用户 cookie 过期时间（秒）
     var defaultBackgroundGradient: List<DefaultBackgroundGradientConfig> = emptyList(),
+    var maxCustomBackgroundCount: Int = 5,     // 自定义背景（图片/渐变）最大数量
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -35,6 +36,7 @@ data class ProjectConfig(
         if (uidCookiePath != other.uidCookiePath) return false
         if (!defaultBookmarkify.contentEquals(other.defaultBookmarkify)) return false
         if (defaultBackgroundGradient != other.defaultBackgroundGradient) return false
+        if (maxCustomBackgroundCount != other.maxCustomBackgroundCount) return false
 
         return true
     }
@@ -47,6 +49,7 @@ data class ProjectConfig(
         result = 31 * result + uidCookiePath.hashCode()
         result = 31 * result + defaultBookmarkify.contentHashCode()
         result = 31 * result + defaultBackgroundGradient.hashCode()
+        result = 31 * result + maxCustomBackgroundCount
         return result
     }
 }
