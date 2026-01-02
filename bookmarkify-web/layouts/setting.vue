@@ -66,7 +66,8 @@ const containerStyle: CSSProperties = {
 const tabs = [
   { value: 0, label: '个人资料', icon: 'icon--memory-account-box icon-size-22' },
   { value: 1, label: '书签管理', icon: 'icon--memory-application-code icon-size-22' },
-  { value: 2, label: '偏好设置', icon: 'icon--memory-dot-hexagon icon-size-22' },
+  { value: 2, label: '主页背景', icon: 'icon--memory-cloud icon-size-22' },
+  { value: 3, label: '偏好设置', icon: 'icon--memory-dot-hexagon icon-size-22' },
 ]
 const indicatorStyle = ref<CSSProperties>({
   transform: 'translate3d(0, 0, 0)',

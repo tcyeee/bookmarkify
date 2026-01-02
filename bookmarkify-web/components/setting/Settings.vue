@@ -1,16 +1,5 @@
 <template>
   <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
-    <section>
-      <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">主页背景</h3>
-      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">自定义您的主页背景，支持渐变背景和图片背景</p>
-      <div class="mt-4">
-        <BackgroundSetting
-          :background-path="userStore.account?.userSetting?.bacSetting?.bacImgFile?.currentName"
-          :background-config="userStore.account?.userSetting?.bacSetting"
-          @update="userStore.refreshUserInfo()" />
-      </div>
-    </section>
-
     <section
       class="space-y-4 rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm transition-colors dark:border-slate-800 dark:bg-slate-900/70">
       <div class="flex flex-wrap items-start justify-between gap-3">
@@ -126,9 +115,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { queryUserPreference, updateUserPreference } from '@api'
 import { BookmarkLayoutMode, BookmarkOpenMode, PageTurnMode, type UserPreference } from '@typing'
-import BackgroundSetting from './background/Setting.vue'
-
-const userStore = useUserStore()
 
 const preferenceLoading = ref(false)
 const preferenceSaving = ref(false)
