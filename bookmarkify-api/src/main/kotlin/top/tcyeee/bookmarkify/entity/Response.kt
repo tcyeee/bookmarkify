@@ -110,6 +110,7 @@ class BacSettingVO(
 
 @Suppress("unused")
 class BacGradientVO(
+    @field:Schema(description = "背景ID") var id: String? = null,
     @field:Schema(description = "背景渐变色") var colors: Array<String>,
     @field:Schema(description = "背景渐变方向") var direction: Int,
 )

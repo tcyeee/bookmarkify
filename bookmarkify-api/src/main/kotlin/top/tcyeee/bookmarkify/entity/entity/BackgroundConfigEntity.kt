@@ -64,5 +64,5 @@ data class BackgroundGradientEntity(
         this.gradient.trim().removePrefix("[").removeSuffix("]").split(",")
             .map { it.trim().removeSurrounding("\"") }.toTypedArray()
 
-    fun vo(): BacGradientVO = BacGradientVO(colors = this.gradientArray(), direction = this.direction)
+    fun vo(): BacGradientVO = BacGradientVO(id = this.id, colors = this.gradientArray(), direction = this.direction)
 }
