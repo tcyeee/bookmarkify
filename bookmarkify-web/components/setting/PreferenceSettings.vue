@@ -1,66 +1,57 @@
 <template>
-  <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
-      <section
-        class="space-y-4  bg-white/80  transition-colors dark:bg-slate-900/70">
-        <div class="flex flex-wrap items-start gap-3">
+  <div class="max-w-3xl space-y-5 text-slate-900 transition-colors dark:text-slate-100">
+    <section
+      class="bg-white/70  backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/70">
           <div>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">偏好设置</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              配置书签打开方式、布局、标题显示和翻页方式，满足你的使用习惯。
-            </p>
+            <h3 class="text-lg font-semibold">偏好设置</h3>
           </div>
-        </div>
 
       <div
         v-if="preferenceLoading"
-        class="flex items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-white/60 px-4 py-3 text-sm text-slate-500 transition-colors dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300">
+        class="mt-4 flex items-center gap-2 rounded-xl border border-dashed border-slate-200/80 bg-white/70 px-4 py-3 text-sm text-slate-500 transition-colors dark:border-slate-800/70 dark:bg-slate-900/60 dark:text-slate-300">
         <span class="icon--loading icon-size-18 animate-spin" />
         <span>正在加载偏好设置...</span>
       </div>
 
-      <div v-else class="grid grid-cols-1 gap-4">
-        <div
-          class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 transition-colors dark:border-slate-800 dark:bg-slate-900/60">
-          <div class="space-y-1">
-            <div class="font-semibold">书签打开方式</div>
-            <p class="text-sm text-slate-500 dark:text-slate-400">选择在当前标签页或新标签页打开书签。</p>
+      <div v-else class="mt-2 divide-y divide-slate-200/70 dark:divide-slate-800/70">
+        <div class="flex flex-wrap items-start gap-3 py-4">
+          <div class="flex-1 space-y-1 min-w-[220px]">
+            <div class="text-sm font-semibold">书签打开方式</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">在当前或新标签页中打开。</p>
           </div>
-          <select v-model="preferenceForm.bookmarkOpenMode" class="cy-input cy-input-sm w-40">
+          <select v-model="preferenceForm.bookmarkOpenMode" class="cy-input cy-input-sm w-44">
             <option :value="BookmarkOpenMode.CURRENT_TAB">当前标签页</option>
             <option :value="BookmarkOpenMode.NEW_TAB">新标签页</option>
           </select>
         </div>
 
-        <div
-          class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 transition-colors dark:border-slate-800 dark:bg-slate-900/60">
-          <div class="space-y-1">
-            <div class="font-semibold">书签排列方式</div>
-            <p class="text-sm text-slate-500 dark:text-slate-400">根据喜好切换紧凑、默认或宽松排布。</p>
+        <div class="flex flex-wrap items-start gap-3 py-4">
+          <div class="flex-1 space-y-1 min-w-[220px]">
+            <div class="text-sm font-semibold">书签排列方式</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">紧凑、默认或宽松排布。</p>
           </div>
-          <select v-model="preferenceForm.bookmarkLayout" class="cy-input cy-input-sm w-40">
+          <select v-model="preferenceForm.bookmarkLayout" class="cy-input cy-input-sm w-44">
             <option :value="BookmarkLayoutMode.COMPACT">紧凑</option>
             <option :value="BookmarkLayoutMode.DEFAULT">默认</option>
             <option :value="BookmarkLayoutMode.SPACIOUS">宽松</option>
           </select>
         </div>
 
-        <div
-          class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 transition-colors dark:border-slate-800 dark:bg-slate-900/60">
-          <div class="space-y-1">
-            <div class="font-semibold">翻页方式</div>
-            <p class="text-sm text-slate-500 dark:text-slate-400">选择垂直滚动或横向翻页的浏览体验。</p>
+        <div class="flex flex-wrap items-start gap-3 py-4">
+          <div class="flex-1 space-y-1 min-w-[220px]">
+            <div class="text-sm font-semibold">翻页方式</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">垂直滚动或横向翻页。</p>
           </div>
-          <select v-model="preferenceForm.pageMode" class="cy-input cy-input-sm w-40">
+          <select v-model="preferenceForm.pageMode" class="cy-input cy-input-sm w-44">
             <option :value="PageTurnMode.VERTICAL_SCROLL">垂直滚动</option>
             <option :value="PageTurnMode.HORIZONTAL_PAGE">横向翻页</option>
           </select>
         </div>
 
-        <div
-          class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 transition-colors dark:border-slate-800 dark:bg-slate-900/60">
-          <div class="space-y-1">
-            <div class="font-semibold">极简模式</div>
-            <p class="text-sm text-slate-500 dark:text-slate-400">隐藏多余装饰，突出核心信息。</p>
+        <div class="flex flex-wrap items-start gap-3 py-4">
+          <div class="flex-1 space-y-1 min-w-[220px]">
+            <div class="text-sm font-semibold">极简模式</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">隐藏装饰，聚焦内容。</p>
           </div>
           <button
             type="button"
@@ -73,11 +64,10 @@
           </button>
         </div>
 
-        <div
-          class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 transition-colors dark:border-slate-800 dark:bg-slate-900/60">
-          <div class="space-y-1">
-            <div class="font-semibold">显示标题</div>
-            <p class="text-sm text-slate-500 dark:text-slate-400">关闭后仅展示图标，更简洁的书签墙。</p>
+        <div class="flex flex-wrap items-start gap-3 py-4">
+          <div class="flex-1 space-y-1 min-w-[220px]">
+            <div class="text-sm font-semibold">显示标题</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">仅展示图标或展示标题。</p>
           </div>
           <button
             type="button"
@@ -90,14 +80,14 @@
           </button>
         </div>
       </div>
-
-      <div
-        v-if="!preferenceLoading && !preferenceDirty"
-        class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-        <span class="icon--memory-check-circle icon-size-16"></span>
-        <span>已同步最新偏好设置</span>
-      </div>
     </section>
+
+    <div
+      v-if="!preferenceLoading && !preferenceDirty"
+      class="flex items-center gap-2 text-xs text-slate-500 transition-colors dark:text-slate-400">
+      <span class="icon--memory-check-circle icon-size-16"></span>
+      <span>已同步最新偏好设置</span>
+    </div>
   </div>
 </template>
 
