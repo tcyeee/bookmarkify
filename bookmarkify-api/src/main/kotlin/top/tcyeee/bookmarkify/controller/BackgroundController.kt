@@ -36,7 +36,12 @@ class BackgroundController(
         images = imageBackgroundService.defaultImageBackgrounds()
     )
 
-    // TODO 获取我自定义的背景资源（渐变 + 图片）
+    @GetMapping("/mine")
+    @Operation(summary = "获取我自定义的背景资源（渐变 + 图片）")
+    fun myBackgrounds(): DefaultBackgroundsResponse = DefaultBackgroundsResponse(
+        gradients = gradientBackgroundService.userGradientBackgrounds(BaseUtils.uid()),
+        images = imageBackgroundService.userImageBackgrounds(BaseUtils.uid())
+    )
 
     @PostMapping("uploadBacPic")
     @Operation(summary = "上传自定义背景图片", parameters = [Parameter(name = "file", description = "背景图片文件")])

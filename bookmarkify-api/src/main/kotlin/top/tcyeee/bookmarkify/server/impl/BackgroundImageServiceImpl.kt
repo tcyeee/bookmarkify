@@ -31,4 +31,11 @@ class BackgroundImageServiceImpl(
             .map { it.uid }.toSet().takeIf { it.isNotEmpty() }
             ?.let { fileMapper.selectByIds(it).toTypedArray() }
             ?: emptyArray()
+
+    override fun userImageBackgrounds(uid: String): Array<UserFile> =
+        ktQuery().eq(BackgroundImageEntity::uid, uid)
+            .eq(BackgroundImageEntity::isDefault, false)
+            .list()
+            .mapNotNull { fileMapper.selectById(it.fileId) }
+            .toTypedArray()
 }
