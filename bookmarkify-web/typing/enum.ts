@@ -41,3 +41,19 @@ export enum AuthStatusEnum {
   /* 已认证 */
   AUTHED = 'AUTHED',
 }
+
+export enum BookmarkOpenMode {
+  CURRENT_TAB = 'CURRENT_TAB',
+  NEW_TAB = 'NEW_TAB',
+}
+
+export enum BookmarkLayoutMode {
+  COMPACT = 'COMPACT',
+  DEFAULT = 'DEFAULT',
+  SPACIOUS = 'SPACIOUS',
+}
+
+export enum PageTurnMode {
+  VERTICAL_SCROLL = 'VERTICAL_SCROLL',
+  HORIZONTAL_PAGE = 'HORIZONTAL_PAGE',
+}

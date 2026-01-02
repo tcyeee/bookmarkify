@@ -1,4 +1,4 @@
-import type { BackgroundType } from './enum'
+import type { BackgroundType, BookmarkLayoutMode, BookmarkOpenMode, PageTurnMode } from './enum'
 import type { UserFile } from './user'
 
 export interface UserSetting {
@@ -32,4 +32,17 @@ export interface UserInfo {
   /* 仅/info接口会返回 */
   avatar: UserFile // 用户头像
   userSetting: UserSetting // 用户设置
+}
+
+export interface UserPreference {
+  id?: string
+  uid?: string
+  backgroundConfigId?: string | null
+  bookmarkOpenMode: BookmarkOpenMode
+  minimalMode: boolean
+  bookmarkLayout: BookmarkLayoutMode
+  showTitle: boolean
+  pageMode: PageTurnMode
+  updateTime?: string
+  createTime?: string
 }

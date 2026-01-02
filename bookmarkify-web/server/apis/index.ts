@@ -35,3 +35,7 @@ export const updateBacColor = (params: t.BacGradientVO) => http.post('/setting/u
 export const defaultImageBackgrounds = () => http.get('/setting/background/images') as Promise<Array<t.UserFile>>
 export const defaultGradientBackgrounds = () => http.get('/setting/background/gradients') as Promise<Array<t.BacGradientVO>>
 export const resetBacBackground = () => http.get('/setting/background/reset') as Promise<boolean>
+
+/* =========[ /preference ]========= */
+export const queryUserPreference = () => http.get('/preference') as Promise<t.UserPreference | null>
+export const updateUserPreference = (params: t.UserPreference) => http.post('/preference', params) as Promise<boolean>
