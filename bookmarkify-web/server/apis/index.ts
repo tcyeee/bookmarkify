@@ -30,11 +30,12 @@ export const uploadAvatar = (file: File) => http.upload('/user/uploadAvatar', fi
 
 /* =========[ /setting ]========= */
 export const queryUserSetting = () => http.get('/setting/query') as Promise<t.UserSetting>
-export const uploadBacPic = (file: File) => http.upload('/setting/uploadBacPic', file) as Promise<string>
-export const updateBacColor = (params: t.BacGradientVO) => http.post('/setting/updateBacColor', params) as Promise<boolean>
-export const defaultImageBackgrounds = () => http.get('/setting/background/images') as Promise<Array<t.UserFile>>
-export const defaultGradientBackgrounds = () => http.get('/setting/background/gradients') as Promise<Array<t.BacGradientVO>>
-export const resetBacBackground = () => http.get('/setting/background/reset') as Promise<boolean>
+export const uploadBacPic = (file: File) => http.upload('/background/uploadBacPic', file) as Promise<string>
+export const updateBacColor = (params: t.BacGradientVO) => http.post('/background/updateBacColor', params) as Promise<boolean>
+export const defaultBackgrounds = () => http.get('/background/default') as Promise<t.DefaultBackgroundsResponse>
+export const defaultImageBackgrounds = async () => (await defaultBackgrounds()).images
+export const defaultGradientBackgrounds = async () => (await defaultBackgrounds()).gradients
+export const resetBacBackground = () => http.get('/background/background/reset') as Promise<boolean>
 
 /* =========[ /preference ]========= */
 export const queryUserPreference = () => http.get('/preference') as Promise<t.UserPreference | null>

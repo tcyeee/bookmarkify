@@ -18,6 +18,11 @@ export interface BacSettingVO {
   bacColorDirection?: number // 当BackgroundType为GRADIENT时使用
 }
 
+export interface DefaultBackgroundsResponse {
+  gradients: BacGradientVO[]
+  images: UserFile[]
+}
+
 /**
  * 仅仅保存用户的状态信息,因为这里的信息会完全写在Session中,在每次请求的时候携带
  */

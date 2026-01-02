@@ -1,4 +1,4 @@
-import { defaultGradientBackgrounds, defaultImageBackgrounds } from '@api'
+import { defaultBackgrounds } from '@api'
 import type { BacGradientVO, UserFile } from '@typing'
 import { defineStore } from 'pinia'
 
@@ -36,10 +36,13 @@ export const useSysStore = defineStore('sys', {
   actions: {
     // 拉取系统默认配置（包括默认背景图和渐变背景）
     async refreshSystemConfig() {
-      ;[this.defaultImageBackgroundsList, this.defaultGradientBackgroundsList] = await Promise.all([
-        defaultImageBackgrounds(),
-        defaultGradientBackgrounds(),
-      ])
+      try {
+        const data = await defaultBackgrounds()
+        this.defaultGradientBackgroundsList = data.gradients ?? []
+        this.defaultImageBackgroundsList = data.images ?? []
+      } catch (error) {
+        console.error('[SYS] refreshSystemConfig failed', error)
+      }
     },
 
     // 触发键盘事件（在全局 keydown 监听中调用）
