@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.entity.entity
 
+import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
@@ -20,7 +21,12 @@ data class UserPreferenceEntity(
 
     @field:Schema(description = "更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
-)
+) {
+    fun upsert(params: UserPreferenceEntity) {
+        BeanUtil.copyProperties(params, this)
+        updateTime = LocalDateTime.now()
+    }
+}
 
 
 /**
