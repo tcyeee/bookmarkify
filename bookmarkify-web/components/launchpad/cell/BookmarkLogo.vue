@@ -1,15 +1,20 @@
 <template>
+  <!-- 外层容器：卡片圆角与开发态提示 -->
   <div
     class="w-app h-app rounded-[22%] bg-gray-100 center shadow overflow-hidden"
     :class="isDev ? 'border-4 border-dashed border-red-200' : ''">
+    <!-- 内层 Logo：默认白底，必要时覆盖主色与淡白蒙版 -->
     <div class="h-20 w-20 bg-white flex justify-center items-center" :style="logoStyle">
+      <!-- 优先使用高清图 -->
       <img v-if="props.value.iconHdUrl && !hdError" :src="props.value.iconHdUrl" alt="" @error="onHdError" />
+      <!-- base64 图：可按尺寸放大 -->
       <img
         v-else-if="!iconError"
         :class="base64SizeClass"
         :src="`data:image/png;base64,${props.value.iconBase64}`"
         alt=""
         @error="onIconError" />
+      <!-- 最终兜底头像 -->
       <img v-else class="w-8 h-8" src="/avatar/default.png" alt="" />
     </div>
   </div>
@@ -21,17 +26,28 @@ import type { Bookmark } from '@typing'
 
 const props = defineProps<{  value: Bookmark}>()
 
+// 状态：错误标记、动态背景色、是否放大
 const hdError = ref(false)
 const iconError = ref(false)
 const backgroundColor = ref('#ffffff')
 const shouldUpscale = ref(false)
+
+// 开发环境标记
 const isDev = computed(() => isLocalhostOrIP(props.value.urlFull))
+// 判定是否需走 base64 分支
 const shouldUseBase64 = computed(
   () => (!props.value.iconHdUrl || hdError.value) && !iconError.value && !!props.value.iconBase64,
 )
+// base64 时叠加主色与淡白蒙版
 const logoStyle = computed(() =>
-  shouldUseBase64.value ? { backgroundColor: backgroundColor.value } : undefined,
+  shouldUseBase64.value
+    ? {
+        backgroundColor: backgroundColor.value,
+        backgroundImage: 'linear-gradient(rgba(255,255,255,0.18), rgba(255,255,255,0.18))',
+      }
+    : undefined,
 )
+// base64 尺寸：ico 大于等于 64px 时放大
 const base64SizeClass = computed(() => (shouldUpscale.value ? 'w-12 h-12' : 'w-8 h-8'))
 
 function onHdError() {
@@ -64,6 +80,7 @@ watch(
   { immediate: true },
 )
 
+// 加载 base64，得到主色与放大标记
 async function analyzeBase64(base64: string): Promise<{ color: string; upscale: boolean }> {
   const img = await loadBase64Image(base64)
   const upscale = Math.max(img.width, img.height) >= 64
@@ -71,6 +88,7 @@ async function analyzeBase64(base64: string): Promise<{ color: string; upscale: 
   return { color, upscale }
 }
 
+// 计算平均色，步长取样兼顾性能
 function computeAverageColor(img: HTMLImageElement): string {
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')
@@ -108,6 +126,7 @@ function computeAverageColor(img: HTMLImageElement): string {
   return rgbToHex(Math.round(r / count), Math.round(g / count), Math.round(b / count))
 }
 
+// 载入 base64 图片
 function loadBase64Image(base64: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
