@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
     <div>
-      <div class="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">预设渐变</div>
+      <div class="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">渐变背景</div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         <button
           v-for="(preset, index) in presets"
@@ -9,13 +9,20 @@
           type="button"
           :style="{ backgroundImage: `linear-gradient(135deg, ${preset.colors.join(', ')})` }"
           :class="[
-            'aspect-square rounded-lg border-2 transition-all shadow-sm',
+            'relative aspect-square rounded-lg border-2 transition-all shadow-sm',
             isPresetActive(preset)
               ? 'border-blue-500 ring-2 ring-blue-200 ring-offset-2 ring-offset-white dark:ring-offset-slate-900'
               : 'border-transparent hover:-translate-y-0.5 hover:shadow-md dark:hover:border-slate-700',
           ]"
           :disabled="applyingPreset"
-          @click="selectPreset(preset)" />
+          @click="selectPreset(preset)">
+          <span
+            v-if="preset.isSystem"
+            class="absolute left-1 top-1 text-xs leading-none select-none"
+            title="系统预设">
+            🔒
+          </span>
+        </button>
         <button
           type="button"
           class="aspect-square rounded-lg border-2 transition-all shadow-sm border-dashed border-slate-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700"
@@ -63,10 +70,12 @@ const customColors = ref<string[]>([])
 const customDirection = ref<number>(135)
 const customSaving = ref(false)
 
+type GradientPreset = BacGradientVO & { isSystem?: boolean }
+
 const props = defineProps<{
   colors: string[]
   direction: number
-  presets: BacGradientVO[]
+  presets: GradientPreset[]
   saving: boolean
   hasBackground: boolean
 }>()
@@ -78,7 +87,7 @@ const emit = defineEmits<{
   (e: 'reset'): void
 }>()
 
-async function applyPresetBackground(preset: BacGradientVO) {
+async function applyPresetBackground(preset: GradientPreset) {
   const setting: BacSettingVO = {
     type: BackgroundType.GRADIENT,
     bacColorGradient: [...preset.colors],
@@ -109,13 +118,13 @@ async function applyPresetBackground(preset: BacGradientVO) {
   }
 }
 
-async function selectPreset(preset: BacGradientVO) {
+async function selectPreset(preset: GradientPreset) {
   emit('update:colors', [...preset.colors])
   emit('update:direction', preset.direction ?? 135)
   await applyPresetBackground(preset)
 }
 
-function isPresetActive(preset: BacGradientVO) {
+function isPresetActive(preset: GradientPreset) {
   return (
     props.colors.length === preset.colors.length &&
     props.colors.every((color, index) => color === preset.colors[index]) &&

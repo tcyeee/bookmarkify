@@ -35,6 +35,7 @@ export const updateBacColor = (params: t.BacGradientVO) => http.post('/backgroun
 export const defaultBackgrounds = () => http.get('/background/default') as Promise<t.DefaultBackgroundsResponse>
 export const defaultImageBackgrounds = async () => (await defaultBackgrounds()).images
 export const defaultGradientBackgrounds = async () => (await defaultBackgrounds()).gradients
+export const myBackgrounds = () => http.get('/background/mine') as Promise<t.DefaultBackgroundsResponse>
 export const resetBacBackground = () => http.get('/background/background/reset') as Promise<boolean>
 export const selectBackground = (params: t.BackSettingParams) =>
   http.post('/background/selectBackground', params) as Promise<boolean>
