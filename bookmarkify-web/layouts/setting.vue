@@ -8,7 +8,7 @@
     <div class="flex-1">
       <div class="mx-auto w-full px-4 sm:px-6 lg:px-8" :style="containerStyle">
         <div class="flex items-start gap-6 lg:gap-8 pb-[10vh]">
-          <aside class="w-60 sm:w-64 lg:w-72 shrink-0 space-y-6">
+          <aside class="sticky top-28 self-start w-60 sm:w-64 lg:w-72 shrink-0 space-y-6">
             <NuxtLink to="/" class="block w-full">
               <div
                 class="cy-btn w-full cy-btn-xl cy-btn-ghost bg-white dark:bg-slate-900 dark:border-slate-700 rounded-xl text-lg transition-colors">
