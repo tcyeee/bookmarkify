@@ -9,7 +9,7 @@
       <div
         v-if="preferenceLoading"
         class="mt-4 flex items-center gap-2 rounded-xl border border-dashed border-slate-200/80 bg-white/70 px-4 py-3 text-sm text-slate-500 transition-colors dark:border-slate-800/70 dark:bg-slate-900/60 dark:text-slate-300">
-        <span class="icon--loading icon-size-18 animate-spin" />
+        <span class="icon--memory-rotate-clockwise icon-size-18 animate-spin" />
         <span>正在加载偏好设置...</span>
       </div>
 

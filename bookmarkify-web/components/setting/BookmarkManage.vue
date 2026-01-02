@@ -35,7 +35,7 @@
 
       <div class="p-4">
         <div v-if="bookmarksLoading" class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-          <span class="icon--loading icon-size-18 animate-spin" />
+          <span class="icon--memory-rotate-clockwise icon-size-18 animate-spin" />
           <span>正在加载书签...</span>
         </div>
         <div v-else-if="!bookmarks.length" class="rounded-md border border-dashed border-slate-200 dark:border-slate-800 px-4 py-6 text-sm text-slate-600 dark:text-slate-300">
