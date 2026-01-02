@@ -113,3 +113,11 @@ class BacGradientVO(
     @field:Schema(description = "背景渐变色") var colors: Array<String>,
     @field:Schema(description = "背景渐变方向") var direction: Int,
 )
+
+/**
+ * 默认背景资源合集
+ */
+class DefaultBackgroundsResponse(
+    @field:Schema(description = "默认渐变背景列表") val gradients: Array<BacGradientVO> = emptyArray(),
+    @field:Schema(description = "默认图片背景列表") val images: Array<UserFile> = emptyArray(),
+)
