@@ -8,7 +8,7 @@ import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 
-import top.tcyeee.bookmarkify.entity.BookmarkUpdataPrams
+import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.HomeItemSortParams
 import top.tcyeee.bookmarkify.entity.entity.Bookmark
@@ -58,7 +58,7 @@ class BookmarksController(
     @Throttle
     @PostMapping("/update")
     @Operation(summary = "修改")
-    fun update(@RequestBody params: BookmarkUpdataPrams): Boolean = bookmarkUserLinkService.updateOne(params)
+    fun update(@RequestBody params: BookmarkUpdatePrams): Boolean = bookmarkUserLinkService.updateOne(params)
 
     @Throttle
     @GetMapping("/addOne")

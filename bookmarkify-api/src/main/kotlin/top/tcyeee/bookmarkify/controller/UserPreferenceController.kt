@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
+import top.tcyeee.bookmarkify.entity.UserPreferenceUpdateParams
 import top.tcyeee.bookmarkify.entity.entity.UserPreferenceEntity
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
 import top.tcyeee.bookmarkify.utils.BaseUtils
@@ -20,7 +21,8 @@ class UserPreferenceController(
 
     @PostMapping
     @Operation(summary = "更新当前用户偏好设置")
-    fun update(@RequestBody params: UserPreferenceEntity): Boolean =
-        userPreferenceService.upsertByUid(BaseUtils.uid(), params)
+    fun update(@RequestBody params: UserPreferenceUpdateParams): Boolean {
+        return userPreferenceService.upsertByUid(BaseUtils.uid(), params)
+    }
 }
 
