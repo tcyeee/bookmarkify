@@ -11,6 +11,12 @@ export interface BacGradientVO {
   direction?: number // 渐变方向角度，默认135
 }
 
+export interface GradientConfigParams {
+  id?: string // 自定义渐变ID（编辑时必填）
+  colors: string[] // 渐变色数组，至少2个颜色
+  direction?: number // 渐变方向角度，默认135
+}
+
 export interface BacSettingVO {
   type: BackgroundType
   bacImgFile?: UserFile // 当BackgroundType为IMAGE时使用
