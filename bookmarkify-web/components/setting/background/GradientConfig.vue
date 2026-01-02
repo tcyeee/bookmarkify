@@ -16,18 +16,36 @@
           ]"
           :disabled="applyingPreset"
           @click="selectPreset(preset)" />
+        <button
+          type="button"
+          class="aspect-square rounded-lg border-2 transition-all shadow-sm border-dashed border-slate-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700"
+          @click="openCustomDialog">
+          <div class="h-full w-full flex items-center justify-center text-slate-500 dark:text-slate-300 text-xl font-semibold">＋</div>
+        </button>
       </div>
     </div>
 
-    <GradientCustom
-      :colors="colors"
-      :direction="direction"
-      :saving="saving"
-      :has-background="hasBackground"
-      @update:colors="emit('update:colors', $event)"
-      @update:direction="emit('update:direction', $event)"
-      @save="emit('save')"
-      @reset="emit('reset')" />
+    <dialog ref="customDialogRef" class="cy-modal" @close="handleDialogClose">
+      <div class="cy-modal-box max-w-3xl">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">自定义渐变</h3>
+        <GradientCustom
+          :colors="customColors"
+          :direction="customDirection"
+          :saving="customSaving"
+          :has-background="hasBackground"
+          @update:colors="(v) => (customColors = v)"
+          @update:direction="(v) => (customDirection = v)"
+          @save="handleCustomSave"
+          @reset="handleCustomReset" />
+        <div class="cy-modal-action">
+          <button class="cy-btn cy-btn-ghost" type="button" @click="closeCustomDialog" :disabled="customSaving">取消</button>
+          <button class="cy-btn cy-btn-primary" type="button" @click="handleCustomSave" :disabled="customSaving">保存</button>
+        </div>
+      </div>
+      <form method="dialog" class="cy-modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
   </div>
 </template>
 
@@ -38,7 +56,12 @@ import GradientCustom from './GradientCustom.vue'
 import { BackgroundType, type BacSettingVO, type BackSettingParams, type BacGradientVO } from '@typing'
 
 const userStore = useUserStore()
+const sysStore = useSysStore()
 const applyingPreset = ref(false)
+const customDialogRef = ref<HTMLDialogElement | null>(null)
+const customColors = ref<string[]>([])
+const customDirection = ref<number>(135)
+const customSaving = ref(false)
 
 const props = defineProps<{
   colors: string[]
@@ -98,5 +121,51 @@ function isPresetActive(preset: BacGradientVO) {
     props.colors.every((color, index) => color === preset.colors[index]) &&
     props.direction === (preset.direction ?? 135)
   )
+}
+
+function openCustomDialog() {
+  customColors.value = [...props.colors]
+  customDirection.value = props.direction ?? 135
+  sysStore.togglePreventKeyEventsFlag(true)
+  customDialogRef.value?.showModal()
+}
+
+function closeCustomDialog() {
+  sysStore.togglePreventKeyEventsFlag(false)
+  customDialogRef.value?.close()
+}
+
+async function handleCustomSave() {
+  customSaving.value = true
+  try {
+    await updateBacColor({
+      colors: customColors.value,
+      direction: customDirection.value,
+    })
+    const setting: BacSettingVO = {
+      type: BackgroundType.GRADIENT,
+      bacColorGradient: [...customColors.value],
+      bacColorDirection: customDirection.value,
+    }
+    userStore.updateBackgroundSetting(setting)
+    emit('update:colors', [...customColors.value])
+    emit('update:direction', customDirection.value)
+    ElNotification.success({ message: '自定义渐变已保存' })
+    closeCustomDialog()
+  } catch (error: any) {
+    ElMessage.error(error.message || '保存失败')
+  } finally {
+    customSaving.value = false
+  }
+}
+
+async function handleCustomReset() {
+  // 重用父组件提供的重置逻辑
+  emit('reset')
+  closeCustomDialog()
+}
+
+function handleDialogClose() {
+  sysStore.togglePreventKeyEventsFlag(false)
 }
 </script>
