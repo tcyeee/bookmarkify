@@ -6,6 +6,7 @@ import {
   type UserFile,
   type UserInfo,
   type UserSetting,
+  type BacSettingVO,
 } from '@typing'
 import { track, queryUserInfo, authLogout, captchaVerifyEmail, captchaVerifySms } from '@api'
 
@@ -17,6 +18,9 @@ export const useUserStore = defineStore('user', {
     account: undefined as UserInfo | undefined,
     // 用户个性化设置
     setting: undefined as UserSetting | undefined,
+    // 用户当前选择的系统背景（同步于 userSetting.bacSetting）
+    backgroundSetting: undefined as BacSettingVO | undefined,
+
     // 用户头像文件
     avatar: undefined as UserFile | undefined,
     // 通用加载状态（登录、拉取信息等异步请求时使用）
@@ -69,6 +73,8 @@ export const useUserStore = defineStore('user', {
       try {
         const result = await queryUserInfo()
         this.account = { ...this.account, ...result }
+        this.setting = result.userSetting ?? this.setting
+        this.backgroundSetting = result.userSetting?.bacSetting ?? undefined
         return result
       } catch (err: any) {
         // 202 表示用户信息/登录态过期，触发重新登录流程
@@ -92,6 +98,8 @@ export const useUserStore = defineStore('user', {
       const user = await track()
       this.loading = false
       this.account = { ...this.account, ...user }
+      this.setting = user.userSetting ?? this.setting
+      this.backgroundSetting = user.userSetting?.bacSetting ?? undefined
       if (!user.token) return Promise.reject('登陆数据异常')
 
       // 登录成功后刷新书签数据
@@ -104,6 +112,15 @@ export const useUserStore = defineStore('user', {
 
       // 返回当前账号信息（此时 state 中已是最新数据）
       return Promise.resolve(this.account as UserInfo)
+    },
+
+    // 本地同步用户背景设置（避免等待刷新接口）
+    updateBackgroundSetting(setting: BacSettingVO) {
+      this.backgroundSetting = setting
+      if (!this.account) return
+      const nextUserSetting = { ...(this.account.userSetting ?? {}), bacSetting: setting } as UserSetting
+      this.setting = nextUserSetting
+      this.account = { ...this.account, userSetting: nextUserSetting }
     },
 
     // 退出登录：清理所有与用户相关的状态和连接

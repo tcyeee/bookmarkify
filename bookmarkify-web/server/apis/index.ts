@@ -36,6 +36,8 @@ export const defaultBackgrounds = () => http.get('/background/default') as Promi
 export const defaultImageBackgrounds = async () => (await defaultBackgrounds()).images
 export const defaultGradientBackgrounds = async () => (await defaultBackgrounds()).gradients
 export const resetBacBackground = () => http.get('/background/background/reset') as Promise<boolean>
+export const selectBackground = (params: t.BackSettingParams) =>
+  http.post('/background/selectBackground', params) as Promise<boolean>
 
 /* =========[ /preference ]========= */
 export const queryUserPreference = () => http.get('/preference') as Promise<t.UserPreference | null>
