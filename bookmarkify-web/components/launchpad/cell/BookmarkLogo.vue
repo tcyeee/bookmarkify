@@ -1,8 +1,8 @@
 <template>
   <div
-    class="w-app h-app rounded-xl bg-gray-100 center shadow overflow-hidden"
+    class="w-app h-app rounded-[22%] bg-gray-100 center shadow overflow-hidden"
     :class="isDev ? 'border-4 border-dashed border-red-200' : ''">
-    <div class="h-20 w-20 rounded-2xl bg-white flex justify-center items-center">
+    <div class="h-20 w-20 bg-white flex justify-center items-center" :style="logoStyle">
       <img v-if="props.value.iconHdUrl && !hdError" :src="props.value.iconHdUrl" alt="" @error="onHdError" />
       <img
         v-else-if="!iconError"
@@ -16,14 +16,21 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Bookmark } from '@typing'
 
 const props = defineProps<{  value: Bookmark}>()
 
 const hdError = ref(false)
 const iconError = ref(false)
+const backgroundColor = ref('#ffffff')
 const isDev = computed(() => isLocalhostOrIP(props.value.urlFull))
+const shouldUseBase64 = computed(
+  () => (!props.value.iconHdUrl || hdError.value) && !iconError.value && !!props.value.iconBase64,
+)
+const logoStyle = computed(() =>
+  shouldUseBase64.value ? { backgroundColor: backgroundColor.value } : undefined,
+)
 
 function onHdError() {
   hdError.value = true
@@ -31,6 +38,79 @@ function onHdError() {
 
 function onIconError() {
   iconError.value = true
+}
+
+watch(
+  () => props.value.iconBase64,
+  async (base64) => {
+    if (!process.client || !base64) {
+      backgroundColor.value = '#ffffff'
+      return
+    }
+
+    try {
+      backgroundColor.value = await extractDominantColor(base64)
+    } catch {
+      backgroundColor.value = '#ffffff'
+      iconError.value = true
+    }
+  },
+  { immediate: true },
+)
+
+async function extractDominantColor(base64: string): Promise<string> {
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  img.src = `data:image/png;base64,${base64}`
+
+  await new Promise((resolve, reject) => {
+    img.onload = () => resolve(null)
+    img.onerror = reject
+  })
+
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+
+  if (!ctx || !img.width || !img.height) {
+    return '#ffffff'
+  }
+
+  const targetWidth = Math.min(img.width, 64)
+  const targetHeight = Math.min(img.height, 64)
+  canvas.width = targetWidth
+  canvas.height = targetHeight
+
+  ctx.drawImage(img, 0, 0, targetWidth, targetHeight)
+  const { data } = ctx.getImageData(0, 0, targetWidth, targetHeight)
+
+  let r = 0
+  let g = 0
+  let b = 0
+  let count = 0
+
+  // 取平均色，步长减少开销
+  const step = 4 * 4
+  for (let i = 0; i + 3 < data.length; i += step) {
+    const alpha = data[i + 3] ?? 0
+    if (!alpha) continue
+    r += data[i] ?? 0
+    g += data[i + 1] ?? 0
+    b += data[i + 2] ?? 0
+    count++
+  }
+
+  if (!count) return '#ffffff'
+
+  return rgbToHex(Math.round(r / count), Math.round(g / count), Math.round(b / count))
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return `#${[r, g, b]
+    .map((val) => {
+      const hex = val.toString(16)
+      return hex.length === 1 ? `0${hex}` : hex
+    })
+    .join('')}`
 }
 
 function isLocalhostOrIP(url: string): boolean {
