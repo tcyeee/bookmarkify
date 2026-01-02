@@ -41,7 +41,27 @@ config:
     - 'https://sspai.com'
     - 'https://bilibili.com'
   default-background-gradient:
-    - '{}'
+    - gradient:
+        - "#a69f9f"
+        - "#c1baba"
+        - "#8f9ea6"
+      direction: 103
+      name: 默认渐变1
+    - gradient:
+        - "#667eea"
+        - "#764ba2"
+      direction: 103
+      name: 默认渐变2
+    - gradient:
+        - "#f093fb"
+        - "#f5576c"
+      direction: 103
+      name: 默认渐变3
+    - gradient:
+        - "#4facfe"
+        - "#00f2fe"
+      direction: 103
+      name: 默认渐变4
 
 
 spring:

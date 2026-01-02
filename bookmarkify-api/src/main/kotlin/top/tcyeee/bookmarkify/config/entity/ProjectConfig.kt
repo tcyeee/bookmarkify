@@ -6,6 +6,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * @author tcyeee
  * @date 4/22/23 13:44
  */
+data class DefaultBackgroundGradientConfig(
+    var gradient: List<String> = emptyList(),
+    var direction: Int = 0,
+    var name: String = "",
+)
+
 @ConfigurationProperties(prefix = "config")
 data class ProjectConfig(
     var imgPath: String,          // 图片本地存储地址
@@ -14,6 +20,7 @@ data class ProjectConfig(
     var uidCookiePath: String,    // 匿名用户 cookie 路径
     var uidCookieMaxAge: Int,     // 匿名用户 cookie 过期时间（秒）
     var defaultBookmarkify: Array<String>,     // 匿名用户 cookie 过期时间（秒）
+    var defaultBackgroundGradient: List<DefaultBackgroundGradientConfig> = emptyList(),
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -27,6 +34,7 @@ data class ProjectConfig(
         if (uidCookieName != other.uidCookieName) return false
         if (uidCookiePath != other.uidCookiePath) return false
         if (!defaultBookmarkify.contentEquals(other.defaultBookmarkify)) return false
+        if (defaultBackgroundGradient != other.defaultBackgroundGradient) return false
 
         return true
     }
@@ -38,6 +46,7 @@ data class ProjectConfig(
         result = 31 * result + uidCookieName.hashCode()
         result = 31 * result + uidCookiePath.hashCode()
         result = 31 * result + defaultBookmarkify.contentHashCode()
+        result = 31 * result + defaultBackgroundGradient.hashCode()
         return result
     }
 }
