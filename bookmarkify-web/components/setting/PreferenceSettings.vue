@@ -85,7 +85,7 @@
     <div
       v-if="!preferenceLoading && !preferenceDirty"
       class="flex items-center gap-2 text-xs text-slate-500 transition-colors dark:text-slate-400">
-      <span class="icon--memory-check-circle icon-size-16"></span>
+      <span class="icon--memory-cloud icon-size-16"></span>
       <span>已同步最新偏好设置</span>
     </div>
   </div>
