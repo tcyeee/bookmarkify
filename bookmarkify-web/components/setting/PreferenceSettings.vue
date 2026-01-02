@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
     <section
-      class="space-y-4 rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm transition-colors dark:border-slate-800 dark:bg-slate-900/70">
+      class="space-y-4  bg-white/80  transition-colors dark:bg-slate-900/70">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">偏好设置</h3>
