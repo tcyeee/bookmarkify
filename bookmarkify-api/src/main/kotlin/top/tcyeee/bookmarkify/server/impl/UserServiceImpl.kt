@@ -196,7 +196,8 @@ class UserServiceImpl(
     override fun queryUserSetting(uid: String): UserSetting = UserSetting(bacSetting = queryUserBacSetting(uid))
 
     override fun bacSetting(params: BackSettingParams, uid: String): Boolean {
-        val entity = backSettingService.ktQuery().eq(BackgroundConfigEntity::uid, uid).one()
+        val entity = backSettingService.ktQuery()
+            .eq(BackgroundConfigEntity::uid, uid).one()
             // 如果查询到了，则修改其中的参数
             ?.also { it.updateParams(params) }
             // 如果没有查询到，则创建对象
