@@ -11,7 +11,7 @@
       class="w-full max-w-2xl"
       :colors="gradientColors"
       :direction="gradientDirection"
-      :presets="sysStore.defaultGradientBackgroundsList"
+      :presets="gradientPresets"
       :saving="saving"
       :has-background="hasBackground"
       @update:colors="setGradientColors"
@@ -67,6 +67,10 @@ const currentType = ref<BackgroundType>(
 
 const gradientColors = ref<string[]>(['#a69f9f', '#c1baba', '#8f9ea6'])
 const gradientDirection = ref<number>(135)
+const gradientPresets = computed(() => [
+  ...(sysStore.defaultGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: true })),
+  ...(sysStore.userGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: false })),
+])
 
 function initGradientConfig() {
   if (props.backgroundConfig?.type === BackgroundType.GRADIENT) {

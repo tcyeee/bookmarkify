@@ -1,4 +1,4 @@
-import { defaultBackgrounds } from '@api'
+import { defaultBackgrounds, myBackgrounds } from '@api'
 import type { BacGradientVO, UserFile } from '@typing'
 import { defineStore } from 'pinia'
 
@@ -30,16 +30,23 @@ export const useSysStore = defineStore('sys', {
     defaultImageBackgroundsList: [] as UserFile[],
     // 系统内置的渐变背景列表
     defaultGradientBackgroundsList: [] as BacGradientVO[],
+
+    // 用户上传的图片背景列表
+    userImageBackgroundsList: [] as UserFile[],
+    // 用户上传的渐变背景列表
+    userGradientBackgroundsList: [] as BacGradientVO[],
   }),
 
   // 业务动作（异步/同步方法）
   actions: {
-    // 拉取系统默认配置（包括默认背景图和渐变背景）
+    // 拉取系统默认配置（包括默认背景 + 用户上传背景）
     async refreshSystemConfig() {
       try {
-        const data = await defaultBackgrounds()
+        const [data, mine] = await Promise.all([defaultBackgrounds(), myBackgrounds()])
         this.defaultGradientBackgroundsList = data.gradients ?? []
         this.defaultImageBackgroundsList = data.images ?? []
+        this.userGradientBackgroundsList = mine.gradients ?? []
+        this.userImageBackgroundsList = mine.images ?? []
       } catch (error) {
         console.error('[SYS] refreshSystemConfig failed', error)
       }
