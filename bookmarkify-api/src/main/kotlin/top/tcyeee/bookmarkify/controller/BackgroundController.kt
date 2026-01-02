@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.BackSettingParams
+import top.tcyeee.bookmarkify.entity.DefaultBackgroundsResponse
 import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.server.impl.BackgroundConfigServiceImpl
@@ -20,13 +21,23 @@ import top.tcyeee.bookmarkify.utils.BaseUtils
  */
 @RestController
 @Tag(name = "设置相关")
-@RequestMapping("/setting")
-class SettingController(
+@RequestMapping("/background")
+class BackgroundController(
     private val userService: IUserService,
     private val imageBackgroundService: BackgroundImageServiceImpl,
     private val gradientBackgroundService: BackgroundGradientServiceImpl,
     private val backgroundConfigService: BackgroundConfigServiceImpl
 ) {
+
+    @GetMapping("/default")
+    @Operation(summary = "获取默认背景资源（渐变 + 图片）")
+    fun defaultBackgrounds(): DefaultBackgroundsResponse = DefaultBackgroundsResponse(
+        gradients = gradientBackgroundService.defaultGradientBackgrounds(),
+        images = imageBackgroundService.defaultImageBackgrounds()
+    )
+
+    // TODO 获取我自定义的背景资源（渐变 + 图片）
+
     @PostMapping("uploadBacPic")
     @Operation(summary = "上传自定义背景图片", parameters = [Parameter(name = "file", description = "背景图片文件")])
     fun uploadBackground(@RequestParam("file") file: MultipartFile): ResultWrapper {
@@ -46,13 +57,5 @@ class SettingController(
     @GetMapping("background/reset")
     @Operation(summary = "重制背景图片")
     fun bacReset(): Boolean = backgroundConfigService.deleteByUid(BaseUtils.uid())
-
-    @Operation(summary = "获取默认背景图片列表")
-    @GetMapping("/background/images")
-    fun defaultBacImg() = imageBackgroundService.defaultImageBackgrounds()
-
-    @Operation(summary = "获取默认渐变背景组")
-    @GetMapping("/background/gradients")
-    fun defaultBacColor() = gradientBackgroundService.defaultGradientBackgrounds()
 
 }

@@ -12,7 +12,7 @@ import top.tcyeee.bookmarkify.utils.BaseUtils
 @Tag(name = "用户偏好设置")
 @RequestMapping("/preference")
 class UserPreferenceController(
-    private val userPreferenceService: IUserPreferenceService
+    private val userPreferenceService: IUserPreferenceService,
 ) {
 
     @GetMapping
