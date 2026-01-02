@@ -20,7 +20,6 @@ export const useUserStore = defineStore('user', {
     setting: undefined as UserSetting | undefined,
     // 用户当前选择的系统背景（同步于 userSetting.bacSetting）
     backgroundSetting: undefined as BacSettingVO | undefined,
-
     // 用户头像文件
     avatar: undefined as UserFile | undefined,
     // 通用加载状态（登录、拉取信息等异步请求时使用）
