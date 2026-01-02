@@ -6,7 +6,7 @@
       <img v-if="props.value.iconHdUrl && !hdError" :src="props.value.iconHdUrl" alt="" @error="onHdError" />
       <img
         v-else-if="!iconError"
-        class="w-8 h-8"
+        :class="base64SizeClass"
         :src="`data:image/png;base64,${props.value.iconBase64}`"
         alt=""
         @error="onIconError" />
@@ -24,6 +24,7 @@ const props = defineProps<{  value: Bookmark}>()
 const hdError = ref(false)
 const iconError = ref(false)
 const backgroundColor = ref('#ffffff')
+const shouldUpscale = ref(false)
 const isDev = computed(() => isLocalhostOrIP(props.value.urlFull))
 const shouldUseBase64 = computed(
   () => (!props.value.iconHdUrl || hdError.value) && !iconError.value && !!props.value.iconBase64,
@@ -31,6 +32,7 @@ const shouldUseBase64 = computed(
 const logoStyle = computed(() =>
   shouldUseBase64.value ? { backgroundColor: backgroundColor.value } : undefined,
 )
+const base64SizeClass = computed(() => (shouldUpscale.value ? 'w-12 h-12' : 'w-8 h-8'))
 
 function onHdError() {
   hdError.value = true
@@ -43,31 +45,33 @@ function onIconError() {
 watch(
   () => props.value.iconBase64,
   async (base64) => {
-    if (!process.client || !base64) {
+    if (!import.meta.client || !base64) {
       backgroundColor.value = '#ffffff'
+      shouldUpscale.value = false
       return
     }
 
     try {
-      backgroundColor.value = await extractDominantColor(base64)
+      const { color, upscale } = await analyzeBase64(base64)
+      backgroundColor.value = color
+      shouldUpscale.value = upscale
     } catch {
       backgroundColor.value = '#ffffff'
+      shouldUpscale.value = false
       iconError.value = true
     }
   },
   { immediate: true },
 )
 
-async function extractDominantColor(base64: string): Promise<string> {
-  const img = new Image()
-  img.crossOrigin = 'anonymous'
-  img.src = `data:image/png;base64,${base64}`
+async function analyzeBase64(base64: string): Promise<{ color: string; upscale: boolean }> {
+  const img = await loadBase64Image(base64)
+  const upscale = Math.max(img.width, img.height) >= 64
+  const color = computeAverageColor(img)
+  return { color, upscale }
+}
 
-  await new Promise((resolve, reject) => {
-    img.onload = () => resolve(null)
-    img.onerror = reject
-  })
-
+function computeAverageColor(img: HTMLImageElement): string {
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')
 
@@ -102,6 +106,16 @@ async function extractDominantColor(base64: string): Promise<string> {
   if (!count) return '#ffffff'
 
   return rgbToHex(Math.round(r / count), Math.round(g / count), Math.round(b / count))
+}
+
+function loadBase64Image(base64: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = `data:image/png;base64,${base64}`
+  })
 }
 
 function rgbToHex(r: number, g: number, b: number): string {
