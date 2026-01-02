@@ -13,7 +13,7 @@ import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.entity.SmsVerifyParams
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
-import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
+import top.tcyeee.bookmarkify.entity.UserInfoUpdateParams
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
@@ -92,7 +92,7 @@ interface IUserService : IService<UserEntity> {
      * @param params 用户信息参数
      * @return 是否更新成功
      */
-    fun updateInfo(params: UserInfoUptateParams): Boolean
+    fun updateInfo(params: UserInfoUpdateParams): Boolean
 
     /**
      * 更新用户名称

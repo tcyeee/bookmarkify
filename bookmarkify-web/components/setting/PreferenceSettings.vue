@@ -1,25 +1,15 @@
 <template>
   <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
-    <section
-      class="space-y-4  bg-white/80  transition-colors dark:bg-slate-900/70">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">偏好设置</h3>
-          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            配置书签打开方式、布局、标题显示和翻页方式，满足你的使用习惯。
-          </p>
+      <section
+        class="space-y-4  bg-white/80  transition-colors dark:bg-slate-900/70">
+        <div class="flex flex-wrap items-start gap-3">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">偏好设置</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              配置书签打开方式、布局、标题显示和翻页方式，满足你的使用习惯。
+            </p>
+          </div>
         </div>
-        <div class="flex items-center gap-3">
-          <button class="cy-btn cy-btn-ghost" :disabled="preferenceLoading" @click="reloadPreference">
-            <span class="icon--memory-refresh icon-size-18"></span>
-            <span>重新拉取</span>
-          </button>
-          <button class="cy-btn cy-btn-primary" :disabled="preferenceSaving || !preferenceDirty" @click="savePreference">
-            <span v-if="preferenceSaving" class="icon--loading icon-size-18 animate-spin"></span>
-            <span>{{ preferenceSaving ? '保存中...' : '保存偏好' }}</span>
-          </button>
-        </div>
-      </div>
 
       <div
         v-if="preferenceLoading"
@@ -28,7 +18,7 @@
         <span>正在加载偏好设置...</span>
       </div>
 
-      <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div v-else class="grid grid-cols-1 gap-4">
         <div
           class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/70 px-4 py-3 transition-colors dark:border-slate-800 dark:bg-slate-900/60">
           <div class="space-y-1">
@@ -112,7 +102,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { queryUserPreference, updateUserPreference } from '@api'
 import { BookmarkLayoutMode, BookmarkOpenMode, PageTurnMode, type UserPreference } from '@typing'
 
@@ -120,6 +110,9 @@ const preferenceLoading = ref(false)
 const preferenceSaving = ref(false)
 const preferenceForm = ref<UserPreference>(createDefaultPreference())
 const preferenceOrigin = ref<UserPreference>(createDefaultPreference())
+const preferenceLoaded = ref(false)
+let autoSaveTimer: ReturnType<typeof setTimeout> | undefined
+let pendingSave = false
 
 function createDefaultPreference(): UserPreference {
   return {
@@ -151,19 +144,28 @@ async function loadPreference() {
     ElMessage.error(error?.message || '获取偏好设置失败')
   } finally {
     preferenceLoading.value = false
+    preferenceLoaded.value = true
   }
 }
 
 async function savePreference() {
+  if (!preferenceDirty.value) return
+  if (preferenceSaving.value) {
+    pendingSave = true
+    return
+  }
   preferenceSaving.value = true
   try {
     await updateUserPreference(preferenceForm.value)
     preferenceOrigin.value = JSON.parse(JSON.stringify(preferenceForm.value))
-    ElNotification.success({ message: '偏好设置已保存' })
   } catch (error: any) {
     ElMessage.error(error?.message || '保存失败，请稍后重试')
   } finally {
     preferenceSaving.value = false
+    if (pendingSave) {
+      pendingSave = false
+      scheduleAutoSave()
+    }
   }
 }
 
@@ -171,13 +173,28 @@ const preferenceDirty = computed(
   () => JSON.stringify(preferenceForm.value) !== JSON.stringify(preferenceOrigin.value)
 )
 
-function reloadPreference() {
-  loadPreference()
-}
-
 function toggleBoolean(key: 'minimalMode' | 'showTitle') {
   preferenceForm.value[key] = !preferenceForm.value[key]
 }
+
+function scheduleAutoSave() {
+  if (!preferenceLoaded.value) return
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+  }
+  autoSaveTimer = setTimeout(() => {
+    autoSaveTimer = undefined
+    savePreference()
+  }, 400)
+}
+
+watch(
+  preferenceForm,
+  () => {
+    scheduleAutoSave()
+  },
+  { deep: true }
+)
 
 onMounted(loadPreference)
 </script>

@@ -8,7 +8,7 @@ import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
-import top.tcyeee.bookmarkify.entity.UserInfoUptateParams
+import top.tcyeee.bookmarkify.entity.UserInfoUpdateParams
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
 
@@ -27,7 +27,7 @@ class UserController(private val userService: IUserService) {
 
     @PostMapping("updateInfo")
     @Operation(summary = "修改用户信息")
-    fun updateUsername(@RequestBody params: UserInfoUptateParams) = userService.updateInfo(params)
+    fun updateUsername(@RequestBody params: UserInfoUpdateParams) = userService.updateInfo(params)
 
     @PostMapping("changePhone")
     @Operation(summary = "修改手机号-发送短信")

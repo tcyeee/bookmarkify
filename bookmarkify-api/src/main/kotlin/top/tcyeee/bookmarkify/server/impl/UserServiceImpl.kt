@@ -207,7 +207,7 @@ class UserServiceImpl(
         return true
     }
 
-    override fun updateInfo(params: UserInfoUptateParams): Boolean {
+    override fun updateInfo(params: UserInfoUpdateParams): Boolean {
         if (params.nickName.isBlank()) return false
         return ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::nickName, params.nickName).update()
     }

@@ -3,7 +3,7 @@ package top.tcyeee.bookmarkify.server.impl
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import top.tcyeee.bookmarkify.entity.BookmarkUpdataPrams
+import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
@@ -15,7 +15,7 @@ import java.util.function.Consumer
  */
 @Service
 class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<BookmarkUserLinkMapper, BookmarkUserLink>() {
-    override fun updateOne(params: BookmarkUpdataPrams): Boolean {
+    override fun updateOne(params: BookmarkUpdatePrams): Boolean {
         ktUpdate().eq(BookmarkUserLink::id, params.linkId).set(BookmarkUserLink::title, params.title)
             .set(BookmarkUserLink::description, params.description).update()
         return false
