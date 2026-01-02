@@ -2,13 +2,13 @@ package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
+import top.tcyeee.bookmarkify.config.cache.RedisCache
+import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.entity.entity.BackgroundImageEntity
 import top.tcyeee.bookmarkify.entity.entity.UserFile
 import top.tcyeee.bookmarkify.mapper.BackgroundImageMapper
 import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.server.IBackgroundImageService
-import top.tcyeee.bookmarkify.config.cache.RedisType
-import top.tcyeee.bookmarkify.config.cache.RedisCache
 
 /**
  * 用户图片背景 Service 实现
@@ -38,4 +38,10 @@ class BackgroundImageServiceImpl(
             .list()
             .mapNotNull { fileMapper.selectById(it.fileId) }
             .toTypedArray()
+
+    override fun deleteUserImage(uid: String, id: String): Boolean = ktUpdate()
+        .eq(BackgroundImageEntity::uid, uid)
+        .eq(BackgroundImageEntity::id, id)
+        .eq(BackgroundImageEntity::isDefault, false)
+        .remove()
 }

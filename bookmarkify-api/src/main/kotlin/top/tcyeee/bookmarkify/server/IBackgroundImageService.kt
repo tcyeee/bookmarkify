@@ -14,4 +14,5 @@ interface IBackgroundImageService : IService<BackgroundImageEntity> {
     fun getFileById(id: String): UserFile
     fun defaultImageBackgrounds(): Array<UserFile>
     fun userImageBackgrounds(uid: String): Array<UserFile>
+    fun deleteUserImage(uid: String, id: String): Boolean
 }
