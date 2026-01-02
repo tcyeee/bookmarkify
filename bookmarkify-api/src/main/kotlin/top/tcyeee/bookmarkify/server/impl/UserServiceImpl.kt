@@ -214,6 +214,13 @@ class UserServiceImpl(
     }
 
     override fun addBacColor(params: GradientConfigParams, uid: String): Boolean {
+        val currentCount = bacGradientService.ktQuery()
+            .eq(BackgroundGradientEntity::uid, uid)
+            .eq(BackgroundGradientEntity::isDefault, false)
+            .count()
+        if (currentCount >= projectConfig.maxCustomBackgroundCount)
+            throw CommonException(ErrorType.E102, "自定义渐变最多 ${projectConfig.maxCustomBackgroundCount} 个")
+
         val entity = BackgroundGradientEntity(
             uid = uid,
             gradient = JSONUtil.toJsonStr(params.colors),
@@ -227,6 +234,13 @@ class UserServiceImpl(
     }
 
     override fun addBacImg(multipartFile: MultipartFile, uid: String): String {
+        val currentCount = bacImageService.ktQuery()
+            .eq(BackgroundImageEntity::uid, uid)
+            .eq(BackgroundImageEntity::isDefault, false)
+            .count()
+        if (currentCount >= projectConfig.maxCustomBackgroundCount)
+            throw CommonException(ErrorType.E102, "自定义图片最多 ${projectConfig.maxCustomBackgroundCount} 个")
+
         val file = fileService.uploadBackground(uid, multipartFile)
 
         // 添加到背景图片数据库
