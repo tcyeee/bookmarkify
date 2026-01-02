@@ -27,11 +27,6 @@ class SettingController(
     private val gradientBackgroundService: BackgroundGradientServiceImpl,
     private val backgroundConfigService: BackgroundConfigServiceImpl
 ) {
-
-    // 修改用户偏好设置
-
-
-
     @PostMapping("uploadBacPic")
     @Operation(summary = "上传自定义背景图片", parameters = [Parameter(name = "file", description = "背景图片文件")])
     fun uploadBackground(@RequestParam("file") file: MultipartFile): ResultWrapper {

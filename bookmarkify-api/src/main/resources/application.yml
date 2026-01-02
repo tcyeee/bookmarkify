@@ -40,6 +40,9 @@ config:
     - 'https://zhihu.com'
     - 'https://sspai.com'
     - 'https://bilibili.com'
+  default-background-gradient:
+    - '{}'
+
 
 spring:
   servlet:

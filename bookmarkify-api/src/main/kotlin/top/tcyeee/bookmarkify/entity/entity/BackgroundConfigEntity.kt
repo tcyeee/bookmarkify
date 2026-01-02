@@ -54,15 +54,15 @@ data class BackgroundImageEntity(
 data class BackgroundGradientEntity(
     @TableId @field:Schema(description = "背景ID") val id: String = IdUtil.fastUUID(),
     @field:Schema(description = "用户ID") var uid: String,
+    @field:Schema(description = "颜色名称") val name: String? = null,
     @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "是否是默认展示的背景") val isDefault: Boolean = false,
     @field:Schema(description = "背景渐变色(JSON)") var gradient: String,
     @field:Schema(description = "背景渐变方向") var direction: Int,
 ) {
-    fun gradientArray(): Array<String> {
-        return this.gradient.trim().removePrefix("[").removeSuffix("]").split(",")
+    fun gradientArray(): Array<String> =
+        this.gradient.trim().removePrefix("[").removeSuffix("]").split(",")
             .map { it.trim().removeSurrounding("\"") }.toTypedArray()
-    }
 
     fun vo(): BacGradientVO = BacGradientVO(colors = this.gradientArray(), direction = this.direction)
 }
