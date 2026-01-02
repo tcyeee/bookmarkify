@@ -8,7 +8,11 @@
     <div class="flex-1">
       <div class="mx-auto w-full px-4 sm:px-6 lg:px-8" :style="containerStyle">
         <div class="flex items-start gap-6 lg:gap-8 pb-[10vh]">
-          <aside class="sticky top-28 self-start w-60 sm:w-64 lg:w-72 shrink-0 space-y-6">
+          <aside
+            :class="[
+              'sticky self-start w-60 sm:w-64 lg:w-72 shrink-0 space-y-6 transition-[top] duration-200 ease-out',
+            ]"
+            :style="asideStyle">
             <NuxtLink to="/" class="block w-full">
               <div
                 class="cy-btn w-full cy-btn-xl cy-btn-ghost bg-white dark:bg-slate-900 dark:border-slate-700 rounded-xl text-lg transition-colors">
@@ -52,7 +56,7 @@
 </template>
 
 <script lang="ts" setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CSSProperties, ComponentPublicInstance } from 'vue'
 
 const sysStore = useSysStore()
@@ -129,6 +133,10 @@ const updateIndicator = () => {
 const handleResize = () => {
   nextTick(updateIndicator)
 }
+
+const asideStyle = computed<CSSProperties>(() => ({
+  top: isHeaderHidden.value ? '2rem' : '7rem',
+}))
 
 watch(
   () => sysStore.settingTabIndex,
