@@ -23,4 +23,11 @@ class BackgroundGradientServiceImpl : IBackgroundGradientService,
     override fun defaultGradientBackgrounds(): Array<BacGradientVO> =
         ktQuery().eq(BackgroundGradientEntity::isDefault, true).list()
             .map { it.vo() }.toTypedArray()
+
+    override fun userGradientBackgrounds(uid: String): Array<BacGradientVO> =
+        ktQuery().eq(BackgroundGradientEntity::uid, uid)
+            .eq(BackgroundGradientEntity::isDefault, false)
+            .list()
+            .map { it.vo() }
+            .toTypedArray()
 }

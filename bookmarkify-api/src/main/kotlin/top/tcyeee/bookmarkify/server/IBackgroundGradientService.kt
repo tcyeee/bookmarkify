@@ -11,5 +11,6 @@ import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
  * @date 12/7/25 15:00
  */
 interface IBackgroundGradientService : IService<BackgroundGradientEntity> {
-    fun defaultGradientBackgrounds():Array<BacGradientVO>
+    fun defaultGradientBackgrounds(): Array<BacGradientVO>
+    fun userGradientBackgrounds(uid: String): Array<BacGradientVO>
 }
