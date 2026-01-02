@@ -39,6 +39,10 @@ export const myBackgrounds = () => http.get('/background/mine') as Promise<t.Def
 export const resetBacBackground = () => http.get('/background/background/reset') as Promise<boolean>
 export const selectBackground = (params: t.BackSettingParams) =>
   http.post('/background/selectBackground', params) as Promise<boolean>
+export const updateGradientBackground = (params: t.GradientConfigParams) =>
+  http.post('/background/gradient/update', params) as Promise<boolean>
+export const deleteGradientBackground = (id: string) =>
+  http.start(`/background/gradient/${id}`, 'DELETE') as Promise<boolean>
 
 /* =========[ /preference ]========= */
 export const queryUserPreference = () => http.get('/preference') as Promise<t.UserPreference | null>
