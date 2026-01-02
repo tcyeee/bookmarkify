@@ -30,9 +30,7 @@
               title="编辑"
               aria-label="编辑自定义渐变"
               @click.stop="startEditPreset(preset)">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487 19.5 7.125m-3.375-3.375-9.379 9.379a2.25 2.25 0 0 0-.563.977l-.563 2.25 2.25-.563a2.25 2.25 0 0 0 .977-.563l9.38-9.38m-9.38 9.38 9.38-9.38" />
-              </svg>
+<span class="icon--memory-pencil icon-size-20 text-current"/>
             </button>
             <button
               type="button"
@@ -41,9 +39,7 @@
               title="删除"
               aria-label="删除自定义渐变"
               @click.stop="handleDeletePreset(preset)">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="h-4 w-4">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6 7.5h12M9.75 7.5V6.75A1.75 1.75 0 0 1 11.5 5h1a1.75 1.75 0 0 1 1.75 1.75V7.5m-7 0h8.5M9.75 7.5h4.5m-6 0v10a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-10m-7 0h8" />
-              </svg>
+<span class="icon--memory-trash icon-size-20 text-current"/>
             </button>
           </div>
         </button>
