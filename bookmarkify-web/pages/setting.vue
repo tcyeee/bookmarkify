@@ -11,7 +11,7 @@ import { computed } from 'vue'
 import AccountProfile from '~/components/setting/account/AccountProfile.vue'
 import SettingBookmarkManage from '~/components/setting/BookmarkManage.vue'
 import BackgroundSettings from '~/components/setting/BackgroundSettings.vue'
-import SettingSettings from '~/components/setting/Settings.vue'
+import PreferenceSettings from '~/components/setting/PreferenceSettings.vue'
 
 definePageMeta({
   middleware: 'auth',
@@ -19,7 +19,7 @@ definePageMeta({
 })
 
 const sysStore = useSysStore()
-const components = [AccountProfile, SettingBookmarkManage, BackgroundSettings, SettingSettings] as const
+const components = [AccountProfile, SettingBookmarkManage, BackgroundSettings, PreferenceSettings] as const
 const currentComponent = computed(() => components[sysStore.settingTabIndex] ?? components[0])
 </script>
 
