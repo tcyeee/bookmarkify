@@ -14,6 +14,7 @@
               ? 'border-blue-500 ring-2 ring-blue-200 ring-offset-2 ring-offset-white dark:ring-offset-slate-900'
               : 'border-transparent hover:-translate-y-0.5 hover:shadow-md dark:hover:border-slate-700',
           ]"
+          :disabled="applyingPreset"
           @click="selectPreset(preset)" />
       </div>
     </div>
@@ -82,7 +83,12 @@
 </template>
 
 <script lang="ts" setup>
-import type { BacGradientVO } from '@typing'
+import { ref } from 'vue'
+import { selectBackground, updateBacColor } from '@api'
+import { BackgroundType, type BacSettingVO, type BackSettingParams, type BacGradientVO } from '@typing'
+
+const userStore = useUserStore()
+const applyingPreset = ref(false)
 
 const props = defineProps<{
   colors: string[]
@@ -117,9 +123,41 @@ function removeColor(index: number) {
   )
 }
 
-function selectPreset(preset: BacGradientVO) {
+async function applyPresetBackground(preset: BacGradientVO) {
+  const setting: BacSettingVO = {
+    type: BackgroundType.GRADIENT,
+    bacColorGradient: [...preset.colors],
+    bacColorDirection: preset.direction ?? 135,
+  }
+
+  applyingPreset.value = true
+  try {
+    const params: BackSettingParams | null = preset.id
+      ? { type: BackgroundType.GRADIENT, backgroundId: preset.id }
+      : null
+
+    if (params) {
+      await selectBackground(params)
+    } else {
+      await updateBacColor({
+        colors: setting.bacColorGradient!,
+        direction: setting.bacColorDirection,
+      })
+    }
+
+    userStore.updateBackgroundSetting(setting)
+    ElNotification.success({ message: '已应用预设背景' })
+  } catch (error: any) {
+    ElMessage.error(error.message || '应用预设失败')
+  } finally {
+    applyingPreset.value = false
+  }
+}
+
+async function selectPreset(preset: BacGradientVO) {
   emit('update:colors', [...preset.colors])
   emit('update:direction', preset.direction ?? 135)
+  await applyPresetBackground(preset)
 }
 
 function updateDirection(value: number) {

@@ -6,6 +6,7 @@ export interface UserSetting {
 }
 
 export interface BacGradientVO {
+  id?: string // 渐变背景配置ID（预设渐变需要用该ID进行选择）
   colors: string[] // 渐变色数组，至少2个颜色
   direction?: number // 渐变方向角度，默认135
 }
@@ -16,6 +17,11 @@ export interface BacSettingVO {
 
   bacColorGradient?: string[] // 当BackgroundType为GRADIENT时使用
   bacColorDirection?: number // 当BackgroundType为GRADIENT时使用
+}
+
+export interface BackSettingParams {
+  type: BackgroundType
+  backgroundId: string
 }
 
 export interface DefaultBackgroundsResponse {
