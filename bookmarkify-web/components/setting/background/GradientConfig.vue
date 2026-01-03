@@ -18,7 +18,7 @@
           @click="selectPreset(preset)">
           <span
             v-if="preset.isSystem"
-            class="icon--memory-lock icon-size-25 absolute left-1 top-1 text-xs leading-none select-none"
+            class="icon--memory-lock icon-size-25 text-gray-500 absolute left-1 top-1 text-xs leading-none select-none"
             title="系统预设" />
           <div
             v-if="!preset.isSystem"
