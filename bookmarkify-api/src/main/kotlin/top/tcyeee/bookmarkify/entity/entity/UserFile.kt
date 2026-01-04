@@ -50,5 +50,6 @@ data class UserFile(
         fullName = OssUtils.resizeAndSignImg(fullPath, 100, 100),
     )
 
+    fun fullUrlWithSign(size: Int): String = OssUtils.resizeAndSignImg(fullPath, size, size)
 }
 

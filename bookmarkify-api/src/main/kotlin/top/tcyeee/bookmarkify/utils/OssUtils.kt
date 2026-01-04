@@ -13,6 +13,7 @@ import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.ImgInfo
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
+import top.tcyeee.bookmarkify.entity.entity.UserFile
 import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
 import top.tcyeee.bookmarkify.entity.enums.FileType
 import java.io.ByteArrayInputStream
@@ -225,6 +226,21 @@ class OssUtils {
         /**
          * 根据对象路径生成带缩放参数的限时访问链接
          *
+         * @param file OSS对象路径或完整URL
+         * @param width 目标宽度（<=0则不限定）
+         * @param height 目标高度（<=0则不限定）
+         */
+        fun resizeAndSignImg(file: UserFile, width: Int, height: Int): String {
+            val objectName = runCatching { URI(file.fullPath).path.removePrefix("/") }
+                .getOrElse { file.fullPath.removePrefix("/") }
+                .substringBefore("?")
+                .takeIf { it.isNotBlank() } ?: throw CommonException(ErrorType.E223, "path:$file.fullPath")
+            return signWithResize(objectName, width.takeIf { it > 0 }, height.takeIf { it > 0 })
+        }
+
+        /**
+         * 根据对象路径生成带缩放参数的限时访问链接
+         *
          * @param path OSS对象路径或完整URL
          * @param width 目标宽度（<=0则不限定）
          * @param height 目标高度（<=0则不限定）
@@ -234,7 +250,6 @@ class OssUtils {
                 .getOrElse { path.removePrefix("/") }
                 .substringBefore("?")
                 .takeIf { it.isNotBlank() } ?: throw CommonException(ErrorType.E223, "path:$path")
-
             return signWithResize(objectName, width.takeIf { it > 0 }, height.takeIf { it > 0 })
         }
 

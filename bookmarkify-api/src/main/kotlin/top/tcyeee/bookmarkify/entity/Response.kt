@@ -85,14 +85,13 @@ data class HomeItemShow(
 data class UserInfoShow(
     @field:Schema(description = "UID") var uid: String,
     @field:Schema(description = "用户名称") var nickName: String,
-    @field:Schema(description = "用户头像文件") var avatar: UserFile? = null,
-    @field:Schema(description = "用户设置信息") var userSetting: UserSetting? = null,
-
-    @JsonIgnore @field:Schema(description = "用户头像文件ID") var avatarFileId: String? = null,
-) {
-    constructor(user: UserEntity) : this(uid = user.id, nickName = user.nickName) {
-        BeanUtil.copyProperties(user, this)
-    }
+    @field:Schema(description = "用户头像文件") var avatarUrl: String? = null,
+){
+    constructor(entity: UserEntity, avatarUrl: String?) : this(
+        uid = entity.id,
+        nickName = entity.nickName,
+        avatarUrl = avatarUrl
+    )
 }
 
 class BacSettingVO(

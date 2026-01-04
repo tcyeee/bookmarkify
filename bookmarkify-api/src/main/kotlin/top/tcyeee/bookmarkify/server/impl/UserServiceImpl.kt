@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server.impl
 import cn.dev33.satoken.stp.StpUtil
 import cn.hutool.captcha.CaptchaUtil
 import cn.hutool.core.util.RandomUtil
+import cn.hutool.core.util.StrUtil
 import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import jakarta.servlet.http.Cookie
@@ -49,14 +50,15 @@ class UserServiceImpl(
      * @param uid uid
      * @return 用户基础信息 + 头像 + 设置 （没有TOKEN）
      */
-    override fun me(uid: String): UserInfoShow = getById(uid)?.vo()?.apply {
-        avatar = fileMapper.selectById(this.avatarFileId)
-        userSetting = queryUserSetting(uid)
-    } ?: run {
-        StpUtil.getSession().clear()
-        StpUtil.logout()
-        throw CommonException(ErrorType.E202)
+    override fun me(uid: String): UserInfoShow =
+        requireNotNull(getById(uid))
+            .let { UserInfoShow(it, it.avatarUrlWithSign()) }
+
+    fun UserEntity.avatarUrlWithSign(): String? {
+        if (StrUtil.isBlank(this.avatarFileId)) return null
+        return fileMapper.selectById(this.avatarFileId)?.fullUrlWithSign(300)
     }
+
 
     /**
      * 注册用户信息
@@ -200,7 +202,7 @@ class UserServiceImpl(
             .eq(BackgroundConfigEntity::uid, uid).one()
             // 如果查询到了，则修改其中的参数
             ?.also { it.updateParams(params) }
-            // 如果没有查询到，则创建对象
+        // 如果没有查询到，则创建对象
             ?: BackgroundConfigEntity(
                 uid = uid, type = params.type, backgroundLinkId = params.backgroundId
             )
