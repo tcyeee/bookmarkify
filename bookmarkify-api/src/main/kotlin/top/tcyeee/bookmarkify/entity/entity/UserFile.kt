@@ -47,7 +47,7 @@ data class UserFile(
 
     fun vo(): UserFileVO = UserFileVO(
         id = id,
-        fullName = OssUtils.resizeAndSignImg(fullPath, 100, 100),
+        fullName = OssUtils.resizeAndSignImg(fullPath, 256, 256),
     )
 
     fun fullUrlWithSign(size: Int): String = OssUtils.resizeAndSignImg(fullPath, size, size)
