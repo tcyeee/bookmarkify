@@ -120,5 +120,10 @@ class BacGradientVO(
  */
 class DefaultBackgroundsResponse(
     @field:Schema(description = "默认渐变背景列表") val gradients: List<BacGradientVO> = emptyList(),
-    @field:Schema(description = "默认图片背景列表") val images: List<UserFile> = emptyList(),
+    @field:Schema(description = "默认图片背景列表") val images: List<UserFileVO> = emptyList(),
+)
+
+data class UserFileVO(
+    @field:Schema(description = "文件ID") var id: String,
+    @field:Schema(description = "文件完整URL") var fullName: String,
 )

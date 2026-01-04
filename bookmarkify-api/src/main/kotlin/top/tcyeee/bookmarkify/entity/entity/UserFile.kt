@@ -4,8 +4,10 @@ import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
+import top.tcyeee.bookmarkify.entity.UserFileVO
 import top.tcyeee.bookmarkify.utils.CurrentEnvironment
 import top.tcyeee.bookmarkify.utils.FileType
+import top.tcyeee.bookmarkify.utils.OssUtils
 import top.tcyeee.bookmarkify.utils.currentEnvironment
 import java.io.Serializable
 import java.time.LocalDateTime
@@ -42,8 +44,11 @@ data class UserFile(
         currentName = "system_bacground_image",
         suffix = "png"
     )
+
+    fun vo(): UserFileVO = UserFileVO(
+        id = id,
+        fullName = OssUtils.resizeAndSignImg(fullPath, 100, 100),
+    )
+
 }
 
-fun UserFile.setAuth() {
-//    OssUtils.resizeAndSignImg()
-}
