@@ -4,7 +4,7 @@
       <div class="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">渐变背景</div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         <button
-          v-for="(preset, index) in presets"
+          v-for="(preset, index) in gradientPresets"
           :key="index"
           type="button"
           :style="{ backgroundImage: `linear-gradient(135deg, ${preset.colors.join(', ')})` }"
@@ -77,8 +77,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
-import { deleteGradientBackground, selectBackground, updateBacColor, updateGradientBackground } from '@api'
+import { computed, ref, watch } from 'vue'
+import { deleteGradientBackground, resetBacBackground, selectBackground, updateBacColor, updateGradientBackground } from '@api'
 import GradientCustom from './GradientCustom.vue'
 import {
   BackgroundType,
@@ -97,23 +97,33 @@ const customDirection = ref<number>(135)
 const customSaving = ref(false)
 const editingPreset = ref<GradientPreset | null>(null)
 const editingPresetWasActive = ref(false)
+const gradientColors = ref<string[]>(['#a69f9f', '#c1baba', '#8f9ea6'])
+const gradientDirection = ref<number>(135)
 
 type GradientPreset = BacGradientVO & { isSystem?: boolean }
 
-const props = defineProps<{
-  colors: string[]
-  direction: number
-  presets: GradientPreset[]
-  saving: boolean
-  hasBackground: boolean
-}>()
+const hasBackground = computed(() => !!userStore.backgroundSetting)
+const gradientPresets = computed<GradientPreset[]>(() => [
+  ...(sysStore.defaultGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: true })),
+  ...(sysStore.userGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: false })),
+])
 
-const emit = defineEmits<{
-  (e: 'update:colors', value: string[]): void
-  (e: 'update:direction', value: number): void
-  (e: 'save'): void
-  (e: 'reset'): void
-}>()
+function syncFromSetting(setting?: BacSettingVO | null) {
+  if (setting?.type === BackgroundType.GRADIENT && setting.bacColorGradient?.length) {
+    gradientColors.value = [...setting.bacColorGradient]
+    gradientDirection.value = setting.bacColorDirection ?? 135
+    customColors.value = [...setting.bacColorGradient]
+    customDirection.value = setting.bacColorDirection ?? 135
+  }
+}
+
+syncFromSetting(userStore.backgroundSetting)
+
+watch(
+  () => userStore.backgroundSetting,
+  (val) => syncFromSetting(val),
+  { deep: true }
+)
 
 async function applyPresetBackground(preset: GradientPreset) {
   const setting: BacSettingVO = {
@@ -122,6 +132,7 @@ async function applyPresetBackground(preset: GradientPreset) {
     bacColorDirection: preset.direction ?? 135,
   }
 
+  // 后端写入选中的渐变（有 id 走 select，无 id 直接更新颜色）
   applyingPreset.value = true
   try {
     const params: BackSettingParams | null = preset.id
@@ -147,16 +158,16 @@ async function applyPresetBackground(preset: GradientPreset) {
 }
 
 async function selectPreset(preset: GradientPreset) {
-  emit('update:colors', [...preset.colors])
-  emit('update:direction', preset.direction ?? 135)
+  gradientColors.value = [...preset.colors]
+  gradientDirection.value = preset.direction ?? 135
   await applyPresetBackground(preset)
 }
 
 function isPresetActive(preset: GradientPreset) {
   return (
-    props.colors.length === preset.colors.length &&
-    props.colors.every((color, index) => color === preset.colors[index]) &&
-    props.direction === (preset.direction ?? 135)
+    gradientColors.value.length === preset.colors.length &&
+    gradientColors.value.every((color, index) => color === preset.colors[index]) &&
+    gradientDirection.value === (preset.direction ?? 135)
   )
 }
 
@@ -164,8 +175,9 @@ function openCustomDialog(presetOrEvent?: GradientPreset | Event) {
   const preset = presetOrEvent && 'colors' in (presetOrEvent as GradientPreset) ? (presetOrEvent as GradientPreset) : undefined
   editingPreset.value = preset ?? null
   editingPresetWasActive.value = preset ? isPresetActive(preset) : false
-  customColors.value = [...(preset?.colors ?? props.colors)]
-  customDirection.value = preset?.direction ?? props.direction ?? 135
+  customColors.value = [...(preset?.colors ?? gradientColors.value)]
+  customDirection.value = preset?.direction ?? gradientDirection.value ?? 135
+  // 弹窗期间屏蔽快捷键
   sysStore.togglePreventKeyEventsFlag(true)
   customDialogRef.value?.showModal()
 }
@@ -226,8 +238,8 @@ async function handleCustomSave() {
           bacColorDirection: customDirection.value,
         }
         userStore.updateBackgroundSetting(setting)
-        emit('update:colors', [...customColors.value])
-        emit('update:direction', customDirection.value)
+        gradientColors.value = [...customColors.value]
+        gradientDirection.value = customDirection.value
       }
 
       ElNotification.success({ message: '自定义渐变已更新' })
@@ -242,8 +254,8 @@ async function handleCustomSave() {
         bacColorDirection: customDirection.value,
       }
       userStore.updateBackgroundSetting(setting)
-      emit('update:colors', [...customColors.value])
-      emit('update:direction', customDirection.value)
+      gradientColors.value = [...customColors.value]
+      gradientDirection.value = customDirection.value
       ElNotification.success({ message: '自定义渐变已保存' })
     }
 
@@ -259,8 +271,31 @@ async function handleCustomSave() {
 }
 
 async function handleCustomReset() {
-  // 重用父组件提供的重置逻辑
-  emit('reset')
+  customSaving.value = true
+  try {
+    await resetBacBackground()
+    await Promise.all([sysStore.refreshSystemConfig(), userStore.refreshUserInfo()])
+
+    // 使用最新 store 配置回填当前 UI
+    const setting = userStore.backgroundSetting
+    if (setting?.type === BackgroundType.GRADIENT && setting.bacColorGradient?.length) {
+      const nextColors = [...setting.bacColorGradient]
+      const nextDirection = setting.bacColorDirection ?? 135
+      gradientColors.value = nextColors
+      gradientDirection.value = nextDirection
+      userStore.updateBackgroundSetting({
+        type: BackgroundType.GRADIENT,
+        bacColorGradient: nextColors,
+        bacColorDirection: nextDirection,
+      })
+    }
+
+    ElNotification.success({ message: '已恢复默认背景' })
+  } catch (error: any) {
+    ElMessage.error(error.message || '重置失败，请重试')
+  } finally {
+    customSaving.value = false
+  }
   closeCustomDialog()
 }
 
