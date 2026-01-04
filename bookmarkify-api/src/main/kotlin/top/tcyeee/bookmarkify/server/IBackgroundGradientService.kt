@@ -12,8 +12,8 @@ import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
  * @date 12/7/25 15:00
  */
 interface IBackgroundGradientService : IService<BackgroundGradientEntity> {
-    fun defaultGradientBackgrounds(): Array<BacGradientVO>
-    fun userGradientBackgrounds(uid: String): Array<BacGradientVO>
+    fun defaultGradientBackgrounds(): List<BacGradientVO>
+    fun userGradientBackgrounds(uid: String): List<BacGradientVO>
     fun deleteUserGradient(uid: String, id: String): Boolean
     fun updateUserGradient(uid: String, params: GradientConfigParams): Boolean
 }

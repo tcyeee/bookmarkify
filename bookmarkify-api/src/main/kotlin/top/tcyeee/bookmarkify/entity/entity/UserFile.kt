@@ -27,4 +27,18 @@ data class UserFile(
     @field:Schema(description = "文件类型") val type: FileType,
     @field:Schema(description = "文件所在环境") val environment: CurrentEnvironment = currentEnvironment(),
     @field:Schema(description = "文件当前名称") val currentName: String,
-) : Serializable
+) : Serializable {
+
+    /**
+     * 初始化默认背景图像
+     * 图片已经上传到OSS中了，位于
+     */
+    constructor(fileName: String) : this(
+        id = fileName.substringBefore("."),
+        uid = "system",
+        originName = "system_bacground_image",
+        size = 1000,
+        type = FileType.BACKGROUND,
+        currentName = "system_bacground_image"
+    )
+}

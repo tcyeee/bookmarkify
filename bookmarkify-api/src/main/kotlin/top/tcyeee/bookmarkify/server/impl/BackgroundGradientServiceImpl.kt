@@ -22,16 +22,15 @@ class BackgroundGradientServiceImpl : IBackgroundGradientService,
     ServiceImpl<BackgroundGradientMapper, BackgroundGradientEntity>() {
 
     @RedisCache(RedisType.DEFAULT_BACKGROUND_GRADIENTS)
-    override fun defaultGradientBackgrounds(): Array<BacGradientVO> =
+    override fun defaultGradientBackgrounds(): List<BacGradientVO> =
         ktQuery().eq(BackgroundGradientEntity::isDefault, true).list()
-            .map { it.vo() }.toTypedArray()
+            .map { it.vo() }
 
-    override fun userGradientBackgrounds(uid: String): Array<BacGradientVO> =
+    override fun userGradientBackgrounds(uid: String): List<BacGradientVO> =
         ktQuery().eq(BackgroundGradientEntity::uid, uid)
             .eq(BackgroundGradientEntity::isDefault, false)
             .list()
             .map { it.vo() }
-            .toTypedArray()
 
     override fun deleteUserGradient(uid: String, id: String): Boolean =
         ktUpdate()
