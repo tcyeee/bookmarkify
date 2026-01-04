@@ -183,28 +183,28 @@ class OssUtils {
                 .also { log.info("[DEBUG] OSS存储成功! Bucket:$bucket; FileName:$path") }
 
         /**
-         * 根据对象路径生成带缩放参数的限时访问链接
+         * 生成带缩放样式的限时访问链接
          *
-         * @param path OSS对象路径或完整URL
-         * @param width 目标宽度（<=0则不限定）
-         * @param height 目标高度（<=0则不限定）
+         * @param objectName OSS对象名（不含域名）
+         * @param width 目标宽度（null/<=0 表示不限制）
+         * @param height 目标高度（null/<=0 表示不限制）
+         * @param expirationMillis 过期时间（毫秒）
          */
-        fun resizeAndSignImg(path: String, width: Int, height: Int): String {
-            val objectName = runCatching { URI(path).path.removePrefix("/") }
-                .getOrElse { path.removePrefix("/") }
-                .substringBefore("?")
-                .takeIf { it.isNotBlank() } ?: throw CommonException(ErrorType.E223, "path:$path")
-
+        private fun signWithResize(
+            objectName: String,
+            width: Int? = null,
+            height: Int? = null,
+            expirationMillis: Long = 3600 * 1000
+        ): String {
             return try {
-                val expiration = java.util.Date(System.currentTimeMillis() + 3600 * 1000)
-                val request = GeneratePresignedUrlRequest(bucket, objectName)
-                request.expiration = expiration
-
-                // 设置图片缩放样式，若未传递宽或高则不设置对应参数
-                val style = StringBuilder("image/resize,m_lfit")
-                if (width > 0) style.append(",w_$width")
-                if (height > 0) style.append(",h_$height")
-                request.process = style.toString()
+                val expiration = java.util.Date(System.currentTimeMillis() + expirationMillis)
+                val request = GeneratePresignedUrlRequest(bucket, objectName).apply {
+                    this.expiration = expiration
+                    val style = StringBuilder("image/resize,m_lfit")
+                    width?.takeIf { it > 0 }?.let { style.append(",w_$it") }
+                    height?.takeIf { it > 0 }?.let { style.append(",h_$it") }
+                    this.process = style.toString()
+                }
 
                 val url = ossClient.generatePresignedUrl(request)
                 val query = url.query
@@ -220,6 +220,22 @@ class OssUtils {
             } catch (e: Exception) {
                 throw CommonException(ErrorType.E221, e.message)
             }
+        }
+
+        /**
+         * 根据对象路径生成带缩放参数的限时访问链接
+         *
+         * @param path OSS对象路径或完整URL
+         * @param width 目标宽度（<=0则不限定）
+         * @param height 目标高度（<=0则不限定）
+         */
+        fun resizeAndSignImg(path: String, width: Int, height: Int): String {
+            val objectName = runCatching { URI(path).path.removePrefix("/") }
+                .getOrElse { path.removePrefix("/") }
+                .substringBefore("?")
+                .takeIf { it.isNotBlank() } ?: throw CommonException(ErrorType.E223, "path:$path")
+
+            return signWithResize(objectName, width.takeIf { it > 0 }, height.takeIf { it > 0 })
         }
 
         /**
@@ -242,25 +258,8 @@ class OssUtils {
                 append(maxmalSize)
                 append(".png")
             }
-            return try {
-                val expiration = java.util.Date(System.currentTimeMillis() + expirationMillis)
-                val request = GeneratePresignedUrlRequest(bucket, objectName)
-                request.expiration = expiration
-
-                val style = StringBuilder("image/resize,m_lfit")
-                style.append(",w_${maxmalSize.coerceAtMost(size)}")
-                style.append(",h_${maxmalSize.coerceAtMost(size)}")
-                request.process = style.toString()
-
-                val url = ossClient.generatePresignedUrl(request)
-                if (customDomain.isNotBlank()) {
-                    "$customDomain${url.path}?${url.query}"
-                } else {
-                    url.toString()
-                }
-            } catch (e: Exception) {
-                throw CommonException(ErrorType.E221, e.message)
-            }
+            val target = maxmalSize.coerceAtMost(size)
+            return signWithResize(objectName, target, target, expirationMillis)
         }
     }
 }

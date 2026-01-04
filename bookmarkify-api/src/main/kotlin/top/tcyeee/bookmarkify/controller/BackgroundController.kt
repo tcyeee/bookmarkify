@@ -60,8 +60,7 @@ class BackgroundController(
 
     @DeleteMapping("image/{id}")
     @Operation(summary = "删除自定义图片背景")
-    fun deleteImage(@PathVariable id: String): Boolean =
-        imageBackgroundService.deleteUserImage(BaseUtils.uid(), id)
+    fun deleteImage(@PathVariable id: String): Boolean = imageBackgroundService.deleteUserImage(BaseUtils.uid(), id)
 
     @PostMapping("gradient/update")
     @Operation(summary = "修改自定义渐变背景")
@@ -70,6 +69,5 @@ class BackgroundController(
 
     @PostMapping("selectBackground")
     @Operation(summary = "在已有的渐变色背景和图片背景中选择主页背景")
-    fun bacSetting(@RequestBody params: BackSettingParams): Boolean =
-        userService.bacSetting(params, BaseUtils.uid())
+    fun bacSetting(@RequestBody params: BackSettingParams): Boolean = userService.bacSetting(params, BaseUtils.uid())
 }
