@@ -3,7 +3,6 @@ package top.tcyeee.bookmarkify.entity.entity
 import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
-import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.utils.CurrentEnvironment
 import top.tcyeee.bookmarkify.utils.FileType
@@ -17,17 +16,18 @@ import java.time.LocalDateTime
  */
 @TableName("user_file")
 data class UserFile(
-    @JsonIgnore @TableId @field:Schema(description = "文件ID") val id: String = IdUtil.fastUUID(),
-    @JsonIgnore @field:Schema(description = "文件所属用户ID") val uid: String,
-    @JsonIgnore @field:Schema(description = "文件曾经名称") val originName: String,
-    @JsonIgnore @field:Schema(description = "文件大小(单位:字节)") val size: Long,
-    @JsonIgnore @field:Schema(description = "文件创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
-    @JsonIgnore @field:Schema(description = "文件是否被删除") val deleted: Boolean = false,
-
+    @TableId @field:Schema(description = "文件ID") val id: String = IdUtil.fastUUID(),
+    @field:Schema(description = "文件所属用户ID") val uid: String,
+    @field:Schema(description = "文件曾经名称") val originName: String,
+    @field:Schema(description = "文件大小(单位:字节)") val size: Long,
+    @field:Schema(description = "文件创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
+    @field:Schema(description = "文件是否被删除") val deleted: Boolean = false,
     @field:Schema(description = "文件类型") val type: FileType,
     @field:Schema(description = "文件所在环境") val environment: CurrentEnvironment = currentEnvironment(),
-    @field:Schema(description = "文件当前名称") val currentName: String,
+    @field:Schema(description = "文件当前名称") val currentName: String,   // eg: 019b86fd-74af-7058-829f-3f580c54c1e8
+    @field:Schema(description = "文件后缀") val suffix: String,        // eg: png
 ) : Serializable {
+    val fullPath: String = "${type.folder}/$currentName.$suffix"
 
     /**
      * 初始化默认背景图像
@@ -39,6 +39,11 @@ data class UserFile(
         originName = "system_bacground_image",
         size = 1000,
         type = FileType.BACKGROUND,
-        currentName = "system_bacground_image"
+        currentName = "system_bacground_image",
+        suffix = "png"
     )
+}
+
+fun UserFile.setAuth() {
+//    OssUtils.resizeAndSignImg()
 }
