@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size
 import top.tcyeee.bookmarkify.config.entity.RoleEnum
 import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
+import top.tcyeee.bookmarkify.utils.OssUtils
 import java.time.LocalDateTime
 
 /**
@@ -39,5 +40,4 @@ data class UserEntity(
     )
 
     fun authVO(token: String): UserSessionInfo = UserSessionInfo(this, token)
-    fun vo(): UserInfoShow = UserInfoShow(this)
 }
