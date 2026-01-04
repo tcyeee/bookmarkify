@@ -21,25 +21,11 @@ class FileServiceImpl(
     private val projectConfig: ProjectConfig,
 ) : IFileService, ServiceImpl<FileMapper, UserFile>() {
 
-    override fun updateAvatar(uid: String, file: MultipartFile): UserFile {
-        val fileName = uploadFile(file, projectConfig.imgPath, FileType.AVATAR)
-        return UserFile(
-            uid = uid,
-            originName = file.originalFilename ?: "",
-            type = FileType.AVATAR,
-            currentName = fileName,
-            size = file.size,
-        ).also { save(it) }
-    }
+    override fun updateAvatar(uid: String, file: MultipartFile): UserFile =
+        uploadFile(file, projectConfig.imgPath, FileType.AVATAR, uid)
+            .also { save(it) }
 
-    override fun uploadBackground(uid: String, file: MultipartFile): UserFile {
-        val fileName = uploadFile(file, projectConfig.imgPath, FileType.BACKGROUND)
-        return UserFile(
-            uid = uid,
-            originName = file.originalFilename ?: "",
-            type = FileType.BACKGROUND,
-            currentName = fileName,
-            size = file.size,
-        ).also { save(it) }
-    }
+    override fun uploadBackground(uid: String, file: MultipartFile): UserFile =
+        uploadFile(file, projectConfig.imgPath, FileType.BACKGROUND, uid)
+            .also { save(it) }
 }

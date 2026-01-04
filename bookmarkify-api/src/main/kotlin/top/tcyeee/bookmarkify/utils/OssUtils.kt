@@ -43,6 +43,9 @@ class OssUtils {
     @Value("\${aliyun.oss.domain-name}")
     private lateinit var domainName: String
 
+    /**
+     * 初始化OSS客户端及域名配置
+     */
     @PostConstruct
     fun init() {
         ossClient = OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret)
@@ -50,6 +53,9 @@ class OssUtils {
         initDomain(endpoint, domainName, bucketName)
     }
 
+    /**
+     * 容器销毁时关闭OSS客户端
+     */
     @PreDestroy
     fun destroy() {
         ossClient.shutdown()
@@ -62,6 +68,9 @@ class OssUtils {
         private lateinit var domain: String
         private lateinit var customDomain: String
 
+        /**
+         * 解析配置生成访问域名（支持自定义域名）
+         */
         fun initDomain(endpoint: String, domainConfig: String, bucketName: String) {
             val protocol = if (endpoint.startsWith("https://")) "https://" else "http://"
             if (domainConfig.isNotBlank()) {
@@ -172,6 +181,46 @@ class OssUtils {
             runCatching { ossClient.putObject(bucket, path, inputStream) }
                 .getOrElse { throw CommonException(ErrorType.E224, it.message) }
                 .also { log.info("[DEBUG] OSS存储成功! Bucket:$bucket; FileName:$path") }
+
+        /**
+         * 根据对象路径生成带缩放参数的限时访问链接
+         *
+         * @param path OSS对象路径或完整URL
+         * @param width 目标宽度（<=0则不限定）
+         * @param height 目标高度（<=0则不限定）
+         */
+        fun resizeAndSignImg(path: String, width: Int, height: Int): String {
+            val objectName = runCatching { URI(path).path.removePrefix("/") }
+                .getOrElse { path.removePrefix("/") }
+                .substringBefore("?")
+                .takeIf { it.isNotBlank() } ?: throw CommonException(ErrorType.E223, "path:$path")
+
+            return try {
+                val expiration = java.util.Date(System.currentTimeMillis() + 3600 * 1000)
+                val request = GeneratePresignedUrlRequest(bucket, objectName)
+                request.expiration = expiration
+
+                // 设置图片缩放样式，若未传递宽或高则不设置对应参数
+                val style = StringBuilder("image/resize,m_lfit")
+                if (width > 0) style.append(",w_$width")
+                if (height > 0) style.append(",h_$height")
+                request.process = style.toString()
+
+                val url = ossClient.generatePresignedUrl(request)
+                val query = url.query
+                if (customDomain.isNotBlank()) {
+                    buildString {
+                        append(customDomain)
+                        append(url.path)
+                        if (!query.isNullOrBlank()) append("?").append(query)
+                    }
+                } else {
+                    url.toString()
+                }
+            } catch (e: Exception) {
+                throw CommonException(ErrorType.E221, e.message)
+            }
+        }
 
         /**
          * 获取带缩放参数的私有图片签名URL
