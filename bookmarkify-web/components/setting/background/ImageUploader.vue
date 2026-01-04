@@ -1,8 +1,7 @@
 <template>
   <div class="space-y-3 text-slate-900 dark:text-slate-100 transition-colors">
     <div class="flex flex-wrap items-center gap-3">
-      <label class="cy-btn cy-btn-soft flex items-center gap-2 cursor-pointer">
-        <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="$emit('file-change', $event)" />
+      <button class="cy-btn cy-btn-soft flex items-center gap-2" type="button" @click="$emit('pick')">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             stroke-linecap="round"
@@ -11,7 +10,7 @@
             d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
         </svg>
         <span>选择图片</span>
-      </label>
+      </button>
 
       <button v-if="previewUrl" type="button" class="cy-btn cy-btn-accent" :disabled="uploading" @click="$emit('upload')">
         <span v-if="uploading">上传中...</span>
@@ -36,12 +35,17 @@
 </template>
 
 <script lang="ts" setup>
-import type { Ref } from 'vue'
 
 const props = defineProps<{
   previewUrl: string | null
   backgroundPath?: string | null
   uploading: boolean
-  fileInputRef?: Ref<HTMLInputElement | null> | null
+}>()
+
+defineEmits<{
+  (e: 'pick'): void
+  (e: 'upload'): void
+  (e: 'cancel'): void
+  (e: 'reset'): void
 }>()
 </script>
