@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
+  <div class="w-full max-w-2xl space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
     <div>
       <div class="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">渐变背景</div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">

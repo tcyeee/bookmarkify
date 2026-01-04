@@ -13,28 +13,27 @@
 </template>
 
 <script lang="ts" setup>
+import { computed } from 'vue'
 import type { BacSettingVO } from '@typing'
-import { getImageUrlByUserFile, getImageUrl } from '@config'
+import { getImageUrlByUserFile } from '@config'
 
-const props = defineProps<{
-  backgroundPath?: string | null
-  backgroundConfig?: BacSettingVO | null
-}>()
+const userStore = useUserStore()
+
+const backgroundSetting = computed<BacSettingVO | null>(() => userStore.backgroundSetting ?? userStore.account?.userSetting?.bacSetting ?? null)
 
 const backgroundUrl = computed(() => {
-  if (props.backgroundConfig?.type === 'IMAGE' && props.backgroundConfig.bacImgFile) {
-    return getImageUrlByUserFile(props.backgroundConfig.bacImgFile)
-  }
-  if (props.backgroundPath) {
-    return getImageUrl(props.backgroundPath)
+  const cfg = backgroundSetting.value
+  if (cfg?.type === 'IMAGE' && cfg.bacImgFile) {
+    return getImageUrlByUserFile(cfg.bacImgFile)
   }
   return null
 })
 
 const previewStyle = computed(() => {
-  if (props.backgroundConfig?.type === 'GRADIENT' && props.backgroundConfig.bacColorGradient) {
-    const colors = props.backgroundConfig.bacColorGradient.join(', ')
-    const direction = props.backgroundConfig.bacColorDirection || 135
+  const cfg = backgroundSetting.value
+  if (cfg?.type === 'GRADIENT' && cfg.bacColorGradient) {
+    const colors = cfg.bacColorGradient.join(', ')
+    const direction = cfg.bacColorDirection || 135
     return {
       backgroundImage: `linear-gradient(${direction}deg, ${colors})`,
     }
