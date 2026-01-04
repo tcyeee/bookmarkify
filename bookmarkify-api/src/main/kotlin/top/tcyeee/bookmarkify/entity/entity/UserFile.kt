@@ -41,7 +41,7 @@ data class UserFile(
         originName = "system_bacground_image",
         size = 1000,
         type = FileType.BACKGROUND,
-        currentName = "system_bacground_image",
+        currentName = fileName.substringBefore("."),
         suffix = "png"
     )
 

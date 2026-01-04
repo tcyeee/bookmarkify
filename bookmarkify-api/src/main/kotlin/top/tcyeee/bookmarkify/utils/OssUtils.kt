@@ -223,20 +223,6 @@ class OssUtils {
             }
         }
 
-        /**
-         * 根据对象路径生成带缩放参数的限时访问链接
-         *
-         * @param file OSS对象路径或完整URL
-         * @param width 目标宽度（<=0则不限定）
-         * @param height 目标高度（<=0则不限定）
-         */
-        fun resizeAndSignImg(file: UserFile, width: Int, height: Int): String {
-            val objectName = runCatching { URI(file.fullPath).path.removePrefix("/") }
-                .getOrElse { file.fullPath.removePrefix("/") }
-                .substringBefore("?")
-                .takeIf { it.isNotBlank() } ?: throw CommonException(ErrorType.E223, "path:$file.fullPath")
-            return signWithResize(objectName, width.takeIf { it > 0 }, height.takeIf { it > 0 })
-        }
 
         /**
          * 根据对象路径生成带缩放参数的限时访问链接

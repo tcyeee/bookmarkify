@@ -42,9 +42,9 @@ config:
     - 'https://sspai.com'
     - 'https://bilibili.com'
   default-background-image:
-    - 'bac/019b86fd-74af-7058-829f-3f580c54c1e8.png'
-    - 'bac/019b86fd-8fd8-73cf-a70b-663ec100a4dd.png'
-    - 'bac/019b86fd-c179-752d-a060-7f8647efbf9c.png'
+    - '019b86fd-74af-7058-829f-3f580c54c1e8.png'
+    - '019b86fd-8fd8-73cf-a70b-663ec100a4dd.png'
+    - '019b86fd-c179-752d-a060-7f8647efbf9c.png'
   default-background-gradient:
     - gradient:
         - "#a69f9f"
