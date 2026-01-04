@@ -201,7 +201,8 @@ class OssUtils {
                 val expiration = java.util.Date(System.currentTimeMillis() + expirationMillis)
                 val request = GeneratePresignedUrlRequest(bucket, objectName).apply {
                     this.expiration = expiration
-                    val style = StringBuilder("image/resize,m_lfit")
+                    // 使用 m_fill 以填充方式裁剪，确保输出尺寸精确匹配期望的宽高
+                    val style = StringBuilder("image/resize,m_fill")
                     width?.takeIf { it > 0 }?.let { style.append(",w_$it") }
                     height?.takeIf { it > 0 }?.let { style.append(",h_$it") }
                     this.process = style.toString()
