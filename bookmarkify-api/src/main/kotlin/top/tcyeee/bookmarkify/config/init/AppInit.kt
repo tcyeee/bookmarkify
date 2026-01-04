@@ -7,7 +7,14 @@ import org.springframework.boot.ApplicationRunner
 import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
+import top.tcyeee.bookmarkify.entity.entity.BackgroundImageEntity
+import top.tcyeee.bookmarkify.entity.entity.UserFile
+import top.tcyeee.bookmarkify.mapper.BackgroundImageMapper
+import top.tcyeee.bookmarkify.server.IBackgroundGradientService
+import top.tcyeee.bookmarkify.server.IBackgroundImageService
+import top.tcyeee.bookmarkify.server.IFileService
 import top.tcyeee.bookmarkify.server.impl.BackgroundGradientServiceImpl
+import top.tcyeee.bookmarkify.utils.FileType
 
 /**
  * 项目初始化
@@ -17,13 +24,15 @@ import top.tcyeee.bookmarkify.server.impl.BackgroundGradientServiceImpl
  */
 @Component
 class AppInit(
-    private val backgroundGradientService: BackgroundGradientServiceImpl,
+    private val backgroundGradientService: IBackgroundGradientService,
+    private val bacgroundImageService: IBackgroundImageService,
+    private val fileservice: IFileService,
     private val projectConfig: ProjectConfig,
 ) : ApplicationRunner {
     override fun run(args: ApplicationArguments?) {
         // 检查是否有默认渐变数据,没有则初始化
-        val list = backgroundGradientService.ktQuery().eq(BackgroundGradientEntity::isDefault, true).list()
-        if (list.isEmpty()) {
+        val gradients = backgroundGradientService.ktQuery().eq(BackgroundGradientEntity::isDefault, true).list()
+        if (gradients.isEmpty()) {
             val defaults = projectConfig.defaultBackgroundGradient.map {
                 BackgroundGradientEntity(
                     uid = IdUtil.fastUUID(),
@@ -33,9 +42,20 @@ class AppInit(
                     isDefault = true,
                 )
             }
-            if (defaults.isNotEmpty()) {
-                backgroundGradientService.saveBatch(defaults)
-            }
+            if (defaults.isNotEmpty()) backgroundGradientService.saveBatch(defaults)
         }
+
+        // 检查是否有默认图片数据,没有则初始化
+//            val defaults = projectConfig.defaultBackgroundGradient.map {
+//                BackgroundGradientEntity(
+//                    uid = IdUtil.fastUUID(),
+//                    name = it.name,
+//                    gradient = JSONUtil.toJsonStr(it.gradient),
+//                    direction = it.direction,
+//                    isDefault = true,
+//                )
+//            }
+//            if (defaults.isNotEmpty()) backgroundGradientService.saveBatch(defaults)
+//        }
     }
 }

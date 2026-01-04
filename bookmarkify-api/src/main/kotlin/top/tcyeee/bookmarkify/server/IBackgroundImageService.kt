@@ -12,7 +12,7 @@ import top.tcyeee.bookmarkify.entity.entity.UserFile
  */
 interface IBackgroundImageService : IService<BackgroundImageEntity> {
     fun getFileById(id: String): UserFile
-    fun defaultImageBackgrounds(): Array<UserFile>
-    fun userImageBackgrounds(uid: String): Array<UserFile>
+    fun defaultImageBackgrounds(): List<UserFile>
+    fun userImageBackgrounds(uid: String): List<UserFile>
     fun deleteUserImage(uid: String, id: String): Boolean
 }

@@ -119,6 +119,6 @@ class BacGradientVO(
  * 默认背景资源合集
  */
 class DefaultBackgroundsResponse(
-    @field:Schema(description = "默认渐变背景列表") val gradients: Array<BacGradientVO> = emptyArray(),
-    @field:Schema(description = "默认图片背景列表") val images: Array<UserFile> = emptyArray(),
+    @field:Schema(description = "默认渐变背景列表") val gradients: List<BacGradientVO> = emptyList(),
+    @field:Schema(description = "默认图片背景列表") val images: List<UserFile> = emptyList(),
 )

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.cache.RedisCache
 import top.tcyeee.bookmarkify.config.cache.RedisType
+import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.entity.BackgroundImageEntity
 import top.tcyeee.bookmarkify.entity.entity.UserFile
 import top.tcyeee.bookmarkify.mapper.BackgroundImageMapper
@@ -18,26 +19,26 @@ import top.tcyeee.bookmarkify.server.IBackgroundImageService
  */
 @Service
 class BackgroundImageServiceImpl(
-    private val fileMapper: FileMapper
+    private val fileMapper: FileMapper,
+    private val projectConfig: ProjectConfig,
 ) : IBackgroundImageService,
     ServiceImpl<BackgroundImageMapper, BackgroundImageEntity>() {
 
     override fun getFileById(id: String): UserFile =
         getById(id).let { fileMapper.selectById(it.fileId) }
 
-    @RedisCache(RedisType.DEFAULT_BACKGROUND_IMAGES)
-    override fun defaultImageBackgrounds(): Array<UserFile> =
-        ktQuery().eq(BackgroundImageEntity::isDefault, true).list()
-            .map { it.uid }.toSet().takeIf { it.isNotEmpty() }
-            ?.let { fileMapper.selectByIds(it).toTypedArray() }
-            ?: emptyArray()
+    /**
+     * 这里的默认图片来自配置文件，需要在这里添加上签名，并且修改尺寸
+     * 1.默认的图片已经存在于OSS，名称就是ID
+     * 2.返回图片ID，用户选择默认图片的时候，和ID进行关联
+     */
+    override fun defaultImageBackgrounds(): List<UserFile> = projectConfig.defaultBackgroundImage.map { UserFile(it) }
 
-    override fun userImageBackgrounds(uid: String): Array<UserFile> =
+    override fun userImageBackgrounds(uid: String): List<UserFile> =
         ktQuery().eq(BackgroundImageEntity::uid, uid)
             .eq(BackgroundImageEntity::isDefault, false)
             .list()
             .mapNotNull { fileMapper.selectById(it.fileId) }
-            .toTypedArray()
 
     override fun deleteUserImage(uid: String, id: String): Boolean = ktUpdate()
         .eq(BackgroundImageEntity::uid, uid)
