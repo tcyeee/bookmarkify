@@ -263,5 +263,12 @@ class OssUtils {
             val target = maxmalSize.coerceAtMost(size)
             return signWithResize(objectName, target, target, expirationMillis)
         }
+
+        fun defaultImgBacById(linkId: String): String = buildString {
+            append(FileType.BACKGROUND.folder)
+            append("/")
+            append(linkId)
+            append(".png")
+        }.let { signWithResize(it) }
     }
 }

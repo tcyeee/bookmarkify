@@ -93,8 +93,12 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { queryUserPreference, updateUserPreference } from '@api'
+import { storeToRefs } from 'pinia'
 import { BookmarkLayoutMode, BookmarkOpenMode, PageTurnMode, type UserPreference } from '@typing'
+import { useUserStore } from '@stores/user.store'
+
+const userStore = useUserStore()
+const { preference } = storeToRefs(userStore)
 
 const preferenceLoading = ref(false)
 const preferenceSaving = ref(false)
@@ -111,11 +115,7 @@ function createDefaultPreference(): UserPreference {
     bookmarkLayout: BookmarkLayoutMode.DEFAULT,
     showTitle: true,
     pageMode: PageTurnMode.VERTICAL_SCROLL,
-    backgroundConfigId: undefined,
-    id: undefined,
-    uid: undefined,
-    updateTime: undefined,
-    createTime: undefined,
+    imgBacShow: undefined,
   }
 }
 
@@ -128,8 +128,10 @@ function syncPreference(pref?: UserPreference | null) {
 async function loadPreference() {
   preferenceLoading.value = true
   try {
-    const result = await queryUserPreference()
-    syncPreference(result ?? undefined)
+    if (!preference.value) {
+      await userStore.fetchPreference()
+    }
+    syncPreference(preference.value ?? undefined)
   } catch (error: any) {
     ElMessage.error(error?.message || '获取偏好设置失败')
   } finally {
@@ -146,7 +148,7 @@ async function savePreference() {
   }
   preferenceSaving.value = true
   try {
-    await updateUserPreference(preferenceForm.value)
+    await userStore.savePreference(preferenceForm.value)
     preferenceOrigin.value = JSON.parse(JSON.stringify(preferenceForm.value))
   } catch (error: any) {
     ElMessage.error(error?.message || '保存失败，请稍后重试')

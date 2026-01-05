@@ -69,7 +69,7 @@ const selectedImageId = ref<string | null>(null)
 const applyingImageId = ref<string | null>(null)
 
 // 从 store 直接取最新的背景配置，减少对父组件 props 的依赖
-const backgroundConfigComputed = computed<BacSettingVO | null>(() => userStore.account?.userSetting?.bacSetting ?? userStore.backgroundSetting ?? null)
+const backgroundConfigComputed = computed<BacSettingVO | null>(() => userStore.preference?.imgBacShow ?? null)
 const backgroundPathComputed = computed<string | null>(
   () => backgroundConfigComputed.value?.bacImgFile?.currentName ?? null
 )
@@ -200,8 +200,6 @@ async function handleUpload() {
     if (fileInputRef.value) fileInputRef.value.value = ''
 
     await Promise.all([sysStore.refreshSystemConfig(), userStore.refreshUserInfo()])
-    // 上传成功后以最新 store 数据为准同步选中态
-    selectedImageId.value = extractImageId(userStore.backgroundSetting?.bacImgFile ?? newConfig.bacImgFile)
   } catch (error: any) {
     ElMessage.error(error.message || '背景上传失败，请重试')
   } finally {

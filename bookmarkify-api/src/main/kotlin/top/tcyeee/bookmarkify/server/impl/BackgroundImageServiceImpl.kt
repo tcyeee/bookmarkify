@@ -9,6 +9,7 @@ import top.tcyeee.bookmarkify.entity.entity.UserFile
 import top.tcyeee.bookmarkify.mapper.BackgroundImageMapper
 import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.server.IBackgroundImageService
+import top.tcyeee.bookmarkify.utils.OssUtils
 
 /**
  * 用户图片背景 Service 实现
@@ -23,6 +24,9 @@ class BackgroundImageServiceImpl(
 ) : IBackgroundImageService, ServiceImpl<BackgroundImageMapper, BackgroundImageEntity>() {
 
     override fun getFileById(id: String): UserFile = getById(id).let { fileMapper.selectById(it.fileId) }
+
+    override fun currentBacImgUrl(uid: String, linkId: String): String =
+        baseMapper.selectById(linkId)?.fileId ?: OssUtils.defaultImgBacById(linkId)
 
     /**
      * 这里的默认图片来自配置文件，需要在这里添加上签名，并且修改尺寸

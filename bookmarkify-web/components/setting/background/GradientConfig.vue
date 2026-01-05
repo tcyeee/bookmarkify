@@ -98,7 +98,7 @@ const gradientDirection = ref<number>(135)
 
 type GradientPreset = BacGradientVO & { isSystem?: boolean }
 
-const hasBackground = computed(() => !!userStore.backgroundSetting)
+const hasBackground = computed(() => !!userStore.preference?.imgBacShow)
 const gradientPresets = computed<GradientPreset[]>(() => [
   ...(sysStore.defaultGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: true })),
   ...(sysStore.userGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: false })),
@@ -113,10 +113,10 @@ function syncFromSetting(setting?: BacSettingVO | null) {
   }
 }
 
-syncFromSetting(userStore.backgroundSetting)
+syncFromSetting(userStore.preference?.imgBacShow)
 
 watch(
-  () => userStore.backgroundSetting,
+  () => userStore.preference?.imgBacShow,
   (val) => syncFromSetting(val),
   { deep: true }
 )
@@ -142,7 +142,6 @@ async function applyPresetBackground(preset: GradientPreset) {
       })
     }
 
-    userStore.updateBackgroundSetting(setting)
     ElNotification.success({ message: '已应用预设背景' })
   } catch (error: any) {
     ElMessage.error(error.message || '应用预设失败')
@@ -231,7 +230,6 @@ async function handleCustomSave() {
           bacColorGradient: [...customColors.value],
           bacColorDirection: customDirection.value,
         }
-        userStore.updateBackgroundSetting(setting)
         gradientColors.value = [...customColors.value]
         gradientDirection.value = customDirection.value
       }
@@ -247,7 +245,6 @@ async function handleCustomSave() {
         bacColorGradient: [...customColors.value],
         bacColorDirection: customDirection.value,
       }
-      userStore.updateBackgroundSetting(setting)
       gradientColors.value = [...customColors.value]
       gradientDirection.value = customDirection.value
       ElNotification.success({ message: '自定义渐变已保存' })
@@ -271,17 +268,12 @@ async function handleCustomReset() {
     await Promise.all([sysStore.refreshSystemConfig(), userStore.refreshUserInfo()])
 
     // 使用最新 store 配置回填当前 UI
-    const setting = userStore.backgroundSetting
+    const setting = userStore.preference?.imgBacShow
     if (setting?.type === BackgroundType.GRADIENT && setting.bacColorGradient?.length) {
       const nextColors = [...setting.bacColorGradient]
       const nextDirection = setting.bacColorDirection ?? 135
       gradientColors.value = nextColors
       gradientDirection.value = nextDirection
-      userStore.updateBackgroundSetting({
-        type: BackgroundType.GRADIENT,
-        bacColorGradient: nextColors,
-        bacColorDirection: nextDirection,
-      })
     }
 
     ElNotification.success({ message: '已恢复默认背景' })
