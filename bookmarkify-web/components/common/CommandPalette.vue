@@ -25,10 +25,10 @@
             <div class="flex items-center justify-between px-3 py-2.5 text-sm">
               <div class="flex items-center gap-3 text-slate-800 dark:text-slate-100">
                 <span
-                  v-if="item.icon"
+                  v-if="item.iconLeft"
                   :class="[
                     'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400 ring-1 ring-slate-200 transition group-hover:text-sky-500 group-aria-selected:text-sky-500 dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-700',
-                    item.icon,
+                    item.iconLeft,
                   ]" />
                 <div class="flex flex-col">
                   <span
@@ -45,8 +45,11 @@
                   {{ item.kbd }}
                 </span>
                 <span
-                  v-if="item.submenu"
-                  class="icon--memory-chevron-right icon-size-16 text-slate-300 group-hover:text-slate-400 group-aria-selected:text-slate-400 dark:text-slate-600 dark:group-hover:text-slate-400" />
+                  v-if="item.iconRight || item.submenu"
+                  :class="[
+                    'text-slate-300 group-hover:text-slate-400 group-aria-selected:text-slate-400 dark:text-slate-600 dark:group-hover:text-slate-400',
+                    item.iconRight || 'icon--memory-chevron-right icon-size-16',
+                  ]" />
               </div>
             </div>
           </Command.Item>
@@ -71,7 +74,8 @@ const preferenceStore = usePreferenceStore()
 type PaletteItem = {
   value: string
   label: string
-  icon?: string
+  iconLeft?: string
+  iconRight?: string
   submenu?: boolean
   hint?: string
   kbd?: string
@@ -98,7 +102,7 @@ rootGroups.set('常用操作', [
   {
     value: 'open-preference-menu',
     label: '偏好设置',
-    icon: 'icon--memory-toggle-switch-off icon-size-16',
+    iconLeft: 'icon--memory-toggle-switch-off icon-size-16',
     submenu: true,
     hint: '快速调整书签偏好',
     run: async () => {
@@ -158,8 +162,21 @@ const currentPreference = computed<UserPreference>(() => ({
 const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
   const pref = currentPreference.value
   return [
+        [
+      '',
+      [
+        {
+          value: 'back-root',
+          iconRight: 'icon--memory-arrow-right-up icon-size-16',
+          label: '返回',
+          run: () => {
+            backToRoot()
+          },
+        },
+      ],
+    ],
     [
-      '偏好设置',
+      '',
       [
         {
           value: 'pref-open-current',
@@ -228,6 +245,7 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
           value: 'pref-minimal-toggle',
           label: pref.minimalMode ? '关闭极简模式' : '开启极简模式',
           hint: pref.minimalMode ? '当前已开启' : '当前已关闭',
+          iconRight: pref.minimalMode ? 'icon--memory-toggle-switch-off icon-size-30' : 'icon--memory-toggle-switch-on icon-size-30',
           run: () =>
             updatePreference({
               minimalMode: !pref.minimalMode,
@@ -235,28 +253,16 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         },
         {
           value: 'pref-show-title-toggle',
-          label: pref.showTitle ? '隐藏标题' : '显示标题',
-          hint: pref.showTitle ? '当前显示标题' : '当前仅图标',
+          label: pref.showTitle ? '关闭标题显示' : '开启标题显示',
+          hint: pref.showTitle ? '当前已关闭' : '当前已开启',
+          iconRight: pref.showTitle ? 'icon--memory-toggle-switch-off icon-size-30' : 'icon--memory-toggle-switch-on icon-size-30',
           run: () =>
             updatePreference({
               showTitle: !pref.showTitle,
             }),
         },
       ],
-    ],
-    [
-      '导航',
-      [
-        {
-          value: 'back-root',
-          label: '返回主菜单',
-          hint: '回到顶层命令',
-          run: () => {
-            backToRoot()
-          },
-        },
-      ],
-    ],
+    ]
   ]
 })
 
