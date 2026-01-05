@@ -2,7 +2,8 @@
 export default defineNuxtConfig({
   modules: [
     '@nuxt/eslint',
-    '@nuxt/ui'
+    '@nuxt/ui',
+    '@element-plus/nuxt'
   ],
 
   devtools: {
@@ -12,7 +13,11 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
 
   routeRules: {
-    '/': { prerender: true }
+    // '/': { prerender: true }
+  },
+
+  future: {
+    compatibilityVersion: 4
   },
 
   devServer: {
