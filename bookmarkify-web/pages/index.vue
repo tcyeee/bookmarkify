@@ -32,6 +32,7 @@
 <script lang="ts" setup>
 import { getImageUrl, getImageUrlByUserFile } from '@config'
 import { BackgroundType, type BacSettingVO } from '@typing'
+import { usePreferenceStore } from '@stores/preference.store'
 
 definePageMeta({
   middleware: 'auth',
@@ -39,7 +40,7 @@ definePageMeta({
 })
 
 const sysStore = useSysStore()
-const userStore = useUserStore()
+const preferenceStore = usePreferenceStore()
 
 const data = reactive<{
   launchpadView: boolean // 是否显示APP
@@ -49,7 +50,7 @@ const data = reactive<{
   duringAnimate: false,
 })
 
-const minimalMode = computed(() => userStore.preference?.minimalMode ?? false)
+const minimalMode = computed(() => preferenceStore.preference?.minimalMode ?? false)
 
 watch(
   minimalMode,
@@ -78,8 +79,8 @@ const classFadeDate = computed(() => {
   }
 })
 
-const bacSetting = computed<BacSettingVO | undefined>(() => userStore.preference?.imgBacShow ?? undefined)
-const cachedBackgroundImage = computed(() => userStore.backgroundImageDataUrl)
+const bacSetting = computed<BacSettingVO | undefined>(() => preferenceStore.preference?.imgBacShow ?? undefined)
+const cachedBackgroundImage = computed(() => preferenceStore.backgroundImageDataUrl)
 
 // 背景样式
 const backgroundStyle = computed(() => {

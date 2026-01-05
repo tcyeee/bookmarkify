@@ -126,7 +126,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { updateUserInfo } from '@api'
 import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
-import { useUserStore } from '@stores/user.store'
+import { useAuthStore } from '@stores/auth.store'
 import { AuthStatusEnum } from '@typing'
 import AccountDelete from './AccountDelete.vue'
 import BindPhoneModal from './BindPhoneModal.vue'
@@ -135,10 +135,10 @@ import AccountLogout from './AccountLogout.vue'
 import LoginDialog from './LoginDialog.vue'
 import ActionInput from '../../common/ActionInput.vue'
 
-const userStore = useUserStore()
-const accountStatus = computed<AuthStatusEnum | undefined>(() => userStore.authStatus)
-const account = computed<UserInfo | undefined>(() => userStore.account)
-const avatarUrl: Ref<string | undefined> = computed(() => userStore.account?.avatar?.currentName)
+const authStore = useAuthStore()
+const accountStatus = computed<AuthStatusEnum | undefined>(() => authStore.authStatus)
+const account = computed<UserInfo | undefined>(() => authStore.account)
+const avatarUrl: Ref<string | undefined> = computed(() => authStore.account?.avatar?.currentName)
 const isAuthed = computed(() => accountStatus.value === AuthStatusEnum.AUTHED)
 const maskedUid = computed(() => {
   const uid = account.value?.uid
@@ -200,7 +200,7 @@ async function saveProfile() {
       phone: form.phone,
       email: form.email,
     })
-    await userStore.refreshUserInfo()
+    await authStore.refreshUserInfo()
     ElNotification.success({ message: '个人资料修改成功' })
   } catch (error: any) {
     ElMessage.error(error?.message || '保存失败，请稍后重试')
@@ -217,7 +217,7 @@ function resetForm() {
 
 async function handleAvatarUpdate(avatarPath: string) {
   // 头像上传成功后，更新用户信息中的头像路径
-  await userStore.refreshUserInfo()
+  await authStore.refreshUserInfo()
 }
 
 function handlePhoneBindSuccess(phone: string) {

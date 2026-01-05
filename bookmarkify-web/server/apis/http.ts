@@ -1,5 +1,6 @@
 import type { UserInfo } from '@typing'
 import type { Result } from '@typing'
+import { useAuthStore } from '@stores/auth.store'
 
 export default class http {
   private static PENDING_DEBOUNCE_MS = 600
@@ -29,9 +30,9 @@ export default class http {
   }
 
   static async uploadFile(path: string, file: File): Promise<any> {
-    const userStore = useUserStore()
+    const authStore = useAuthStore()
 
-    if (!userStore.account?.token) await userStore.loginOrRegister()
+    if (!authStore.account?.token) await authStore.loginOrRegister()
 
     // 创建 FormData
     const formData = new FormData()
@@ -39,7 +40,7 @@ export default class http {
 
     // 创建请求
     console.log(`[API] UPLOAD::${path}`)
-    const token = userStore.account?.token ?? ''
+    const token = authStore.account?.token ?? ''
     const request: Request = new Request(useRuntimeConfig().public.apiBase + path, {
       headers: { satoken: token },
       body: formData,
@@ -60,17 +61,17 @@ export default class http {
   }
 
   static async start(path: string, method: string, params?: any): Promise<any> {
-    const userStore = useUserStore()
+    const authStore = useAuthStore()
 
     // 除了Login，其他都需要token
-    if (method != 'GET' && !path.startsWith('/auth/') && !userStore.account?.token) await userStore.loginOrRegister()
+    if (method != 'GET' && !path.startsWith('/auth/') && !authStore.account?.token) await authStore.loginOrRegister()
 
     // 创建请求
     console.log(`[API] ${method}::${path}`)
     if (method == 'GET' && params) path += `?${new URLSearchParams(params).toString()}`
     const body = method == 'POST' ? JSON.stringify(params) : undefined
     const request: Request = new Request(useRuntimeConfig().public.apiBase + path, {
-      headers: { 'Content-Type': 'application/json', satoken: userStore.account?.token ?? '' },
+      headers: { 'Content-Type': 'application/json', satoken: authStore.account?.token ?? '' },
       body: body,
       method: method,
     })
@@ -89,8 +90,8 @@ async function resultCheck(result: Result<object>, request: Request): Promise<an
   if (result.ok) return Promise.resolve(result.data)
   // 如果遇到token失效,则重新登录
   if ([101].includes(result.code)) {
-    const userStore = useUserStore()
-    const account: UserInfo = await userStore.loginOrRegister()
+    const authStore = useAuthStore()
+    const account: UserInfo = await authStore.loginOrRegister()
     if (account.token) {
       request.headers.set('satoken', account.token)
       return await fetch(request)

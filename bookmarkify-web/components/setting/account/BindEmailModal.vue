@@ -119,11 +119,12 @@
 
 <script lang="ts" setup>
 import { captchaSendEmail, captchaVerifyEmail } from '@api'
+import { useAuthStore } from '@stores/auth.store'
 const props = defineProps<{ email?: string; disabled?: boolean; hideTrigger?: boolean }>()
 const emit = defineEmits<{ (e: 'success', email: string): void }>()
 
 const sysStore = useSysStore()
-const userStore = useUserStore()
+const authStore = useAuthStore()
 const dialogRef = ref<HTMLDialogElement>()
 const emailCodeInputRef = ref<HTMLInputElement>()
 
@@ -182,7 +183,7 @@ defineExpose({ openDialog, closeDialog })
 
 async function submit() {
   if (!isEmailValid.value || !isEmailCodeValid.value) return
-  userStore
+  authStore
     .loginWithEmail({ email: form.email, code: form.emailCode })
     .then(() => {
       ElNotification.success({ message: '邮箱绑定成功' })

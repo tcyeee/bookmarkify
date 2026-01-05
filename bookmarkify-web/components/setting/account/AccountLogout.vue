@@ -21,11 +21,12 @@
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { AuthStatusEnum } from '@typing'
+import { useAuthStore } from '@stores/auth.store'
 
 const logoutDialogRef = ref<HTMLDialogElement | null>(null)
-const userStore = useUserStore()
+const authStore = useAuthStore()
 const sysStore = useSysStore()
-const isAuthed = computed(() => userStore.authStatus === AuthStatusEnum.AUTHED)
+const isAuthed = computed(() => authStore.authStatus === AuthStatusEnum.AUTHED)
 
 function handleDialogClose() {
   sysStore.togglePreventKeyEventsFlag(false)
@@ -58,7 +59,7 @@ onBeforeUnmount(() => {
 })
 
 async function confirmLogout() {
-  await userStore.logout()
+  await authStore.logout()
   closeLogoutDialog()
 }
 </script>

@@ -44,16 +44,17 @@ import { BackgroundType, type BacSettingVO } from '@typing'
 import { selectBackground } from '@api'
 import { getImageUrl, getImageUrlByUserFile } from '@config/image.config'
 import ImageBackgroundUploader from './ImageBackgroundUploader.vue'
+import { usePreferenceStore } from '@stores/preference.store'
 
-const userStore = useUserStore()
+const preferenceStore = usePreferenceStore()
 
 const selectedImageId = ref<string | null>(null)
 const applyingImageId = ref<string | null>(null)
 
-const uploading = computed(() => userStore.imageBackgroundUploading)
+const uploading = computed(() => preferenceStore.imageBackgroundUploading)
 
 // 从 store 直接取最新的背景配置，减少对父组件 props 的依赖
-const backgroundConfigComputed = computed<BacSettingVO | null>(() => userStore.preference?.imgBacShow ?? null)
+const backgroundConfigComputed = computed<BacSettingVO | null>(() => preferenceStore.preference?.imgBacShow ?? null)
 const backgroundPathComputed = computed<string | null>(
   () => backgroundConfigComputed.value?.bacImgFile?.fullName ?? null
 )
@@ -97,8 +98,12 @@ const imagePresets = computed<ImagePreset[]>(() => {
   }
 
   // 系统预设 + 用户自定义预设，保持原有顺序
-  ;(userStore.defaultImageBackgroundsList ?? []).forEach((img) => addPreset(mapImageToPreset(img, true)))
-  ;(userStore.userImageBackgroundsList ?? []).forEach((img) => addPreset(mapImageToPreset(img, false)))
+  ;(preferenceStore.defaultImageBackgroundsList ?? []).forEach((img) =>
+    addPreset(mapImageToPreset(img, true)),
+  )
+  ;(preferenceStore.userImageBackgroundsList ?? []).forEach((img) =>
+    addPreset(mapImageToPreset(img, false)),
+  )
   // 若当前选中的背景不在列表中，则追加在末尾，不打乱已有顺序
   addPreset(mapImageToPreset(backgroundConfigComputed.value?.bacImgFile, false))
   return presets
@@ -144,7 +149,7 @@ async function selectImagePreset(preset: ImagePreset) {
   applyingImageId.value = preset.id
   try {
     const setting = await selectBackground({ type: BackgroundType.IMAGE, backgroundId: preset.id })
-    userStore.upsertPreferenceBackground(setting)
+    preferenceStore.upsertPreferenceBackground(setting)
     selectedImageId.value = extractImageId(setting.bacImgFile) ?? setting.backgroundLinkId ?? preset.id
     ElNotification.success({ message: '已应用图片背景' })
 

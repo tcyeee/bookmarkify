@@ -95,10 +95,10 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { BookmarkLayoutMode, BookmarkOpenMode, PageTurnMode, type UserPreference } from '@typing'
-import { useUserStore } from '@stores/user.store'
+import { usePreferenceStore } from '@stores/preference.store'
 
-const userStore = useUserStore()
-const { preference } = storeToRefs(userStore)
+const preferenceStore = usePreferenceStore()
+const { preference } = storeToRefs(preferenceStore)
 
 const preferenceLoading = ref(false)
 const preferenceSaving = ref(false)
@@ -141,7 +141,7 @@ async function loadPreference() {
 
   preferenceLoading.value = true
   try {
-    await userStore.fetchPreference()
+    await preferenceStore.fetchPreference()
     syncPreference(preference.value ?? undefined)
   } catch (error: any) {
     ElMessage.error(error?.message || '获取偏好设置失败')
@@ -159,7 +159,7 @@ async function savePreference() {
   }
   preferenceSaving.value = true
   try {
-    await userStore.savePreference(preferenceForm.value)
+    await preferenceStore.savePreference(preferenceForm.value)
     preferenceOrigin.value = snapshotPreference(preferenceForm.value)
   } catch (error: any) {
     ElMessage.error(error?.message || '保存失败，请稍后重试')

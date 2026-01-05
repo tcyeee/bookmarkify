@@ -16,19 +16,22 @@
 import { computed } from 'vue'
 import { BackgroundType, type BacSettingVO } from '@typing'
 import { getImageUrl, getImageUrlByUserFile } from '@config'
+import { useAuthStore } from '@stores/auth.store'
+import { usePreferenceStore } from '@stores/preference.store'
 
-const userStore = useUserStore()
+const authStore = useAuthStore()
+const preferenceStore = usePreferenceStore()
 
 // 优先使用当前偏好中的背景设置，其次兜底账号信息中的历史字段
-const backgroundSetting = computed<BacSettingVO | null>(
-  () => userStore.preference?.imgBacShow ?? (userStore.account as any)?.userSetting?.bacSetting ?? null
-)
+const backgroundSetting = computed<BacSettingVO | null>(() => {
+  return preferenceStore.preference?.imgBacShow ?? (authStore.account as any)?.userSetting?.bacSetting ?? null
+})
 
 const backgroundUrl = computed(() => {
   const cfg = backgroundSetting.value
   // 先看是否有本地缓存的 DataURL
   if (cfg?.type === BackgroundType.IMAGE) {
-    if (userStore.backgroundImageDataUrl) return userStore.backgroundImageDataUrl
+    if (preferenceStore.backgroundImageDataUrl) return preferenceStore.backgroundImageDataUrl
     const file: any = cfg.bacImgFile
     if (!file) return null
     // 优先使用服务端回填的完整地址
