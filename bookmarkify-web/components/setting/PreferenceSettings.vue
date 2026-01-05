@@ -119,18 +119,29 @@ function createDefaultPreference(): UserPreference {
   }
 }
 
+function snapshotPreference(pref: UserPreference): UserPreference {
+  return JSON.parse(JSON.stringify(pref))
+}
+
 function syncPreference(pref?: UserPreference | null) {
   const merged = { ...createDefaultPreference(), ...(pref ?? {}) }
   preferenceForm.value = merged
-  preferenceOrigin.value = JSON.parse(JSON.stringify(merged))
+  preferenceOrigin.value = snapshotPreference(merged)
 }
 
 async function loadPreference() {
+  if (preferenceLoaded.value) return
+
+  // store 中已有数据时直接同步，无需再走 loading 状态
+  if (preference.value) {
+    syncPreference(preference.value)
+    preferenceLoaded.value = true
+    return
+  }
+
   preferenceLoading.value = true
   try {
-    if (!preference.value) {
-      await userStore.fetchPreference()
-    }
+    await userStore.fetchPreference()
     syncPreference(preference.value ?? undefined)
   } catch (error: any) {
     ElMessage.error(error?.message || '获取偏好设置失败')
@@ -149,7 +160,7 @@ async function savePreference() {
   preferenceSaving.value = true
   try {
     await userStore.savePreference(preferenceForm.value)
-    preferenceOrigin.value = JSON.parse(JSON.stringify(preferenceForm.value))
+    preferenceOrigin.value = snapshotPreference(preferenceForm.value)
   } catch (error: any) {
     ElMessage.error(error?.message || '保存失败，请稍后重试')
   } finally {
