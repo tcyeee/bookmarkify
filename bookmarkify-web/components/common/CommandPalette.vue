@@ -47,10 +47,13 @@
 import { ref, watch, computed } from 'vue'
 import { useMagicKeys, onKeyStroke } from '@vueuse/core'
 import { Command } from 'vue-command-palette'
+import { BookmarkLayoutMode, BookmarkOpenMode, PageTurnMode, type UserPreference } from '@typing'
 import { useAuthStore } from '@stores/auth.store'
+import { usePreferenceStore } from '@stores/preference.store'
 
 const sysStore = useSysStore()
 const authStore = useAuthStore()
+const preferenceStore = usePreferenceStore()
 
 type PaletteItem = {
   value: string
@@ -62,9 +65,12 @@ type PaletteItem = {
 
 const visible = ref(false)
 const search = ref('')
+const currentMenu = ref<'root' | 'preference'>('root')
+const preferenceMenuLoading = ref(false)
+const preferenceMenuReady = ref(false)
 
-const groups: Map<string, PaletteItem[]> = new Map()
-groups.set('常用操作', [
+const rootGroups: Map<string, PaletteItem[]> = new Map()
+rootGroups.set('常用操作', [
   {
     value: 'toggle-theme',
     label: '切换主题模式',
@@ -99,8 +105,16 @@ groups.set('常用操作', [
       sysStore.addBookmarkDialogVisible = true
     },
   },
+  {
+    value: 'open-preference-menu',
+    label: '偏好设置',
+    hint: '快速调整书签偏好',
+    run: async () => {
+      await openPreferenceMenu()
+    },
+  },
 ])
-groups.set('账号操作', [
+rootGroups.set('账号操作', [
   {
     value: 'logout',
     label: '退出登陆',
@@ -112,8 +126,155 @@ groups.set('账号操作', [
   },
 ])
 
-const groupEntries = computed(() => Array.from(groups.entries()))
+const rootGroupEntries = computed(() => Array.from(rootGroups.entries()))
+
+const currentPreference = computed<UserPreference>(() => ({
+  bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
+  minimalMode: false,
+  bookmarkLayout: BookmarkLayoutMode.DEFAULT,
+  showTitle: true,
+  pageMode: PageTurnMode.VERTICAL_SCROLL,
+  imgBacShow: undefined,
+  ...(preferenceStore.preference ?? {}),
+}))
+
+const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
+  const pref = currentPreference.value
+  return [
+    [
+      '偏好设置',
+      [
+        {
+          value: 'pref-open-current',
+          label: '书签打开方式：当前标签页',
+          hint: pref.bookmarkOpenMode === BookmarkOpenMode.CURRENT_TAB ? '当前选项' : '切换为当前标签页',
+          run: () =>
+            updatePreference({
+              bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
+            }),
+        },
+        {
+          value: 'pref-open-new',
+          label: '书签打开方式：新标签页',
+          hint: pref.bookmarkOpenMode === BookmarkOpenMode.NEW_TAB ? '当前选项' : '切换为新标签页',
+          run: () =>
+            updatePreference({
+              bookmarkOpenMode: BookmarkOpenMode.NEW_TAB,
+            }),
+        },
+        {
+          value: 'pref-layout-compact',
+          label: '书签排列方式：紧凑',
+          hint: pref.bookmarkLayout === BookmarkLayoutMode.COMPACT ? '当前选项' : '切换为紧凑布局',
+          run: () =>
+            updatePreference({
+              bookmarkLayout: BookmarkLayoutMode.COMPACT,
+            }),
+        },
+        {
+          value: 'pref-layout-default',
+          label: '书签排列方式：默认',
+          hint: pref.bookmarkLayout === BookmarkLayoutMode.DEFAULT ? '当前选项' : '切换为默认布局',
+          run: () =>
+            updatePreference({
+              bookmarkLayout: BookmarkLayoutMode.DEFAULT,
+            }),
+        },
+        {
+          value: 'pref-layout-spacious',
+          label: '书签排列方式：宽松',
+          hint: pref.bookmarkLayout === BookmarkLayoutMode.SPACIOUS ? '当前选项' : '切换为宽松布局',
+          run: () =>
+            updatePreference({
+              bookmarkLayout: BookmarkLayoutMode.SPACIOUS,
+            }),
+        },
+        {
+          value: 'pref-page-vertical',
+          label: '翻页方式：垂直滚动',
+          hint: pref.pageMode === PageTurnMode.VERTICAL_SCROLL ? '当前选项' : '切换为垂直滚动',
+          run: () =>
+            updatePreference({
+              pageMode: PageTurnMode.VERTICAL_SCROLL,
+            }),
+        },
+        {
+          value: 'pref-page-horizontal',
+          label: '翻页方式：横向翻页',
+          hint: pref.pageMode === PageTurnMode.HORIZONTAL_PAGE ? '当前选项' : '切换为横向翻页',
+          run: () =>
+            updatePreference({
+              pageMode: PageTurnMode.HORIZONTAL_PAGE,
+            }),
+        },
+        {
+          value: 'pref-minimal-toggle',
+          label: pref.minimalMode ? '关闭极简模式' : '开启极简模式',
+          hint: pref.minimalMode ? '当前已开启' : '当前已关闭',
+          run: () =>
+            updatePreference({
+              minimalMode: !pref.minimalMode,
+            }),
+        },
+        {
+          value: 'pref-show-title-toggle',
+          label: pref.showTitle ? '隐藏标题' : '显示标题',
+          hint: pref.showTitle ? '当前显示标题' : '当前仅图标',
+          run: () =>
+            updatePreference({
+              showTitle: !pref.showTitle,
+            }),
+        },
+      ],
+    ],
+    [
+      '导航',
+      [
+        {
+          value: 'back-root',
+          label: '返回主菜单',
+          hint: '回到顶层命令',
+          run: () => {
+            backToRoot()
+          },
+        },
+      ],
+    ],
+  ]
+})
+
+const groupEntries = computed(() =>
+  currentMenu.value === 'root' ? rootGroupEntries.value : preferenceGroupEntries.value
+)
 const allItems = computed(() => groupEntries.value.flatMap(([, list]) => list))
+
+async function ensurePreferenceLoaded() {
+  if (preferenceMenuReady.value || preferenceMenuLoading.value) return
+  if (preferenceStore.preference !== undefined) {
+    preferenceMenuReady.value = true
+    return
+  }
+  preferenceMenuLoading.value = true
+  try {
+    await preferenceStore.fetchPreference()
+    preferenceMenuReady.value = true
+  } catch (error) {
+    console.error('[CommandPalette] load preference failed', error)
+  } finally {
+    preferenceMenuLoading.value = false
+  }
+}
+
+async function updatePreference(patch: Partial<UserPreference>) {
+  await ensurePreferenceLoaded()
+  if (!preferenceMenuReady.value && preferenceStore.preference === undefined) return
+  const merged: UserPreference = { ...currentPreference.value, ...patch }
+  try {
+    await preferenceStore.savePreference(merged)
+  } catch (error) {
+    console.error('[CommandPalette] save preference failed', error)
+  }
+}
 
 function open() {
   visible.value = true
@@ -123,6 +284,7 @@ function open() {
 function close() {
   visible.value = false
   search.value = ''
+  currentMenu.value = 'root'
   sysStore.togglePreventKeyEventsFlag(false)
 }
 
@@ -142,6 +304,17 @@ function toggleTheme() {
 function navigate(path: string) {
   close()
   navigateTo(path)
+}
+
+async function openPreferenceMenu() {
+  currentMenu.value = 'preference'
+  search.value = ''
+  await ensurePreferenceLoaded()
+}
+
+function backToRoot() {
+  currentMenu.value = 'root'
+  search.value = ''
 }
 
 function handleSelect(payload: { value: string }) {
