@@ -6,10 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Size
-import top.tcyeee.bookmarkify.config.entity.RoleEnum
-import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
-import top.tcyeee.bookmarkify.utils.OssUtils
 import java.time.LocalDateTime
 
 /**
@@ -26,7 +23,7 @@ data class UserEntity(
     @field:Size(max = 20) @field:Schema(description = "手机号") var phone: String? = null,
     @field:Size(max = 200) @field:Schema(description = "用户密码MD5") var password: String? = null,
     @field:Schema(description = "头像文件地址") var avatarFileId: String? = null,
-    @field:Schema(description = "用户角色 默认'NONE'") var role: RoleEnum = RoleEnum.NONE,
+    @field:Schema(description = "用户角色 默认'NONE'") var role: RoleEnum = RoleEnum.USER,
     @field:Schema(description = "创建时间") var updateTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "是否已经被删除") var deleted: Boolean = false,
@@ -41,3 +38,5 @@ data class UserEntity(
 
     fun authVO(token: String): UserSessionInfo = UserSessionInfo(this, token)
 }
+
+enum class RoleEnum { USER, ADMIN }
