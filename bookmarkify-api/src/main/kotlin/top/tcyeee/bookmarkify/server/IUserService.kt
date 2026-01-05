@@ -71,7 +71,7 @@ interface IUserService : IService<UserEntity> {
      * @param uid 用户ID
      * @return 是否成功
      */
-    fun bacSetting(params: BackSettingParams, uid: String): Boolean
+    fun bacSetting(params: BackSettingParams, uid: String): BacSettingVO
 
     /**
      * 查询用户设置

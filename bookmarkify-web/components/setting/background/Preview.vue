@@ -2,7 +2,7 @@
   <div class="background-preview-container">
     <div class="background-preview" :style="previewStyle">
       <img v-if="backgroundUrl" :src="backgroundUrl" alt="主页背景" class="preview-image" />
-      <div v-else-if="backgroundConfig?.type === 'GRADIENT' && backgroundConfig.bacColorGradient" class="preview-gradient">
+      <div v-else-if="backgroundSetting?.type === 'GRADIENT' && backgroundSetting.bacColorGradient" class="preview-gradient">
         <span>渐变背景</span>
       </div>
       <div v-else class="preview-placeholder">

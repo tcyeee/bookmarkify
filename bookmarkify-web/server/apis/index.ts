@@ -37,7 +37,7 @@ export const defaultGradientBackgrounds = async () => (await defaultBackgrounds(
 export const myBackgrounds = () => http.get('/background/mine') as Promise<t.DefaultBackgroundsResponse>
 export const resetBacBackground = () => http.get('/background/background/reset') as Promise<boolean>
 export const selectBackground = (params: t.BackSettingParams) =>
-  http.post('/background/selectBackground', params) as Promise<boolean>
+  http.post('/background/selectBackground', params) as Promise<t.BacSettingVO>
 export const updateGradientBackground = (params: t.GradientConfigParams) =>
   http.post('/background/gradient/update', params) as Promise<boolean>
 export const deleteGradientBackground = (id: string) =>
