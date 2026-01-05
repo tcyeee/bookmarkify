@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server.impl
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.entity.BacSettingVO
+import top.tcyeee.bookmarkify.entity.UserFileVO
 import top.tcyeee.bookmarkify.entity.entity.BackgroundConfigEntity
 import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
 import top.tcyeee.bookmarkify.entity.entity.BackgroundType
@@ -24,8 +25,7 @@ class BackgroundConfigServiceImpl(
     override fun queryByUid(uid: String): BackgroundConfigEntity =
         ktQuery().eq(BackgroundConfigEntity::uid, uid).one() ?: initUserBacSetting(uid)
 
-    override fun deleteByUid(uid: String): Boolean =
-        ktUpdate().eq(BackgroundConfigEntity::uid, uid).remove()
+    override fun deleteByUid(uid: String): Boolean = ktUpdate().eq(BackgroundConfigEntity::uid, uid).remove()
 
     override fun queryShowByUid(uid: String): BacSettingVO {
         val result = queryByUid(uid).vo()
@@ -38,7 +38,10 @@ class BackgroundConfigServiceImpl(
         }
 
         if (result.type == BackgroundType.IMAGE) {
-            result.bacImgFileUrl = backgroundImageService.currentBacImgUrl(uid, result.backgroundLinkId)
+            result.bacImgFile = UserFileVO(
+                id = result.backgroundLinkId,
+                fullName = backgroundImageService.currentBacImgUrl(uid, result.backgroundLinkId)
+            )
         }
 
         return result
@@ -46,16 +49,11 @@ class BackgroundConfigServiceImpl(
 
     private fun initUserBacSetting(uid: String): BackgroundConfigEntity {
         // 默认找到第一个默认渐变色进行关联
-        val first = backgroundGradientService
-            .ktQuery()
-            .eq(BackgroundGradientEntity::isDefault, true)
-            .last("limit 1")
-            .one()
+        val first =
+            backgroundGradientService.ktQuery().eq(BackgroundGradientEntity::isDefault, true).last("limit 1").one()
 
         return BackgroundConfigEntity(
-            uid = uid,
-            type = BackgroundType.GRADIENT,
-            backgroundLinkId = first.id
+            uid = uid, type = BackgroundType.GRADIENT, backgroundLinkId = first.id
         ).also { save(it) }
     }
 }
