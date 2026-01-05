@@ -1,5 +1,5 @@
 <template>
-  <div class="w-20 flex flex-col items-center">
+  <div class="w-20 flex flex-col items-center" :class="{ 'justify-center': !showTitle }">
     <div class="w-app h-app rounded-xl bg-gray-300 flex justify-center items-center shadow">
       <div>
         <div class="flex mb-[0.4rem]">
@@ -12,14 +12,17 @@
         </div>
       </div>
     </div>
-    <div class="w-18 text-xs mt-[0.3rem] text-gray-800 truncate text-center">{{ value.name }}</div>
+    <div v-if="showTitle" class="w-18 text-xs mt-[0.3rem] text-gray-800 truncate text-center">{{ value.name }}</div>
   </div>
 </template>
 
 <script lang="ts" setup>
 import type { Bookmark, BookmarkDir } from '@typing'
 
-defineProps<{ value: BookmarkDir }>()
+const props = withDefaults(defineProps<{ value: BookmarkDir; showTitle?: boolean }>(), {
+  showTitle: true,
+})
+const { showTitle, value } = toRefs(props)
 
 reactive<{ bookmarks: Array<Bookmark> }>({
   bookmarks: [],
