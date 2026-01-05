@@ -21,16 +21,6 @@ import {
   updateUserPreference,
 } from '@api'
 
-function createDefaultPreference(): UserPreference {
-  return {
-    bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
-    minimalMode: false,
-    bookmarkLayout: BookmarkLayoutMode.DEFAULT,
-    showTitle: true,
-    pageMode: PageTurnMode.VERTICAL_SCROLL,
-    imgBacShow: undefined,
-  }
-}
 
 // 用户相关的 Pinia Store（账号信息、设置、头像、登录状态等）
 export const useUserStore = defineStore('user', {
@@ -196,3 +186,14 @@ export const useUserStore = defineStore('user', {
   // 刷新重新加载信息需要一定的时间, 导致登陆状态丢失
   persist: true,
 })
+
+function createDefaultPreference(): UserPreference {
+  return {
+    bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
+    minimalMode: false,
+    bookmarkLayout: BookmarkLayoutMode.DEFAULT,
+    showTitle: true,
+    pageMode: PageTurnMode.VERTICAL_SCROLL,
+    imgBacShow: undefined,
+  }
+}
