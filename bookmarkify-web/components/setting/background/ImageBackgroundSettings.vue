@@ -115,10 +115,11 @@ const imagePresets = computed<ImagePreset[]>(() => {
     presets.push(preset)
   }
 
-  // 已有背景 + 系统预设 + 用户自定义预设
-  addPreset(mapImageToPreset(backgroundConfigComputed.value?.bacImgFile, false))
+  // 系统预设 + 用户自定义预设，保持原有顺序
   ;(sysStore.defaultImageBackgroundsList ?? []).forEach((img) => addPreset(mapImageToPreset(img, true)))
   ;(sysStore.userImageBackgroundsList ?? []).forEach((img) => addPreset(mapImageToPreset(img, false)))
+  // 若当前选中的背景不在列表中，则追加在末尾，不打乱已有顺序
+  addPreset(mapImageToPreset(backgroundConfigComputed.value?.bacImgFile, false))
   return presets
 })
 
