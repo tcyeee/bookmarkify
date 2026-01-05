@@ -17,12 +17,14 @@
           <LaunchpadCellBookmark
             v-if="item.element.type == 'BOOKMARK_DIR'"
             :value="item.element.typeDir"
+            :show-title="showTitle"
             @click="openDir(item.element)" />
           <LaunchpadCellBookmark
             v-if="item.element.type == 'BOOKMARK'"
             :value="item.element.typeApp"
+            :show-title="showTitle"
             @click="openPage(item.element.typeApp)" />
-          <LaunchpadCellBookmarkLoading v-if="item.element.type == 'LOADING'" />
+          <LaunchpadCellBookmarkLoading v-if="item.element.type == 'LOADING'" :show-title="showTitle" />
         </div>
       </template>
       <template #footer>
@@ -32,7 +34,7 @@
 
     <!-- 二级菜单 -->
     <div v-if="data.subItemId" v-for="bookmark in data.subApps" :key="bookmark.bookmarkId">
-      <LaunchpadCellBookmark :value="bookmark" @click="openPage(bookmark)" />
+      <LaunchpadCellBookmark :value="bookmark" :show-title="showTitle" @click="openPage(bookmark)" />
     </div>
 
     <!-- 书签详情 -->
@@ -49,8 +51,10 @@ import type { HomeItem, Bookmark, BookmarkSortParams } from '@typing'
 
 const sysStore = useSysStore()
 const bookmarkStore = useBookmarkStore()
+const userStore = useUserStore()
 
 const pageData = computed<Array<HomeItem>>(() => bookmarkStore.homeItems || [])
+const showTitle = computed<boolean>(() => userStore.preference?.showTitle ?? true)
 
 const data = reactive<{
   subApps?: Array<Bookmark>
