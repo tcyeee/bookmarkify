@@ -35,6 +35,8 @@ export const useSysStore = defineStore('sys', {
     userImageBackgroundsList: [] as UserFile[],
     // 用户上传的渐变背景列表
     userGradientBackgroundsList: [] as BacGradientVO[],
+    // 图片背景上传状态（通过子组件与父组件共享）
+    imageBackgroundUploading: false,
   }),
 
   // 业务动作（异步/同步方法）
@@ -126,6 +128,10 @@ export const useSysStore = defineStore('sys', {
         this.emailCountdownTimer = null
       }
       this.emailCountdown = 0
+    },
+
+    setImageBackgroundUploading(value: boolean) {
+      this.imageBackgroundUploading = value
     },
   },
 })

@@ -50,16 +50,6 @@
         <div class="text-center text-sm font-medium text-slate-600 dark:text-slate-300">{{ direction }}°</div>
       </div>
     </div>
-
-    <div class="flex flex-wrap items-center justify-center gap-3">
-      <button type="button" class="cy-btn cy-btn-accent" :disabled="saving" @click="$emit('save')">
-        <span v-if="saving">保存中...</span>
-        <span v-else>保存渐变背景</span>
-      </button>
-      <button v-if="hasBackground" type="button" class="cy-btn cy-btn-ghost" :disabled="saving" @click="$emit('reset')">
-        恢复默认
-      </button>
-    </div>
   </div>
 </template>
 
