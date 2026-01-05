@@ -95,4 +95,4 @@ aliyun:
 admin:
   login:
     account: tcyeee@outlook.com
-    passworld: admin
+    password: admin

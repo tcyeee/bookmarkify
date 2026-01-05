@@ -36,3 +36,5 @@ data class HomeItemSortParams(var id: String, var sort: Int)
 data class UserDelParams(val password: String)
 data class UserInfoUpdateParams(var nickName: String, var phone: String?)
 data class BookmarkUpdatePrams(var linkId: String, var title: String, var description: String)
+data class AdminLoginParams(val account: String, val password: String)
+
