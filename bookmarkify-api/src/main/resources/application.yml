@@ -91,3 +91,8 @@ aliyun:
     access-key-secret: ${BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_SECRET}
     bucket-name: ${BOOKMARKIFY_ALIYUN_OSS_BUCKET_NAME}
     domain-name: ${BOOKMARKIFY_ALIYUN_OSS_DOMAIN} # 自定义域名 https://i.tcyeee.top
+
+admin:
+  login:
+    account: tcyeee@outlook.com
+    passworld: admin

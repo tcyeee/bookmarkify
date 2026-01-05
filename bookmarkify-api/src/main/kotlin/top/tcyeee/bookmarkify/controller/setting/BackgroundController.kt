@@ -1,9 +1,16 @@
-package top.tcyeee.bookmarkify.controller
+package top.tcyeee.bookmarkify.controller.setting
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
-import org.springframework.web.bind.annotation.*
+import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.BacSettingVO
@@ -46,7 +53,7 @@ class BackgroundController(
     @Operation(summary = "上传自定义背景图片", parameters = [Parameter(name = "file", description = "背景图片文件")])
     fun uploadBackground(@RequestParam("file") file: MultipartFile): ResultWrapper {
         val fileUrl = userService.addBacImg(file, BaseUtils.uid())
-        return ResultWrapper.ok(fileUrl)
+        return ResultWrapper.Companion.ok(fileUrl)
     }
 
     @PostMapping("updateBacColor")
