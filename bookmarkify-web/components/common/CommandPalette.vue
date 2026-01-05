@@ -90,6 +90,15 @@ groups.set('常用操作', [
       navigate('/setting')
     },
   },
+  {
+    value: 'open-add-bookmark',
+    label: '添加 / 关联书签',
+    hint: '打开添加书签窗口',
+    run: () => {
+      close()
+      sysStore.addBookmarkDialogVisible = true
+    },
+  },
 ])
 groups.set('账号操作', [
   {
