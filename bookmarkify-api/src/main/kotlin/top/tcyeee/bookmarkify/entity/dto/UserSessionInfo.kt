@@ -1,11 +1,11 @@
 package top.tcyeee.bookmarkify.entity.dto
 
 import cn.dev33.satoken.session.SaSession
-import cn.dev33.satoken.stp.StpUtil
 import cn.hutool.json.JSONUtil
 import com.fasterxml.jackson.annotation.JsonInclude
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
+import top.tcyeee.bookmarkify.utils.StpKit
 
 /**
  * 存储在Session中的用户信息
@@ -43,7 +43,7 @@ data class UserSessionInfo(
         if (phone != null) this.set("phone", phone)
     }
         .let { JSONUtil.toJsonStr(it) }
-        .also { StpUtil.getSession().set(SaSession.USER, it) }
+        .also { StpKit.USER.session.set(SaSession.USER, it) }
         .let { this }
 
     /* 从STP-Session中读取 */

@@ -1,6 +1,5 @@
 package top.tcyeee.bookmarkify.server.impl
 
-import cn.dev33.satoken.stp.StpUtil
 import cn.hutool.captcha.CaptchaUtil
 import cn.hutool.core.util.RandomUtil
 import cn.hutool.core.util.StrUtil
@@ -26,6 +25,7 @@ import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
 import top.tcyeee.bookmarkify.utils.MailUtils
 import top.tcyeee.bookmarkify.utils.RedisUtils
+import top.tcyeee.bookmarkify.utils.StpKit
 import top.tcyeee.bookmarkify.utils.pwd
 
 /**
@@ -68,18 +68,18 @@ class UserServiceImpl(
      */
     override fun track(
         request: HttpServletRequest, response: HttpServletResponse
-    ): UserSessionInfo = if (StpUtil.isLogin() && BaseUtils.user() != null) {
+    ): UserSessionInfo = if (StpKit.USER.isLogin && BaseUtils.user() != null) {
         BaseUtils.user()!!
     } else {
         BaseUtils.sessionRegisterDeviceId(request, response, projectConfig).let(this::queryOrRegisterByDeviceId)
-            .also { bookmarkService.setDefaultBookmark(it.id) }.also { StpUtil.login(it.id, true) }
-            .authVO(StpUtil.getTokenValue()).writeToSession()
+            .also { bookmarkService.setDefaultBookmark(it.id) }.also { StpKit.USER.login(it.id, true) }
+            .authVO(StpKit.USER.tokenValue).writeToSession()
     }
 
     override fun loginOut(response: HttpServletResponse) {
         // 清除session
-        StpUtil.getSession().clear()
-        StpUtil.logout()
+        StpKit.USER.session.clear()
+        StpKit.USER.logout()
         Cookie(projectConfig.uidCookieName, "").apply { maxAge = 0; path = "/" }.also { response.addCookie(it) }
     }
 
@@ -149,10 +149,10 @@ class UserServiceImpl(
         val userEntity = findUser()
         // 用户正在使用验证码登录
         return if (userEntity != null) {
-            StpUtil.logout()
-            StpUtil.getSession().clear()
-            StpUtil.login(userEntity.id, true)
-            userEntity.authVO(StpUtil.getTokenValue()).writeToSession()
+            StpKit.USER.logout()
+            StpKit.USER.session.clear()
+            StpKit.USER.login(userEntity.id, true)
+            userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
         } else {
             // 没认证账户则绑定到当前账户
             bindToCurrentUser(uid)
