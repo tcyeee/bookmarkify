@@ -122,7 +122,7 @@ data class UserFileVO(
 )
 
 data class UserPreferenceVO(
-    @field:Schema(description = "书签打开方式") var bookmarkOpenMode: BookmarkOpenMode = BookmarkOpenMode.CURRENT_TAB,
+    @field:Schema(description = "书签打开方式") var bookmarkOpenMode: BookmarkOpenMode = BookmarkOpenMode.NEW_TAB,
     @field:Schema(description = "是否开启极简模式") var minimalMode: Boolean = false,
     @field:Schema(description = "书签排列方式") var bookmarkLayout: BookmarkLayoutMode = BookmarkLayoutMode.DEFAULT,
     @field:Schema(description = "是否显示标题") var showTitle: Boolean = true,

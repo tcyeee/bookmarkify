@@ -47,7 +47,7 @@
 import Draggable from 'vuedraggable'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { bookmarksSort, bookmarksDel } from '@api'
-import type { HomeItem, Bookmark, BookmarkSortParams } from '@typing'
+import { BookmarkOpenMode, type HomeItem, type Bookmark, type BookmarkSortParams } from '@typing'
 
 const sysStore = useSysStore()
 const bookmarkStore = useBookmarkStore()
@@ -55,6 +55,7 @@ const userStore = useUserStore()
 
 const pageData = computed<Array<HomeItem>>(() => bookmarkStore.homeItems || [])
 const showTitle = computed<boolean>(() => userStore.preference?.showTitle ?? true)
+const bookmarkOpenMode = computed<BookmarkOpenMode>(() => userStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB)
 
 const data = reactive<{
   subApps?: Array<Bookmark>
@@ -88,8 +89,9 @@ function openDir(item: HomeItem) {
   })
 }
 
-function openPage(bookmark: Bookmark) { 
-  window.open(bookmark.urlFull, '_blank')
+function openPage(bookmark: Bookmark) {
+  const target = bookmarkOpenMode.value === BookmarkOpenMode.NEW_TAB ? '_blank' : '_self'
+  window.open(bookmark.urlFull, target)
 }
 
 function getClickMenu(item: HomeItem) {

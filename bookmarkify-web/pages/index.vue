@@ -11,7 +11,7 @@
       <!-- 内容页面 -->
       <div class="mt-15 flex-1 w-full flex justify-center items-start">
         <Transition name="fade-main">
-          <div v-if="data.appView"
+          <div v-if="data.launchpadView"
             class="w-full max-w-6xl px-4 sm:px-6 lg:px-12 mt-8 sm:mt-12 md:mt-16">
             <LaunchpadList />
           </div>
@@ -42,12 +42,22 @@ const sysStore = useSysStore()
 const userStore = useUserStore()
 
 const data = reactive<{
-  appView: boolean // 是否显示APP
+  launchpadView: boolean // 是否显示APP
   duringAnimate: boolean // 是否正在动画
 }>({
-  appView: false,
+  launchpadView: false,
   duringAnimate: false,
 })
+
+const minimalMode = computed(() => userStore.preference?.minimalMode ?? false)
+
+watch(
+  minimalMode,
+  (val) => {
+    if (val) data.launchpadView = true
+  },
+  { immediate: true },
+)
 
 onMounted(async () => {
   sysStore.registerKeyEvent('Space', '/', () => sceneToggle('Space'))
@@ -56,15 +66,15 @@ onMounted(async () => {
 
 const classFadeBg = computed(() => {
   return {
-    'animate-fade-bg-in': data.appView,
-    'animate-fade-bg-out': !data.appView,
+    'animate-fade-bg-in': data.launchpadView,
+    'animate-fade-bg-out': !data.launchpadView,
   }
 })
 
 const classFadeDate = computed(() => {
   return {
-    'animate-fade-date-in': data.appView,
-    'animate-fade-date-out': !data.appView,
+    'animate-fade-date-in': data.launchpadView,
+    'animate-fade-date-out': !data.launchpadView,
   }
 })
 
@@ -101,7 +111,11 @@ function sceneToggle(key?: string) {
     sysStore.addBookmarkDialogVisible = false
     return
   }
-  data.appView = !data.appView
+  if (minimalMode.value) {
+    data.launchpadView = true
+    return
+  }
+  data.launchpadView = !data.launchpadView
 }
 </script>
 
