@@ -68,9 +68,11 @@ const classFadeDate = computed(() => {
   }
 })
 
+const bacSetting = computed<BacSettingVO | undefined>(() => userStore.preference?.imgBacShow ?? undefined)
+
 // 背景样式
 const backgroundStyle = computed(() => {
-  const config: BacSettingVO | undefined = userStore.account?.userSetting?.bacSetting
+  const config = bacSetting.value
 
   if (config && config.type === BackgroundType.GRADIENT) {
     const colors = config.bacColorGradient!.join(',')
