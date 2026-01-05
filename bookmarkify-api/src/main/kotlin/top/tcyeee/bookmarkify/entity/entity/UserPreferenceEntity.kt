@@ -12,7 +12,7 @@ data class UserPreferenceEntity(
     @field:Schema(description = "用户ID") var uid: String,
 
     @field:Schema(description = "主页背景配置ID") var backgroundConfigId: String? = null,
-    @field:Schema(description = "书签打开方式") var bookmarkOpenMode: BookmarkOpenMode = BookmarkOpenMode.CURRENT_TAB,
+    @field:Schema(description = "书签打开方式") var bookmarkOpenMode: BookmarkOpenMode = BookmarkOpenMode.NEW_TAB,
     @field:Schema(description = "是否开启极简模式") var minimalMode: Boolean = false,
     @field:Schema(description = "书签排列方式") var bookmarkLayout: BookmarkLayoutMode = BookmarkLayoutMode.DEFAULT,
     @field:Schema(description = "是否显示标题") var showTitle: Boolean = true,
