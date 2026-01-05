@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import {
   AuthStatusEnum,
+  BackgroundType,
   BookmarkLayoutMode,
   BookmarkOpenMode,
   PageTurnMode,
@@ -23,6 +24,7 @@ import {
   queryUserPreference,
   updateUserPreference,
 } from '@api'
+import { getImageUrl, getImageUrlByUserFile } from '@config/image.config'
 
 
 // 用户相关的 Pinia Store（账号信息、设置、头像、登录状态等）
@@ -37,6 +39,8 @@ export const useUserStore = defineStore('user', {
     avatar: undefined as UserFile | undefined,
     // 通用加载状态（登录、拉取信息等异步请求时使用）
     loading: false as boolean,
+    // 缓存的背景图片（DataURL），避免链接过期
+    backgroundImageDataUrl: (import.meta.client ? localStorage.getItem('backgroundImageDataUrl') : null) as string | null,
     // 系统内置的图片背景列表
     defaultImageBackgroundsList: [] as UserFile[],
     // 系统内置的渐变背景列表
@@ -65,6 +69,7 @@ export const useUserStore = defineStore('user', {
       try {
         const result = await queryUserPreference()
         this.preference = result ?? null
+        this.handleBackgroundCache(this.preference?.imgBacShow)
         return this.preference
       } catch (err: any) {
         ElMessage.error(err?.message || '获取偏好设置失败')
@@ -76,6 +81,7 @@ export const useUserStore = defineStore('user', {
     upsertPreferenceBackground(setting: BacSettingVO | null | undefined) {
       const base = this.preference ?? createDefaultPreference()
       this.preference = { ...base, imgBacShow: setting ?? undefined }
+      this.handleBackgroundCache(setting ?? undefined)
     },
 
     // 更新用户偏好设置，并同步到 store
@@ -105,6 +111,47 @@ export const useUserStore = defineStore('user', {
 
     setImageBackgroundUploading(value: boolean) {
       this.imageBackgroundUploading = value
+    },
+
+    // 缓存背景图片到本地，避免临时 URL 过期
+    async cacheBackgroundImage(file?: any) {
+      if (!import.meta.client || !file) return
+      // 组装 URL（兼容 UserFile / UserFileVO）
+      const url: string | null =
+        file.fullName ??
+        (file.environment && file.currentName ? getImageUrlByUserFile(file) : null) ??
+        (file.currentName ? getImageUrl(file.currentName) : null)
+      if (!url) return
+
+      try {
+        const resp = await fetch(url, { cache: 'no-cache' })
+        const blob = await resp.blob()
+        await new Promise<void>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            this.backgroundImageDataUrl = reader.result as string
+            localStorage.setItem('backgroundImageDataUrl', this.backgroundImageDataUrl)
+            resolve()
+          }
+          reader.onerror = () => reject(reader.error)
+          reader.readAsDataURL(blob)
+        })
+      } catch (error) {
+        console.error('[USER] cacheBackgroundImage failed', error)
+      }
+    },
+
+    clearBackgroundImageCache() {
+      this.backgroundImageDataUrl = null
+      if (import.meta.client) localStorage.removeItem('backgroundImageDataUrl')
+    },
+
+    handleBackgroundCache(setting?: BacSettingVO | null) {
+      if (setting?.type === BackgroundType.IMAGE && setting.bacImgFile) {
+        void this.cacheBackgroundImage(setting.bacImgFile)
+      } else {
+        this.clearBackgroundImageCache()
+      }
     },
 
 
@@ -204,6 +251,7 @@ export const useUserStore = defineStore('user', {
         if (import.meta.client) {
           localStorage.removeItem('homeItems')
           localStorage.removeItem('user')
+          localStorage.removeItem('backgroundImageDataUrl')
           document.cookie = 'user=;deviceUid=; Max-Age=0; path=/'
         }
 
