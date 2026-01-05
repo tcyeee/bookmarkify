@@ -101,8 +101,8 @@ type GradientPreset = BacGradientVO & { isSystem?: boolean }
 
 const hasBackground = computed(() => !!userStore.preference?.imgBacShow)
 const gradientPresets = computed<GradientPreset[]>(() => [
-  ...(sysStore.defaultGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: true })),
-  ...(sysStore.userGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: false })),
+  ...(userStore.defaultGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: true })),
+  ...(userStore.userGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: false })),
 ])
 
 function syncFromSetting(setting?: BacSettingVO | null) {
@@ -201,10 +201,10 @@ async function handleDeletePreset(preset: GradientPreset) {
 
   try {
     await deleteGradientBackground(preset.id)
-    await sysStore.refreshSystemConfig()
+    await userStore.refreshBackgroundConfig()
 
     if (isPresetActive(preset)) {
-      const fallback = sysStore.defaultGradientBackgroundsList?.[0]
+      const fallback = userStore.defaultGradientBackgroundsList?.[0]
       if (fallback) {
         await selectPreset({ ...fallback, isSystem: true })
       }
@@ -262,7 +262,7 @@ async function handleCustomSave() {
       bacColorGradient: [...gradientColors.value],
       bacColorDirection: gradientDirection.value,
     })
-    await sysStore.refreshSystemConfig()
+    await userStore.refreshBackgroundConfig()
     closeCustomDialog()
   } catch (error: any) {
     ElMessage.error(error.message || '保存失败')
@@ -277,10 +277,7 @@ async function handleCustomReset() {
   customSaving.value = true
   try {
     await resetBacBackground()
-    const [, latestPreference] = await Promise.all([
-      sysStore.refreshSystemConfig(),
-      userStore.fetchPreference(),
-    ])
+    const [, latestPreference] = await Promise.all([userStore.refreshBackgroundConfig(), userStore.fetchPreference()])
 
     // 使用最新 store 配置回填当前 UI
     const setting = latestPreference?.imgBacShow ?? userStore.preference?.imgBacShow

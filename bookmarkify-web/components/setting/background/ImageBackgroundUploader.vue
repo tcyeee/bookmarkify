@@ -19,13 +19,12 @@ import { computed, ref } from 'vue'
 import { uploadBacPic } from '@api'
 import { imageConfig } from '@config/image.config'
 
-const sysStore = useSysStore()
 const userStore = useUserStore()
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
 
-const uploading = computed(() => sysStore.imageBackgroundUploading)
+const uploading = computed(() => userStore.imageBackgroundUploading)
 const maxSizeMB = computed(() => imageConfig.maxImageSize / (1024 * 1024))
 
 function resetFileInput() {
@@ -64,17 +63,17 @@ function handleFileChange(event: Event) {
 async function uploadSelectedFile() {
   if (!selectedFile.value || uploading.value) return
 
-  sysStore.setImageBackgroundUploading(true)
+  userStore.setImageBackgroundUploading(true)
   try {
     await uploadBacPic(selectedFile.value)
     ElNotification.success({ message: '背景上传成功' })
 
     resetFileInput()
-    await Promise.all([sysStore.refreshSystemConfig(), userStore.refreshUserInfo()])
+    await Promise.all([userStore.refreshBackgroundConfig(), userStore.refreshUserInfo()])
   } catch (error: any) {
     ElMessage.error(error.message || '背景上传失败，请重试')
   } finally {
-    sysStore.setImageBackgroundUploading(false)
+    userStore.setImageBackgroundUploading(false)
   }
 }
 
