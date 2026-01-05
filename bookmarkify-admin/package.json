@@ -11,10 +11,14 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "@element-plus/nuxt": "^1.1.4",
     "@iconify-json/lucide": "^1.2.82",
     "@iconify-json/simple-icons": "^1.2.63",
     "@nuxt/ui": "^4.3.0",
-    "nuxt": "^4.2.2"
+    "element-plus": "^2.13.0",
+    "nuxt": "^4.2.2",
+    "sass": "^1.97.1"
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.12.1",
