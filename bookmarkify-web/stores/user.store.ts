@@ -4,6 +4,7 @@ import {
   BookmarkLayoutMode,
   BookmarkOpenMode,
   PageTurnMode,
+  type BacGradientVO,
   type EmailVerifyParams,
   type SmsVerifyParams,
   type UserFile,
@@ -17,6 +18,8 @@ import {
   authLogout,
   captchaVerifyEmail,
   captchaVerifySms,
+  defaultBackgrounds,
+  myBackgrounds,
   queryUserPreference,
   updateUserPreference,
 } from '@api'
@@ -34,6 +37,16 @@ export const useUserStore = defineStore('user', {
     avatar: undefined as UserFile | undefined,
     // 通用加载状态（登录、拉取信息等异步请求时使用）
     loading: false as boolean,
+    // 系统内置的图片背景列表
+    defaultImageBackgroundsList: [] as UserFile[],
+    // 系统内置的渐变背景列表
+    defaultGradientBackgroundsList: [] as BacGradientVO[],
+    // 用户上传的图片背景列表
+    userImageBackgroundsList: [] as UserFile[],
+    // 用户上传的渐变背景列表
+    userGradientBackgroundsList: [] as BacGradientVO[],
+    // 图片背景上传状态（通过子组件与父组件共享）
+    imageBackgroundUploading: false as boolean,
   }),
 
   // 基于 state 派生出的计算属性
@@ -75,6 +88,23 @@ export const useUserStore = defineStore('user', {
         ElMessage.error(err?.message || '保存偏好设置失败')
         throw err
       }
+    },
+
+    // 刷新背景列表（默认 + 用户上传）
+    async refreshBackgroundConfig() {
+      try {
+        const [data, mine] = await Promise.all([defaultBackgrounds(), myBackgrounds()])
+        this.defaultGradientBackgroundsList = data.gradients ?? []
+        this.defaultImageBackgroundsList = data.images ?? []
+        this.userGradientBackgroundsList = mine.gradients ?? []
+        this.userImageBackgroundsList = mine.images ?? []
+      } catch (error) {
+        console.error('[USER] refreshBackgroundConfig failed', error)
+      }
+    },
+
+    setImageBackgroundUploading(value: boolean) {
+      this.imageBackgroundUploading = value
     },
 
 

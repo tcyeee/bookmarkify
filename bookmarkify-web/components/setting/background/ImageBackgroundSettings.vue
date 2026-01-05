@@ -45,13 +45,12 @@ import { selectBackground } from '@api'
 import { getImageUrl, getImageUrlByUserFile } from '@config/image.config'
 import ImageBackgroundUploader from './ImageBackgroundUploader.vue'
 
-const sysStore = useSysStore()
 const userStore = useUserStore()
 
 const selectedImageId = ref<string | null>(null)
 const applyingImageId = ref<string | null>(null)
 
-const uploading = computed(() => sysStore.imageBackgroundUploading)
+const uploading = computed(() => userStore.imageBackgroundUploading)
 
 // 从 store 直接取最新的背景配置，减少对父组件 props 的依赖
 const backgroundConfigComputed = computed<BacSettingVO | null>(() => userStore.preference?.imgBacShow ?? null)
@@ -98,8 +97,8 @@ const imagePresets = computed<ImagePreset[]>(() => {
   }
 
   // 系统预设 + 用户自定义预设，保持原有顺序
-  ;(sysStore.defaultImageBackgroundsList ?? []).forEach((img) => addPreset(mapImageToPreset(img, true)))
-  ;(sysStore.userImageBackgroundsList ?? []).forEach((img) => addPreset(mapImageToPreset(img, false)))
+  ;(userStore.defaultImageBackgroundsList ?? []).forEach((img) => addPreset(mapImageToPreset(img, true)))
+  ;(userStore.userImageBackgroundsList ?? []).forEach((img) => addPreset(mapImageToPreset(img, false)))
   // 若当前选中的背景不在列表中，则追加在末尾，不打乱已有顺序
   addPreset(mapImageToPreset(backgroundConfigComputed.value?.bacImgFile, false))
   return presets

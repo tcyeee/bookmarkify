@@ -20,8 +20,8 @@ import BackgroundPreview from './background/Preview.vue'
 import GradientConfig from './background/GradientConfig.vue'
 import ImageBackgroundSettings from './background/ImageBackgroundSettings.vue'
 
-const sysStore = useSysStore()
+const userStore = useUserStore()
 onMounted(async () => {
-  await sysStore.refreshSystemConfig()
+  await userStore.refreshBackgroundConfig()
 })
 </script>

@@ -1,5 +1,3 @@
-import { defaultBackgrounds, myBackgrounds } from '@api'
-import type { BacGradientVO, UserFile } from '@typing'
 import { defineStore } from 'pinia'
 
 // 系统级别的 Pinia Store（键盘事件、倒计时、系统背景等）
@@ -26,34 +24,10 @@ export const useSysStore = defineStore('sys', {
     emailCountdown: 0,
     // 邮箱验证码倒计时计时器句柄
     emailCountdownTimer: null as ReturnType<typeof setInterval> | null,
-    // 系统内置的图片背景列表
-    defaultImageBackgroundsList: [] as UserFile[],
-    // 系统内置的渐变背景列表
-    defaultGradientBackgroundsList: [] as BacGradientVO[],
-
-    // 用户上传的图片背景列表
-    userImageBackgroundsList: [] as UserFile[],
-    // 用户上传的渐变背景列表
-    userGradientBackgroundsList: [] as BacGradientVO[],
-    // 图片背景上传状态（通过子组件与父组件共享）
-    imageBackgroundUploading: false,
   }),
 
   // 业务动作（异步/同步方法）
   actions: {
-    // 拉取系统默认配置（包括默认背景 + 用户上传背景）
-    async refreshSystemConfig() {
-      try {
-        const [data, mine] = await Promise.all([defaultBackgrounds(), myBackgrounds()])
-        this.defaultGradientBackgroundsList = data.gradients ?? []
-        this.defaultImageBackgroundsList = data.images ?? []
-        this.userGradientBackgroundsList = mine.gradients ?? []
-        this.userImageBackgroundsList = mine.images ?? []
-      } catch (error) {
-        console.error('[SYS] refreshSystemConfig failed', error)
-      }
-    },
-
     // 触发键盘事件（在全局 keydown 监听中调用）
     triggerKeyEvent(keyCode: string, triggerPath: string) {
       const eventKey = this.eventName(keyCode, triggerPath)
@@ -130,8 +104,5 @@ export const useSysStore = defineStore('sys', {
       this.emailCountdown = 0
     },
 
-    setImageBackgroundUploading(value: boolean) {
-      this.imageBackgroundUploading = value
-    },
   },
 })
