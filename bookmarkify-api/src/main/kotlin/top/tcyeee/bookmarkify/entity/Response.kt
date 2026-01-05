@@ -95,7 +95,6 @@ class BacSettingVO(
     @field:Schema(description = "背景ID") var backgroundLinkId: String,
 
     /* 如果是图片背景 */
-    @field:Schema(description = "图片背景") var bacImgFile: UserFile? = null,
     @field:Schema(description = "图片背景URL") var bacImgFileUrl: String? = null,
     /* 如果是渐变色背景 */
     @field:Schema(description = "背景渐变色") var bacColorGradient: Array<String>? = null,

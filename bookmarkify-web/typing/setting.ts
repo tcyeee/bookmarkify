@@ -1,7 +1,7 @@
 import type { BackgroundType, BookmarkLayoutMode, BookmarkOpenMode, PageTurnMode } from './enum'
 import type { UserFile } from './user'
 
-export interface UserSetting {
+export interface UserPreferenceVO {
   bacSetting: BacSettingVO
 }
 
