@@ -4,6 +4,7 @@
     <NuxtPage />
   </NuxtLayout>
   <CommonCommandPalette />
+  
 </template>
 <script setup lang="ts">
 import { usePreferredDark } from '@vueuse/core'
