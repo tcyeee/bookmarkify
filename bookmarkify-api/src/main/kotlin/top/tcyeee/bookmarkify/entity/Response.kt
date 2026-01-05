@@ -95,7 +95,7 @@ class BacSettingVO(
     @field:Schema(description = "背景ID") var backgroundLinkId: String,
 
     /* 如果是图片背景 */
-    @field:Schema(description = "图片背景URL") var bacImgFileUrl: String? = null,
+    @field:Schema(description = "图片背景URL") var bacImgFile: UserFileVO? = null,
     /* 如果是渐变色背景 */
     @field:Schema(description = "背景渐变色") var bacColorGradient: Array<String>? = null,
     @field:Schema(description = "背景渐变方向") var bacColorDirection: Int? = null,
@@ -111,7 +111,7 @@ class BacGradientVO(
 /**
  * 默认背景资源合集
  */
-class DefaultBackgroundsResponse(
+data class DefaultBackgroundsResponse(
     @field:Schema(description = "默认渐变背景列表") val gradients: List<BacGradientVO> = emptyList(),
     @field:Schema(description = "默认图片背景列表") val images: List<UserFileVO> = emptyList(),
 )
