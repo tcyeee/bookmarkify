@@ -81,7 +81,8 @@ const backgroundStyle = computed(() => {
   }
 
   if (config && config.type === BackgroundType.IMAGE && config.bacImgFile) {
-    const imageUrl = getImageUrlByUserFile(config.bacImgFile)
+    const file = config.bacImgFile as any
+    const imageUrl = file.fullName ?? getImageUrlByUserFile(file)
     return { backgroundImage: `url(${imageUrl})` }
   }
 
