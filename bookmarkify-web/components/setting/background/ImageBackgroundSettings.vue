@@ -44,7 +44,7 @@
         class="aspect-square rounded-lg border-2 transition-all shadow-sm border-dashed border-slate-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700"
         :disabled="uploading"
         @click="openImagePicker">
-        <div class="h-full w-full flex items-center justify-center text-slate-500 dark:text-slate-300 text-xl font-semibold">
+        <div class="h-full w-full flex items-center justify-center text-slate-500 dark:text-slate-300 text-xl font-semibold select-none cursor-pointer">
           ＋
         </div>
       </button>
@@ -220,7 +220,6 @@ async function selectImagePreset(preset: ImagePreset) {
   applyingImageId.value = preset.id
   try {
     await selectBackground({ type: BackgroundType.IMAGE, backgroundId: preset.id })
-    await Promise.all([sysStore.refreshSystemConfig(), userStore.refreshUserInfo()])
     selectedImageId.value = preset.id
     selectedFile.value = null
     if (fileInputRef.value) fileInputRef.value.value = ''

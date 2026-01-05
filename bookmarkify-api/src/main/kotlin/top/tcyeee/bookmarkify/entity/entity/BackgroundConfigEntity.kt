@@ -38,7 +38,10 @@ data class BackgroundConfigEntity(
         this.updateTime = LocalDateTime.now()
     }
 
-    fun vo(): BacSettingVO = BacSettingVO(uid = this.uid, type = this.type, backgroundLinkId = this.backgroundLinkId)
+    fun vo(): BacSettingVO = BacSettingVO(
+        type = this.type,
+        backgroundLinkId = this.backgroundLinkId
+    )
 }
 
 @TableName("background_image")

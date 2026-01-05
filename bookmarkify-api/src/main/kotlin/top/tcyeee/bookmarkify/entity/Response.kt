@@ -4,11 +4,7 @@ import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.EnumUtil
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
-import top.tcyeee.bookmarkify.entity.dto.UserSetting
-import top.tcyeee.bookmarkify.entity.entity.BackgroundType
-import top.tcyeee.bookmarkify.entity.entity.HomeItem
-import top.tcyeee.bookmarkify.entity.entity.UserEntity
-import top.tcyeee.bookmarkify.entity.entity.UserFile
+import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.FunctionType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
@@ -86,7 +82,7 @@ data class UserInfoShow(
     @field:Schema(description = "UID") var uid: String,
     @field:Schema(description = "用户名称") var nickName: String,
     @field:Schema(description = "用户头像文件") var avatarUrl: String? = null,
-){
+) {
     constructor(entity: UserEntity, avatarUrl: String?) : this(
         uid = entity.id,
         nickName = entity.nickName,
@@ -95,13 +91,12 @@ data class UserInfoShow(
 }
 
 class BacSettingVO(
-    @JsonIgnore @field:Schema(description = "用户ID") var uid: String,
-    @JsonIgnore @field:Schema(description = "背景ID") var backgroundLinkId: String,
     @field:Schema(description = "背景类型") var type: BackgroundType,
+    @field:Schema(description = "背景ID") var backgroundLinkId: String,
 
     /* 如果是图片背景 */
     @field:Schema(description = "图片背景") var bacImgFile: UserFile? = null,
-
+    @field:Schema(description = "图片背景URL") var bacImgFileUrl: String? = null,
     /* 如果是渐变色背景 */
     @field:Schema(description = "背景渐变色") var bacColorGradient: Array<String>? = null,
     @field:Schema(description = "背景渐变方向") var bacColorDirection: Int? = null,
@@ -126,3 +121,17 @@ data class UserFileVO(
     @field:Schema(description = "文件ID") var id: String,
     @field:Schema(description = "文件完整URL") var fullName: String,
 )
+
+data class UserPreferenceVO(
+    @field:Schema(description = "书签打开方式") var bookmarkOpenMode: BookmarkOpenMode = BookmarkOpenMode.CURRENT_TAB,
+    @field:Schema(description = "是否开启极简模式") var minimalMode: Boolean = false,
+    @field:Schema(description = "书签排列方式") var bookmarkLayout: BookmarkLayoutMode = BookmarkLayoutMode.DEFAULT,
+    @field:Schema(description = "是否显示标题") var showTitle: Boolean = true,
+    @field:Schema(description = "翻页方式") var pageMode: PageTurnMode = PageTurnMode.VERTICAL_SCROLL,
+
+    @field:Schema(description = "背景配置") var imgBacShow: BacSettingVO? = null,
+) {
+    constructor(entity: UserPreferenceEntity) : this() {
+        BeanUtil.copyProperties(entity, this)
+    }
+}

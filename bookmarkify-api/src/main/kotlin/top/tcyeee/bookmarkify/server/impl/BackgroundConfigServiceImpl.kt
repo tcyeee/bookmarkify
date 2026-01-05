@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
+import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
 import top.tcyeee.bookmarkify.entity.entity.BackgroundType
 import top.tcyeee.bookmarkify.entity.entity.BackgroundConfigEntity
@@ -26,6 +27,10 @@ class BackgroundConfigServiceImpl(
     override fun deleteByUid(uid: String): Boolean = ktUpdate()
         .eq(BackgroundConfigEntity::uid, uid)
         .remove()
+
+    override fun queryShowByUid(uid: String): BacSettingVO {
+        TODO("Not yet implemented")
+    }
 
     private fun initUserBacSetting(uid: String): BackgroundConfigEntity {
         // 默认找到第一个默认渐变色进行关联
