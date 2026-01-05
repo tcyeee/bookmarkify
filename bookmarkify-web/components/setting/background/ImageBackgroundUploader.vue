@@ -3,7 +3,7 @@
     <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleFileChange" />
     <button
       type="button"
-      class="aspect-square rounded-lg border-2 transition-all shadow-sm border-dashed border-slate-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700"
+      class="group relative w-full aspect-square overflow-hidden rounded-lg border-2 border-dashed border-slate-200 transition-all shadow-sm hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:hover:border-slate-700"
       :disabled="uploading"
       @click="openImagePicker">
       <div
