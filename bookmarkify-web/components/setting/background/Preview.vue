@@ -26,8 +26,11 @@ const backgroundSetting = computed<BacSettingVO | null>(
 
 const backgroundUrl = computed(() => {
   const cfg = backgroundSetting.value
-  if (cfg?.type === BackgroundType.IMAGE && cfg.bacImgFile) {
+  // 先看是否有本地缓存的 DataURL
+  if (cfg?.type === BackgroundType.IMAGE) {
+    if (userStore.backgroundImageDataUrl) return userStore.backgroundImageDataUrl
     const file: any = cfg.bacImgFile
+    if (!file) return null
     // 优先使用服务端回填的完整地址
     if (file.fullName) return file.fullName as string
     // 尝试使用标准 UserFile 字段

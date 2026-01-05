@@ -30,7 +30,7 @@
 </template>
 
 <script lang="ts" setup>
-import { getImageUrlByUserFile } from '@config'
+import { getImageUrl, getImageUrlByUserFile } from '@config'
 import { BackgroundType, type BacSettingVO } from '@typing'
 
 definePageMeta({
@@ -69,6 +69,7 @@ const classFadeDate = computed(() => {
 })
 
 const bacSetting = computed<BacSettingVO | undefined>(() => userStore.preference?.imgBacShow ?? undefined)
+const cachedBackgroundImage = computed(() => userStore.backgroundImageDataUrl)
 
 // 背景样式
 const backgroundStyle = computed(() => {
@@ -81,9 +82,11 @@ const backgroundStyle = computed(() => {
   }
 
   if (config && config.type === BackgroundType.IMAGE && config.bacImgFile) {
+    const cached = cachedBackgroundImage.value
+    if (cached) return { backgroundImage: `url(${cached})` }
     const file = config.bacImgFile as any
-    const imageUrl = file.fullName ?? getImageUrlByUserFile(file)
-    return { backgroundImage: `url(${imageUrl})` }
+    const imageUrl = file.fullName ?? (file.environment && file.currentName ? getImageUrlByUserFile(file) : getImageUrl(file.currentName))
+    return imageUrl ? { backgroundImage: `url(${imageUrl})` } : {}
   }
 
   return { backgroundImage: 'linear-gradient(135deg, #a69f9f, #c1baba, #8f9ea6)' }
