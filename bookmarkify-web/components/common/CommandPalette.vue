@@ -98,11 +98,25 @@ type PaletteItem = {
   run: () => void | Promise<void>
 }
 
+function createDefaultPreference(): UserPreference {
+  return {
+    bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
+    minimalMode: false,
+    bookmarkLayout: BookmarkLayoutMode.DEFAULT,
+    showTitle: true,
+    pageMode: PageTurnMode.VERTICAL_SCROLL,
+    imgBacShow: undefined,
+  }
+}
+
 const visible = ref(false)
 const search = ref('')
 const currentMenu = ref<'root' | 'preference'>('root')
 const preferenceMenuLoading = ref(false)
 const preferenceMenuReady = ref(false)
+const currentPreference = ref<UserPreference>(createDefaultPreference())
+let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let pendingPreference: UserPreference | null = null
 
 const rootGroups: Map<string, PaletteItem[]> = new Map()
 rootGroups.set('常用操作', [
@@ -165,15 +179,13 @@ rootGroups.set('其他', [
 
 const rootGroupEntries = computed(() => Array.from(rootGroups.entries()))
 
-const currentPreference = computed<UserPreference>(() => ({
-  bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
-  minimalMode: false,
-  bookmarkLayout: BookmarkLayoutMode.DEFAULT,
-  showTitle: true,
-  pageMode: PageTurnMode.VERTICAL_SCROLL,
-  imgBacShow: undefined,
-  ...(preferenceStore.preference ?? {}),
-}))
+watch(
+  () => preferenceStore.preference,
+  (val) => {
+    currentPreference.value = { ...createDefaultPreference(), ...(val ?? {}) }
+  },
+  { immediate: true }
+)
 
 const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
   const pref = currentPreference.value
@@ -280,12 +292,30 @@ async function ensurePreferenceLoaded() {
 async function updatePreference(patch: Partial<UserPreference>) {
   await ensurePreferenceLoaded()
   if (!preferenceMenuReady.value && preferenceStore.preference === undefined) return
+  applyPreferencePatch(patch)
+}
+
+function applyPreferencePatch(patch: Partial<UserPreference>) {
   const merged: UserPreference = { ...currentPreference.value, ...patch }
-  try {
-    await preferenceStore.savePreference(merged)
-  } catch (error) {
-    console.error('[CommandPalette] save preference failed', error)
-  }
+  currentPreference.value = merged
+  preferenceStore.preference = merged
+  scheduleSave(merged)
+}
+
+function scheduleSave(pref: UserPreference) {
+  pendingPreference = pref
+  if (saveDebounceTimer) clearTimeout(saveDebounceTimer)
+  saveDebounceTimer = setTimeout(async () => {
+    saveDebounceTimer = null
+    const payload = pendingPreference
+    pendingPreference = null
+    if (!payload) return
+    try {
+      await preferenceStore.savePreference(payload)
+    } catch (error) {
+      console.error('[CommandPalette] save preference failed', error)
+    }
+  }, 200)
 }
 
 function toggleOpenMode() {
@@ -293,7 +323,7 @@ function toggleOpenMode() {
     currentPreference.value.bookmarkOpenMode === BookmarkOpenMode.CURRENT_TAB
       ? BookmarkOpenMode.NEW_TAB
       : BookmarkOpenMode.CURRENT_TAB
-  void updatePreference({ bookmarkOpenMode: next })
+  applyPreferencePatch({ bookmarkOpenMode: next })
 }
 
 function toggleLayoutMode() {
@@ -301,7 +331,7 @@ function toggleLayoutMode() {
   const current = currentPreference.value.bookmarkLayout
   const idx = order.indexOf(current)
   const next = order[(idx + 1) % order.length]
-  void updatePreference({ bookmarkLayout: next })
+  applyPreferencePatch({ bookmarkLayout: next })
 }
 
 function togglePageMode() {
@@ -309,20 +339,20 @@ function togglePageMode() {
     currentPreference.value.pageMode === PageTurnMode.VERTICAL_SCROLL
       ? PageTurnMode.HORIZONTAL_PAGE
       : PageTurnMode.VERTICAL_SCROLL
-  void updatePreference({ pageMode: next })
+  applyPreferencePatch({ pageMode: next })
 }
 
 function handleBadgeClick(itemValue: string, badgeValue: any) {
   if (badgeValue === undefined) return
   switch (itemValue) {
     case 'pref-open-mode-toggle':
-      void updatePreference({ bookmarkOpenMode: badgeValue as BookmarkOpenMode })
+      applyPreferencePatch({ bookmarkOpenMode: badgeValue as BookmarkOpenMode })
       break
     case 'pref-layout-toggle':
-      void updatePreference({ bookmarkLayout: badgeValue as BookmarkLayoutMode })
+      applyPreferencePatch({ bookmarkLayout: badgeValue as BookmarkLayoutMode })
       break
     case 'pref-page-mode-toggle':
-      void updatePreference({ pageMode: badgeValue as PageTurnMode })
+      applyPreferencePatch({ pageMode: badgeValue as PageTurnMode })
       break
     default:
       break
