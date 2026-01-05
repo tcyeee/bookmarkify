@@ -45,17 +45,19 @@
                   {{ item.kbd }}
                 </span>
                 <div v-if="item.badges?.length" class="flex flex-wrap justify-end gap-1.5">
-                  <span
+                  <button
                     v-for="badge in item.badges"
                     :key="badge.label"
+                    type="button"
                     class="inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-medium transition"
                     :class="
                       badge.active
                         ? 'border-sky-500 bg-sky-50 text-sky-700 dark:border-sky-600 dark:bg-sky-900/50 dark:text-sky-100'
                         : 'border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-500'
-                    ">
+                    "
+                    @click.stop.prevent="handleBadgeClick(item.value, badge.value)">
                     {{ badge.label }}
-                  </span>
+                  </button>
                 </div>
                 <span
                   v-else-if="item.iconRight || item.submenu"
@@ -91,7 +93,7 @@ type PaletteItem = {
   iconRight?: string
   submenu?: boolean
   hint?: string
-  badges?: { label: string; active: boolean }[]
+  badges?: { label: string; active: boolean; value?: any }[]
   kbd?: string
   run: () => void | Promise<void>
 }
@@ -197,8 +199,8 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
           label: '书签打开方式',
           hint: pref.bookmarkOpenMode === BookmarkOpenMode.CURRENT_TAB ? '当前：当前标签页' : '当前：新标签页',
           badges: [
-            { label: '当前标签页', active: pref.bookmarkOpenMode === BookmarkOpenMode.CURRENT_TAB },
-            { label: '新标签页', active: pref.bookmarkOpenMode === BookmarkOpenMode.NEW_TAB },
+            { label: '当前标签页', value: BookmarkOpenMode.CURRENT_TAB, active: pref.bookmarkOpenMode === BookmarkOpenMode.CURRENT_TAB },
+            { label: '新标签页', value: BookmarkOpenMode.NEW_TAB, active: pref.bookmarkOpenMode === BookmarkOpenMode.NEW_TAB },
           ],
           run: () => toggleOpenMode(),
         },
@@ -212,9 +214,9 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
                 ? '当前：宽松'
                 : '当前：默认',
           badges: [
-            { label: '紧凑', active: pref.bookmarkLayout === BookmarkLayoutMode.COMPACT },
-            { label: '默认', active: pref.bookmarkLayout === BookmarkLayoutMode.DEFAULT },
-            { label: '宽松', active: pref.bookmarkLayout === BookmarkLayoutMode.SPACIOUS },
+            { label: '紧凑', value: BookmarkLayoutMode.COMPACT, active: pref.bookmarkLayout === BookmarkLayoutMode.COMPACT },
+            { label: '默认', value: BookmarkLayoutMode.DEFAULT, active: pref.bookmarkLayout === BookmarkLayoutMode.DEFAULT },
+            { label: '宽松', value: BookmarkLayoutMode.SPACIOUS, active: pref.bookmarkLayout === BookmarkLayoutMode.SPACIOUS },
           ],
           run: () => toggleLayoutMode(),
         },
@@ -223,8 +225,8 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
           label: '翻页方式',
           hint: pref.pageMode === PageTurnMode.VERTICAL_SCROLL ? '当前：垂直滚动' : '当前：横向翻页',
           badges: [
-            { label: '垂直滚动', active: pref.pageMode === PageTurnMode.VERTICAL_SCROLL },
-            { label: '横向翻页', active: pref.pageMode === PageTurnMode.HORIZONTAL_PAGE },
+            { label: '垂直滚动', value: PageTurnMode.VERTICAL_SCROLL, active: pref.pageMode === PageTurnMode.VERTICAL_SCROLL },
+            { label: '横向翻页', value: PageTurnMode.HORIZONTAL_PAGE, active: pref.pageMode === PageTurnMode.HORIZONTAL_PAGE },
           ],
           run: () => togglePageMode(),
         },
@@ -308,6 +310,23 @@ function togglePageMode() {
       ? PageTurnMode.HORIZONTAL_PAGE
       : PageTurnMode.VERTICAL_SCROLL
   void updatePreference({ pageMode: next })
+}
+
+function handleBadgeClick(itemValue: string, badgeValue: any) {
+  if (badgeValue === undefined) return
+  switch (itemValue) {
+    case 'pref-open-mode-toggle':
+      void updatePreference({ bookmarkOpenMode: badgeValue as BookmarkOpenMode })
+      break
+    case 'pref-layout-toggle':
+      void updatePreference({ bookmarkLayout: badgeValue as BookmarkLayoutMode })
+      break
+    case 'pref-page-mode-toggle':
+      void updatePreference({ pageMode: badgeValue as PageTurnMode })
+      break
+    default:
+      break
+  }
 }
 
 function open() {
