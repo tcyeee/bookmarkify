@@ -36,6 +36,19 @@
                     {{ item.label }}
                   </span>
                   <span v-if="item.hint" class="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{{ item.hint }}</span>
+                  <div v-if="item.badges?.length" class="mt-2 flex flex-wrap gap-2">
+                    <span
+                      v-for="badge in item.badges"
+                      :key="badge.label"
+                      class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium transition"
+                      :class="
+                        badge.active
+                          ? 'border-sky-500 bg-sky-50 text-sky-700 dark:border-sky-600 dark:bg-sky-900/40 dark:text-sky-200'
+                          : 'border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-500'
+                      ">
+                      {{ badge.label }}
+                    </span>
+                  </div>
                 </div>
               </div>
               <div class="ml-3 flex items-center gap-2">
@@ -78,6 +91,7 @@ type PaletteItem = {
   iconRight?: string
   submenu?: boolean
   hint?: string
+  badges?: { label: string; active: boolean }[]
   kbd?: string
   run: () => void | Promise<void>
 }
@@ -162,7 +176,7 @@ const currentPreference = computed<UserPreference>(() => ({
 const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
   const pref = currentPreference.value
   return [
-        [
+    [
       '',
       [
         {
@@ -179,67 +193,40 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
       '',
       [
         {
-          value: 'pref-open-current',
-          label: '书签打开方式：当前标签页',
-          hint: pref.bookmarkOpenMode === BookmarkOpenMode.CURRENT_TAB ? '当前选项' : '切换为当前标签页',
-          run: () =>
-            updatePreference({
-              bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
-            }),
+          value: 'pref-open-mode-toggle',
+          label: '书签打开方式',
+          hint: pref.bookmarkOpenMode === BookmarkOpenMode.CURRENT_TAB ? '当前：当前标签页' : '当前：新标签页',
+          badges: [
+            { label: '当前标签页', active: pref.bookmarkOpenMode === BookmarkOpenMode.CURRENT_TAB },
+            { label: '新标签页', active: pref.bookmarkOpenMode === BookmarkOpenMode.NEW_TAB },
+          ],
+          run: () => toggleOpenMode(),
         },
         {
-          value: 'pref-open-new',
-          label: '书签打开方式：新标签页',
-          hint: pref.bookmarkOpenMode === BookmarkOpenMode.NEW_TAB ? '当前选项' : '切换为新标签页',
-          run: () =>
-            updatePreference({
-              bookmarkOpenMode: BookmarkOpenMode.NEW_TAB,
-            }),
+          value: 'pref-layout-toggle',
+          label: '书签排列方式',
+          hint:
+            pref.bookmarkLayout === BookmarkLayoutMode.COMPACT
+              ? '当前：紧凑'
+              : pref.bookmarkLayout === BookmarkLayoutMode.SPACIOUS
+                ? '当前：宽松'
+                : '当前：默认',
+          badges: [
+            { label: '紧凑', active: pref.bookmarkLayout === BookmarkLayoutMode.COMPACT },
+            { label: '默认', active: pref.bookmarkLayout === BookmarkLayoutMode.DEFAULT },
+            { label: '宽松', active: pref.bookmarkLayout === BookmarkLayoutMode.SPACIOUS },
+          ],
+          run: () => toggleLayoutMode(),
         },
         {
-          value: 'pref-layout-compact',
-          label: '书签排列方式：紧凑',
-          hint: pref.bookmarkLayout === BookmarkLayoutMode.COMPACT ? '当前选项' : '切换为紧凑布局',
-          run: () =>
-            updatePreference({
-              bookmarkLayout: BookmarkLayoutMode.COMPACT,
-            }),
-        },
-        {
-          value: 'pref-layout-default',
-          label: '书签排列方式：默认',
-          hint: pref.bookmarkLayout === BookmarkLayoutMode.DEFAULT ? '当前选项' : '切换为默认布局',
-          run: () =>
-            updatePreference({
-              bookmarkLayout: BookmarkLayoutMode.DEFAULT,
-            }),
-        },
-        {
-          value: 'pref-layout-spacious',
-          label: '书签排列方式：宽松',
-          hint: pref.bookmarkLayout === BookmarkLayoutMode.SPACIOUS ? '当前选项' : '切换为宽松布局',
-          run: () =>
-            updatePreference({
-              bookmarkLayout: BookmarkLayoutMode.SPACIOUS,
-            }),
-        },
-        {
-          value: 'pref-page-vertical',
-          label: '翻页方式：垂直滚动',
-          hint: pref.pageMode === PageTurnMode.VERTICAL_SCROLL ? '当前选项' : '切换为垂直滚动',
-          run: () =>
-            updatePreference({
-              pageMode: PageTurnMode.VERTICAL_SCROLL,
-            }),
-        },
-        {
-          value: 'pref-page-horizontal',
-          label: '翻页方式：横向翻页',
-          hint: pref.pageMode === PageTurnMode.HORIZONTAL_PAGE ? '当前选项' : '切换为横向翻页',
-          run: () =>
-            updatePreference({
-              pageMode: PageTurnMode.HORIZONTAL_PAGE,
-            }),
+          value: 'pref-page-mode-toggle',
+          label: '翻页方式',
+          hint: pref.pageMode === PageTurnMode.VERTICAL_SCROLL ? '当前：垂直滚动' : '当前：横向翻页',
+          badges: [
+            { label: '垂直滚动', active: pref.pageMode === PageTurnMode.VERTICAL_SCROLL },
+            { label: '横向翻页', active: pref.pageMode === PageTurnMode.HORIZONTAL_PAGE },
+          ],
+          run: () => togglePageMode(),
         },
         {
           value: 'pref-minimal-toggle',
@@ -262,7 +249,7 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
             }),
         },
       ],
-    ]
+    ],
   ]
 })
 
@@ -297,6 +284,30 @@ async function updatePreference(patch: Partial<UserPreference>) {
   } catch (error) {
     console.error('[CommandPalette] save preference failed', error)
   }
+}
+
+function toggleOpenMode() {
+  const next =
+    currentPreference.value.bookmarkOpenMode === BookmarkOpenMode.CURRENT_TAB
+      ? BookmarkOpenMode.NEW_TAB
+      : BookmarkOpenMode.CURRENT_TAB
+  void updatePreference({ bookmarkOpenMode: next })
+}
+
+function toggleLayoutMode() {
+  const order = [BookmarkLayoutMode.COMPACT, BookmarkLayoutMode.DEFAULT, BookmarkLayoutMode.SPACIOUS]
+  const current = currentPreference.value.bookmarkLayout
+  const idx = order.indexOf(current)
+  const next = order[(idx + 1) % order.length]
+  void updatePreference({ bookmarkLayout: next })
+}
+
+function togglePageMode() {
+  const next =
+    currentPreference.value.pageMode === PageTurnMode.VERTICAL_SCROLL
+      ? PageTurnMode.HORIZONTAL_PAGE
+      : PageTurnMode.VERTICAL_SCROLL
+  void updatePreference({ pageMode: next })
 }
 
 function open() {
