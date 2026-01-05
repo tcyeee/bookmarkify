@@ -7,7 +7,7 @@
         <div class="flex flex-col items-center gap-6">
           <BackgroundPreview />
           <GradientConfig />
-          <ImageBackgroundSettings/>
+          <ImageBackgroundSettings />
         </div>
       </div>
     </section>
