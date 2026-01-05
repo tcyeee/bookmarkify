@@ -125,6 +125,7 @@ watch(
 async function applyPresetBackground(preset: GradientPreset) {
   const setting: BacSettingVO = {
     type: BackgroundType.GRADIENT,
+    backgroundLinkId: preset.id ?? userStore.preference?.imgBacShow?.backgroundLinkId ?? '',
     bacColorGradient: [...preset.colors],
     bacColorDirection: preset.direction ?? 135,
   }
@@ -230,6 +231,7 @@ async function handleCustomSave() {
       if (editingPresetWasActive.value) {
         const setting: BacSettingVO = {
           type: BackgroundType.GRADIENT,
+          backgroundLinkId: editingPreset.value.id ?? userStore.preference?.imgBacShow?.backgroundLinkId ?? '',
           bacColorGradient: [...customColors.value],
           bacColorDirection: customDirection.value,
         }
@@ -245,6 +247,7 @@ async function handleCustomSave() {
       })
       const setting: BacSettingVO = {
         type: BackgroundType.GRADIENT,
+        backgroundLinkId: userStore.preference?.imgBacShow?.backgroundLinkId ?? '',
         bacColorGradient: [...customColors.value],
         bacColorDirection: customDirection.value,
       }
@@ -255,6 +258,7 @@ async function handleCustomSave() {
 
     userStore.upsertPreferenceBackground({
       type: BackgroundType.GRADIENT,
+      backgroundLinkId: editingPreset.value?.id ?? userStore.preference?.imgBacShow?.backgroundLinkId ?? '',
       bacColorGradient: [...gradientColors.value],
       bacColorDirection: gradientDirection.value,
     })
@@ -273,10 +277,13 @@ async function handleCustomReset() {
   customSaving.value = true
   try {
     await resetBacBackground()
-    await Promise.all([sysStore.refreshSystemConfig(), userStore.refreshUserInfo()])
+    const [, latestPreference] = await Promise.all([
+      sysStore.refreshSystemConfig(),
+      userStore.fetchPreference(),
+    ])
 
     // 使用最新 store 配置回填当前 UI
-    const setting = userStore.preference?.imgBacShow
+    const setting = latestPreference?.imgBacShow ?? userStore.preference?.imgBacShow
     if (setting?.type === BackgroundType.GRADIENT && setting.bacColorGradient?.length) {
       const nextColors = [...setting.bacColorGradient]
       const nextDirection = setting.bacColorDirection ?? 135
