@@ -72,6 +72,7 @@ const tabs = [
   { value: 1, label: '书签管理', icon: 'icon--memory-application-code icon-size-22' },
   { value: 2, label: '主页背景', icon: 'icon--memory-cloud icon-size-22' },
   { value: 3, label: '偏好设置', icon: 'icon--memory-dot-hexagon icon-size-22' },
+  { value: 4, label: '快捷键', icon: 'icon--memory-terminal icon-size-22' },
 ]
 const indicatorStyle = ref<CSSProperties>({
   transform: 'translate3d(0, 0, 0)',
