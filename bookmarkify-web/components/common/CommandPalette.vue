@@ -72,31 +72,6 @@ const preferenceMenuReady = ref(false)
 const rootGroups: Map<string, PaletteItem[]> = new Map()
 rootGroups.set('常用操作', [
   {
-    value: 'toggle-theme',
-    label: '切换主题模式',
-    hint: '在浅色和深色模式之间切换',
-    run: () => {
-      toggleTheme()
-      close()
-    },
-  },
-  {
-    value: 'go-index',
-    label: '前往首页',
-    hint: `打开主页${authStore.authStatus === 'NONE' ? ' (请先登陆)' : ''}`,
-    run: () => {
-      navigate('/')
-    },
-  },
-  {
-    value: 'go-setting',
-    label: '前往设置',
-    hint: `打开设置页面${authStore.authStatus === 'NONE' ? ' (请先登陆)' : ''}`,
-    run: () => {
-      navigate('/setting')
-    },
-  },
-  {
     value: 'open-add-bookmark',
     label: '添加 / 关联书签',
     hint: '打开添加书签窗口',
@@ -114,7 +89,32 @@ rootGroups.set('常用操作', [
     },
   },
 ])
-rootGroups.set('账号操作', [
+rootGroups.set('路由', [
+  {
+    value: 'go-index',
+    label: `前往首页${authStore.authStatus === 'NONE' ? ' (请先登陆)' : ''}`,
+    run: () => {
+      navigate('/')
+    },
+  },
+  {
+    value: 'go-setting',
+    label: `前往设置${authStore.authStatus === 'NONE' ? ' (请先登陆)' : ''}`,
+    run: () => {
+      navigate('/setting')
+    },
+  },
+])
+rootGroups.set('其他', [
+    {
+    value: 'toggle-theme',
+    label: '切换主题模式',
+    hint: '在浅色和深色模式之间切换',
+    run: () => {
+      toggleTheme()
+      close()
+    },
+  },
   {
     value: 'logout',
     label: '退出登陆',
