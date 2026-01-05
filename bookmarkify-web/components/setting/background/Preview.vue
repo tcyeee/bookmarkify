@@ -14,24 +14,34 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue'
-import type { BacSettingVO } from '@typing'
-import { getImageUrlByUserFile } from '@config'
+import { BackgroundType, type BacSettingVO } from '@typing'
+import { getImageUrl, getImageUrlByUserFile } from '@config'
 
 const userStore = useUserStore()
 
-const backgroundSetting = computed<BacSettingVO | null>(() => userStore.backgroundSetting ?? userStore.account?.userSetting?.bacSetting ?? null)
+// 优先使用当前偏好中的背景设置，其次兜底账号信息中的历史字段
+const backgroundSetting = computed<BacSettingVO | null>(
+  () => userStore.preference?.imgBacShow ?? (userStore.account as any)?.userSetting?.bacSetting ?? null
+)
 
 const backgroundUrl = computed(() => {
   const cfg = backgroundSetting.value
-  if (cfg?.type === 'IMAGE' && cfg.bacImgFile) {
-    return getImageUrlByUserFile(cfg.bacImgFile)
+  if (cfg?.type === BackgroundType.IMAGE && cfg.bacImgFile) {
+    const file: any = cfg.bacImgFile
+    // 优先使用服务端回填的完整地址
+    if (file.fullName) return file.fullName as string
+    // 尝试使用标准 UserFile 字段
+    if (file.environment && file.currentName) return getImageUrlByUserFile(file)
+    // 退化到 currentName 的兜底解析
+    if (file.currentName) return getImageUrl(file.currentName)
+    return null
   }
   return null
 })
 
 const previewStyle = computed(() => {
   const cfg = backgroundSetting.value
-  if (cfg?.type === 'GRADIENT' && cfg.bacColorGradient) {
+  if (cfg?.type === BackgroundType.GRADIENT && cfg.bacColorGradient) {
     const colors = cfg.bacColorGradient.join(', ')
     const direction = cfg.bacColorDirection || 135
     return {
