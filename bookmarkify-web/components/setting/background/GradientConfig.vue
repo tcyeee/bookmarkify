@@ -16,10 +16,11 @@
           ]"
           :disabled="applyingPreset"
           @click="selectPreset(preset)">
-          <span
-            v-if="preset.isSystem"
-            class="icon--memory-lock icon-size-25 text-gray-500 absolute left-1 top-1 text-xs leading-none select-none"
-            title="系统预设" />
+                    <span
+          v-if="preset.isSystem"
+          class="absolute left-1 top-1 rounded bg-white/80 px-1 text-[10px] text-slate-600 shadow">
+          系统
+        </span>
           <div
             v-if="!preset.isSystem"
             class="pointer-events-none absolute inset-x-1 bottom-1 flex items-center justify-center gap-2 rounded-md bg-slate-900/35 px-2 py-1 text-white opacity-0 shadow-sm backdrop-blur group-hover:opacity-100">
@@ -142,6 +143,7 @@ async function applyPresetBackground(preset: GradientPreset) {
       })
     }
 
+    userStore.upsertPreferenceBackground(setting)
     ElNotification.success({ message: '已应用预设背景' })
   } catch (error: any) {
     ElMessage.error(error.message || '应用预设失败')
@@ -250,6 +252,11 @@ async function handleCustomSave() {
       ElNotification.success({ message: '自定义渐变已保存' })
     }
 
+    userStore.upsertPreferenceBackground({
+      type: BackgroundType.GRADIENT,
+      bacColorGradient: [...gradientColors.value],
+      bacColorDirection: gradientDirection.value,
+    })
     await sysStore.refreshSystemConfig()
     closeCustomDialog()
   } catch (error: any) {
@@ -276,6 +283,7 @@ async function handleCustomReset() {
       gradientDirection.value = nextDirection
     }
 
+    userStore.upsertPreferenceBackground(setting ?? null)
     ElNotification.success({ message: '已恢复默认背景' })
   } catch (error: any) {
     ElMessage.error(error.message || '重置失败，请重试')
