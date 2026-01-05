@@ -1,5 +1,5 @@
 import type { BackgroundType, BookmarkLayoutMode, BookmarkOpenMode, PageTurnMode } from './enum'
-import type { UserFile } from './user'
+import type { UserFile, UserFileVO } from './user'
 
 export interface UserPreferenceVO {
   bacSetting: BacSettingVO
@@ -19,7 +19,8 @@ export interface GradientConfigParams {
 
 export interface BacSettingVO {
   type: BackgroundType
-  bacImgFile?: UserFile // 当BackgroundType为IMAGE时使用
+  backgroundLinkId: string
+  bacImgFile?: UserFileVO
 
   bacColorGradient?: string[] // 当BackgroundType为GRADIENT时使用
   bacColorDirection?: number // 当BackgroundType为GRADIENT时使用

@@ -34,6 +34,11 @@ export interface UserFile {
   type: UserFileType
 }
 
+export interface UserFileVO {
+  id: string
+  fullName: string
+}
+
 export interface UserInfoUpdate {
   nickName?: string
   phone?: string
