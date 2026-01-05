@@ -13,14 +13,12 @@ import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.ImgInfo
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
-import top.tcyeee.bookmarkify.entity.entity.UserFile
 import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
 import top.tcyeee.bookmarkify.entity.enums.FileType
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.net.URI
 import javax.imageio.ImageIO
-import kotlin.text.substringBefore
 
 /**
  * @author tcyeee
@@ -201,11 +199,15 @@ class OssUtils {
                 val expiration = java.util.Date(System.currentTimeMillis() + expirationMillis)
                 val request = GeneratePresignedUrlRequest(bucket, objectName).apply {
                     this.expiration = expiration
-                    // 使用 m_fill 以填充方式裁剪，确保输出尺寸精确匹配期望的宽高
-                    val style = StringBuilder("image/resize,m_fill")
-                    width?.takeIf { it > 0 }?.let { style.append(",w_$it") }
-                    height?.takeIf { it > 0 }?.let { style.append(",h_$it") }
-                    this.process = style.toString()
+                    val hasWidth = width?.let { it > 0 } == true
+                    val hasHeight = height?.let { it > 0 } == true
+                    if (hasWidth || hasHeight) {
+                        // 使用 m_fill 以填充方式裁剪，确保输出尺寸精确匹配期望的宽高
+                        val style = StringBuilder("image/resize,m_fill")
+                        width?.takeIf { it > 0 }?.let { style.append(",w_$it") }
+                        height?.takeIf { it > 0 }?.let { style.append(",h_$it") }
+                        this.process = style.toString()
+                    }
                 }
 
                 val url = ossClient.generatePresignedUrl(request)
