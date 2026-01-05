@@ -30,7 +30,7 @@
               title="编辑"
               aria-label="编辑自定义渐变"
               @click.stop="startEditPreset(preset)">
-<span class="icon--memory-pencil icon-size-20 text-current"/>
+              <span class="icon--memory-pencil icon-size-20 text-current" />
             </button>
             <button
               type="button"
@@ -39,15 +39,17 @@
               title="删除"
               aria-label="删除自定义渐变"
               @click.stop="handleDeletePreset(preset)">
-<span class="icon--memory-trash icon-size-20 text-current"/>
+              <span class="icon--memory-trash icon-size-20 text-current" />
             </button>
           </div>
         </button>
         <button
           type="button"
-          class="aspect-square rounded-lg border-2 transition-all shadow-sm border-dashed border-slate-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700"
+          class="aspect-square rounded-lg border-2 transition-all shadow-sm border-dashed border-slate-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 select-none cursor-pointer"
           @click="openCustomDialog">
-          <div class="h-full w-full flex items-center justify-center text-slate-500 dark:text-slate-300 text-xl font-semibold">＋</div>
+          <div class="h-full w-full flex items-center justify-center text-slate-500 dark:text-slate-300 text-xl font-semibold">
+            ＋
+          </div>
         </button>
       </div>
     </div>
@@ -80,13 +82,7 @@
 import { computed, ref, watch } from 'vue'
 import { deleteGradientBackground, resetBacBackground, selectBackground, updateBacColor, updateGradientBackground } from '@api'
 import GradientCustom from './GradientCustom.vue'
-import {
-  BackgroundType,
-  type BacGradientVO,
-  type BacSettingVO,
-  type BackSettingParams,
-  type GradientConfigParams,
-} from '@typing'
+import { BackgroundType, type BacGradientVO, type BacSettingVO, type BackSettingParams, type GradientConfigParams } from '@typing'
 
 const userStore = useUserStore()
 const sysStore = useSysStore()
@@ -135,9 +131,7 @@ async function applyPresetBackground(preset: GradientPreset) {
   // 后端写入选中的渐变（有 id 走 select，无 id 直接更新颜色）
   applyingPreset.value = true
   try {
-    const params: BackSettingParams | null = preset.id
-      ? { type: BackgroundType.GRADIENT, backgroundId: preset.id }
-      : null
+    const params: BackSettingParams | null = preset.id ? { type: BackgroundType.GRADIENT, backgroundId: preset.id } : null
 
     if (params) {
       await selectBackground(params)

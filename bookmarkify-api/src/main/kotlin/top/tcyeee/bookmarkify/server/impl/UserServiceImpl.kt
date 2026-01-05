@@ -201,12 +201,12 @@ class UserServiceImpl(
         val entity = backSettingService.ktQuery()
             .eq(BackgroundConfigEntity::uid, uid).one()
             // 如果查询到了，则修改其中的参数
+            // 如果没有查询到，则创建对象
             ?.also { it.updateParams(params) }
-        // 如果没有查询到，则创建对象
-            ?: BackgroundConfigEntity(
-                uid = uid, type = params.type, backgroundLinkId = params.backgroundId
-            )
+            ?: BackgroundConfigEntity(uid = uid, type = params.type, backgroundLinkId = params.backgroundId)
         backSettingService.saveOrUpdate(entity)
+
+        // TODO 返回当前的背景配置
         return true
     }
 

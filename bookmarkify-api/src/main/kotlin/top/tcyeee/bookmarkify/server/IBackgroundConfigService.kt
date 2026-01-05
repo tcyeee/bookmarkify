@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
+import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.entity.BackgroundConfigEntity
 
 /**
@@ -12,4 +13,5 @@ import top.tcyeee.bookmarkify.entity.entity.BackgroundConfigEntity
 interface IBackgroundConfigService : IService<BackgroundConfigEntity> {
     fun queryByUid(uid: String): BackgroundConfigEntity
     fun deleteByUid(uid: String): Boolean
+    fun queryShowByUid(uid: String): BacSettingVO
 }
