@@ -23,18 +23,31 @@
             @select="handleSelect"
             class="group mx-1 cursor-pointer rounded-md outline-none transition hover:bg-slate-50 aria-selected:bg-slate-100 focus:bg-slate-100 dark:hover:bg-slate-800 dark:aria-selected:bg-slate-800 dark:focus:bg-slate-800">
             <div class="flex items-center justify-between px-3 py-2.5 text-sm">
-              <div class="flex flex-col text-slate-800 dark:text-slate-100">
+              <div class="flex items-center gap-3 text-slate-800 dark:text-slate-100">
                 <span
-                  class="font-medium group-aria-selected:text-sky-600 group-hover:text-sky-600 dark:group-aria-selected:text-sky-400 dark:group-hover:text-sky-400">
-                  {{ item.label }}
-                </span>
-                <span v-if="item.hint" class="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{{ item.hint }}</span>
+                  v-if="item.icon"
+                  :class="[
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400 ring-1 ring-slate-200 transition group-hover:text-sky-500 group-aria-selected:text-sky-500 dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-700',
+                    item.icon,
+                  ]" />
+                <div class="flex flex-col">
+                  <span
+                    class="font-medium group-aria-selected:text-sky-600 group-hover:text-sky-600 dark:group-aria-selected:text-sky-400 dark:group-hover:text-sky-400">
+                    {{ item.label }}
+                  </span>
+                  <span v-if="item.hint" class="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{{ item.hint }}</span>
+                </div>
               </div>
-              <span
-                v-if="item.kbd"
-                class="ml-3 inline-flex items-center gap-1 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400 dark:border-slate-700 dark:text-slate-500">
-                {{ item.kbd }}
-              </span>
+              <div class="ml-3 flex items-center gap-2">
+                <span
+                  v-if="item.kbd"
+                  class="inline-flex items-center gap-1 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400 dark:border-slate-700 dark:text-slate-500">
+                  {{ item.kbd }}
+                </span>
+                <span
+                  v-if="item.submenu"
+                  class="icon--memory-chevron-right icon-size-16 text-slate-300 group-hover:text-slate-400 group-aria-selected:text-slate-400 dark:text-slate-600 dark:group-hover:text-slate-400" />
+              </div>
             </div>
           </Command.Item>
         </Command.Group>
@@ -58,6 +71,8 @@ const preferenceStore = usePreferenceStore()
 type PaletteItem = {
   value: string
   label: string
+  icon?: string
+  submenu?: boolean
   hint?: string
   kbd?: string
   run: () => void | Promise<void>
@@ -83,6 +98,8 @@ rootGroups.set('常用操作', [
   {
     value: 'open-preference-menu',
     label: '偏好设置',
+    icon: 'icon--memory-toggle-switch-off icon-size-16',
+    submenu: true,
     hint: '快速调整书签偏好',
     run: async () => {
       await openPreferenceMenu()
