@@ -5,10 +5,17 @@ import {
   type SmsVerifyParams,
   type UserFile,
   type UserInfo,
-  type UserPreferenceVO,
-  type BacSettingVO,
+  type UserPreference,
 } from '@typing'
-import { track, queryUserInfo, authLogout, captchaVerifyEmail, captchaVerifySms } from '@api'
+import {
+  track,
+  queryUserInfo,
+  authLogout,
+  captchaVerifyEmail,
+  captchaVerifySms,
+  queryUserPreference,
+  updateUserPreference,
+} from '@api'
 
 // 用户相关的 Pinia Store（账号信息、设置、头像、登录状态等）
 export const useUserStore = defineStore('user', {
@@ -17,9 +24,7 @@ export const useUserStore = defineStore('user', {
     // 用户基本信息（含 token 等）
     account: undefined as UserInfo | undefined,
     // 用户个性化设置
-    setting: undefined as UserPreferenceVO | undefined,
-    // 用户当前选择的系统背景（同步于 userSetting.bacSetting）
-    backgroundSetting: undefined as BacSettingVO | undefined,
+    preference: undefined as UserPreference | null | undefined,
     // 用户头像文件
     avatar: undefined as UserFile | undefined,
     // 通用加载状态（登录、拉取信息等异步请求时使用）
@@ -37,7 +42,29 @@ export const useUserStore = defineStore('user', {
   },
 
   actions: {
-    // TODO 获取用户偏好设置,并存储到store中
+    // 获取用户偏好设置，并同步到 store
+    async fetchPreference(): Promise<UserPreference | null> {
+      try {
+        const result = await queryUserPreference()
+        this.preference = result ?? null
+        return this.preference
+      } catch (err: any) {
+        ElMessage.error(err?.message || '获取偏好设置失败')
+        throw err
+      }
+    },
+
+    // 更新用户偏好设置，并同步到 store
+    async savePreference(preference: UserPreference): Promise<boolean> {
+      try {
+        const ok = await updateUserPreference(preference)
+        if (ok) this.preference = { ...preference }
+        return ok
+      } catch (err: any) {
+        ElMessage.error(err?.message || '保存偏好设置失败')
+        throw err
+      }
+    },
 
 
     // 使用邮箱 + 验证码登录
@@ -75,8 +102,6 @@ export const useUserStore = defineStore('user', {
       try {
         const result = await queryUserInfo()
         this.account = { ...this.account, ...result }
-        this.setting = result.userSetting ?? this.setting
-        this.backgroundSetting = result.userSetting?.bacSetting ?? undefined
         return result
       } catch (err: any) {
         // 202 表示用户信息/登录态过期，触发重新登录流程
@@ -100,8 +125,6 @@ export const useUserStore = defineStore('user', {
       const user = await track()
       this.loading = false
       this.account = { ...this.account, ...user }
-      this.setting = user.userSetting ?? this.setting
-      this.backgroundSetting = user.userSetting?.bacSetting ?? undefined
       if (!user.token) return Promise.reject('登陆数据异常')
 
       // 登录成功后刷新书签数据
@@ -114,15 +137,6 @@ export const useUserStore = defineStore('user', {
 
       // 返回当前账号信息（此时 state 中已是最新数据）
       return Promise.resolve(this.account as UserInfo)
-    },
-
-    // 本地同步用户背景设置（避免等待刷新接口）
-    updateBackgroundSetting(setting: BacSettingVO) {
-      this.backgroundSetting = setting
-      if (!this.account) return
-      const nextUserSetting = { ...(this.account.userSetting ?? {}), bacSetting: setting } as UserSetting
-      this.setting = nextUserSetting
-      this.account = { ...this.account, userSetting: nextUserSetting }
     },
 
     // 退出登录：清理所有与用户相关的状态和连接

@@ -38,8 +38,7 @@ class BackgroundConfigServiceImpl(
         }
 
         if (result.type == BackgroundType.IMAGE) {
-            result.bacImgFileUrl = runCatching { backgroundImageService.getFileById(result.backgroundLinkId) }
-                .getOrNull()?.fullUrlWithSign()
+            result.bacImgFileUrl = backgroundImageService.currentBacImgUrl(uid, result.backgroundLinkId)
         }
 
         return result

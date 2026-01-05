@@ -45,21 +45,13 @@ export interface UserInfo {
   email?: string // 用户邮箱
   verified: boolean // 用户是否验证
   token: string // 用户TOKEN
-
-  /* 仅/info接口会返回 */
-  avatar: UserFile // 用户头像
-  userSetting: UserSetting // 用户设置
 }
 
 export interface UserPreference {
-  id?: string
-  uid?: string
-  backgroundConfigId?: string | null
   bookmarkOpenMode: BookmarkOpenMode
   minimalMode: boolean
   bookmarkLayout: BookmarkLayoutMode
   showTitle: boolean
   pageMode: PageTurnMode
-  updateTime?: string
-  createTime?: string
+  imgBacShow?: BacSettingVO | null
 }

@@ -10,7 +10,7 @@ enum class FileType(
     var type: String,       // 文件类型限制
 ) {
     AVATAR(5 * 1024 * 1024, "bookmarkify/avatar", "image/"),
-    BACKGROUND(10 * 1024 * 1024, "bookmarkify/background", "image/"),
+    BACKGROUND(10 * 1024 * 1024, "bookmarkify/bac", "image/"),
     WEBSITE_LOGO(1 * 1024 * 1024, "bookmarkify/logo", "image/"),
     WEBSITE_OG(5 * 1024 * 1024, "bookmarkify/og", "image/");
 
