@@ -36,19 +36,6 @@
                     {{ item.label }}
                   </span>
                   <span v-if="item.hint" class="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{{ item.hint }}</span>
-                  <div v-if="item.badges?.length" class="mt-2 flex flex-wrap gap-2">
-                    <span
-                      v-for="badge in item.badges"
-                      :key="badge.label"
-                      class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium transition"
-                      :class="
-                        badge.active
-                          ? 'border-sky-500 bg-sky-50 text-sky-700 dark:border-sky-600 dark:bg-sky-900/40 dark:text-sky-200'
-                          : 'border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-500'
-                      ">
-                      {{ badge.label }}
-                    </span>
-                  </div>
                 </div>
               </div>
               <div class="ml-3 flex items-center gap-2">
@@ -57,8 +44,21 @@
                   class="inline-flex items-center gap-1 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-400 dark:border-slate-700 dark:text-slate-500">
                   {{ item.kbd }}
                 </span>
+                <div v-if="item.badges?.length" class="flex flex-wrap justify-end gap-1.5">
+                  <span
+                    v-for="badge in item.badges"
+                    :key="badge.label"
+                    class="inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-medium transition"
+                    :class="
+                      badge.active
+                        ? 'border-sky-500 bg-sky-50 text-sky-700 dark:border-sky-600 dark:bg-sky-900/50 dark:text-sky-100'
+                        : 'border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-500'
+                    ">
+                    {{ badge.label }}
+                  </span>
+                </div>
                 <span
-                  v-if="item.iconRight || item.submenu"
+                  v-else-if="item.iconRight || item.submenu"
                   :class="[
                     'text-slate-300 group-hover:text-slate-400 group-aria-selected:text-slate-400 dark:text-slate-600 dark:group-hover:text-slate-400',
                     item.iconRight || 'icon--memory-chevron-right icon-size-16',
@@ -181,7 +181,7 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
       [
         {
           value: 'back-root',
-          iconRight: 'icon--memory-arrow-right-up icon-size-16',
+          iconLeft: 'icon--memory-arrow-left-box icon-size-16',
           label: '返回',
           run: () => {
             backToRoot()
