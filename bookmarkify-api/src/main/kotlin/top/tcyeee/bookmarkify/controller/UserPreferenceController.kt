@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.entity.UserPreferenceUpdateParams
+import top.tcyeee.bookmarkify.entity.UserPreferenceVO
 import top.tcyeee.bookmarkify.entity.entity.UserPreferenceEntity
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
 import top.tcyeee.bookmarkify.utils.BaseUtils
@@ -17,7 +18,7 @@ class UserPreferenceController(
 
     @GetMapping
     @Operation(summary = "获取当前用户偏好设置")
-    fun query(): UserPreferenceEntity? = userPreferenceService.queryByUid(BaseUtils.uid())
+    fun query(): UserPreferenceVO = userPreferenceService.queryShowByUid(BaseUtils.uid())
 
     @PostMapping
     @Operation(summary = "更新当前用户偏好设置")

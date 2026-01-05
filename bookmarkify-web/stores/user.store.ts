@@ -5,7 +5,7 @@ import {
   type SmsVerifyParams,
   type UserFile,
   type UserInfo,
-  type UserSetting,
+  type UserPreferenceVO,
   type BacSettingVO,
 } from '@typing'
 import { track, queryUserInfo, authLogout, captchaVerifyEmail, captchaVerifySms } from '@api'
@@ -17,7 +17,7 @@ export const useUserStore = defineStore('user', {
     // 用户基本信息（含 token 等）
     account: undefined as UserInfo | undefined,
     // 用户个性化设置
-    setting: undefined as UserSetting | undefined,
+    setting: undefined as UserPreferenceVO | undefined,
     // 用户当前选择的系统背景（同步于 userSetting.bacSetting）
     backgroundSetting: undefined as BacSettingVO | undefined,
     // 用户头像文件
@@ -37,6 +37,9 @@ export const useUserStore = defineStore('user', {
   },
 
   actions: {
+    // TODO 获取用户偏好设置,并存储到store中
+
+
     // 使用邮箱 + 验证码登录
     async loginWithEmail(params: EmailVerifyParams): Promise<UserInfo> {
       this.loading = true

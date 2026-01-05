@@ -179,20 +179,7 @@ class UserServiceImpl(
         ktQuery().eq(UserEntity::deviceId, deviceId).one() ?: UserEntity(deviceId).also { save(it) }
 
     override fun queryUserBacSetting(uid: String): BacSettingVO {
-        val result = backSettingService.queryByUid(uid).vo()
-
-        if (result.type == BackgroundType.GRADIENT) {
-            bacGradientService.getById(result.backgroundLinkId).apply {
-                result.bacColorGradient = this.gradientArray()
-                result.bacColorDirection = this.direction
-            }
-        }
-
-        if (result.type == BackgroundType.IMAGE) {
-            bacImageService.getFileById(result.backgroundLinkId).apply { result.bacImgFile = this }
-        }
-
-        return result
+        return backSettingService.queryShowByUid(uid)
     }
 
     override fun queryUserSetting(uid: String): UserSetting = UserSetting(bacSetting = queryUserBacSetting(uid))

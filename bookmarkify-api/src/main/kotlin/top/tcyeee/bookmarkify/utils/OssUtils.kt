@@ -191,7 +191,7 @@ class OssUtils {
          * @param height 目标高度（null/<=0 表示不限制）
          * @param expirationMillis 过期时间（毫秒）
          */
-        private fun signWithResize(
+        fun signWithResize(
             objectName: String,
             width: Int? = null,
             height: Int? = null,
