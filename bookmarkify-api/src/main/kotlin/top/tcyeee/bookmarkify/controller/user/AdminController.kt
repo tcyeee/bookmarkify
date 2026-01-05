@@ -24,7 +24,7 @@ class AdminController(private val adminLoginConfig: AdminLoginConfig) {
     @PostMapping("/login")
     fun login(@RequestBody params: AdminLoginParams): SaTokenInfo {
         if (params.account == adminLoginConfig.account &&
-                        params.password == adminLoginConfig.password
+            params.password == adminLoginConfig.password
         ) {
             StpKit.ADMIN.login(params.account)
             return StpKit.ADMIN.tokenInfo
