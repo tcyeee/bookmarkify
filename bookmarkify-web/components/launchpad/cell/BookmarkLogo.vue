@@ -8,12 +8,7 @@
       <!-- 优先使用高清图 -->
       <img v-if="props.value.iconHdUrl && !hdError" :src="props.value.iconHdUrl" alt="" @error="onHdError" />
       <!-- base64 图：可按尺寸放大 -->
-      <img
-        v-else-if="!iconError"
-        :class="base64SizeClass"
-        :src="`data:image/png;base64,${props.value.iconBase64}`"
-        alt=""
-        @error="onIconError" />
+      <img v-else-if="!iconError" :class="base64SizeClass" :src="base64Src" alt="" @error="onIconError" />
       <!-- 最终兜底头像 -->
       <img v-else class="w-8 h-8" src="/avatar/default.png" alt="" />
     </div>
@@ -49,6 +44,7 @@ const logoStyle = computed(() =>
 )
 // base64 尺寸：ico 大于等于 64px 时放大
 const base64SizeClass = computed(() => (shouldUpscale.value ? 'w-12 h-12' : 'w-8 h-8'))
+const base64Src = computed(() => buildBase64DataUrl(props.value.iconBase64))
 
 function onHdError() {
   hdError.value = true
@@ -133,8 +129,33 @@ function loadBase64Image(base64: string): Promise<HTMLImageElement> {
     img.crossOrigin = 'anonymous'
     img.onload = () => resolve(img)
     img.onerror = reject
-    img.src = `data:image/png;base64,${base64}`
+    img.src = buildBase64DataUrl(base64)
   })
+}
+
+function buildBase64DataUrl(base64: string): string {
+  if (!base64) return ''
+  const trimmed = base64.trim()
+  if (trimmed.startsWith('data:image/')) return trimmed
+  const mime = detectMimeFromBase64(trimmed)
+  return `data:${mime};base64,${trimmed}`
+}
+
+function detectMimeFromBase64(base64: string): string {
+  if (!import.meta.client) return 'image/png'
+
+  try {
+    const raw = atob(base64.slice(0, 240))
+    const trimmed = raw.trimStart()
+    if (trimmed.startsWith('\x89PNG')) return 'image/png'
+    if (trimmed.startsWith('\xff\xd8\xff')) return 'image/jpeg'
+    if (trimmed.startsWith('GIF8')) return 'image/gif'
+    if (trimmed.startsWith('<svg') || trimmed.startsWith('<?xml') || trimmed.toLowerCase().includes('<svg')) return 'image/svg+xml'
+  } catch {
+    // ignore and fall back
+  }
+
+  return 'image/png'
 }
 
 function rgbToHex(r: number, g: number, b: number): string {
