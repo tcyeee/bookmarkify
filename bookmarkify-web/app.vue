@@ -4,10 +4,12 @@
     <NuxtPage />
   </NuxtLayout>
   <CommonCommandPalette />
+  <AddOneDialog />
   
 </template>
 <script setup lang="ts">
 import { usePreferredDark } from '@vueuse/core'
+import AddOneDialog from './components/launchpad/AddOneDialog.vue'
 const isDark = usePreferredDark()
 
 useHead(() => ({
