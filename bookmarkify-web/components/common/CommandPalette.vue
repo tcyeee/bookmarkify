@@ -62,7 +62,8 @@
                 <span
                   v-else-if="item.iconRight || item.submenu"
                   :class="[
-                    'text-slate-300 group-hover:text-slate-400 group-aria-selected:text-slate-400 dark:text-slate-600 dark:group-hover:text-slate-400',
+                    item.iconRightClass ??
+                      'text-slate-300 group-hover:text-slate-400 group-aria-selected:text-slate-400 dark:text-slate-600 dark:group-hover:text-slate-400',
                     item.iconRight || 'icon--memory-chevron-right icon-size-16',
                   ]" />
               </div>
@@ -91,6 +92,7 @@ type PaletteItem = {
   label: string
   iconLeft?: string
   iconRight?: string
+  iconRightClass?: string
   submenu?: boolean
   hint?: string
   badges?: { label: string; active: boolean; value?: any }[]
@@ -246,7 +248,12 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
           value: 'pref-minimal-toggle',
           label: pref.minimalMode ? '关闭极简模式' : '开启极简模式',
           hint: pref.minimalMode ? '当前已开启' : '当前已关闭',
-          iconRight: pref.minimalMode ? 'icon--memory-toggle-switch-off icon-size-30' : 'icon--memory-toggle-switch-on icon-size-30',
+          iconRight: pref.minimalMode
+            ? 'icon--memory-toggle-switch-off icon-size-30'
+            : 'icon--memory-toggle-switch-on icon-size-30',
+          iconRightClass: pref.minimalMode
+            ? 'text-slate-400 dark:text-slate-500'
+            : 'text-primary',
           run: () =>
             updatePreference({
               minimalMode: !pref.minimalMode,
@@ -256,7 +263,12 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
           value: 'pref-show-title-toggle',
           label: pref.showTitle ? '关闭标题显示' : '开启标题显示',
           hint: pref.showTitle ? '当前已关闭' : '当前已开启',
-          iconRight: pref.showTitle ? 'icon--memory-toggle-switch-off icon-size-30' : 'icon--memory-toggle-switch-on icon-size-30',
+          iconRight: pref.showTitle
+            ? 'icon--memory-toggle-switch-off icon-size-30'
+            : 'icon--memory-toggle-switch-on icon-size-30',
+          iconRightClass: pref.showTitle
+            ? 'text-slate-400 dark:text-slate-500'
+            : 'text-primary',
           run: () =>
             updatePreference({
               showTitle: !pref.showTitle,
