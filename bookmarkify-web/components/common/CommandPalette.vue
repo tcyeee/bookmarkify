@@ -52,7 +52,7 @@
                     class="inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-medium transition"
                     :class="
                       badge.active
-                        ? 'border-sky-500 bg-sky-50 text-sky-700 dark:border-sky-600 dark:bg-sky-900/50 dark:text-sky-100'
+                        ? 'border-primary/70 bg-primary/10 text-primary dark:border-primary/60 dark:bg-primary/20 dark:text-primary'
                         : 'border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-500'
                     "
                     @click.stop.prevent="handleBadgeClick(item.value, badge.value)">
@@ -211,7 +211,6 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         {
           value: 'pref-open-mode-toggle',
           label: '书签打开方式',
-          hint: pref.bookmarkOpenMode === BookmarkOpenMode.CURRENT_TAB ? '当前：当前标签页' : '当前：新标签页',
           badges: [
             { label: '当前标签页', value: BookmarkOpenMode.CURRENT_TAB, active: pref.bookmarkOpenMode === BookmarkOpenMode.CURRENT_TAB },
             { label: '新标签页', value: BookmarkOpenMode.NEW_TAB, active: pref.bookmarkOpenMode === BookmarkOpenMode.NEW_TAB },
@@ -221,12 +220,6 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         {
           value: 'pref-layout-toggle',
           label: '书签排列方式',
-          hint:
-            pref.bookmarkLayout === BookmarkLayoutMode.COMPACT
-              ? '当前：紧凑'
-              : pref.bookmarkLayout === BookmarkLayoutMode.SPACIOUS
-                ? '当前：宽松'
-                : '当前：默认',
           badges: [
             { label: '紧凑', value: BookmarkLayoutMode.COMPACT, active: pref.bookmarkLayout === BookmarkLayoutMode.COMPACT },
             { label: '默认', value: BookmarkLayoutMode.DEFAULT, active: pref.bookmarkLayout === BookmarkLayoutMode.DEFAULT },
@@ -237,7 +230,6 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         {
           value: 'pref-page-mode-toggle',
           label: '翻页方式',
-          hint: pref.pageMode === PageTurnMode.VERTICAL_SCROLL ? '当前：垂直滚动' : '当前：横向翻页',
           badges: [
             { label: '垂直滚动', value: PageTurnMode.VERTICAL_SCROLL, active: pref.pageMode === PageTurnMode.VERTICAL_SCROLL },
             { label: '横向翻页', value: PageTurnMode.HORIZONTAL_PAGE, active: pref.pageMode === PageTurnMode.HORIZONTAL_PAGE },
@@ -247,7 +239,6 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         {
           value: 'pref-minimal-toggle',
           label: pref.minimalMode ? '关闭极简模式' : '开启极简模式',
-          hint: pref.minimalMode ? '当前已开启' : '当前已关闭',
           iconRight: pref.minimalMode
             ? 'icon--memory-toggle-switch-off icon-size-30'
             : 'icon--memory-toggle-switch-on icon-size-30',
@@ -262,7 +253,6 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         {
           value: 'pref-show-title-toggle',
           label: pref.showTitle ? '关闭标题显示' : '开启标题显示',
-          hint: pref.showTitle ? '当前已关闭' : '当前已开启',
           iconRight: pref.showTitle
             ? 'icon--memory-toggle-switch-off icon-size-30'
             : 'icon--memory-toggle-switch-on icon-size-30',
