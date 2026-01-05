@@ -1,11 +1,15 @@
 import { defineStore } from 'pinia'
 import {
   AuthStatusEnum,
+  BookmarkLayoutMode,
+  BookmarkOpenMode,
+  PageTurnMode,
   type EmailVerifyParams,
   type SmsVerifyParams,
   type UserFile,
   type UserInfo,
   type UserPreference,
+  type BacSettingVO,
 } from '@typing'
 import {
   track,
@@ -16,6 +20,17 @@ import {
   queryUserPreference,
   updateUserPreference,
 } from '@api'
+
+function createDefaultPreference(): UserPreference {
+  return {
+    bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
+    minimalMode: false,
+    bookmarkLayout: BookmarkLayoutMode.DEFAULT,
+    showTitle: true,
+    pageMode: PageTurnMode.VERTICAL_SCROLL,
+    imgBacShow: undefined,
+  }
+}
 
 // 用户相关的 Pinia Store（账号信息、设置、头像、登录状态等）
 export const useUserStore = defineStore('user', {
@@ -52,6 +67,12 @@ export const useUserStore = defineStore('user', {
         ElMessage.error(err?.message || '获取偏好设置失败')
         throw err
       }
+    },
+
+    // 仅更新偏好中的背景配置（保持其他偏好字段不变）
+    upsertPreferenceBackground(setting: BacSettingVO | null | undefined) {
+      const base = this.preference ?? createDefaultPreference()
+      this.preference = { ...base, imgBacShow: setting ?? undefined }
     },
 
     // 更新用户偏好设置，并同步到 store
