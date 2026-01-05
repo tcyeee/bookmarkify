@@ -128,6 +128,7 @@ async function applyPresetBackground(preset: GradientPreset) {
     bacColorGradient: [...preset.colors],
     bacColorDirection: preset.direction ?? 135,
   }
+  let updatedSetting: BacSettingVO = setting
 
   // 后端写入选中的渐变（有 id 走 select，无 id 直接更新颜色）
   applyingPreset.value = true
@@ -135,7 +136,7 @@ async function applyPresetBackground(preset: GradientPreset) {
     const params: BackSettingParams | null = preset.id ? { type: BackgroundType.GRADIENT, backgroundId: preset.id } : null
 
     if (params) {
-      await selectBackground(params)
+      updatedSetting = await selectBackground(params)
     } else {
       await updateBacColor({
         colors: setting.bacColorGradient!,
@@ -143,7 +144,7 @@ async function applyPresetBackground(preset: GradientPreset) {
       })
     }
 
-    userStore.upsertPreferenceBackground(setting)
+    userStore.upsertPreferenceBackground(updatedSetting)
     ElNotification.success({ message: '已应用预设背景' })
   } catch (error: any) {
     ElMessage.error(error.message || '应用预设失败')

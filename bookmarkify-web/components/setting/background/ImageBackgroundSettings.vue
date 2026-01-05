@@ -68,10 +68,12 @@ const uploading = ref(false)
 const selectedImageId = ref<string | null>(null)
 const applyingImageId = ref<string | null>(null)
 
+const maxSizeMB = computed(() => imageConfig.maxImageSize / (1024 * 1024))
+
 // 从 store 直接取最新的背景配置，减少对父组件 props 的依赖
 const backgroundConfigComputed = computed<BacSettingVO | null>(() => userStore.preference?.imgBacShow ?? null)
 const backgroundPathComputed = computed<string | null>(
-  () => backgroundConfigComputed.value?.bacImgFile?.currentName ?? null
+  () => backgroundConfigComputed.value?.bacImgFile?.fullName ?? null
 )
 
 type ImagePreset = {
@@ -156,49 +158,50 @@ watch(
   { deep: true }
 )
 
+function resetFileInput() {
+  selectedFile.value = null
+  if (fileInputRef.value) fileInputRef.value.value = ''
+}
+
+function validateSelectedFile(file: File | null | undefined): file is File {
+  if (!file) return false
+
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件')
+    resetFileInput()
+    return false
+  }
+
+  if (file.size > imageConfig.maxImageSize) {
+    ElMessage.error(`图片大小不能超过 ${maxSizeMB.value}MB`)
+    resetFileInput()
+    return false
+  }
+
+  return true
+}
+
 function handleFileChange(event: Event) {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
 
-  if (!file) return
-
-  if (!file.type.startsWith('image/')) {
-    ElMessage.error('请选择图片文件')
-    return
-  }
-
-  if (file.size > imageConfig.maxImageSize) {
-    const maxSizeMB = imageConfig.maxImageSize / (1024 * 1024)
-    ElMessage.error(`图片大小不能超过 ${maxSizeMB}MB`)
-    return
-  }
+  if (!validateSelectedFile(file)) return
 
   selectedFile.value = file
   // 选择后直接上传，预览交由 store 刷新结果
-  handleUpload()
+  uploadSelectedFile()
 }
 
-async function handleUpload() {
-  if (!selectedFile.value) return
+async function uploadSelectedFile() {
+  if (!selectedFile.value || uploading.value) return
 
   uploading.value = true
   try {
     const imagePath = await uploadBacPic(selectedFile.value)
 
-    const newConfig: BacSettingVO = {
-      type: BackgroundType.IMAGE,
-      bacImgFile: {
-        environment: getCurrentEnvironment(),
-        currentName: imagePath,
-        type: UserFileType.BACKGROUND,
-      },
-    }
-
     ElNotification.success({ message: '背景上传成功' })
 
-    selectedFile.value = null
-    if (fileInputRef.value) fileInputRef.value.value = ''
-
+    resetFileInput()
     await Promise.all([sysStore.refreshSystemConfig(), userStore.refreshUserInfo()])
   } catch (error: any) {
     ElMessage.error(error.message || '背景上传失败，请重试')
@@ -217,11 +220,12 @@ function openImagePicker() {
 async function selectImagePreset(preset: ImagePreset) {
   applyingImageId.value = preset.id
   try {
-    await selectBackground({ type: BackgroundType.IMAGE, backgroundId: preset.id })
-    selectedImageId.value = preset.id
-    selectedFile.value = null
-    if (fileInputRef.value) fileInputRef.value.value = ''
+    const setting = await selectBackground({ type: BackgroundType.IMAGE, backgroundId: preset.id })
+    userStore.upsertPreferenceBackground(setting)
+    selectedImageId.value = extractImageId(setting.bacImgFile) ?? setting.backgroundLinkId ?? preset.id
+    resetFileInput()
     ElNotification.success({ message: '已应用图片背景' })
+
   } catch (error: any) {
     ElMessage.error(error.message || '应用图片背景失败，请重试')
   } finally {
@@ -229,4 +233,3 @@ async function selectImagePreset(preset: ImagePreset) {
   }
 }
 </script>
-

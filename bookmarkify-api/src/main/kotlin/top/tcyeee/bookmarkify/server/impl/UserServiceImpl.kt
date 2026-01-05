@@ -184,7 +184,7 @@ class UserServiceImpl(
 
     override fun queryUserSetting(uid: String): UserSetting = UserSetting(bacSetting = queryUserBacSetting(uid))
 
-    override fun bacSetting(params: BackSettingParams, uid: String): Boolean {
+    override fun bacSetting(params: BackSettingParams, uid: String): BacSettingVO {
         val entity = backSettingService.ktQuery()
             .eq(BackgroundConfigEntity::uid, uid).one()
             // 如果查询到了，则修改其中的参数
@@ -193,8 +193,7 @@ class UserServiceImpl(
             ?: BackgroundConfigEntity(uid = uid, type = params.type, backgroundLinkId = params.backgroundId)
         backSettingService.saveOrUpdate(entity)
 
-        // TODO 返回当前的背景配置
-        return true
+        return backSettingService.queryShowByUid(uid)
     }
 
     override fun updateInfo(params: UserInfoUpdateParams): Boolean {

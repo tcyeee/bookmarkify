@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
+import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.BackSettingParams
 import top.tcyeee.bookmarkify.entity.DefaultBackgroundsResponse
 import top.tcyeee.bookmarkify.entity.GradientConfigParams
@@ -69,5 +70,5 @@ class BackgroundController(
 
     @PostMapping("selectBackground")
     @Operation(summary = "在已有的渐变色背景和图片背景中选择主页背景")
-    fun bacSetting(@RequestBody params: BackSettingParams): Boolean = userService.bacSetting(params, BaseUtils.uid())
+    fun bacSetting(@RequestBody params: BackSettingParams): BacSettingVO = userService.bacSetting(params, BaseUtils.uid())
 }
