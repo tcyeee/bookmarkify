@@ -79,6 +79,7 @@ type ImagePreset = {
   url: string
   isSystem: boolean
   raw?: any
+  isPreview?: boolean
 }
 
 function extractImageId(file: any): string | null {

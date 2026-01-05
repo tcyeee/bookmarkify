@@ -1,5 +1,5 @@
 <template>
-  <div class="w-full max-w-2xl space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
+  <div class="w-full max-w-2xl space-y-3">
     <div>
       <div class="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">渐变背景</div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
@@ -9,10 +9,10 @@
           type="button"
           :style="{ backgroundImage: `linear-gradient(135deg, ${preset.colors.join(', ')})` }"
           :class="[
-            'group relative aspect-square overflow-hidden rounded-lg border-2 transition-all shadow-sm',
+            'group relative aspect-square overflow-hidden rounded-lg border-2 border-white transition-all shadow-sm',
             isPresetActive(preset)
               ? 'border-blue-500 ring-2 ring-blue-200 ring-offset-2 ring-offset-white dark:ring-offset-slate-900'
-              : 'border-transparent hover:-translate-y-0.5 hover:shadow-md dark:hover:border-slate-700',
+              : ' hover:-translate-y-0.5 hover:shadow-md dark:hover:border-slate-700',
           ]"
           :disabled="applyingPreset"
           @click="selectPreset(preset)">
