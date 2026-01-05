@@ -1,12 +1,12 @@
 package top.tcyeee.bookmarkify.config.websocket
 
-import cn.dev33.satoken.stp.StpUtil
 import org.springframework.http.server.ServerHttpRequest
 import org.springframework.http.server.ServerHttpResponse
 import org.springframework.web.socket.WebSocketHandler
 import org.springframework.web.socket.server.HandshakeInterceptor
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.utils.StpKit
 
 /**
  * WebSocket 握手之前解析TOKEN
@@ -23,7 +23,7 @@ class AuthHandshakeInterceptor : HandshakeInterceptor {
     ): Boolean = true.also {
         request.uri.query
             ?.substringAfter("token=")?.takeWhile { it != '&' }
-            ?.let { StpUtil.getLoginIdByToken(it) }
+            ?.let { StpKit.USER.getLoginIdByToken(it) }
             ?.apply { attributes["uid"] = this }
             ?: throw CommonException(ErrorType.E201)
     }

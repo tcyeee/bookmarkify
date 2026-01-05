@@ -1,7 +1,6 @@
 package top.tcyeee.bookmarkify.utils
 
 import cn.dev33.satoken.session.SaSession
-import cn.dev33.satoken.stp.StpUtil
 import cn.hutool.core.codec.Base64
 import cn.hutool.core.date.LocalDateTimeUtil
 import cn.hutool.core.util.IdUtil
@@ -23,7 +22,7 @@ import java.time.temporal.ChronoUnit
 object BaseUtils {
     /* 用户相关方法 */
     fun uid(): String = user()?.uid ?: throw NullPointerException()
-    fun user(): UserSessionInfo? = StpUtil.getSession().get(SaSession.USER)?.let { UserSessionInfo(it) }
+    fun user(): UserSessionInfo? = StpKit.USER.session.get(SaSession.USER)?.let { UserSessionInfo(it) }
 
     fun sessionRegisterDeviceId(
         request: HttpServletRequest, response: HttpServletResponse, config: ProjectConfig
