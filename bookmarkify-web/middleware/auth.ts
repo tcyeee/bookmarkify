@@ -1,8 +1,9 @@
 import { AuthStatusEnum } from '@typing'
-const userStore = useUserStore()
+import { useAuthStore } from '@stores/auth.store'
+const authStore = useAuthStore()
 // 如果已经有帐户,则跳转到index
 export default defineNuxtRouteMiddleware((to, from) => {
-  const isNone = [AuthStatusEnum.NONE].includes(userStore.authStatus)
+  const isNone = [AuthStatusEnum.NONE].includes(authStore.authStatus)
 
   // 引导页
   const welcomePage = '/welcome'

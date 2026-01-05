@@ -118,13 +118,13 @@
 <script lang="ts" setup>
 import { nextTick, ref, watch } from 'vue'
 import type { UserInfo, LoginMethod } from '@typing'
-import { useUserStore } from '@stores/user.store'
+import { useAuthStore } from '@stores/auth.store'
 import BindPhoneModal from './BindPhoneModal.vue'
 import BindEmailModal from './BindEmailModal.vue'
 
-const userStore = useUserStore()
+const authStore = useAuthStore()
 const selectedMethod = ref<LoginMethod['key']>('phone')
-const account = computed<UserInfo | undefined>(() => userStore.account)
+const account = computed<UserInfo | undefined>(() => authStore.account)
 const phoneModalRef = ref<InstanceType<typeof BindPhoneModal>>()
 const emailModalRef = ref<InstanceType<typeof BindEmailModal>>()
 

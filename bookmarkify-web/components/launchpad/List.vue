@@ -48,14 +48,17 @@ import Draggable from 'vuedraggable'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { bookmarksSort, bookmarksDel } from '@api'
 import { BookmarkOpenMode, type HomeItem, type Bookmark, type BookmarkSortParams } from '@typing'
+import { usePreferenceStore } from '@stores/preference.store'
 
 const sysStore = useSysStore()
 const bookmarkStore = useBookmarkStore()
-const userStore = useUserStore()
+const preferenceStore = usePreferenceStore()
 
 const pageData = computed<Array<HomeItem>>(() => bookmarkStore.homeItems || [])
-const showTitle = computed<boolean>(() => userStore.preference?.showTitle ?? true)
-const bookmarkOpenMode = computed<BookmarkOpenMode>(() => userStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB)
+const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
+const bookmarkOpenMode = computed<BookmarkOpenMode>(
+  () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB,
+)
 
 const data = reactive<{
   subApps?: Array<Bookmark>

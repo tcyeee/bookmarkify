@@ -84,8 +84,9 @@ import { computed, ref, watch } from 'vue'
 import { deleteGradientBackground, resetBacBackground, selectBackground, updateBacColor, updateGradientBackground } from '@api'
 import GradientCustom from './GradientCustom.vue'
 import { BackgroundType, type BacGradientVO, type BacSettingVO, type BackSettingParams, type GradientConfigParams } from '@typing'
+import { usePreferenceStore } from '@stores/preference.store'
 
-const userStore = useUserStore()
+const preferenceStore = usePreferenceStore()
 const sysStore = useSysStore()
 const applyingPreset = ref(false)
 const customDialogRef = ref<HTMLDialogElement | null>(null)
@@ -99,10 +100,10 @@ const gradientDirection = ref<number>(135)
 
 type GradientPreset = BacGradientVO & { isSystem?: boolean }
 
-const hasBackground = computed(() => !!userStore.preference?.imgBacShow)
+const hasBackground = computed(() => !!preferenceStore.preference?.imgBacShow)
 const gradientPresets = computed<GradientPreset[]>(() => [
-  ...(userStore.defaultGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: true })),
-  ...(userStore.userGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: false })),
+  ...(preferenceStore.defaultGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: true })),
+  ...(preferenceStore.userGradientBackgroundsList ?? []).map((g) => ({ ...g, isSystem: false })),
 ])
 
 function syncFromSetting(setting?: BacSettingVO | null) {
@@ -114,10 +115,10 @@ function syncFromSetting(setting?: BacSettingVO | null) {
   }
 }
 
-syncFromSetting(userStore.preference?.imgBacShow)
+syncFromSetting(preferenceStore.preference?.imgBacShow)
 
 watch(
-  () => userStore.preference?.imgBacShow,
+  () => preferenceStore.preference?.imgBacShow,
   (val) => syncFromSetting(val),
   { deep: true }
 )
@@ -125,7 +126,7 @@ watch(
 async function applyPresetBackground(preset: GradientPreset) {
   const setting: BacSettingVO = {
     type: BackgroundType.GRADIENT,
-    backgroundLinkId: preset.id ?? userStore.preference?.imgBacShow?.backgroundLinkId ?? '',
+    backgroundLinkId: preset.id ?? preferenceStore.preference?.imgBacShow?.backgroundLinkId ?? '',
     bacColorGradient: [...preset.colors],
     bacColorDirection: preset.direction ?? 135,
   }
@@ -145,7 +146,7 @@ async function applyPresetBackground(preset: GradientPreset) {
       })
     }
 
-    userStore.upsertPreferenceBackground(updatedSetting)
+    preferenceStore.upsertPreferenceBackground(updatedSetting)
     ElNotification.success({ message: '已应用预设背景' })
   } catch (error: any) {
     ElMessage.error(error.message || '应用预设失败')
@@ -201,10 +202,10 @@ async function handleDeletePreset(preset: GradientPreset) {
 
   try {
     await deleteGradientBackground(preset.id)
-    await userStore.refreshBackgroundConfig()
+    await preferenceStore.refreshBackgroundConfig()
 
     if (isPresetActive(preset)) {
-      const fallback = userStore.defaultGradientBackgroundsList?.[0]
+      const fallback = preferenceStore.defaultGradientBackgroundsList?.[0]
       if (fallback) {
         await selectPreset({ ...fallback, isSystem: true })
       }
@@ -231,7 +232,8 @@ async function handleCustomSave() {
       if (editingPresetWasActive.value) {
         const setting: BacSettingVO = {
           type: BackgroundType.GRADIENT,
-          backgroundLinkId: editingPreset.value.id ?? userStore.preference?.imgBacShow?.backgroundLinkId ?? '',
+          backgroundLinkId:
+            editingPreset.value.id ?? preferenceStore.preference?.imgBacShow?.backgroundLinkId ?? '',
           bacColorGradient: [...customColors.value],
           bacColorDirection: customDirection.value,
         }
@@ -247,7 +249,7 @@ async function handleCustomSave() {
       })
       const setting: BacSettingVO = {
         type: BackgroundType.GRADIENT,
-        backgroundLinkId: userStore.preference?.imgBacShow?.backgroundLinkId ?? '',
+        backgroundLinkId: preferenceStore.preference?.imgBacShow?.backgroundLinkId ?? '',
         bacColorGradient: [...customColors.value],
         bacColorDirection: customDirection.value,
       }
@@ -256,13 +258,14 @@ async function handleCustomSave() {
       ElNotification.success({ message: '自定义渐变已保存' })
     }
 
-    userStore.upsertPreferenceBackground({
+    preferenceStore.upsertPreferenceBackground({
       type: BackgroundType.GRADIENT,
-      backgroundLinkId: editingPreset.value?.id ?? userStore.preference?.imgBacShow?.backgroundLinkId ?? '',
+      backgroundLinkId:
+        editingPreset.value?.id ?? preferenceStore.preference?.imgBacShow?.backgroundLinkId ?? '',
       bacColorGradient: [...gradientColors.value],
       bacColorDirection: gradientDirection.value,
     })
-    await userStore.refreshBackgroundConfig()
+    await preferenceStore.refreshBackgroundConfig()
     closeCustomDialog()
   } catch (error: any) {
     ElMessage.error(error.message || '保存失败')
@@ -277,10 +280,13 @@ async function handleCustomReset() {
   customSaving.value = true
   try {
     await resetBacBackground()
-    const [, latestPreference] = await Promise.all([userStore.refreshBackgroundConfig(), userStore.fetchPreference()])
+    const [, latestPreference] = await Promise.all([
+      preferenceStore.refreshBackgroundConfig(),
+      preferenceStore.fetchPreference(),
+    ])
 
     // 使用最新 store 配置回填当前 UI
-    const setting = latestPreference?.imgBacShow ?? userStore.preference?.imgBacShow
+    const setting = latestPreference?.imgBacShow ?? preferenceStore.preference?.imgBacShow
     if (setting?.type === BackgroundType.GRADIENT && setting.bacColorGradient?.length) {
       const nextColors = [...setting.bacColorGradient]
       const nextDirection = setting.bacColorDirection ?? 135
@@ -288,7 +294,7 @@ async function handleCustomReset() {
       gradientDirection.value = nextDirection
     }
 
-    userStore.upsertPreferenceBackground(setting ?? null)
+    preferenceStore.upsertPreferenceBackground(setting ?? null)
     ElNotification.success({ message: '已恢复默认背景' })
   } catch (error: any) {
     ElMessage.error(error.message || '重置失败，请重试')

@@ -28,7 +28,7 @@
 
 <script lang="ts" setup>
 import { uploadAvatar } from '@api'
-import { useUserStore } from '@stores/user.store'
+import { useAuthStore } from '@stores/auth.store'
 import { imageConfig } from '@config/image.config'
 import AvatarPreview from './AvatarPreview.vue'
 
@@ -42,13 +42,13 @@ const emit = defineEmits<{
   (e: 'update', avatarPath: string): void
 }>()
 
-const userStore = useUserStore()
+const authStore = useAuthStore()
 const fileInputRef = ref<HTMLInputElement>()
 const previewUrl = ref<string | null>(null)
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
 const fallbackInitial = computed(() => {
-  const name = userStore.account?.nickName?.trim()
+  const name = authStore.account?.nickName?.trim()
   if (!name) return '用'
   return name.slice(0, 1)
 })
@@ -103,7 +103,7 @@ async function handleUpload() {
     }
 
     // 刷新用户信息
-    await userStore.refreshUserInfo()
+    await authStore.refreshUserInfo()
   } catch (error: any) {
     ElMessage.error(error.message || '头像上传失败，请重试')
   } finally {

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { SocketTypes, type SocketMessage } from '@typing'
+import { useAuthStore } from './auth.store'
 
 // WebSocket 相关的 Pinia Store（负责建立连接、心跳、重连和消息分发）
 export const useWebSocketStore = defineStore('socket', {
@@ -105,8 +106,8 @@ export const useWebSocketStore = defineStore('socket', {
       this.reconnectTimeout = window.setTimeout(() => {
         this.reconnectAttempts++
 
-        const userStore = useUserStore()
-        const token: string = userStore.account?.token ?? ''
+        const authStore = useAuthStore()
+        const token: string = authStore.account?.token ?? ''
         this.connect(token) // 重新连接
       }, delay)
     },

@@ -47,9 +47,10 @@
 import { ref, watch, computed } from 'vue'
 import { useMagicKeys, onKeyStroke } from '@vueuse/core'
 import { Command } from 'vue-command-palette'
+import { useAuthStore } from '@stores/auth.store'
 
 const sysStore = useSysStore()
-const userStore = useUserStore()
+const authStore = useAuthStore()
 
 type PaletteItem = {
   value: string
@@ -76,7 +77,7 @@ groups.set('常用操作', [
   {
     value: 'go-index',
     label: '前往首页',
-    hint: `打开主页${userStore.authStatus === 'NONE' ? ' (请先登陆)' : ''}`,
+    hint: `打开主页${authStore.authStatus === 'NONE' ? ' (请先登陆)' : ''}`,
     run: () => {
       navigate('/')
     },
@@ -84,7 +85,7 @@ groups.set('常用操作', [
   {
     value: 'go-setting',
     label: '前往设置',
-    hint: `打开设置页面${userStore.authStatus === 'NONE' ? ' (请先登陆)' : ''}`,
+    hint: `打开设置页面${authStore.authStatus === 'NONE' ? ' (请先登陆)' : ''}`,
     run: () => {
       navigate('/setting')
     },
@@ -96,7 +97,7 @@ groups.set('账号操作', [
     label: '退出登陆',
     hint: '退出当前账号',
     run: async () => {
-      await userStore.logout()
+      await authStore.logout()
       close()
     },
   },

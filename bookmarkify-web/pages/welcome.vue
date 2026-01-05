@@ -134,17 +134,18 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import FloatingBookmarks from '../components/welcome/FloatingBookmarks.vue'
 import UiScrollReveal from '../components/stunning/ScrollReveal.vue'
 import ShimmerText from '../components/stunning/ShimmerText.vue'
+import { useAuthStore } from '@stores/auth.store'
 
 definePageMeta({ layout: 'explore' })
 
-const userStore = useUserStore()
+const authStore = useAuthStore()
 const startLoading = ref(false)
 
 async function startUse() {
   if (startLoading.value) return
   startLoading.value = true
   try {
-    await userStore.loginOrRegister()
+    await authStore.loginOrRegister()
     await navigateTo('/')
   } finally {
     startLoading.value = false

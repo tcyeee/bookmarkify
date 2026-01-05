@@ -150,10 +150,11 @@
 
 <script lang="ts" setup>
 import { captchaVerifySms, captchaImage, captchaSendSms } from '@api'
+import { useAuthStore } from '@stores/auth.store'
 const props = defineProps<{ phone?: string; disabled?: boolean; hideTrigger?: boolean }>()
 const emit = defineEmits<{ (e: 'success', phone: string): void }>()
 
-const userStore = useUserStore()
+const authStore = useAuthStore()
 const sysStore = useSysStore()
 const dialogRef = ref<HTMLDialogElement>()
 const smsCodeInputRef = ref<HTMLInputElement>()
@@ -227,7 +228,7 @@ async function submit() {
   if (!isPhoneValid.value || !isSmsValid.value) return
   loading.value = true
   const phoneValue = form.phone.trim()
-  userStore
+  authStore
     .loginWithPhone({ smsCode: form.smsCode, phone: phoneValue })
     .then(() => {
       ElNotification.success({ message: '手机号绑定成功' })
