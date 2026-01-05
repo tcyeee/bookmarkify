@@ -15,8 +15,13 @@ import top.tcyeee.bookmarkify.utils.StpKit
 class SaTokenConfigure : WebMvcConfigurer {
     // 注册拦截器
     override fun addInterceptors(registry: InterceptorRegistry) {
-        // 如果是/admin/**,则使用admin解析
-        // 否则使用 User解析
-        registry.addInterceptor(SaInterceptor { StpKit.USER.checkLogin() }).addPathPatterns("/**")
+        // USER 模块鉴权：拦截所有路径，排除 /admin/**
+        registry.addInterceptor(SaInterceptor { StpKit.USER.checkLogin() })
+            .addPathPatterns("/**")
+            .excludePathPatterns("/admin/**")
+
+        // ADMIN 模块鉴权：仅拦截 /admin/**
+        registry.addInterceptor(SaInterceptor { StpKit.ADMIN.checkLogin() })
+            .addPathPatterns("/admin/**")
     }
 }

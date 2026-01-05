@@ -16,12 +16,12 @@ export default defineNuxtConfig({
     // '/': { prerender: true }
   },
 
-  future: {
-    compatibilityVersion: 4
-  },
-
   devServer: {
     port: 3010
+  },
+
+  future: {
+    compatibilityVersion: 4
   },
 
   compatibilityDate: '2025-01-15',

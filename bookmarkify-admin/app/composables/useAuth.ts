@@ -2,7 +2,7 @@ export const useAuth = () => {
   const token = useCookie('auth_token')
   const user = useState<{ username: string } | null>('auth_user', () => null)
 
-  const login = async (form: { username: string; password: string }) => {
+  const login = async (form: { username: string, password: string }) => {
     // Mock API delay
     await new Promise(resolve => setTimeout(resolve, 500))
 

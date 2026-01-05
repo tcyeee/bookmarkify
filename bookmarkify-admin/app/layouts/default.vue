@@ -1,12 +1,19 @@
 <template>
   <el-container class="h-screen w-full">
-    <el-aside width="220px" class="border-r border-gray-200 bg-white">
+    <el-aside
+      width="220px"
+      class="border-r border-gray-200 bg-white"
+    >
       <div class="h-16 flex items-center justify-center border-b border-gray-200">
         <h1 class="text-xl font-bold text-primary-600">
           Bookmarkify
         </h1>
       </div>
-      <el-menu router :default-active="$route.path" class="border-r-0">
+      <el-menu
+        router
+        :default-active="$route.path"
+        class="border-r-0"
+      >
         <el-menu-item index="/">
           <el-icon>
             <Document />
@@ -22,7 +29,11 @@
         </div>
         <div class="flex items-center gap-4">
           <span class="text-sm text-gray-500">Admin</span>
-          <el-button type="danger" link @click="handleLogout">
+          <el-button
+            type="danger"
+            link
+            @click="handleLogout"
+          >
             退出登录
           </el-button>
         </div>
@@ -35,10 +46,10 @@
 </template>
 
 <script setup>
-const { logout } = useAuth();
+const { logout } = useAuth()
 const handleLogout = () => {
-  logout();
-};
+  logout()
+}
 </script>
 
 <style>

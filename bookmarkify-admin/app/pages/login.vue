@@ -2,17 +2,38 @@
   <div class="flex items-center justify-center h-screen bg-gray-100">
     <el-card class="w-[400px] shadow-lg">
       <template #header>
-        <div class="text-center font-bold text-xl py-2">系统登录</div>
+        <div class="text-center font-bold text-xl py-2">
+          系统登录
+        </div>
       </template>
-      <el-form :model="form" @submit.prevent="handleLogin" size="large">
+      <el-form
+        :model="form"
+        size="large"
+        @submit.prevent="handleLogin"
+      >
         <el-form-item>
-          <el-input v-model="form.username" placeholder="账号 (admin)" prefix-icon="User" />
+          <el-input
+            v-model="form.username"
+            placeholder="账号 (admin)"
+            prefix-icon="User"
+          />
         </el-form-item>
         <el-form-item>
-          <el-input v-model="form.password" type="password" placeholder="密码 (admin)" show-password prefix-icon="Lock" />
+          <el-input
+            v-model="form.password"
+            type="password"
+            placeholder="密码 (admin)"
+            show-password
+            prefix-icon="Lock"
+          />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" class="w-full" :loading="loading" @click="handleLogin">
+          <el-button
+            type="primary"
+            class="w-full"
+            :loading="loading"
+            @click="handleLogin"
+          >
             登录
           </el-button>
         </el-form-item>
@@ -26,31 +47,31 @@
 
 <script setup>
 definePageMeta({
-  layout: false,
-});
+  layout: false
+})
 
 const form = reactive({
-  username: "",
-  password: "",
-});
-const loading = ref(false);
-const { login } = useAuth();
+  username: '',
+  password: ''
+})
+const loading = ref(false)
+const { login } = useAuth()
 
 const handleLogin = async () => {
   if (!form.username || !form.password) {
-    ElMessage.warning("请输入账号和密码");
-    return;
+    ElMessage.warning('请输入账号和密码')
+    return
   }
 
-  loading.value = true;
+  loading.value = true
   try {
-    await login(form);
-    ElMessage.success("登录成功");
-    navigateTo("/");
+    await login(form)
+    ElMessage.success('登录成功')
+    navigateTo('/')
   } catch (e) {
-    ElMessage.error(e.message || "登录失败");
+    ElMessage.error(e.message || '登录失败')
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 </script>
