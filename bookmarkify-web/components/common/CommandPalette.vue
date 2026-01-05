@@ -21,18 +21,18 @@
             :key="item.value"
             :data-value="item.value"
             @select="handleSelect"
-            class="group mx-1 cursor-pointer rounded-md outline-none transition hover:bg-slate-50 aria-selected:bg-slate-100 focus:bg-slate-100 dark:hover:bg-slate-800 dark:aria-selected:bg-slate-800 dark:focus:bg-slate-800">
+            class="group mx-1 cursor-pointer rounded-md outline-none transition hover:bg-slate-50 aria-selected:bg-primary/10 focus:bg-primary/10 dark:hover:bg-slate-800 dark:aria-selected:bg-primary/20 dark:focus:bg-primary/20">
             <div class="flex items-center justify-between px-3 py-2.5 text-sm">
               <div class="flex items-center gap-3 text-slate-800 dark:text-slate-100">
                 <span
                   v-if="item.iconLeft"
                   :class="[
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400 ring-1 ring-slate-200 transition group-hover:text-sky-500 group-aria-selected:text-sky-500 dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-700',
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400 ring-1 ring-slate-200 transition group-hover:text-primary group-aria-selected:text-primary dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-700',
                     item.iconLeft,
                   ]" />
                 <div class="flex flex-col">
                   <span
-                    class="font-medium group-aria-selected:text-sky-600 group-hover:text-sky-600 dark:group-aria-selected:text-sky-400 dark:group-hover:text-sky-400">
+                    class="font-medium group-aria-selected:text-primary group-hover:text-primary dark:group-aria-selected:text-primary dark:group-hover:text-primary">
                     {{ item.label }}
                   </span>
                   <span v-if="item.hint" class="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{{ item.hint }}</span>
