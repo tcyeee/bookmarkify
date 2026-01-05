@@ -101,9 +101,11 @@
 <script lang="ts" setup>
 import { bookmarksAddOne, bookmarksLinkOne, bookmarksSearch } from '@api'
 import type { HomeItem } from '@typing'
+import { useBookmarkStore } from '@stores/bookmark.store'
 import { useDebounceFn } from '@vueuse/core'
 
 const sysStore = useSysStore()
+const bookmarkStore = useBookmarkStore()
 
 const emit = defineEmits<{ (e: 'success', res: HomeItem): void }>()
 
@@ -166,7 +168,7 @@ function addOne() {
   }
 
   bookmarksAddOne(data.input).then((res: HomeItem) => {
-    emit('success', res)
+    handleSuccess(res)
     data.notice = '添加成功!'
     data.input = undefined
     data.urlIsTrue = false
@@ -191,7 +193,7 @@ function checkInput() {
 
 function selectBookmark(item: any) {
   bookmarksLinkOne(item.id).then((res: HomeItem) => {
-    emit('success', res)
+    handleSuccess(res)
     data.notice = '关联成功!'
     data.input = undefined
     searchResults.value = []
@@ -201,6 +203,16 @@ function selectBookmark(item: any) {
       sysStore.addBookmarkDialogVisible = false
     }, 500)
   })
+}
+
+// 统一处理成功回调：通知外部并更新本地 store，用于立即显示占位或新书签
+function handleSuccess(res: HomeItem) {
+  emit('success', res)
+  if (res?.typeApp) {
+    bookmarkStore.homeItems.push(res)
+  } else {
+    bookmarkStore.addEmpty(res)
+  }
 }
 
 function isUrl(url: string): boolean {
