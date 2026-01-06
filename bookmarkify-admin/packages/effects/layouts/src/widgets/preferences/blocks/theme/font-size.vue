@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { watch } from 'vue';
 
-import { $t } from '@vben/locales';
 
 import {
   NumberField,
@@ -56,7 +55,7 @@ watch(
       <span class="text-muted-foreground whitespace-nowrap text-xs">px</span>
     </div>
     <div class="text-muted-foreground text-xs">
-      {{ $t('preferences.theme.fontSizeTip') }}
+      {{ '调整全局字体大小，实时预览效果' }}
     </div>
   </div>
 </template>

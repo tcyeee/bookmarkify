@@ -5,7 +5,6 @@ import type {
   SelectOption,
 } from '@vben/types';
 
-import { $t } from '@vben/locales';
 
 import SelectItem from '../select-item.vue';
 import SwitchItem from '../switch-item.vue';
@@ -20,34 +19,34 @@ const headerMenuAlign =
 
 const localeItems: SelectOption[] = [
   {
-    label: $t('preferences.header.modeStatic'),
+    label: '静止',
     value: 'static',
   },
   {
-    label: $t('preferences.header.modeFixed'),
+    label: '固定',
     value: 'fixed',
   },
   {
-    label: $t('preferences.header.modeAuto'),
+    label: '自动隐藏和显示',
     value: 'auto',
   },
   {
-    label: $t('preferences.header.modeAutoScroll'),
+    label: '滚动隐藏和显示',
     value: 'auto-scroll',
   },
 ];
 
 const headerMenuAlignItems: SelectOption[] = [
   {
-    label: $t('preferences.header.menuAlignStart'),
+    label: '左侧',
     value: 'start',
   },
   {
-    label: $t('preferences.header.menuAlignCenter'),
+    label: '居中',
     value: 'center',
   },
   {
-    label: $t('preferences.header.menuAlignEnd'),
+    label: '右侧',
     value: 'end',
   },
 ];
@@ -55,20 +54,20 @@ const headerMenuAlignItems: SelectOption[] = [
 
 <template>
   <SwitchItem v-model="headerEnable" :disabled="disabled">
-    {{ $t('preferences.header.visible') }}
+    {{ '显示顶栏' }}
   </SwitchItem>
   <SelectItem
     v-model="headerMode"
     :disabled="!headerEnable"
     :items="localeItems"
   >
-    {{ $t('preferences.mode') }}
+    {{ '模式' }}
   </SelectItem>
   <ToggleItem
     v-model="headerMenuAlign"
     :disabled="!headerEnable"
     :items="headerMenuAlignItems"
   >
-    {{ $t('preferences.header.menuAlign') }}
+    {{ '菜单位置' }}
   </ToggleItem>
 </template>

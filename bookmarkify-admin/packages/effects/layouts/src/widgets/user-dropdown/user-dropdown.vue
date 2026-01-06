@@ -7,7 +7,6 @@ import { computed, useTemplateRef, watch } from 'vue';
 
 import { useHoverToggle } from '@vben/hooks';
 import { LockKeyhole, LogOut } from '@vben/icons';
-import { $t } from '@vben/locales';
 import { preferences, usePreferences } from '@vben/preferences';
 import { useAccessStore } from '@vben/stores';
 import { isWindowsOs } from '@vben/utils';
@@ -176,16 +175,16 @@ if (enableShortcutKey.value) {
   />
 
   <LogoutModal
-    :cancel-text="$t('common.cancel')"
-    :confirm-text="$t('common.confirm')"
+    :cancel-text="'取消'"
+    :confirm-text="'确认'"
     :fullscreen-button="false"
-    :title="$t('common.prompt')"
+    :title="'提示'"
     centered
     content-class="px-8 min-h-10"
     footer-class="border-none mb-3 mr-3"
     header-class="border-none"
   >
-    {{ $t('ui.widgets.logoutTip') }}
+    {{ '是否退出登录？' }}
   </LogoutModal>
 
   <DropdownMenu v-model:open="openPopover">
@@ -240,7 +239,7 @@ if (enableShortcutKey.value) {
           @click="handleOpenLock"
         >
           <LockKeyhole class="mr-2 size-4" />
-          {{ $t('ui.widgets.lockScreen.title') }}
+          {{ '锁定屏幕' }}
           <DropdownMenuShortcut v-if="enableLockScreenShortcutKey">
             {{ altView }} L
           </DropdownMenuShortcut>
@@ -251,7 +250,7 @@ if (enableShortcutKey.value) {
           @click="handleLogout"
         >
           <LogOut class="mr-2 size-4" />
-          {{ $t('common.logout') }}
+          {{ '退出登录' }}
           <DropdownMenuShortcut v-if="enableLogoutShortcutKey">
             {{ altView }} Q
           </DropdownMenuShortcut>

@@ -10,7 +10,6 @@ import { ElMessage } from 'element-plus';
 
 import { getAllMenusApi } from '#/api';
 import { BasicLayout, IFrameView } from '#/layouts';
-import { $t } from '#/locales';
 
 const forbiddenComponent = () => import('#/views/_core/fallback/forbidden.vue');
 
@@ -27,7 +26,7 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
     fetchMenuListAsync: async () => {
       ElMessage({
         duration: 1500,
-        message: `${$t('common.loadingMenu')}...`,
+        message: '加载菜单中...',
       });
       return await getAllMenusApi();
     },

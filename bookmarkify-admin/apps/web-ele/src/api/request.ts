@@ -66,7 +66,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       const accessStore = useAccessStore();
 
       config.headers.Authorization = formatToken(accessStore.accessToken);
-      config.headers['Accept-Language'] = preferences.app.locale;
+      config.headers['Accept-Language'] = 'zh-CN';
       return config;
     },
   });

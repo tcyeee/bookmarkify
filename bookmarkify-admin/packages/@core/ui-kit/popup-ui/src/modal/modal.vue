@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { ExtendedModalApi, ModalProps } from './modal';
+import type { ExtendedModalApi, ModalProps } from "./modal";
 
 import {
   computed,
@@ -10,14 +10,10 @@ import {
   unref,
   useId,
   watch,
-} from 'vue';
+} from "vue";
 
-import {
-  useIsMobile,
-  usePriorityValues,
-  useSimpleLocale,
-} from '@vben-core/composables';
-import { Expand, Shrink } from '@vben-core/icons';
+import { useIsMobile, usePriorityValues } from "@vben-core/composables";
+import { Expand, Shrink } from "@vben-core/icons";
 import {
   Dialog,
   DialogContent,
@@ -30,12 +26,12 @@ import {
   VbenIconButton,
   VbenLoading,
   VisuallyHidden,
-} from '@vben-core/shadcn-ui';
-import { ELEMENT_ID_MAIN_CONTENT } from '@vben-core/shared/constants';
-import { globalShareState } from '@vben-core/shared/global-state';
-import { cn } from '@vben-core/shared/utils';
+} from "@vben-core/shadcn-ui";
+import { ELEMENT_ID_MAIN_CONTENT } from "@vben-core/shared/constants";
+import { globalShareState } from "@vben-core/shared/global-state";
+import { cn } from "@vben-core/shared/utils";
 
-import { useModalDraggable } from './use-modal-draggable';
+import { useModalDraggable } from "./use-modal-draggable";
 
 interface Props extends ModalProps {
   modalApi?: ExtendedModalApi;
@@ -57,9 +53,8 @@ const footerRef = ref();
 
 const id = useId();
 
-provide('DISMISSABLE_MODAL_ID', id);
+provide("DISMISSABLE_MODAL_ID", id);
 
-const { $t } = useSimpleLocale();
 const { isMobile } = useIsMobile();
 const state = props.modalApi?.useStore?.();
 
@@ -101,11 +96,11 @@ const {
 const shouldFullscreen = computed(() => fullscreen.value || isMobile.value);
 
 const shouldDraggable = computed(
-  () => draggable.value && !shouldFullscreen.value && header.value,
+  () => draggable.value && !shouldFullscreen.value && header.value
 );
 
 const shouldCentered = computed(
-  () => centered.value && !shouldFullscreen.value,
+  () => centered.value && !shouldFullscreen.value
 );
 
 const getAppendTo = computed(() => {
@@ -119,7 +114,7 @@ const { dragging, transform } = useModalDraggable(
   headerRef,
   shouldDraggable,
   getAppendTo,
-  shouldCentered,
+  shouldCentered
 );
 
 const firstOpened = ref(false);
@@ -142,7 +137,7 @@ watch(
         : `translate(${offsetX}px, ${offsetY}px)`;
     }
   },
-  { immediate: true },
+  { immediate: true }
 );
 
 // watch(
@@ -228,15 +223,8 @@ function handleClosed() {
 }
 </script>
 <template>
-  <Dialog
-    :modal="false"
-    :open="state?.isOpen"
-    @update:open="() => (!submitting ? modalApi?.close() : undefined)"
-  >
-    <DialogContent
-      ref="contentRef"
-      :append-to="getAppendTo"
-      :class="
+  <Dialog :modal="false" :open="state?.isOpen" @update:open="() => (!submitting ? modalApi?.close() : undefined)">
+    <DialogContent ref="contentRef" :append-to="getAppendTo" :class="
         cn(
           'left-0 right-0 top-[10vh] mx-auto flex max-h-[80%] w-[520px] flex-col p-0',
           shouldFullscreen ? 'sm:rounded-none' : 'sm:rounded-[var(--radius)]',
@@ -251,28 +239,8 @@ function handleClosed() {
             hidden: isClosed,
           },
         )
-      "
-      :force-mount="getForceMount"
-      :modal="modal"
-      :open="state?.isOpen"
-      :show-close="closable"
-      :animation-type="animationType"
-      :z-index="zIndex"
-      :overlay-blur="overlayBlur"
-      close-class="top-3"
-      @close-auto-focus="handleFocusOutside"
-      @closed="handleClosed"
-      :close-disabled="submitting"
-      @escape-key-down="escapeKeyDown"
-      @focus-outside="handleFocusOutside"
-      @interact-outside="interactOutside"
-      @open-auto-focus="handleOpenAutoFocus"
-      @opened="handleOpened"
-      @pointer-down-outside="pointerDownOutside"
-    >
-      <DialogHeader
-        ref="headerRef"
-        :class="
+      " :force-mount="getForceMount" :modal="modal" :open="state?.isOpen" :show-close="closable" :animation-type="animationType" :z-index="zIndex" :overlay-blur="overlayBlur" close-class="top-3" @close-auto-focus="handleFocusOutside" @closed="handleClosed" :close-disabled="submitting" @escape-key-down="escapeKeyDown" @focus-outside="handleFocusOutside" @interact-outside="interactOutside" @open-auto-focus="handleOpenAutoFocus" @opened="handleOpened" @pointer-down-outside="pointerDownOutside">
+      <DialogHeader ref="headerRef" :class="
           cn(
             'px-5 py-4',
             {
@@ -282,8 +250,7 @@ function handleClosed() {
             },
             headerClass,
           )
-        "
-      >
+        ">
         <DialogTitle v-if="title" class="text-left">
           <slot name="title">
             {{ title }}
@@ -305,30 +272,20 @@ function handleClosed() {
           <DialogDescription v-if="!description" />
         </VisuallyHidden>
       </DialogHeader>
-      <div
-        ref="wrapperRef"
-        :class="
+      <div ref="wrapperRef" :class="
           cn('relative min-h-40 flex-1 overflow-y-auto p-3', contentClass, {
             'pointer-events-none': showLoading || submitting,
           })
-        "
-      >
+        ">
         <slot></slot>
       </div>
       <VbenLoading v-if="showLoading || submitting" spinning />
-      <VbenIconButton
-        v-if="fullscreenButton"
-        class="flex-center absolute right-10 top-3 hidden size-6 rounded-full px-1 text-lg text-foreground/80 opacity-70 transition-opacity hover:bg-accent hover:text-accent-foreground hover:opacity-100 focus:outline-none disabled:pointer-events-none sm:block"
-        @click="handleFullscreen"
-      >
+      <VbenIconButton v-if="fullscreenButton" class="flex-center absolute right-10 top-3 hidden size-6 rounded-full px-1 text-lg text-foreground/80 opacity-70 transition-opacity hover:bg-accent hover:text-accent-foreground hover:opacity-100 focus:outline-none disabled:pointer-events-none sm:block" @click="handleFullscreen">
         <Shrink v-if="fullscreen" class="size-3.5" />
         <Expand v-else class="size-3.5" />
       </VbenIconButton>
 
-      <DialogFooter
-        v-if="showFooter"
-        ref="footerRef"
-        :class="
+      <DialogFooter v-if="showFooter" ref="footerRef" :class="
           cn(
             'flex-row items-center justify-end p-2',
             {
@@ -336,31 +293,18 @@ function handleClosed() {
             },
             footerClass,
           )
-        "
-      >
+        ">
         <slot name="prepend-footer"></slot>
         <slot name="footer">
-          <component
-            :is="components.DefaultButton || VbenButton"
-            v-if="showCancelButton"
-            variant="ghost"
-            :disabled="submitting"
-            @click="() => modalApi?.onCancel()"
-          >
+          <component :is="components.DefaultButton || VbenButton" v-if="showCancelButton" variant="ghost" :disabled="submitting" @click="() => modalApi?.onCancel()">
             <slot name="cancelText">
-              {{ cancelText || $t('cancel') }}
+              {{ cancelText || '取消' }}
             </slot>
           </component>
           <slot name="center-footer"></slot>
-          <component
-            :is="components.PrimaryButton || VbenButton"
-            v-if="showConfirmButton"
-            :disabled="confirmDisabled"
-            :loading="confirmLoading || submitting"
-            @click="() => modalApi?.onConfirm()"
-          >
+          <component :is="components.PrimaryButton || VbenButton" v-if="showConfirmButton" :disabled="confirmDisabled" :loading="confirmLoading || submitting" @click="() => modalApi?.onConfirm()">
             <slot name="confirmText">
-              {{ confirmText || $t('confirm') }}
+              {{ confirmText || '确认' }}
             </slot>
           </component>
         </slot>

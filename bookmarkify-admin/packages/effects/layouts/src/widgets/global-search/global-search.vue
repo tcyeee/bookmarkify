@@ -10,7 +10,6 @@ import {
   MdiKeyboardEsc,
   Search,
 } from '@vben/icons';
-import { $t } from '@vben/locales';
 import { isWindowsOs } from '@vben/utils';
 
 import { useVbenModal } from '@vben-core/popup-ui';
@@ -107,7 +106,7 @@ onMounted(() => {
           <input
             ref="searchInputRef"
             v-model="keyword"
-            :placeholder="$t('ui.widgets.search.searchNavigate')"
+            :placeholder="'搜索导航菜单'"
             class="ring-none placeholder:text-muted-foreground w-[80%] rounded-md border border-none bg-transparent p-2 pl-0 text-sm font-normal outline-none ring-0 ring-offset-transparent focus-visible:ring-transparent"
           />
         </div>
@@ -118,16 +117,16 @@ onMounted(() => {
         <div class="flex w-full justify-start text-xs">
           <div class="mr-2 flex items-center">
             <CornerDownLeft class="mr-1 size-3" />
-            {{ $t('ui.widgets.search.select') }}
+            {{ '选择' }}
           </div>
           <div class="mr-2 flex items-center">
             <ArrowUp class="mr-1 size-3" />
             <ArrowDown class="mr-1 size-3" />
-            {{ $t('ui.widgets.search.navigate') }}
+            {{ '导航' }}
           </div>
           <div class="flex items-center">
             <MdiKeyboardEsc class="mr-1 size-3" />
-            {{ $t('ui.widgets.search.close') }}
+            {{ '关闭' }}
           </div>
         </div>
       </template>
@@ -142,7 +141,7 @@ onMounted(() => {
       <span
         class="text-muted-foreground group-hover:text-foreground hidden text-xs duration-300 md:block"
       >
-        {{ $t('ui.widgets.search.title') }}
+        {{ '搜索' }}
       </span>
       <span
         v-if="enableShortcutKey"

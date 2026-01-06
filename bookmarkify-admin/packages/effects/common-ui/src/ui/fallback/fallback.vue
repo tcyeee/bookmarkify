@@ -5,7 +5,6 @@ import { computed, defineAsyncComponent } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { ArrowLeft, RotateCw } from '@vben/icons';
-import { $t } from '@vben/locales';
 
 import { VbenButton } from '@vben-core/shadcn-ui';
 
@@ -41,19 +40,19 @@ const titleText = computed(() => {
 
   switch (props.status) {
     case '403': {
-      return $t('ui.fallback.forbidden');
+      return '哎呀！访问被拒绝';
     }
     case '404': {
-      return $t('ui.fallback.pageNotFound');
+      return '哎呀！未找到页面';
     }
     case '500': {
-      return $t('ui.fallback.internalError');
+      return '哎呀！出错了';
     }
     case 'coming-soon': {
-      return $t('ui.fallback.comingSoon');
+      return '即将推出';
     }
     case 'offline': {
-      return $t('ui.fallback.offlineError');
+      return '哎呀！网络错误';
     }
     default: {
       return '';
@@ -67,16 +66,16 @@ const descText = computed(() => {
   }
   switch (props.status) {
     case '403': {
-      return $t('ui.fallback.forbiddenDesc');
+      return '抱歉，您没有权限访问此页面。';
     }
     case '404': {
-      return $t('ui.fallback.pageNotFoundDesc');
+      return '抱歉，我们无法找到您要找的页面。';
     }
     case '500': {
-      return $t('ui.fallback.internalErrorDesc');
+      return '抱歉，服务器遇到错误。';
     }
     case 'offline': {
-      return $t('ui.fallback.offlineErrorDesc');
+      return '抱歉，无法连接到互联网，请检查您的网络连接并重试。';
     }
     default: {
       return '';
@@ -153,11 +152,11 @@ function refresh() {
       <slot v-if="$slots.action" name="action"></slot>
       <VbenButton v-else-if="showBack" size="lg" @click="back">
         <ArrowLeft class="mr-2 size-4" />
-        {{ $t('common.backToHome') }}
+        {{ '返回首页' }}
       </VbenButton>
       <VbenButton v-else-if="showRefresh" size="lg" @click="refresh">
         <RotateCw class="mr-2 size-4" />
-        {{ $t('common.refresh') }}
+        {{ '刷新' }}
       </VbenButton>
     </div>
   </div>

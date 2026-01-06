@@ -2,7 +2,6 @@
 import type { CaptchaPoint, PointSelectionCaptchaProps } from '../types';
 
 import { RotateCw } from '@vben/icons';
-import { $t } from '@vben/locales';
 
 import { VbenButton, VbenIconButton } from '@vben-core/shadcn-ui';
 
@@ -122,12 +121,12 @@ function handleConfirm() {
     @click="handleClick"
   >
     <template #title>
-      <slot name="title">{{ $t('ui.captcha.title') }}</slot>
+      <slot name="title">{{ '请完成安全验证' }}</slot>
     </template>
 
     <template #extra>
       <VbenIconButton
-        :aria-label="$t('ui.captcha.refreshAriaLabel')"
+        :aria-label="'刷新验证码'"
         class="ml-1"
         @click="handleRefresh"
       >
@@ -135,19 +134,19 @@ function handleConfirm() {
       </VbenIconButton>
       <VbenButton
         v-if="showConfirm"
-        :aria-label="$t('ui.captcha.confirmAriaLabel')"
+        :aria-label="'确认选择'"
         class="ml-2"
         size="sm"
         @click="handleConfirm"
       >
-        {{ $t('ui.captcha.confirm') }}
+        {{ '确认' }}
       </VbenButton>
     </template>
 
     <div
       v-for="(point, index) in points"
       :key="index"
-      :aria-label="$t('ui.captcha.pointAriaLabel') + (index + 1)"
+      :aria-label="'点击点' + (index + 1)"
       :style="{
         top: `${point.y - POINT_OFFSET}px`,
         left: `${point.x - POINT_OFFSET}px`,
@@ -161,7 +160,7 @@ function handleConfirm() {
     <template #footer>
       <img
         v-if="hintImage"
-        :alt="$t('ui.captcha.alt')"
+        :alt="'支持img标签src属性值'"
         :src="hintImage"
         class="border-border h-10 w-full rounded border"
       />
@@ -169,7 +168,7 @@ function handleConfirm() {
         v-else-if="hintText"
         class="border-border flex-center h-10 w-full rounded border"
       >
-        {{ `${$t('ui.captcha.clickInOrder')}` + `【${hintText}】` }}
+        {{ `${'请依次点击'}` + `【${hintText}】` }}
       </div>
     </template>
   </CaptchaCard>

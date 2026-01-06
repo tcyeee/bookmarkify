@@ -6,7 +6,6 @@ import type { VbenDropdownMenuItem } from '@vben-core/shadcn-ui';
 import { computed } from 'vue';
 
 import { InspectionPanel, PanelLeft, PanelRight } from '@vben/icons';
-import { $t } from '@vben/locales';
 import {
   preferences,
   updatePreferences,
@@ -22,17 +21,17 @@ defineOptions({
 const menus = computed((): VbenDropdownMenuItem[] => [
   {
     icon: PanelLeft,
-    label: $t('authentication.layout.alignLeft'),
+    label: '居左',
     value: 'panel-left',
   },
   {
     icon: InspectionPanel,
-    label: $t('authentication.layout.center'),
+    label: '居中',
     value: 'panel-center',
   },
   {
     icon: PanelRight,
-    label: $t('authentication.layout.alignRight'),
+    label: '居右',
     value: 'panel-right',
   },
 ]);
