@@ -4,6 +4,8 @@ server:
 logging:
   level:
     root: INFO
+#    org.apache.kafka: warn
+#    org.apache.kafka.clients.producer: warn
 
 mybatis-plus:
   global-config:

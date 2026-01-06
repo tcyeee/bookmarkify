@@ -1,14 +1,12 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import org.slf4j.LoggerFactory
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.entity.enums.KafkaTopicType
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
 
 @Service
-@ConditionalOnProperty(prefix = "bookmarkify.kafka", name = ["enabled"], havingValue = "true")
 class KafkaMessageServiceImpl(
     private val kafkaTemplate: KafkaTemplate<String, String>,
 ) : IKafkaMessageService {
