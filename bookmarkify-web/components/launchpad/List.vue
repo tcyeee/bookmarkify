@@ -1,11 +1,11 @@
 <template>
-  <div class="flex flex-wrap flex-start gap-12">
+  <div :class="['flex flex-wrap flex-start', layoutGapClass]">
     <!-- 二级菜单的返回 -->
     <!-- <BookmarkReturn v-show="data.subItemId" @click="backTopLayer()" /> -->
 
     <!-- 一级菜单 -->
     <draggable
-      class="flex flex-wrap flex-start gap-12"
+      :class="['flex flex-wrap flex-start', layoutGapClass]"
       v-show="!data.subItemId"
       v-model="pageData"
       v-bind="dragOptions"
@@ -47,7 +47,7 @@
 import Draggable from 'vuedraggable'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { bookmarksSort, bookmarksDel } from '@api'
-import { BookmarkOpenMode, type HomeItem, type Bookmark, type BookmarkSortParams } from '@typing'
+import { BookmarkLayoutMode, BookmarkOpenMode, type HomeItem, type Bookmark, type BookmarkSortParams } from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
 
 const sysStore = useSysStore()
@@ -59,6 +59,18 @@ const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle 
 const bookmarkOpenMode = computed<BookmarkOpenMode>(
   () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB,
 )
+const layoutGapClass = computed<string>(() => {
+  const layout = preferenceStore.preference?.bookmarkLayout ?? BookmarkLayoutMode.DEFAULT
+  switch (layout) {
+    case BookmarkLayoutMode.COMPACT:
+      return 'gap-6'
+    case BookmarkLayoutMode.SPACIOUS:
+      return 'gap-16'
+    case BookmarkLayoutMode.DEFAULT:
+    default:
+      return 'gap-12'
+  }
+})
 
 const data = reactive<{
   subApps?: Array<Bookmark>
