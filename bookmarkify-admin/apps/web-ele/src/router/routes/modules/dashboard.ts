@@ -32,6 +32,32 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  {
+    meta: {
+      icon: 'lucide:bookmark',
+      title: '书签管理',
+    },
+    name: 'Bookmark',
+    path: '/bookmark',
+    children: [
+      {
+        name: 'BookmarkCleaning',
+        path: '/bookmark/cleaning',
+        component: () => import('#/views/bookmark/cleaning/index.vue'),
+        meta: {
+          title: '书签清洗',
+        },
+      },
+      {
+        name: 'BookmarkLiveness',
+        path: '/bookmark/liveness',
+        component: () => import('#/views/bookmark/liveness/index.vue'),
+        meta: {
+          title: '书签活性检测',
+        },
+      },
+    ],
+  },
 ];
 
 export default routes;

@@ -182,15 +182,13 @@ const logoSrc = computed(() => {
   filter: blur(100px);
 }
 
-.dark {
-  .login-background {
-    background: linear-gradient(
-      154deg,
-      #07070915 30%,
-      hsl(var(--primary) / 20%) 48%,
-      #07070915 64%
-    );
-    filter: blur(100px);
-  }
+.dark .login-background {
+  background: linear-gradient(
+    154deg,
+    #07070915 30%,
+    hsl(var(--primary) / 20%) 48%,
+    #07070915 64%
+  );
+  filter: blur(100px);
 }
 </style>

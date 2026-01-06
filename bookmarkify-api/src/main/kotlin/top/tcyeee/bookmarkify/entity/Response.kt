@@ -19,6 +19,8 @@ data class BookmarkShow(
     @field:Schema(description = "基础url") var urlBase: String? = null,
     @field:Schema(description = "小图标") var iconBase64: String? = null,
     @field:Schema(description = "网站活性") var isActivity: Boolean? = null,
+    @field:Schema(description = "书签创建时间(Unix秒)") var createTime: Long? = null,
+    @field:Schema(description = "目录层级(从根到目标)") var paths: List<String>? = null,
 
     @JsonIgnore @field:Schema(description = "用户ID") var uid: String? = null,
     @JsonIgnore @field:Schema(description = "大图尺寸") var hdSize: Int = 0,
