@@ -7,7 +7,6 @@ import org.springframework.beans.factory.ObjectProvider
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import top.tcyeee.bookmarkify.config.entity.KafkaProperties
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
 
 
@@ -22,7 +21,6 @@ import top.tcyeee.bookmarkify.server.IKafkaMessageService
 @RequestMapping("/test")
 class TestController(
     private val kafkaMessageService: ObjectProvider<IKafkaMessageService>,
-    private val kafkaProperties: KafkaProperties
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -39,9 +37,6 @@ class TestController(
     @SaIgnore
     @GetMapping("/kafka/ping")
     fun kafkaPing(): String {
-        if (!kafkaProperties.enabled) {
-            return "kafka disabled by config"
-        }
         val svc = kafkaMessageService.ifAvailable
             ?: return "kafka bean missing (check enabled/config)"
 
