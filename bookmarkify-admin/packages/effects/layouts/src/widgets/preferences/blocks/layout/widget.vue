@@ -1,40 +1,38 @@
 <script setup lang="ts">
-import type { SelectOption } from '@vben/types';
+import type { SelectOption } from "@vben/types";
 
-import { computed } from 'vue';
+import { computed } from "vue";
 
-
-import SelectItem from '../select-item.vue';
-import SwitchItem from '../switch-item.vue';
+import SelectItem from "../select-item.vue";
+import SwitchItem from "../switch-item.vue";
 
 defineOptions({
-  name: 'PreferenceInterfaceControl',
+  name: "PreferenceInterfaceControl",
 });
 
-const widgetGlobalSearch = defineModel<boolean>('widgetGlobalSearch');
-const widgetFullscreen = defineModel<boolean>('widgetFullscreen');
-const widgetLanguageToggle = defineModel<boolean>('widgetLanguageToggle');
-const widgetNotification = defineModel<boolean>('widgetNotification');
-const widgetThemeToggle = defineModel<boolean>('widgetThemeToggle');
-const widgetSidebarToggle = defineModel<boolean>('widgetSidebarToggle');
-const widgetLockScreen = defineModel<boolean>('widgetLockScreen');
+const widgetGlobalSearch = defineModel<boolean>("widgetGlobalSearch");
+const widgetFullscreen = defineModel<boolean>("widgetFullscreen");
+const widgetLanguageToggle = defineModel<boolean>("widgetLanguageToggle");
+const widgetNotification = defineModel<boolean>("widgetNotification");
+const widgetThemeToggle = defineModel<boolean>("widgetThemeToggle");
+const widgetSidebarToggle = defineModel<boolean>("widgetSidebarToggle");
 const appPreferencesButtonPosition = defineModel<string>(
-  'appPreferencesButtonPosition',
+  "appPreferencesButtonPosition"
 );
-const widgetRefresh = defineModel<boolean>('widgetRefresh');
+const widgetRefresh = defineModel<boolean>("widgetRefresh");
 
 const positionItems = computed((): SelectOption[] => [
   {
-    label: '自动',
-    value: 'auto',
+    label: "自动",
+    value: "auto",
   },
   {
-    label: '顶栏',
-    value: 'header',
+    label: "顶栏",
+    value: "header",
   },
   {
-    label: '固定',
-    value: 'fixed',
+    label: "固定",
+    value: "fixed",
   },
 ]);
 </script>
@@ -54,9 +52,6 @@ const positionItems = computed((): SelectOption[] => [
   </SwitchItem>
   <SwitchItem v-model="widgetNotification">
     {{ '启用通知' }}
-  </SwitchItem>
-  <SwitchItem v-model="widgetLockScreen">
-    {{ '启用锁屏' }}
   </SwitchItem>
   <SwitchItem v-model="widgetSidebarToggle">
     {{ '启用侧边栏切换' }}
