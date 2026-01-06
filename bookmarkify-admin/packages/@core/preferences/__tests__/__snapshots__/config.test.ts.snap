@@ -73,7 +73,6 @@ exports[`defaultPreferences immutability test > should not modify the config obj
   },
   "shortcutKeys": {
     "enable": true,
-    "globalLockScreen": true,
     "globalLogout": true,
     "globalPreferences": true,
     "globalSearch": true,
@@ -128,13 +127,10 @@ exports[`defaultPreferences immutability test > should not modify the config obj
   "widget": {
     "fullscreen": true,
     "globalSearch": true,
-    "languageToggle": true,
-    "lockScreen": true,
     "notification": true,
     "refresh": true,
     "sidebarToggle": true,
     "themeToggle": true,
-    "timezone": true,
   },
 }
 `;

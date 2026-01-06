@@ -12,7 +12,6 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.ArrayDeque
 
-
 data class ChromeBookmarkRowData(
     val title: String,
     val url: String,
@@ -25,6 +24,11 @@ data class ChromeBookmarkStructure(
     val folderName: String,
     val bookmarks: List<ChromeBookmarkRowData>,
     val childFolder: List<ChromeBookmarkStructure>,
+)
+
+data class SystemBookmarkStructure(
+    val folderName: String,
+    val bookmarks: List<ChromeBookmarkRowData>,
 )
 
 /**
@@ -41,10 +45,60 @@ object ChromeBookmarkParser {
      * - 仅做数据清洗与转换，不进行任何持久化或业务校验。
      */
     fun trim(file: MultipartFile): ChromeBookmarkStructure {
-        // 1) 读取并校验原始 HTML 文本
+        // 1.读取并校验原始 HTML 文本
         val rawHtml = readHtmlContent(file)
-        // 2) 解析并直接返回树形结构
+        // 2.解析并直接返回树形结构
         return parseRows(rawHtml)
+    }
+
+    /**
+     * TODO 将chrome数据结构, 转变为系统数据结构
+     *
+     * chrome数据结构: 无限层级, 无限嵌套
+     * system数据结构: 不可嵌套, 文件夹中不可包含文件夹
+     *
+     * eg:chrome数据结构
+     * 文件夹1:
+     *  |- 书签1
+     *  |- 书签2
+     *  |- 文件夹2
+     *    |- 书签3
+     *    |- 书签4
+     *    |- 文件夹3
+     *      |- 书签5
+     *      |- 书签6
+     *
+     * eg: 转化后的system数据结构
+     * 文件夹1:
+     *  |- 书签1
+     *  |- 书签2
+     * 文件夹2
+     *  |- 书签3
+     *  |- 书签4
+     * 文件夹3
+     *  |- 书签5
+     *  |- 书签6
+     */
+    fun transferStructure(chromeStructure: ChromeBookmarkStructure): List<SystemBookmarkStructure> {
+        val result = mutableListOf<SystemBookmarkStructure>()
+
+        fun traverse(node: ChromeBookmarkStructure) {
+            // 将当前节点落地为一个扁平文件夹，名称沿用原目录名
+            // 为防止数据丢失，即便是 ROOT 也保留其书签（若存在）
+            if (node.bookmarks.isNotEmpty() || node.folderName != "ROOT") {
+                result.add(
+                    SystemBookmarkStructure(
+                        folderName = node.folderName,
+                        bookmarks = node.bookmarks,
+                    )
+                )
+            }
+            // 递归子目录，按深度优先展开
+            node.childFolder.forEach { traverse(it) }
+        }
+
+        traverse(chromeStructure)
+        return result
     }
 
     /**

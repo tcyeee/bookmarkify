@@ -12,7 +12,6 @@ import {
   updatePreferences,
   usePreferences,
 } from "@vben/preferences";
-import { useAccessStore } from "@vben/stores";
 import { cloneDeep, mapTree } from "@vben/utils";
 
 import { VbenAdminLayout } from "@vben-core/layout-ui";
@@ -49,7 +48,6 @@ const {
   sidebarCollapsed,
   theme,
 } = usePreferences();
-const accessStore = useAccessStore();
 
 const sidebarTheme = computed(() => {
   const dark = isDark.value || preferences.theme.semiDarkSidebar;
@@ -229,9 +227,6 @@ const headerSlots = computed(() => {
         <template #notification>
           <slot name="notification"></slot>
         </template>
-        <template #timezone>
-          <slot name="timezone"></slot>
-        </template>
         <template v-for="item in headerSlots" #[item]>
           <slot :name="item"></slot>
         </template>
@@ -279,10 +274,6 @@ const headerSlots = computed(() => {
     <template #extra>
       <slot name="extra"></slot>
       <CheckUpdates v-if="preferences.app.enableCheckUpdates" :check-updates-interval="preferences.app.checkUpdatesInterval" />
-
-      <Transition v-if="preferences.widget.lockScreen" name="slide-up">
-        <slot v-if="accessStore.isLockScreen" name="lock-screen"></slot>
-      </Transition>
 
       <template v-if="preferencesButtonPosition.fixed">
         <Preferences class="z-100 fixed bottom-20 right-0" @clear-preferences-and-logout="clearPreferencesAndLogout" />

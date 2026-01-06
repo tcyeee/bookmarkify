@@ -93,14 +93,6 @@ type PageTransitionType = 'fade' | 'fade-down' | 'fade-slide' | 'fade-up';
  */
 type AuthPageLayoutType = 'panel-center' | 'panel-left' | 'panel-right';
 
-/**
- * 时区选项
- */
-interface TimezoneOption {
-  label: string;
-  offset: number;
-  timezone: string;
-}
 
 export type {
   AccessModeType,
@@ -117,5 +109,4 @@ export type {
   PreferencesButtonPositionType,
   TabsStyleType,
   ThemeModeType,
-  TimezoneOption,
 };

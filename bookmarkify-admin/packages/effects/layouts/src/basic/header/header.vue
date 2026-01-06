@@ -8,12 +8,7 @@ import { useAccessStore } from "@vben/stores";
 
 import { VbenFullScreen, VbenIconButton } from "@vben-core/shadcn-ui";
 
-import {
-  GlobalSearch,
-  PreferencesButton,
-  ThemeToggle,
-  TimezoneButton,
-} from "../../widgets";
+import { GlobalSearch, PreferencesButton, ThemeToggle } from "../../widgets";
 
 interface Props {
   /**
@@ -58,18 +53,6 @@ const rightSlots = computed(() => {
     list.push({
       index: REFERENCE_VALUE + 20,
       name: "theme-toggle",
-    });
-  }
-  if (preferences.widget.languageToggle) {
-    list.push({
-      index: REFERENCE_VALUE + 30,
-      name: "language-toggle",
-    });
-  }
-  if (preferences.widget.timezone) {
-    list.push({
-      index: REFERENCE_VALUE + 40,
-      name: "timezone",
     });
   }
   if (preferences.widget.fullscreen) {
@@ -152,9 +135,6 @@ function clearPreferencesAndLogout() {
         </template>
         <template v-else-if="slot.name === 'fullscreen'">
           <VbenFullScreen class="mr-1" />
-        </template>
-        <template v-else-if="slot.name === 'timezone'">
-          <TimezoneButton class="mr-1 mt-[2px]" />
         </template>
       </slot>
     </template>
