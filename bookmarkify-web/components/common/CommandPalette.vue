@@ -238,7 +238,7 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         },
         {
           value: 'pref-minimal-toggle',
-          label: pref.minimalMode ? '关闭极简模式' : '开启极简模式',
+          label:  '极简模式',
           iconRight: pref.minimalMode
             ? 'icon--memory-toggle-switch-off icon-size-30'
             : 'icon--memory-toggle-switch-on icon-size-30',
@@ -252,13 +252,13 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         },
         {
           value: 'pref-show-title-toggle',
-          label: pref.showTitle ? '关闭标题显示' : '开启标题显示',
+          label:  '标题显示',
           iconRight: pref.showTitle
-            ? 'icon--memory-toggle-switch-off icon-size-30'
-            : 'icon--memory-toggle-switch-on icon-size-30',
+            ? 'icon--memory-toggle-switch-on icon-size-30'
+            : 'icon--memory-toggle-switch-off icon-size-30',
           iconRightClass: pref.showTitle
-            ? 'text-slate-400 dark:text-slate-500'
-            : 'text-primary',
+            ? 'text-primary'
+            : 'text-slate-400 dark:text-slate-500',
           run: () =>
             updatePreference({
               showTitle: !pref.showTitle,
