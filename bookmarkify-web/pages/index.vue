@@ -135,21 +135,25 @@ function sceneToggle(key?: string) {
   position: relative;
   height: calc(100vh - 9rem);
   overflow-y: auto;
-  padding: 0 0 2.5rem;
+  padding: 90px 0 80px;
   box-sizing: border-box;
   overscroll-behavior: contain; /* 防止滚动链到页面本身 */
   -webkit-mask-image: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 0),
-    rgba(0, 0, 0, 1) 40px,
-    rgba(0, 0, 0, 1) calc(100% - 40px),
+    rgba(0, 0, 0, 0) 48px,
+    rgba(0, 0, 0, 1) 88px,
+    rgba(0, 0, 0, 1) calc(100% - 88px),
+    rgba(0, 0, 0, 0) calc(100% - 48px),
     rgba(0, 0, 0, 0)
   );
   mask-image: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 0),
-    rgba(0, 0, 0, 1) 40px,
-    rgba(0, 0, 0, 1) calc(100% - 40px),
+    rgba(0, 0, 0, 0) 48px,
+    rgba(0, 0, 0, 1) 88px,
+    rgba(0, 0, 0, 1) calc(100% - 88px),
+    rgba(0, 0, 0, 0) calc(100% - 48px),
     rgba(0, 0, 0, 0)
   );
 }
