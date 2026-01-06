@@ -9,7 +9,7 @@
         class="my-6 sm:mt-10 text-[5rem] text-white opacity-80 text-center font-bold z-0 px-4" />
 
       <!-- 内容页面 -->
-      <div class="mt-15 flex-1 min-h-0 w-full flex justify-center items-start">
+      <div class="mt-15 flex-1 min-h-0 w-full flex justify-center items-start overflow-hidden">
         <Transition name="fade-main">
           <div v-if="data.launchpadView"
             class="launchpad-scroll w-full max-w-6xl px-4 sm:px-6 lg:px-12 mt-8 sm:mt-12 md:mt-16">
@@ -135,6 +135,7 @@ function sceneToggle(key?: string) {
   max-height: calc(100vh - 14rem);
   overflow-y: auto;
   padding-bottom: 2.5rem;
+  overscroll-behavior: contain; /* 防止滚动链到页面本身 */
 }
 
 @media (min-width: 640px) {
