@@ -25,50 +25,6 @@ sa-token:
   is-log: true
   is-print: false
 
-config:
-  uid-cookie-name: 'deviceUid'    # 匿名用户 cookie 名称
-  uid-cookie-path: "/"            # 匿名用户 cookie 路径
-  uid-cookie-max-age: 315360000   # 10 年（秒）
-  max-custom-background-count: 5  # 自定义背景（图片/渐变）最大数量
-  default-bookmarkify:
-    - 'https://xiaohongshu.com'
-    - 'https://www.guokr.com'
-    - 'https://www.163.com'
-    - 'https://www.gamersky.com'
-    - 'https://www.jianshu.com'
-    - 'https://www.douban.com'
-    - 'https://zcool.com.cn'
-    - 'https://zhihu.com'
-    - 'https://sspai.com'
-    - 'https://bilibili.com'
-  default-background-image:
-    - '019b86fd-74af-7058-829f-3f580c54c1e8.png'
-    - '019b86fd-8fd8-73cf-a70b-663ec100a4dd.png'
-    - '019b86fd-c179-752d-a060-7f8647efbf9c.png'
-  default-background-gradient:
-    - gradient:
-        - "#a69f9f"
-        - "#c1baba"
-        - "#8f9ea6"
-      direction: 103
-      name: 默认渐变1
-    - gradient:
-        - "#667eea"
-        - "#764ba2"
-      direction: 103
-      name: 默认渐变2
-    - gradient:
-        - "#f093fb"
-        - "#f5576c"
-      direction: 103
-      name: 默认渐变3
-    - gradient:
-        - "#4facfe"
-        - "#00f2fe"
-      direction: 103
-      name: 默认渐变4
-
-
 spring:
   servlet:
     multipart:
@@ -94,25 +50,62 @@ spring:
     listener:
       missing-topics-fatal: false  # 订阅缺失主题时不让应用启动失败
 
-wechat:
-  work:
+bookmarkify:
+  wechat:
     # 微信企业邮箱-企业ID
     corpid: ${BOOKMARKIFY_WECHAT_WORK_CORPID}
     # 微信企业邮箱-自建应用 SECRET-CODE
     corpsecret: ${BOOKMARKIFY_WECHAT_WORK_CORPSECRET}
-
-aliyun:
-  oss:
-    endpoint: ${BOOKMARKIFY_ALIYUN_OSS_ENDPOINT}
-    access-key-id: ${BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_ID}
-    access-key-secret: ${BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_SECRET}
-    bucket-name: ${BOOKMARKIFY_ALIYUN_OSS_BUCKET_NAME}
-    domain-name: ${BOOKMARKIFY_ALIYUN_OSS_DOMAIN} # 自定义域名 https://i.tcyeee.top
-
-admin:
-  login:
-    account: tcyeee@outlook.com
-    password: admin
-
-bookmarkify:
-#  TODO 将所有自定义配置都移动到这里来
+  aliyun:
+    oss:
+      endpoint: ${BOOKMARKIFY_ALIYUN_OSS_ENDPOINT}
+      access-key-id: ${BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_ID}
+      access-key-secret: ${BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_SECRET}
+      bucket-name: ${BOOKMARKIFY_ALIYUN_OSS_BUCKET_NAME}
+      domain-name: ${BOOKMARKIFY_ALIYUN_OSS_DOMAIN} # 自定义域名 https://i.tcyeee.top
+  admin:
+    login:
+      account: tcyeee@outlook.com
+      password: admin
+  config:
+    uid-cookie-name: 'deviceUid'    # 匿名用户 cookie 名称
+    uid-cookie-path: "/"            # 匿名用户 cookie 路径
+    uid-cookie-max-age: 315360000   # 10 年（秒）
+    max-custom-background-count: 5  # 自定义背景（图片/渐变）最大数量
+    default-bookmarkify:
+      - 'https://xiaohongshu.com'
+      - 'https://www.guokr.com'
+      - 'https://www.163.com'
+      - 'https://www.gamersky.com'
+      - 'https://www.jianshu.com'
+      - 'https://www.douban.com'
+      - 'https://zcool.com.cn'
+      - 'https://zhihu.com'
+      - 'https://sspai.com'
+      - 'https://bilibili.com'
+    default-background-image:
+      - '019b86fd-74af-7058-829f-3f580c54c1e8.png'
+      - '019b86fd-8fd8-73cf-a70b-663ec100a4dd.png'
+      - '019b86fd-c179-752d-a060-7f8647efbf9c.png'
+    default-background-gradient:
+      - gradient:
+          - "#a69f9f"
+          - "#c1baba"
+          - "#8f9ea6"
+        direction: 103
+        name: 默认渐变1
+      - gradient:
+          - "#667eea"
+          - "#764ba2"
+        direction: 103
+        name: 默认渐变2
+      - gradient:
+          - "#f093fb"
+          - "#f5576c"
+        direction: 103
+        name: 默认渐变3
+      - gradient:
+          - "#4facfe"
+          - "#00f2fe"
+        direction: 103
+        name: 默认渐变4
