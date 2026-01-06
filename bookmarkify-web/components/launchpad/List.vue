@@ -3,6 +3,7 @@
     <!-- 一级菜单 -->
     <ClientOnly>
       <Vuuri
+        :key="bookmarkLayoutKey"
         v-show="!data.subItemId"
         class="bookmark-grid"
         :model-value="gridItems"
@@ -82,24 +83,29 @@ type AddItem = { id: string; sort: number; type: 'ADD' }
 type GridItem = HomeItem | AddItem
 
 const ADD_ITEM_ID = '__bookmark_add_placeholder__'
-const bookmarkSize = '5rem'
 
-const gridGap = computed<number>(() => {
+const layoutConfig = computed(() => {
   const layout = preferenceStore.preference?.bookmarkLayout ?? BookmarkLayoutMode.DEFAULT
   switch (layout) {
     case BookmarkLayoutMode.COMPACT:
-      return 1.5
+      return { gap: 1.5, size: 4.25 }
     case BookmarkLayoutMode.SPACIOUS:
-      return 4
+      return { gap: 4, size: 6 }
     case BookmarkLayoutMode.DEFAULT:
     default:
-      return 3
+      return { gap: 3, size: 5 }
   }
 })
 
+const bookmarkLayoutKey = computed(() => preferenceStore.preference?.bookmarkLayout ?? BookmarkLayoutMode.DEFAULT)
+const gridGap = computed<number>(() => layoutConfig.value.gap)
+const bookmarkGapRem = computed<string>(() => `${gridGap.value}rem`)
+const bookmarkSize = computed<string>(() => `${layoutConfig.value.size}rem`)
+const bookmarkCellWidth = computed<string>(() => `calc(${bookmarkSize.value} + ${bookmarkGapRem.value})`)
+
 const gridStyle = computed(() => ({
   '--bookmark-gap': `${gridGap.value}rem`,
-  '--bookmark-size': bookmarkSize,
+  '--bookmark-size': bookmarkSize.value,
 }))
 
 const addButtonItem = computed<AddItem>(() => ({
@@ -196,12 +202,14 @@ function onItemContextMenu(e: MouseEvent, item: GridItem) {
 }
 
 function getItemWidth() {
-  return bookmarkSize
+  return bookmarkCellWidth.value
 }
 
 function getItemHeight(item: GridItem) {
   const titleSpace = showTitle.value ? '1.6rem' : '0rem'
-  return isAddItem(item) ? bookmarkSize : `calc(${bookmarkSize} + ${titleSpace})`
+  return isAddItem(item)
+    ? bookmarkCellWidth.value
+    : `calc(${bookmarkSize.value} + ${titleSpace} + ${bookmarkGapRem.value})`
 }
 
 function onGridInput(items: GridItem[]) {
@@ -245,11 +253,11 @@ function sort() {
 
 .bookmark-grid {
   width: 100%;
-  min-height: calc(var(--bookmark-size) + 1.6rem);
+  min-height: calc(var(--bookmark-size) + 1.6rem + var(--bookmark-gap));
 }
 
 .bookmark-grid .muuri-item {
-  margin: calc(var(--bookmark-gap) / 2);
+  margin: 0;
 }
 
 .bookmark-grid .bookmark-item {
