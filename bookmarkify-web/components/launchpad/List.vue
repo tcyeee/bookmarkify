@@ -247,12 +247,15 @@ function sort() {
 <style>
 .bookmark-grid-wrapper {
   width: 100%;
+  display: flex;
+  justify-content: center;
+  box-sizing: border-box;
   --bookmark-gap: 3rem;
   --bookmark-size: 5rem;
 }
 
 .bookmark-grid {
-  width: 100%;
+  width: min(100%, max-content);
   min-height: calc(var(--bookmark-size) + 1.6rem + var(--bookmark-gap));
 }
 
