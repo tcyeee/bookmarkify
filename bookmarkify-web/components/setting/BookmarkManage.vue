@@ -102,7 +102,7 @@
 </template>
 
 <script lang="ts" setup>
-import { bookmarksList } from '@api'
+import { bookmarksList, bookmarksUpload } from '@api'
 import type { Bookmark } from '@typing'
 
 const fileInputRef = ref<HTMLInputElement>()
@@ -161,19 +161,13 @@ async function handleImport() {
   statusType.value = 'default'
 
   try {
-    // TODO: 在此处接入后端导入 API，将 selectedFile 作为 FormData 上传
-    // const formData = new FormData()
-    // formData.append('file', selectedFile.value)
-    // await importBookmarks(formData)
-
-    // 这里先做个前端假等待，等你接后端
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    statusMessage.value = '导入完成！你可以在主页查看新书签。'
+    const imported = await bookmarksUpload(selectedFile.value)
+    statusMessage.value = `导入完成！本次处理 ${imported?.length ?? 0} 条书签。`
     statusType.value = 'success'
+    await fetchBookmarks()
   } catch (error: any) {
     console.error(error)
-    statusMessage.value = error?.message || '导入失败，请稍后重试。'
+    statusMessage.value = error?.msg || error?.message || '导入失败，请稍后重试。'
     statusType.value = 'error'
   } finally {
     importing.value = false

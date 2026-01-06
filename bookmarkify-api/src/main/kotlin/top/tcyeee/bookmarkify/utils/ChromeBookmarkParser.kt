@@ -33,23 +33,42 @@ data class ChromeBookmarkStructure(
 object ChromeBookmarkParser {
 
     /**
-     * 从 MultipartFile 读取 HTML 并解析为书签列表。
+     * 对外入口：从浏览器导出的 HTML 书签文件中提取结构化数据。
      *
-     * 仅负责数据清洗，不做任何持久化或业务校验。
-     *
-     * @param file Chrome 导出的书签 HTML
-     * @return 解析得到的书签数据，若解析失败则返回空列表
+     * 设计目标：
+     * - 将“读取文件 / 解析行数据 / 构建树结构”三步解耦，便于单元测试与复用；
+     * - 所有错误统一转换为业务异常，避免上层混用异常类型；
+     * - 仅做数据清洗与转换，不进行任何持久化或业务校验。
      */
     fun trim(file: MultipartFile): ChromeBookmarkStructure {
-        val rows = runCatching {
-            file.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
-        }.mapCatching { content ->
-            parseContent(content)
-        }.getOrElse {
-            it.printStackTrace()
-            throw CommonException(ErrorType.E228)
-        }
-        return buildTree(rows)
+        // 1) 读取并校验原始 HTML 文本
+        val rawHtml = readHtmlContent(file)
+        // 2) 解析并直接返回树形结构
+        return parseRows(rawHtml)
+    }
+
+    /**
+     * 读取上传的 MultipartFile，按 UTF-8 获取完整字符串。
+     *
+     * 失败时统一抛出 E228，避免泄露底层 IO 异常。
+     */
+    private fun readHtmlContent(file: MultipartFile): String = runCatching {
+        file.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+    }.mapCatching { content ->
+        content.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("文件内容为空")
+    }.getOrElse {
+        log.error("读取书签文件失败", it)
+        throw CommonException(ErrorType.E228)
+    }
+
+    /**
+     * 包装 parseContent，集中处理解析异常。
+     */
+    private fun parseRows(content: String): ChromeBookmarkStructure = runCatching {
+        parseContent(content)
+    }.getOrElse {
+        log.error("解析书签内容失败", it)
+        throw CommonException(ErrorType.E228)
     }
 
     /**
@@ -61,26 +80,36 @@ object ChromeBookmarkParser {
      * - 遇到异常行直接跳过，避免中断整体解析。
      */
 
-    fun parseContent(content: String): List<ChromeBookmarkRowData> {
+    fun parseContent(content: String): ChromeBookmarkStructure {
         val pathStack = ArrayDeque<String>()
         val result = mutableListOf<ChromeBookmarkRowData>()
 
         content.lineSequence().forEach { rawLine ->
             val line = rawLine.trim()
+            if (line.isBlank() || line.startsWith("<!DOCTYPE", true)) return@forEach
+
+            val upper = line.uppercase()
             when {
-                line.isBlank() || line.startsWith("<!DOCTYPE", true) -> Unit
-                line.contains("</DL>", true) -> if (pathStack.isNotEmpty()) pathStack.removeLast()
-                line.startsWith("<H3", true) -> extractFolder(line)?.let { pathStack.addLast(it) }
-                line.startsWith("<A", true) -> parseBookmark(line, pathStack)?.let { result.add(it) }
+                // 目录结束：遇到 </DL> 即弹栈
+                upper.contains("</DL>") -> if (pathStack.isNotEmpty()) pathStack.removeLast()
+                // 目录开始：兼容 <DT><H3 ...> 与裸 <H3 ...>
+                upper.contains("<H3") -> extractFolder(line)?.let { pathStack.addLast(it) }
+                // 书签行：兼容 <DT><A ...> 与裸 <A ...>
+                upper.contains("<A") -> {
+                    val anchor = line.substringAfter("<A", missingDelimiterValue = "")
+                        .let { if (it.isBlank()) line else "<A$it" }
+                    parseBookmark(anchor, pathStack)?.let { result.add(it) }
+                }
             }
         }
-        return result
+        return buildTree(result)
     }
 
     /** 解析目录名称，失败返回 null */
     private fun extractFolder(line: String): String? = runCatching {
-        // <DT><H3 ADD_DATE="..." LAST_MODIFIED="...">Folder</H3>
-        line.substringAfter('>').substringBefore("</H3>").trim().takeIf { it.isNotBlank() }
+        // 典型形态：<DT><H3 ADD_DATE="..." LAST_MODIFIED="...">Folder</H3>
+        val regex = Regex("""<H3[^>]*>(.*?)</H3>""", RegexOption.IGNORE_CASE)
+        regex.find(line)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }
     }.getOrNull()
 
     /** 解析单个书签节点 */
