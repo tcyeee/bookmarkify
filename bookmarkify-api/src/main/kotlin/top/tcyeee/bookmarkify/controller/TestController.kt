@@ -29,7 +29,6 @@ class TestController(
     @GetMapping("/link")
     fun linkTest(): Boolean {
         try {
-            kafkaMessageService.send(KafkaTopicType.DEFAULT, "ping-${System.currentTimeMillis()}")
         } catch (ex: Exception) {
             log.error("Kafka ping failed", ex)
             "kafka send failed: ${ex.message}"

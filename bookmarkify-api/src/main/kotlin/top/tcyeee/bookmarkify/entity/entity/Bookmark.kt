@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.entity.entity
 
 import cn.hutool.core.util.IdUtil
+import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import com.fasterxml.jackson.annotation.JsonIgnore
@@ -42,10 +43,13 @@ data class Bookmark(
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
 ) {
-    val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
 
+    // 拼接后的完整网站
+    val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
     // 检查标签,这里为true,说明这个书签需要被检查了
     val checkFlag get() = updateTime?.isBefore(yesterday()) ?: true
+    // JSON格式化后的数据
+    val json: String? = JSONUtil.toJsonStr(this)
 
     constructor(url: BookmarkUrlWrapper) : this(
         id = IdUtil.fastUUID(),
@@ -63,6 +67,7 @@ data class Bookmark(
         this.updateTime = LocalDateTime.now()
         this.iconBase64 = FileUtils.icoBase64(wrapper.distinctIcons, this.rawUrl)
     }
+
 }
 
 @TableName("bookmark_user_link")

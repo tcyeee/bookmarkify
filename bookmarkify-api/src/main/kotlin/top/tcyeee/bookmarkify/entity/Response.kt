@@ -74,9 +74,7 @@ data class HomeItemShow(
     )
 
     constructor(uid: String, itemId: String, bookmarkShow: BookmarkShow) : this(
-        id = itemId,
-        uid = uid,
-        typeApp = bookmarkShow
+        id = itemId, uid = uid, typeApp = bookmarkShow
     )
 }
 
