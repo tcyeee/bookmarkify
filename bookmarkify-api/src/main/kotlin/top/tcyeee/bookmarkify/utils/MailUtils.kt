@@ -17,10 +17,10 @@ import top.tcyeee.bookmarkify.config.log
 @Component
 class MailUtils {
 
-    @Value("\${wechat.work.corpid}")
+    @Value("\${bookmarkify.wechat.corpid}")
     private lateinit var corpid: String
 
-    @Value("\${wechat.work.corpsecret}")
+    @Value("\${bookmarkify.wechat.corpsecret}")
     private lateinit var corpsecret: String
 
     enum class EmailType(val title: String, val content: String) {

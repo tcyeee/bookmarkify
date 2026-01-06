@@ -27,19 +27,19 @@ import javax.imageio.ImageIO
 @Component
 class OssUtils {
 
-    @Value("\${aliyun.oss.endpoint}")
+    @Value("\${bookmarkify.aliyun.oss.endpoint}")
     private lateinit var endpoint: String
 
-    @Value("\${aliyun.oss.access-key-id}")
+    @Value("\${bookmarkify.aliyun.oss.access-key-id}")
     private lateinit var accessKeyId: String
 
-    @Value("\${aliyun.oss.access-key-secret}")
+    @Value("\${bookmarkify.aliyun.oss.access-key-secret}")
     private lateinit var accessKeySecret: String
 
-    @Value("\${aliyun.oss.bucket-name}")
+    @Value("\${bookmarkify.aliyun.oss.bucket-name}")
     private lateinit var bucketName: String
 
-    @Value("\${aliyun.oss.domain-name}")
+    @Value("\${bookmarkify.aliyun.oss.domain-name}")
     private lateinit var domainName: String
 
     /**

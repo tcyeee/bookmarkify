@@ -12,7 +12,7 @@ data class DefaultBackgroundGradientConfig(
     var name: String = "",
 )
 
-@ConfigurationProperties(prefix = "config")
+@ConfigurationProperties(prefix = "bookmarkify.config")
 class ProjectConfig(
     var imgPath: String,          // 图片本地存储地址
     var imgPrefix: String,        // 图片前缀
