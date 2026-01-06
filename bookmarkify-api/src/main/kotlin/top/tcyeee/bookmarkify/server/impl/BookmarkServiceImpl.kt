@@ -64,39 +64,10 @@ class BookmarkServiceImpl(
     override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow> =
         bookmarkUserLinkMapper.allBookmarkByUid(uid).onEach { it.initLogo() }
 
-    /**
-     * 书签上传入口。
-     *
-     * 步骤:
-     * 1. 调用 `ChromeBookmarkParser.parse` 读取 HTML 书签，拿到纯净数据(标题/URL/创建时间/Icon/路径)。
-     * 2. 使用 `WebsiteParser.urlWrapper` 规范化 URL，补全协议与根域名信息。
-     * 3. 映射成 `BookmarkShow`，仅做展示使用，不在此处落库。
-     * 4. 解析失败的条目记录 warn 日志并跳过，保证上传接口健壮性。
-     *
-     * 该方法目前不做入库/去重/关联，后续若需要保存请在业务层补充。
-     *
-     * @param file 前端上传的 Chrome 导出 HTML 文件
-     * @param uid  当前用户 ID，暂未使用，预留给后续落库逻辑
-     * @return 清洗后的书签列表，只包含展示必要字段
-     */
-    override fun importBookmarkFile(file: MultipartFile, uid: String): List<BookmarkShow> =
-        ChromeBookmarkParser.parse(file).mapNotNull { bookmark ->
-            runCatching {
-                val urlWrapper = WebsiteParser.urlWrapper(bookmark.url)
-                BookmarkShow(
-                    title = bookmark.title,
-                    urlFull = urlWrapper.urlRaw,
-                    urlBase = urlWrapper.urlRoot,
-                    iconBase64 = bookmark.iconBase64,
-                    isActivity = true,
-                    createTime = bookmark.createTime,
-                    paths = bookmark.paths,
-                ).apply { urlHost = urlWrapper.urlHost }
-            }.getOrElse {
-                log.warn("跳过无法解析的书签: {}", bookmark.url, it)
-                null
-            }
-        }
+    override fun importBookmarkFile(file: MultipartFile, uid: String): List<BookmarkShow>? {
+        val trim = ChromeBookmarkParser.trim(file)
+        return emptyList()
+    }
 
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::parseBookmark)
 
