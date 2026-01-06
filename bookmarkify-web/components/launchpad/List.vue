@@ -1,40 +1,50 @@
 <template>
-  <div :class="['flex flex-wrap flex-start', layoutGapClass]">
-    <!-- 二级菜单的返回 -->
-    <!-- <BookmarkReturn v-show="data.subItemId" @click="backTopLayer()" /> -->
-
+  <div class="bookmark-grid-wrapper" :style="gridStyle">
     <!-- 一级菜单 -->
-    <draggable
-      :class="['flex flex-wrap flex-start', layoutGapClass]"
-      v-show="!data.subItemId"
-      v-model="pageData"
-      v-bind="dragOptions"
-      group="people"
-      @sort="sort"
-      item-key="id">
-      <template #item="item">
-        <div class="bookmark-item" @contextmenu="onContextMenu($event, item.element)">
-          <LaunchpadCellBookmark
-            v-if="item.element.type == 'BOOKMARK_DIR'"
-            :value="item.element.typeDir"
-            :show-title="showTitle"
-            @click="openDir(item.element)" />
-          <LaunchpadCellBookmark
-            v-if="item.element.type == 'BOOKMARK'"
-            :value="item.element.typeApp"
-            :show-title="showTitle"
-            @click="openPage(item.element.typeApp)" />
-          <LaunchpadCellBookmarkLoading v-if="item.element.type == 'LOADING'" :show-title="showTitle" />
-        </div>
-      </template>
-      <template #footer>
-        <LaunchpadAddOne @success="addBookmark" />
-      </template>
-    </draggable>
+    <ClientOnly>
+      <Vuuri
+        v-show="!data.subItemId"
+        class="bookmark-grid"
+        :model-value="gridItems"
+        item-key="id"
+        :options="vuuriOptions"
+        drag-handle=".bookmark-drag-handle"
+        :drag-enabled="true"
+        :get-item-width="getItemWidth"
+        :get-item-height="getItemHeight"
+        @input="onGridInput"
+        @dragReleaseEnd="onDragReleaseEnd">
+        <template #item="{ item }">
+          <div
+            class="bookmark-item"
+            :class="{ 'is-add': isAddItem(item) }"
+            @contextmenu="onItemContextMenu($event, item)">
+            <div v-if="isAddItem(item)" class="bookmark-add-placeholder">
+              <LaunchpadAddOne @success="addBookmark" />
+            </div>
+            <div v-else class="bookmark-drag-handle">
+              <LaunchpadCellBookmark
+                v-if="item.type == 'BOOKMARK_DIR'"
+                :value="item.typeDir"
+                :show-title="showTitle"
+                @click="openDir(item)" />
+              <LaunchpadCellBookmark
+                v-else-if="item.type == 'BOOKMARK'"
+                :value="item.typeApp"
+                :show-title="showTitle"
+                @click="openPage(item.typeApp)" />
+              <LaunchpadCellBookmarkLoading v-else-if="item.type == 'LOADING'" :show-title="showTitle" />
+            </div>
+          </div>
+        </template>
+      </Vuuri>
+    </ClientOnly>
 
     <!-- 二级菜单 -->
-    <div v-if="data.subItemId" v-for="bookmark in data.subApps" :key="bookmark.bookmarkId">
-      <LaunchpadCellBookmark :value="bookmark" :show-title="showTitle" @click="openPage(bookmark)" />
+    <div v-if="data.subItemId" class="bookmark-sub-grid">
+      <div v-for="bookmark in data.subApps" :key="bookmark.bookmarkId" class="bookmark-item">
+        <LaunchpadCellBookmark :value="bookmark" :show-title="showTitle" @click="openPage(bookmark)" />
+      </div>
     </div>
 
     <!-- 书签详情 -->
@@ -44,7 +54,7 @@
   </div>
 </template>
 <script lang="ts" setup>
-import Draggable from 'vuedraggable'
+import { defineAsyncComponent, defineComponent } from 'vue'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { bookmarksSort, bookmarksDel } from '@api'
 import { BookmarkLayoutMode, BookmarkOpenMode, type HomeItem, type Bookmark, type BookmarkSortParams } from '@typing'
@@ -54,23 +64,51 @@ const sysStore = useSysStore()
 const bookmarkStore = useBookmarkStore()
 const preferenceStore = usePreferenceStore()
 
+const Vuuri = process.client
+  ? defineAsyncComponent(() => import('vuuri'))
+  : defineComponent({
+      name: 'VuuriPlaceholder',
+      setup: () => () => null,
+    })
+
 const pageData = computed<Array<HomeItem>>(() => bookmarkStore.homeItems || [])
 const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
 const bookmarkOpenMode = computed<BookmarkOpenMode>(
   () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB,
 )
-const layoutGapClass = computed<string>(() => {
+
+type AddItem = { id: string; sort: number; type: 'ADD' }
+type GridItem = HomeItem | AddItem
+
+const ADD_ITEM_ID = '__bookmark_add_placeholder__'
+const bookmarkSize = '5rem'
+
+const gridGap = computed<number>(() => {
   const layout = preferenceStore.preference?.bookmarkLayout ?? BookmarkLayoutMode.DEFAULT
   switch (layout) {
     case BookmarkLayoutMode.COMPACT:
-      return 'gap-6'
+      return 1.5
     case BookmarkLayoutMode.SPACIOUS:
-      return 'gap-16'
+      return 4
     case BookmarkLayoutMode.DEFAULT:
     default:
-      return 'gap-12'
+      return 3
   }
 })
+
+const gridStyle = computed(() => ({
+  '--bookmark-gap': `${gridGap.value}rem`,
+  '--bookmark-size': bookmarkSize,
+}))
+
+const addButtonItem = computed<AddItem>(() => ({
+  id: ADD_ITEM_ID,
+  sort: Number.MAX_SAFE_INTEGER,
+  type: 'ADD',
+}))
+
+const gridItems = computed<GridItem[]>(() => [...(pageData.value ?? []), addButtonItem.value])
+const vuuriOptions = { layout: { fillGaps: true, rounding: false } }
 
 const data = reactive<{
   subApps?: Array<Bookmark>
@@ -85,12 +123,10 @@ watchEffect(() => {
   sysStore.preventKeyEventsFlag = data.bookmarkDetailDialog
 })
 
-const dragOptions = ref({ animation: 300, draggable: '.bookmark-item' })
-
 function addBookmark(item: HomeItem) {
-  if(item.typeApp!=null){
-    bookmarkStore.homeItems.push(item);
-  }else{
+  if (item.typeApp != null) {
+    bookmarkStore.homeItems.push(item)
+  } else {
     bookmarkStore.addEmpty(item)
   }
 }
@@ -122,10 +158,6 @@ function getClickMenu(item: HomeItem) {
   ]
 }
 
-function onContextMenu(e: MouseEvent, item: HomeItem) {
-  ContextMenu.showContextMenu({ items: getClickMenu(item), x: e.x, y: e.y })
-}
-
 // 查看详情
 function clickDetail(item: HomeItem) {
   data.bookmarkDetailDialog = true
@@ -140,10 +172,36 @@ function delOne(item: HomeItem) {
   if (index !== -1) pageData.value?.splice(index, 1)
 }
 
+function isAddItem(item: GridItem): item is AddItem {
+  return item.id === ADD_ITEM_ID
+}
+
+function onItemContextMenu(e: MouseEvent, item: GridItem) {
+  if (isAddItem(item)) return
+  ContextMenu.showContextMenu({ items: getClickMenu(item), x: e.x, y: e.y })
+}
+
+function getItemWidth() {
+  return bookmarkSize
+}
+
+function getItemHeight(item: GridItem) {
+  const titleSpace = showTitle.value ? '1.6rem' : '0rem'
+  return isAddItem(item) ? bookmarkSize : `calc(${bookmarkSize} + ${titleSpace})`
+}
+
+function onGridInput(items: GridItem[]) {
+  bookmarkStore.homeItems = items.filter((it): it is HomeItem => !isAddItem(it))
+}
+
+function onDragReleaseEnd() {
+  sort()
+}
+
 // 重新排序
 function sort() {
-  let params: Array<BookmarkSortParams> = []
-  pageData.value?.forEach((item) => {
+  const params: Array<BookmarkSortParams> = []
+  bookmarkStore.homeItems?.forEach((item) => {
     params.push({ id: item.id, sort: params.length })
   })
   bookmarksSort(params)
@@ -151,6 +209,47 @@ function sort() {
 </script>
 
 <style>
+.bookmark-grid-wrapper {
+  width: 100%;
+  --bookmark-gap: 3rem;
+  --bookmark-size: 5rem;
+}
+
+.bookmark-grid {
+  width: 100%;
+  min-height: calc(var(--bookmark-size) + 1.6rem);
+}
+
+.bookmark-grid .muuri-item {
+  margin: calc(var(--bookmark-gap) / 2);
+}
+
+.bookmark-grid .bookmark-item {
+  width: var(--bookmark-size);
+}
+
+.bookmark-drag-handle {
+  cursor: grab;
+}
+
+.bookmark-add-placeholder {
+  width: var(--bookmark-size);
+  height: var(--bookmark-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bookmark-sub-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bookmark-gap);
+}
+
+.bookmark-sub-grid .bookmark-item {
+  width: var(--bookmark-size);
+}
+
 .bookmark-dialog-box {
   border-radius: 2rem;
   padding: 3rem;

@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaIgnore
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
@@ -43,9 +44,9 @@ class BookmarksController(
     @Operation(summary = "我的桌面布局")
     fun query(): List<HomeItemShow> = homeItemService.findShowByUid(BaseUtils.uid())
 
-//    @PostMapping("/upload")
-//    @Operation(summary = "书签上传", parameters = [Parameter(name = "file", description = "书签文件.html")])
-//    fun upload(file: MultipartFile): List<BookmarkDetail> = updateBookmark(file, BaseUtils.uid())
+    @PostMapping("/upload")
+    @Operation(summary = "书签上传")
+    fun upload(@RequestParam file: MultipartFile): List<BookmarkShow> = bookmarkService.importBookmarkFile(file, BaseUtils.uid())
 
     @PostMapping("/sort")
     @Operation(summary = "排序")
