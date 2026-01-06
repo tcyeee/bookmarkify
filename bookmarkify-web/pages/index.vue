@@ -9,10 +9,10 @@
         class="my-6 sm:mt-10 text-[5rem] text-white opacity-80 text-center font-bold z-0 px-4" />
 
       <!-- 内容页面 -->
-      <div class="mt-15 flex-1 min-h-0 w-full flex justify-center items-start overflow-hidden">
+      <div class="flex-1 min-h-0 w-full flex justify-center items-start overflow-hidden">
         <Transition name="fade-main">
           <div v-if="data.launchpadView"
-            class="launchpad-scroll w-full max-w-6xl px-4 sm:px-6 lg:px-12 mt-8 sm:mt-12 md:mt-16">
+            class="launchpad-scroll w-full max-w-6xl px-4 sm:px-6 lg:px-12">
             <LaunchpadList />
           </div>
         </Transition>
@@ -132,21 +132,37 @@ function sceneToggle(key?: string) {
 }
 
 .launchpad-scroll {
-  max-height: calc(100vh - 14rem);
+  position: relative;
+  height: calc(100vh - 9rem);
   overflow-y: auto;
-  padding-bottom: 2.5rem;
+  padding: 0 0 2.5rem;
+  box-sizing: border-box;
   overscroll-behavior: contain; /* 防止滚动链到页面本身 */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0),
+    rgba(0, 0, 0, 1) 40px,
+    rgba(0, 0, 0, 1) calc(100% - 40px),
+    rgba(0, 0, 0, 0)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0),
+    rgba(0, 0, 0, 1) 40px,
+    rgba(0, 0, 0, 1) calc(100% - 40px),
+    rgba(0, 0, 0, 0)
+  );
 }
 
 @media (min-width: 640px) {
   .launchpad-scroll {
-    max-height: calc(100vh - 16rem);
+    height: calc(100vh - 10rem);
   }
 }
 
 @media (min-width: 1024px) {
   .launchpad-scroll {
-    max-height: calc(100vh - 18rem);
+    height: calc(100vh - 11rem);
   }
 }
 
