@@ -135,6 +135,8 @@ function sceneToggle(key?: string) {
   position: relative;
   height: calc(100vh - 9rem);
   overflow-y: auto;
+  scrollbar-width: none; /* Firefox 隐藏滚动条 */
+  -ms-overflow-style: none; /* IE/Edge 隐藏滚动条 */
   padding: 90px 2rem 80px 2rem;
   box-sizing: border-box;
   overscroll-behavior: contain; /* 防止滚动链到页面本身 */
@@ -156,6 +158,10 @@ function sceneToggle(key?: string) {
     rgba(0, 0, 0, 0) calc(100% - 48px),
     rgba(0, 0, 0, 0)
   );
+}
+
+.launchpad-scroll::-webkit-scrollbar {
+  display: none; /* WebKit 隐藏滚动条 */
 }
 
 @media (min-width: 640px) {
