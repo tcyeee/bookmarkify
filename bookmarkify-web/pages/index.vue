@@ -135,7 +135,7 @@ function sceneToggle(key?: string) {
   position: relative;
   height: calc(100vh - 9rem);
   overflow-y: auto;
-  padding: 90px 0 80px;
+  padding: 90px 2rem 80px 2rem;
   box-sizing: border-box;
   overscroll-behavior: contain; /* 防止滚动链到页面本身 */
   -webkit-mask-image: linear-gradient(
