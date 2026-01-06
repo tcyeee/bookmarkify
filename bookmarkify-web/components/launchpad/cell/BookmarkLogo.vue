@@ -1,8 +1,11 @@
 <template>
   <!-- 外层容器：卡片圆角与开发态提示 -->
   <div
-    class="w-app h-app rounded-[22%] bg-gray-100 center shadow overflow-hidden"
-    :class="isDev ? 'border-4 border-dashed border-red-200' : ''">
+    :class="[
+      'w-app h-app rounded-[22%] bg-gray-100 center shadow overflow-hidden',
+      isDev ? 'dev-outline dev-shrink' : '',
+    ]"
+    :style="isDev ? { '--dev-outline-color': devOutlineColor } : undefined">
     <!-- 内层 Logo：默认白底，必要时覆盖主色与淡白蒙版 -->
     <div class="h-20 w-20 bg-white flex justify-center items-center" :style="logoStyle">
       <!-- 优先使用高清图 -->
@@ -33,6 +36,7 @@ const isDev = computed(() => isLocalhostOrIP(props.value.urlFull))
 const shouldUseBase64 = computed(
   () => (!props.value.iconHdUrl || hdError.value) && !iconError.value && !!props.value.iconBase64,
 )
+const devOutlineColor = computed(() => backgroundColor.value || '#ffffff')
 // base64 时叠加主色与淡白蒙版
 const logoStyle = computed(() =>
   shouldUseBase64.value
@@ -179,4 +183,18 @@ function isLocalhostOrIP(url: string): boolean {
   }
 }
 </script>
+
+<style scoped>
+.dev-outline {
+  /* 外描边不占空间，避免缩小内部图标 */
+  outline: 4px dashed var(--dev-outline-color, #ffffff);
+  outline-offset: 3px;
+}
+
+.dev-shrink {
+  /* 稍微缩放，让描边后的整体与正常图标一致 */
+  transform: scale(0.9);
+  transform-origin: center;
+}
+</style>
 
