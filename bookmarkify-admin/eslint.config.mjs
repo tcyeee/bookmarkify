@@ -1,6 +1,5 @@
 // @ts-check
-import withNuxt from './.nuxt/eslint.config.mjs'
 
-export default withNuxt(
-  // Your custom configs here
-)
+import { defineConfig } from '@vben/eslint-config';
+
+export default defineConfig();
