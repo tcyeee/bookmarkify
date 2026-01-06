@@ -7,6 +7,9 @@ import org.springframework.beans.factory.ObjectProvider
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.config.exception.CommonException
+import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.entity.enums.KafkaTopicType
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
 
 
@@ -27,25 +30,17 @@ class TestController(
 
     @SaIgnore
     @GetMapping("/link")
-    fun linkTest(type: Int, param: String?): Boolean {
-        return true
-    }
+    fun linkTest(): Boolean {
+        val svc = kafkaMessageService.ifAvailable ?: throw CommonException(ErrorType.E999)
 
-    /**
-     * 最快验证 Kafka：若未开启直接提示；已开启则发一条消息并返回结果。
-     */
-    @SaIgnore
-    @GetMapping("/kafka/ping")
-    fun kafkaPing(): String {
-        val svc = kafkaMessageService.ifAvailable
-            ?: return "kafka bean missing (check enabled/config)"
-
-        return try {
-            svc.send("kafka-ping", "ping-${System.currentTimeMillis()}")
-            "kafka send ok"
+        try {
+            svc.send(KafkaTopicType.DEFAULT, "ping-${System.currentTimeMillis()}")
         } catch (ex: Exception) {
             log.error("Kafka ping failed", ex)
             "kafka send failed: ${ex.message}"
         }
+
+        return true
     }
+
 }

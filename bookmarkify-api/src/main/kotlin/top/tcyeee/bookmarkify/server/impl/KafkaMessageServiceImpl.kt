@@ -4,6 +4,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
+import top.tcyeee.bookmarkify.entity.enums.KafkaTopicType
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
 
 @Service
@@ -14,15 +15,8 @@ class KafkaMessageServiceImpl(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    enum class TopicType {
-        /* 默认主题 */
-        DEFAULT,
-        /* 单条书签解析 */
-        BOOKMARK_PRASE,
-    }
-
-    override fun send(topic: String, message: String) {
-        kafkaTemplate.send(topic, message).whenComplete { result, ex ->
+    override fun send(topic: KafkaTopicType, message: String) {
+        kafkaTemplate.send(topic.name, message).whenComplete { result, ex ->
             if (ex != null) {
                 log.error("Kafka send failed topic={} message={}", topic, message, ex)
                 return@whenComplete
