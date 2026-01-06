@@ -21,7 +21,7 @@ import java.time.LocalDateTime
  * @date 3/10/24 15:31
  */
 @TableName("bookmark")
-data class Bookmark(
+data class BookmarkEntity(
 
     /* URL相关 */
     @TableId var id: String,
@@ -82,7 +82,7 @@ data class BookmarkUserLink(
     @JsonIgnore @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "是否删除") var deleted: Boolean = false,
 ) {
-    constructor(bookmarkUrlWrapper: BookmarkUrlWrapper, uid: String, bookmark: Bookmark) : this(
+    constructor(bookmarkUrlWrapper: BookmarkUrlWrapper, uid: String, bookmark: BookmarkEntity) : this(
         id = IdUtil.fastUUID(),
         uid = uid,
         bookmarkId = bookmark.id,
@@ -91,7 +91,7 @@ data class BookmarkUserLink(
         urlFull = bookmarkUrlWrapper.urlRaw,
     )
 
-    constructor(bookmark: Bookmark, uid: String) : this(
+    constructor(bookmark: BookmarkEntity, uid: String) : this(
         id = IdUtil.fastUUID(),
         uid = uid,
         bookmarkId = bookmark.id,

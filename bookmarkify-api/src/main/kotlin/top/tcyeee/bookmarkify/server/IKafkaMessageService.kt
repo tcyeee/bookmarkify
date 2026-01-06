@@ -1,13 +1,13 @@
 package top.tcyeee.bookmarkify.server
 
-import top.tcyeee.bookmarkify.entity.entity.Bookmark
+import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 
 interface IKafkaMessageService {
     /**
      * 解析书签,然后保存到数据库
      * @param bookmark bookmark
      */
-    fun bookmarkParse(bookmark: Bookmark)
+    fun bookmarkParse(bookmark: BookmarkEntity)
 
     /**
      * 解析书签,然后保存到数据库,同时通知到用户
@@ -16,6 +16,6 @@ interface IKafkaMessageService {
      * @param userLinkId bookmark-user-link-id
      * @param homeItemId home-item-id
      */
-    fun bookmarkParseAndNotice(uid: String, bookmark: Bookmark, userLinkId: String, homeItemId: String)
+    fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, userLinkId: String, homeItemId: String)
 }
 
