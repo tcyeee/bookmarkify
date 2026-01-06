@@ -250,17 +250,27 @@ function sort() {
   display: flex;
   justify-content: center;
   box-sizing: border-box;
+  padding-inline: calc(var(--bookmark-gap) / 2);
   --bookmark-gap: 3rem;
   --bookmark-size: 5rem;
 }
 
 .bookmark-grid {
-  width: min(100%, max-content);
+  width: 100%;
   min-height: calc(var(--bookmark-size) + 1.6rem + var(--bookmark-gap));
 }
 
 .bookmark-grid .muuri-item {
   margin: 0;
+}
+
+.bookmark-grid .muuri-item-content {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .bookmark-grid .bookmark-item {
