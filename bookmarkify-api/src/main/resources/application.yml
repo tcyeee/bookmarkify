@@ -78,10 +78,10 @@ spring:
       enabled: true             # 可选：开启上传支持
   kafka:
     # Kafka 服务地址，多个用逗号分隔
-    bootstrap-servers: ${BOOKMARKIFY_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${BOOKMARKIFY_KAFKA_BOOTSTRAP_SERVERS}
     consumer:
-      # 消费组 ID
-      group-id: ${BOOKMARKIFY_KAFKA_CONSUMER_GROUP:bookmarkify-group}
+      # 消费组 ID 单机时默认为 bookmarkify-group
+      group-id: 'bookmarkify-group'
       # 偏移重置策略：latest / earliest
       auto-offset-reset: latest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -115,7 +115,4 @@ admin:
     password: admin
 
 bookmarkify:
-  kafka:
-    enabled: false   # true 开启 Kafka（无 broker 时请保持 false）
-    default-topic: bookmarkify-events   # send(message) 的默认主题
-    consumer-group: ${BOOKMARKIFY_KAFKA_CONSUMER_GROUP:bookmarkify-group}  # 兜底消费组
+#  TODO 将所有自定义配置都移动到这里来
