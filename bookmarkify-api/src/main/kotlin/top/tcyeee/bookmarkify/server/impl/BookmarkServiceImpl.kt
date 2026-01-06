@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
+import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
@@ -60,6 +61,11 @@ class BookmarkServiceImpl(
 
     override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow> =
         bookmarkUserLinkMapper.allBookmarkByUid(uid).onEach { it.initLogo() }
+
+    override fun importBookmarkFile(file: MultipartFile, uid: String): List<BookmarkShow> {
+        log.warn(file.name)
+        return emptyList()
+    }
 
     override fun checkAll() = ktQuery().lt(Bookmark::updateTime, yesterday()).list().forEach(this::parseBookmark)
 
