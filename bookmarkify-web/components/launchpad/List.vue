@@ -13,6 +13,7 @@
         :get-item-width="getItemWidth"
         :get-item-height="getItemHeight"
         @input="onGridInput"
+      @dragStart="onDragStart"
         @dragReleaseEnd="onDragReleaseEnd">
         <template #item="{ item }">
           <div
@@ -108,7 +109,13 @@ const addButtonItem = computed<AddItem>(() => ({
 }))
 
 const gridItems = computed<GridItem[]>(() => [...(pageData.value ?? []), addButtonItem.value])
-const vuuriOptions = { layout: { fillGaps: true, rounding: false } }
+const vuuriOptions = {
+  layout: { fillGaps: true, rounding: false },
+  layoutDuration: 250,
+  showDuration: 0,
+  hideDuration: 0,
+  dragReleaseDuration: 50,
+}
 
 const data = reactive<{
   subApps?: Array<Bookmark>
@@ -117,6 +124,11 @@ const data = reactive<{
   bookmarkDetail?: Bookmark
 }>({
   bookmarkDetailDialog: false,
+})
+
+const dragState = reactive({
+  dragging: false,
+  justDropped: false,
 })
 
 watchEffect(() => {
@@ -132,6 +144,7 @@ function addBookmark(item: HomeItem) {
 }
 
 function openDir(item: HomeItem) {
+  if (dragState.dragging || dragState.justDropped) return
   data.subItemId = item.id
   data.subApps = item.typeDir.bookmarkList
   window.scrollTo({
@@ -141,6 +154,7 @@ function openDir(item: HomeItem) {
 }
 
 function openPage(bookmark: Bookmark) {
+  if (dragState.dragging || dragState.justDropped) return
   const target = bookmarkOpenMode.value === BookmarkOpenMode.NEW_TAB ? '_blank' : '_self'
   window.open(bookmark.urlFull, target)
 }
@@ -194,7 +208,21 @@ function onGridInput(items: GridItem[]) {
   bookmarkStore.homeItems = items.filter((it): it is HomeItem => !isAddItem(it))
 }
 
+function onDragStart() {
+  dragState.dragging = true
+  dragState.justDropped = false
+}
+
 function onDragReleaseEnd() {
+  dragState.dragging = false
+  dragState.justDropped = true
+  if (typeof requestAnimationFrame !== 'undefined') {
+    requestAnimationFrame(() => {
+      dragState.justDropped = false
+    })
+  } else {
+    setTimeout(() => (dragState.justDropped = false), 16)
+  }
   sort()
 }
 
