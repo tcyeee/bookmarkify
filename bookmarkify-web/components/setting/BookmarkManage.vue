@@ -67,7 +67,7 @@
                       <div class="h-7 w-7 overflow-hidden rounded-md">
                         <img
                           class="h-full w-full object-contain"
-                          :src="`data:image/png;base64,${bookmark.iconBase64}`"
+                          :src="bookmark.iconBase64"
                           :alt="bookmark.title"
                         />
                       </div>
