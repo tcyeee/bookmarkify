@@ -26,5 +26,5 @@ interface IBookmarkService : IService<Bookmark> {
     fun search(name: String): List<Bookmark>
     fun linkOne(bookmarkId: String, uid: String): HomeItemShow
     fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow>
-    fun importBookmarkFile(file: MultipartFile, uid: String): List<BookmarkShow>
+    fun importBookmarkFile(file: MultipartFile, uid: String): List<BookmarkShow>?
 }

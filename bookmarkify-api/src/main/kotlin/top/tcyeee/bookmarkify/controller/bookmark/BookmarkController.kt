@@ -46,7 +46,7 @@ class BookmarksController(
 
     @PostMapping("/upload")
     @Operation(summary = "书签上传")
-    fun upload(@RequestParam file: MultipartFile): List<BookmarkShow> = bookmarkService.importBookmarkFile(file, BaseUtils.uid())
+    fun upload(@RequestParam file: MultipartFile): List<BookmarkShow>? = bookmarkService.importBookmarkFile(file, BaseUtils.uid())
 
     @PostMapping("/sort")
     @Operation(summary = "排序")
