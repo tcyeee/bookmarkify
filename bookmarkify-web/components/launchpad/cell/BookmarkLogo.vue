@@ -140,7 +140,7 @@ function loadBase64Image(base64: string): Promise<HTMLImageElement> {
 function buildBase64DataUrl(base64: string): string {
   if (!base64) return ''
   const trimmed = base64.trim()
-  if (trimmed.startsWith('data:image/')) return trimmed
+  if (trimmed.startsWith('data:')) return trimmed
   const mime = detectMimeFromBase64(trimmed)
   return `data:${mime};base64,${trimmed}`
 }

@@ -17,7 +17,28 @@ object FileUtils {
     fun icoBase64(imgs: List<ManifestIcon>?, rawUrl: String): String? {
         val icon = imgs?.firstOrNull { it.sizes == "16x16" || it.src?.endsWith(".ico", ignoreCase = true) == true }
             ?: ManifestIcon(src = "${rawUrl}/favicon.ico")
-        return runCatching { HttpUtil.downloadBytes(icon.src)?.let { Base64.encode(it) } }.getOrNull()
+        return runCatching {
+            HttpUtil.createGet(icon.src).execute().use { resp ->
+                val bytes = resp.bodyBytes()
+                if (bytes == null || bytes.isEmpty()) return@runCatching null
+                val contentType = resp.header("Content-Type")?.substringBefore(";")?.takeIf { it.isNotBlank() }
+                    ?: guessImageMime(icon.src!!)
+                "data:${contentType};base64,${Base64.encode(bytes)}"
+            }
+        }.getOrNull()
+    }
+
+    private fun guessImageMime(src: String): String {
+        val ext = FileUtil.extName(src.substringBefore("?")).lowercase()
+        return when (ext) {
+            "png" -> "image/png"
+            "jpg", "jpeg" -> "image/jpeg"
+            "svg" -> "image/svg+xml"
+            "ico" -> "image/x-icon"
+            "gif" -> "image/gif"
+            "webp" -> "image/webp"
+            else -> "application/octet-stream"
+        }
     }
 }
 

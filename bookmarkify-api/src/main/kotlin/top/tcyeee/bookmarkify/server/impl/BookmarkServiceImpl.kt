@@ -62,6 +62,10 @@ class BookmarkServiceImpl(
     override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow> =
         bookmarkUserLinkMapper.allBookmarkByUid(uid).onEach { it.initLogo() }
 
+//    /**
+//     * TODO 书签上传, 拿到chrome导出的书签文件(html)以后,进行数据清洗,仅需要其中用户保存的url和
+//     *
+//     */
     override fun importBookmarkFile(file: MultipartFile, uid: String): List<BookmarkShow> {
         log.warn(file.name)
         return emptyList()
