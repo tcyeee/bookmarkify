@@ -44,15 +44,16 @@ object ChromeBookmarkParser {
      * - 所有错误统一转换为业务异常，避免上层混用异常类型；
      * - 仅做数据清洗与转换，不进行任何持久化或业务校验。
      */
-    fun trim(file: MultipartFile): ChromeBookmarkStructure {
+    fun trim(file: MultipartFile): List<SystemBookmarkStructure> =
         // 1.读取并校验原始 HTML 文本
-        val rawHtml = readHtmlContent(file)
-        // 2.解析并直接返回树形结构
-        return parseRows(rawHtml)
-    }
+        readHtmlContent(file)
+            // 2.解析并直接返回树形结构
+            .let { parseRows(it) }
+            // 3.将chrome数据结构, 转变为系统数据结构
+            .let { transferStructure(it) }
 
     /**
-     * TODO 将chrome数据结构, 转变为系统数据结构
+     * 将chrome数据结构, 转变为系统数据结构
      *
      * chrome数据结构: 无限层级, 无限嵌套
      * system数据结构: 不可嵌套, 文件夹中不可包含文件夹
@@ -64,9 +65,6 @@ object ChromeBookmarkParser {
      *  |- 文件夹2
      *    |- 书签3
      *    |- 书签4
-     *    |- 文件夹3
-     *      |- 书签5
-     *      |- 书签6
      *
      * eg: 转化后的system数据结构
      * 文件夹1:
@@ -75,9 +73,6 @@ object ChromeBookmarkParser {
      * 文件夹2
      *  |- 书签3
      *  |- 书签4
-     * 文件夹3
-     *  |- 书签5
-     *  |- 书签6
      */
     fun transferStructure(chromeStructure: ChromeBookmarkStructure): List<SystemBookmarkStructure> {
         val result = mutableListOf<SystemBookmarkStructure>()
