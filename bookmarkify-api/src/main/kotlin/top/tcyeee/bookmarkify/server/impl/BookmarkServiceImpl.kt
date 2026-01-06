@@ -60,7 +60,10 @@ class BookmarkServiceImpl(
         bookmarkUserLinkMapper.allBookmarkByUid(uid).onEach { it.initLogo() }
 
     override fun importBookmarkFile(file: MultipartFile, uid: String): List<BookmarkShow>? {
+        // 拿到原始数据
         val trim = ChromeBookmarkParser.trim(file)
+        // TODO 生成占位信息
+
         return emptyList()
     }
 
