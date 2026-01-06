@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { $t } from '@vben/locales';
 
 import SwitchItem from '../switch-item.vue';
 
@@ -24,13 +23,13 @@ function handleClick(value: string) {
 
 <template>
   <SwitchItem v-model="transitionProgress">
-    {{ $t('preferences.animation.progress') }}
+    {{ '页面切换进度条' }}
   </SwitchItem>
   <SwitchItem v-model="transitionLoading">
-    {{ $t('preferences.animation.loading') }}
+    {{ '页面切换 Loading' }}
   </SwitchItem>
   <SwitchItem v-model="transitionEnable">
-    {{ $t('preferences.animation.transition') }}
+    {{ '页面切换动画' }}
   </SwitchItem>
   <div
     v-if="transitionEnable"

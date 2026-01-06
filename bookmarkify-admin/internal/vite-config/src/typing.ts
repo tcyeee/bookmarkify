@@ -214,11 +214,6 @@ interface ApplicationPluginOptions extends CommonPluginOptions {
    */
   html?: boolean;
   /**
-   * 是否开启国际化
-   * @default false
-   */
-  i18n?: boolean;
-  /**
    * 是否开启 ImportMap CDN
    * @default false
    */

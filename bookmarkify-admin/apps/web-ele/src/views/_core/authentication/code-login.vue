@@ -1,13 +1,12 @@
 <script lang="ts" setup>
-import type { VbenFormSchema } from '@vben/common-ui';
-import type { Recordable } from '@vben/types';
+import type { VbenFormSchema } from "@vben/common-ui";
+import type { Recordable } from "@vben/types";
 
-import { computed, ref } from 'vue';
+import { computed, ref } from "vue";
 
-import { AuthenticationCodeLogin, z } from '@vben/common-ui';
-import { $t } from '@vben/locales';
+import { AuthenticationCodeLogin, z } from "@vben/common-ui";
 
-defineOptions({ name: 'CodeLogin' });
+defineOptions({ name: "CodeLogin" });
 
 const loading = ref(false);
 const CODE_LENGTH = 6;
@@ -15,36 +14,34 @@ const CODE_LENGTH = 6;
 const formSchema = computed((): VbenFormSchema[] => {
   return [
     {
-      component: 'VbenInput',
+      component: "VbenInput",
       componentProps: {
-        placeholder: $t('authentication.mobile'),
+        placeholder: "手机号",
       },
-      fieldName: 'phoneNumber',
-      label: $t('authentication.mobile'),
+      fieldName: "phoneNumber",
+      label: "手机号",
       rules: z
         .string()
-        .min(1, { message: $t('authentication.mobileTip') })
+        .min(1, { message: "请输入手机号" })
         .refine((v) => /^\d{11}$/.test(v), {
-          message: $t('authentication.mobileErrortip'),
+          message: "手机号格式错误",
         }),
     },
     {
-      component: 'VbenPinInput',
+      component: "VbenPinInput",
       componentProps: {
         codeLength: CODE_LENGTH,
         createText: (countdown: number) => {
           const text =
-            countdown > 0
-              ? $t('authentication.sendText', [countdown])
-              : $t('authentication.sendCode');
+            countdown > 0 ? `${countdown}秒后重新获取` : "获取验证码";
           return text;
         },
-        placeholder: $t('authentication.code'),
+        placeholder: "验证码",
       },
-      fieldName: 'code',
-      label: $t('authentication.code'),
+      fieldName: "code",
+      label: "验证码",
       rules: z.string().length(CODE_LENGTH, {
-        message: $t('authentication.codeTip', [CODE_LENGTH]),
+        message: `请输入${CODE_LENGTH}位验证码`,
       }),
     },
   ];
@@ -61,9 +58,5 @@ async function handleLogin(values: Recordable<any>) {
 </script>
 
 <template>
-  <AuthenticationCodeLogin
-    :form-schema="formSchema"
-    :loading="loading"
-    @submit="handleLogin"
-  />
+  <AuthenticationCodeLogin :form-schema="formSchema" :loading="loading" @submit="handleLogin" />
 </template>

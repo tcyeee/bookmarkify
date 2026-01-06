@@ -20,9 +20,7 @@
     }
   },
   "dependencies": {
-    "@intlify/core-base": "catalog:",
     "@vben-core/composables": "workspace:*",
-    "vue": "catalog:",
-    "vue-i18n": "catalog:"
+    "vue": "catalog:"
   }
 }

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import { $t } from '@vben/locales';
 import { isWindowsOs } from '@vben/utils';
 
 import SwitchItem from '../switch-item.vue';
@@ -23,28 +22,28 @@ const altView = computed(() => (isWindowsOs() ? 'Alt' : '⌥'));
 
 <template>
   <SwitchItem v-model="shortcutKeysEnable">
-    {{ $t('preferences.shortcutKeys.title') }}
+    {{ '快捷键' }}
   </SwitchItem>
   <SwitchItem
     v-model="shortcutKeysGlobalSearch"
     :disabled="!shortcutKeysEnable"
   >
-    {{ $t('preferences.shortcutKeys.search') }}
+    {{ '全局搜索' }}
     <template #shortcut>
       {{ isWindowsOs() ? 'Ctrl' : '⌘' }}
       <kbd> K </kbd>
     </template>
   </SwitchItem>
   <SwitchItem v-model="shortcutKeysLogout" :disabled="!shortcutKeysEnable">
-    {{ $t('preferences.shortcutKeys.logout') }}
+    {{ '退出登录' }}
     <template #shortcut> {{ altView }} Q </template>
   </SwitchItem>
   <!-- <SwitchItem v-model="shortcutKeysPreferences" :disabled="!shortcutKeysEnable">
-    {{ $t('preferences.shortcutKeys.preferences') }}
+    {{ '偏好设置' }}
     <template #shortcut> {{ altView }} , </template>
   </SwitchItem> -->
   <SwitchItem v-model="shortcutKeysLockScreen" :disabled="!shortcutKeysEnable">
-    {{ $t('ui.widgets.lockScreen.title') }}
+    {{ '锁定屏幕' }}
     <template #shortcut> {{ altView }} L </template>
   </SwitchItem>
 </template>

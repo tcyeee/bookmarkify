@@ -10,7 +10,7 @@ import '@vben/styles/ele';
 import { useTitle } from '@vueuse/core';
 import { ElLoading } from 'element-plus';
 
-import { $t, setupI18n } from '#/locales';
+
 
 import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
@@ -43,9 +43,6 @@ async function bootstrap(namespace: string) {
     spinning: 'spinning',
   });
 
-  // 国际化 i18n 配置
-  await setupI18n(app);
-
   // 配置 pinia-tore
   await initStores(app, { namespace });
 
@@ -68,7 +65,7 @@ async function bootstrap(namespace: string) {
     if (preferences.app.dynamicTitle) {
       const routeTitle = router.currentRoute.value.meta?.title;
       const pageTitle =
-        (routeTitle ? `${$t(routeTitle)} - ` : '') + preferences.app.name;
+        (routeTitle ? `${routeTitle} - ` : '') + preferences.app.name;
       useTitle(pageTitle);
     }
   });

@@ -4,7 +4,6 @@ import type { NotificationItem } from './types';
 import { useRouter } from 'vue-router';
 
 import { Bell, CircleCheckBig, CircleX, MailCheck } from '@vben/icons';
-import { $t } from '@vben/locales';
 
 import {
   VbenButton,
@@ -105,10 +104,10 @@ function navigateTo(
 
     <div class="relative">
       <div class="flex items-center justify-between p-4 py-3">
-        <div class="text-foreground">{{ $t('ui.widgets.notifications') }}</div>
+        <div class="text-foreground">{{ '通知' }}</div>
         <VbenIconButton
           :disabled="notifications.length <= 0"
-          :tooltip="$t('ui.widgets.markAllAsRead')"
+          :tooltip="'全部标记为已读'"
           @click="handleMakeAll"
         >
           <MailCheck class="size-4" />
@@ -151,7 +150,7 @@ function navigateTo(
                   size="xs"
                   variant="ghost"
                   class="h-6 px-2"
-                  :tooltip="$t('common.confirm')"
+                  :tooltip="'确认'"
                   @click.stop="emit('read', item)"
                 >
                   <CircleCheckBig class="size-4" />
@@ -161,7 +160,7 @@ function navigateTo(
                   size="xs"
                   variant="ghost"
                   class="text-destructive h-6 px-2"
-                  :tooltip="$t('common.delete')"
+                  :tooltip="'删除'"
                   @click.stop="emit('remove', item)"
                 >
                   <CircleX class="size-4" />
@@ -174,7 +173,7 @@ function navigateTo(
 
       <template v-else>
         <div class="flex-center text-muted-foreground min-h-[150px] w-full">
-          {{ $t('common.noData') }}
+          {{ '暂无数据' }}
         </div>
       </template>
 
@@ -187,10 +186,10 @@ function navigateTo(
           variant="ghost"
           @click="handleClear"
         >
-          {{ $t('ui.widgets.clearNotifications') }}
+          {{ '清空' }}
         </VbenButton>
         <VbenButton size="sm" @click="handleViewAll">
-          {{ $t('ui.widgets.viewAll') }}
+          {{ '查看所有消息' }}
         </VbenButton>
       </div>
     </div>

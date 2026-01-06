@@ -3,7 +3,6 @@ import type { SelectOption } from '@vben/types';
 
 import { computed } from 'vue';
 
-import { $t } from '@vben/locales';
 
 import SelectItem from '../select-item.vue';
 import SwitchItem from '../switch-item.vue';
@@ -26,15 +25,15 @@ const widgetRefresh = defineModel<boolean>('widgetRefresh');
 
 const positionItems = computed((): SelectOption[] => [
   {
-    label: $t('preferences.position.auto'),
+    label: '自动',
     value: 'auto',
   },
   {
-    label: $t('preferences.position.header'),
+    label: '顶栏',
     value: 'header',
   },
   {
-    label: $t('preferences.position.fixed'),
+    label: '固定',
     value: 'fixed',
   },
 ]);
@@ -42,30 +41,30 @@ const positionItems = computed((): SelectOption[] => [
 
 <template>
   <SwitchItem v-model="widgetGlobalSearch">
-    {{ $t('preferences.widget.globalSearch') }}
+    {{ '启用全局搜索' }}
   </SwitchItem>
   <SwitchItem v-model="widgetThemeToggle">
-    {{ $t('preferences.widget.themeToggle') }}
+    {{ '启用主题切换' }}
   </SwitchItem>
   <SwitchItem v-model="widgetLanguageToggle">
-    {{ $t('preferences.widget.languageToggle') }}
+    {{ '启用语言切换' }}
   </SwitchItem>
   <SwitchItem v-model="widgetFullscreen">
-    {{ $t('preferences.widget.fullscreen') }}
+    {{ '启用全屏' }}
   </SwitchItem>
   <SwitchItem v-model="widgetNotification">
-    {{ $t('preferences.widget.notification') }}
+    {{ '启用通知' }}
   </SwitchItem>
   <SwitchItem v-model="widgetLockScreen">
-    {{ $t('preferences.widget.lockScreen') }}
+    {{ '启用锁屏' }}
   </SwitchItem>
   <SwitchItem v-model="widgetSidebarToggle">
-    {{ $t('preferences.widget.sidebarToggle') }}
+    {{ '启用侧边栏切换' }}
   </SwitchItem>
   <SwitchItem v-model="widgetRefresh">
-    {{ $t('preferences.widget.refresh') }}
+    {{ '启用刷新' }}
   </SwitchItem>
   <SelectItem v-model="appPreferencesButtonPosition" :items="positionItems">
-    {{ $t('preferences.position.title') }}
+    {{ '偏好设置位置' }}
   </SelectItem>
 </template>

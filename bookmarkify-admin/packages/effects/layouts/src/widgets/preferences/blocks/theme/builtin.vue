@@ -5,7 +5,6 @@ import type { BuiltinThemeType } from '@vben/types';
 import { computed, ref, watch } from 'vue';
 
 import { UserRoundPen } from '@vben/icons';
-import { $t } from '@vben/locales';
 import { BUILT_IN_THEME_PRESETS } from '@vben/preferences';
 import { convertToHsl, TinyColor } from '@vben/utils';
 
@@ -41,50 +40,50 @@ const builtinThemePresets = computed(() => {
 function typeView(name: BuiltinThemeType) {
   switch (name) {
     case 'custom': {
-      return $t('preferences.theme.builtin.custom');
+      return '自定义';
     }
     case 'deep-blue': {
-      return $t('preferences.theme.builtin.deepBlue');
+      return '深蓝色';
     }
     case 'deep-green': {
-      return $t('preferences.theme.builtin.deepGreen');
+      return '深绿色';
     }
     case 'default': {
-      return $t('preferences.theme.builtin.default');
+      return '默认';
     }
     case 'gray': {
-      return $t('preferences.theme.builtin.gray');
+      return '中灰色';
     }
     case 'green': {
-      return $t('preferences.theme.builtin.green');
+      return '浅绿色';
     }
 
     case 'neutral': {
-      return $t('preferences.theme.builtin.neutral');
+      return '中性色';
     }
     case 'orange': {
-      return $t('preferences.theme.builtin.orange');
+      return '橙黄色';
     }
     case 'pink': {
-      return $t('preferences.theme.builtin.pink');
+      return '樱花粉';
     }
     case 'rose': {
-      return $t('preferences.theme.builtin.rose');
+      return '玫瑰红';
     }
     case 'sky-blue': {
-      return $t('preferences.theme.builtin.skyBlue');
+      return '天蓝色';
     }
     case 'slate': {
-      return $t('preferences.theme.builtin.slate');
+      return '石板灰';
     }
     case 'violet': {
-      return $t('preferences.theme.builtin.violet');
+      return '紫罗兰';
     }
     case 'yellow': {
-      return $t('preferences.theme.builtin.yellow');
+      return '柠檬黄';
     }
     case 'zinc': {
-      return $t('preferences.theme.builtin.zinc');
+      return '锌色灰';
     }
   }
 }

@@ -6,7 +6,7 @@ import type { AlertProps, BeforeCloseScope, PromptProps } from './alert';
 
 import { h, nextTick, ref, render } from 'vue';
 
-import { useSimpleLocale } from '@vben-core/composables';
+
 import { Input, VbenRenderContent } from '@vben-core/shadcn-ui';
 import { isFunction, isString } from '@vben-core/shared/utils';
 
@@ -14,7 +14,6 @@ import Alert from './alert.vue';
 
 const alerts = ref<Array<{ container: HTMLElement; instance: Component }>>([]);
 
-const { $t } = useSimpleLocale();
 
 export function vbenAlert(options: AlertProps): Promise<void>;
 export function vbenAlert(
@@ -35,8 +34,8 @@ export function vbenAlert(
   return new Promise((resolve, reject) => {
     const options: AlertProps = isString(arg0)
       ? {
-          content: arg0,
-        }
+        content: arg0,
+      }
       : { ...arg0 };
     if (arg1) {
       if (isString(arg1)) {
@@ -78,7 +77,7 @@ export function vbenAlert(
       },
       ...options,
       open: true,
-      title: options.title ?? $t.value('prompt'),
+      title: options.title ?? '提示',
     };
 
     // 创建Alert组件的VNode

@@ -1,7 +1,6 @@
 import type { RequestClient } from './request-client';
 import type { MakeErrorMessageFn, ResponseInterceptorConfig } from './types';
 
-import { $t } from '@vben/locales';
 import { isFunction } from '@vben/utils';
 
 import axios from 'axios';
@@ -121,9 +120,9 @@ export const errorMessageResponseInterceptor = (
       const err: string = error?.toString?.() ?? '';
       let errMsg = '';
       if (err?.includes('Network Error')) {
-        errMsg = $t('ui.fallback.http.networkError');
+        errMsg = '网络异常，请检查您的网络连接后重试。';
       } else if (error?.message?.includes?.('timeout')) {
-        errMsg = $t('ui.fallback.http.requestTimeout');
+        errMsg = '请求超时，请稍后再试。';
       }
       if (errMsg) {
         makeErrorMessage?.(errMsg, error);
@@ -135,27 +134,27 @@ export const errorMessageResponseInterceptor = (
 
       switch (status) {
         case 400: {
-          errorMessage = $t('ui.fallback.http.badRequest');
+          errorMessage = '请求错误。请检查您的输入并重试。';
           break;
         }
         case 401: {
-          errorMessage = $t('ui.fallback.http.unauthorized');
+          errorMessage = '登录认证过期，请重新登录后继续。';
           break;
         }
         case 403: {
-          errorMessage = $t('ui.fallback.http.forbidden');
+          errorMessage = '禁止访问, 您没有权限访问此资源。';
           break;
         }
         case 404: {
-          errorMessage = $t('ui.fallback.http.notFound');
+          errorMessage = '未找到, 请求的资源不存在。';
           break;
         }
         case 408: {
-          errorMessage = $t('ui.fallback.http.requestTimeout');
+          errorMessage = '请求超时，请稍后再试。';
           break;
         }
         default: {
-          errorMessage = $t('ui.fallback.http.internalServerError');
+          errorMessage = '内部服务器错误，请稍后再试。';
         }
       }
       makeErrorMessage?.(errorMessage, error);
