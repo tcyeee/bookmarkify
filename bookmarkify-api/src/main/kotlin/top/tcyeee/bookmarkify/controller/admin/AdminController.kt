@@ -1,4 +1,4 @@
-package top.tcyeee.bookmarkify.controller.user
+package top.tcyeee.bookmarkify.controller.admin
 
 import cn.dev33.satoken.annotation.SaIgnore
 import cn.dev33.satoken.stp.SaTokenInfo
@@ -31,4 +31,6 @@ class AdminController(private val adminLoginConfig: AdminLoginConfig) {
         }
         throw CommonException(ErrorType.E109)
     }
+
+    // TODO 查看全部的用户信息
 }
