@@ -12,7 +12,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.HomeItemSortParams
-import top.tcyeee.bookmarkify.entity.entity.Bookmark
+import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IHomeItemService
@@ -33,7 +33,7 @@ class BookmarksController(
 
     @Operation(summary = "通过书签简称/标题/描述/根域名,搜索书签")
     @PostMapping("/search")
-    fun search(@RequestParam name: String): List<Bookmark> = bookmarkService.search(name)
+    fun search(@RequestParam name: String): List<BookmarkEntity> = bookmarkService.search(name)
 
     @Operation(summary = "查看我的全部书签")
     @PostMapping("/list")

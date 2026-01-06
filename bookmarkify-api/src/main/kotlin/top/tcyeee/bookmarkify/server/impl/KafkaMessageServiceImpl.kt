@@ -5,19 +5,28 @@ import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
-import top.tcyeee.bookmarkify.entity.entity.Bookmark
+import top.tcyeee.bookmarkify.entity.HomeItemShow
+import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.enums.KafkaTopicType
-import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.mapper.BookmarkMapper
+import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
+import top.tcyeee.bookmarkify.mapper.WebsiteLogoMapper
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
+import top.tcyeee.bookmarkify.utils.OssUtils
+import top.tcyeee.bookmarkify.utils.SocketUtils
+import top.tcyeee.bookmarkify.utils.WebsiteParser
+import java.time.LocalDateTime
 
 @Service
 class KafkaMessageServiceImpl(
     private val kafkaTemplate: KafkaTemplate<String, String>,
-    private val bookmarkService: IBookmarkService
+    private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
+    private val bookmarkMapper: BookmarkMapper,
+    private val websiteLogoMapper: WebsiteLogoMapper
 ) : IKafkaMessageService {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    override fun bookmarkParse(bookmark: Bookmark) {
+    override fun bookmarkParse(bookmark: BookmarkEntity) {
         val type = KafkaTopicType.BOOKMARK_PRASE
         kafkaTemplate.send(type.name, bookmark.json).whenComplete { res, err ->
             if (err != null) throw CommonException(ErrorType.E229, "type:${type.name},error:${err.message}")
@@ -26,9 +35,53 @@ class KafkaMessageServiceImpl(
         }
     }
 
-    override fun bookmarkParseAndNotice(uid: String, bookmark: Bookmark, userLinkId: String, homeItemId: String) {
-        bookmarkService.parseBookmark(bookmark)
-        bookmarkService.findBookmarkAndNotice(userLinkId, homeItemId, uid)
+    override fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, userLinkId: String, homeItemId: String) {
+        this.parseBookmark(bookmark)
+        this.findBookmarkAndNotice(userLinkId, homeItemId, uid)
+    }
+
+    private fun parseBookmark(bookmark: BookmarkEntity) {
+        log.warn("[CHECK] 开始解析域名:${bookmark.rawUrl}")
+        val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }
+            .getOrElse {
+                if (it.message.toString().contains("403")) bookmark.antiCrawlerDetected = true
+                bookmark.parseErrMsg = it.message.toString()
+                bookmark.isActivity = false
+                bookmarkMapper.insertOrUpdate(bookmark)
+                it.printStackTrace()
+                return
+            }
+            // 填充bookmark基础信息 以及 bookmark-ico-base64信息
+            .also { bookmark.initBaseInfo(it) }
+            // 更新书签
+            .also { bookmarkMapper.insertOrUpdate(bookmark) }
+
+        // 保存网站LOGO/OG图片到OSS和数据库
+        if (wrapper.distinctIcons.isNullOrEmpty()) return
+        OssUtils.restoreWebsiteLogoAndOg(wrapper.distinctIcons, bookmark.id)
+            // 更新/保存LOGO到数据库
+            ?.also { websiteLogoMapper.insertOrUpdate(it) }
+            // 更新/保存最大图标信息
+            ?.also { bookmark.setMaximalLogoSize(it.width) }
+
+    }
+
+    private fun findBookmarkAndNotice(bookmarkUserLinkId: String, homeItemId: String, uid: String) =
+        bookmarkUserLinkMapper
+            // 找到用户自定义书签
+            .findShowById(bookmarkUserLinkId)
+            // 包装为桌面元素
+            .let { HomeItemShow(uid, homeItemId, it.also { it.initLogo() }) }
+            // 通知
+            .also { SocketUtils.homeItemUpdate(uid, it) }.run {}
+
+    // 在BookmarkEntity设置LOGO最大尺寸
+    private fun BookmarkEntity.setMaximalLogoSize(maximal: Int) {
+        this.maximalLogoSize = maximal
+        this.isActivity = true
+        this.updateTime = LocalDateTime.now()
+        bookmarkMapper.insertOrUpdate(this)
     }
 }
+
 
