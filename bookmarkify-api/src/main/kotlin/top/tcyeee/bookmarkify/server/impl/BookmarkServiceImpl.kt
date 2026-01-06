@@ -59,10 +59,18 @@ class BookmarkServiceImpl(
     override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow> =
         bookmarkUserLinkMapper.allBookmarkByUid(uid).onEach { it.initLogo() }
 
+    /**
+     * TODO
+     *
+     * 数据读取完成以后,立即返回占位信息
+     * 等待书签解析完成以后,通过WebSocket逐个向前端返回解析完成后的数据
+     */
     override fun importBookmarkFile(file: MultipartFile, uid: String): List<BookmarkShow>? {
         // 拿到原始数据
         val trim = ChromeBookmarkParser.trim(file)
         // TODO 生成占位信息
+
+        //
 
         return emptyList()
     }

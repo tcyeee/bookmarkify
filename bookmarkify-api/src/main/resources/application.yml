@@ -76,6 +76,23 @@ spring:
       max-request-size: 50MB    # 单次请求总大小50MB
       file-size-threshold: 2MB  # 可选：内存缓存阈值
       enabled: true             # 可选：开启上传支持
+  kafka:
+    # Kafka 服务地址，多个用逗号分隔
+    bootstrap-servers: ${BOOKMARKIFY_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # 消费组 ID
+      group-id: ${BOOKMARKIFY_KAFKA_CONSUMER_GROUP:bookmarkify-group}
+      # 偏移重置策略：latest / earliest
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all       # all=全副本确认，保证可靠性
+      retries: 3      # 发送失败重试次数
+    listener:
+      missing-topics-fatal: false  # 订阅缺失主题时不让应用启动失败
 
 wechat:
   work:
@@ -96,3 +113,9 @@ admin:
   login:
     account: tcyeee@outlook.com
     password: admin
+
+bookmarkify:
+  kafka:
+    enabled: false   # true 开启 Kafka（无 broker 时请保持 false）
+    default-topic: bookmarkify-events   # send(message) 的默认主题
+    consumer-group: ${BOOKMARKIFY_KAFKA_CONSUMER_GROUP:bookmarkify-group}  # 兜底消费组
