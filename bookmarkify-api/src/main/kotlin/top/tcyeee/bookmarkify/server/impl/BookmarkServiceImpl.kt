@@ -87,7 +87,7 @@ class BookmarkServiceImpl(
         val userLink = BookmarkUserLink(url, uid, nodeEntity.id, bookmark).also { bookmarkUserLinkMapper.insert(it) }
 
         // 返回占位信息,同时通知队列去检查书签
-        if (bookmark.checkFlag) return nodeEntity.loadingVO()
+        if (bookmark.checkFlag()) return nodeEntity.loadingVO()
             .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark, userLink.id, nodeEntity.id) }
 
         // 如果无需更新书签,则直接将旧书签打包为桌面元素返回
