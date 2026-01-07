@@ -5,11 +5,12 @@ import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
-import top.tcyeee.bookmarkify.entity.HomeItemShow
+import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.enums.KafkaTopicType
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
+import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
 import top.tcyeee.bookmarkify.mapper.WebsiteLogoMapper
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
 import top.tcyeee.bookmarkify.utils.OssUtils
@@ -22,7 +23,8 @@ class KafkaMessageServiceImpl(
     private val kafkaTemplate: KafkaTemplate<String, String>,
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
     private val bookmarkMapper: BookmarkMapper,
-    private val websiteLogoMapper: WebsiteLogoMapper
+    private val websiteLogoMapper: WebsiteLogoMapper,
+    private val layoutNodeMapper: UserLayoutNodeMapper
 ) : IKafkaMessageService {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -35,15 +37,16 @@ class KafkaMessageServiceImpl(
         }
     }
 
-    override fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, userLinkId: String, homeItemId: String) {
+    override fun bookmarkParseAndNotice(
+        uid: String, bookmark: BookmarkEntity, userLinkId: String, nodeLayoutId: String
+    ) {
         this.parseBookmark(bookmark)
-        this.findBookmarkAndNotice(userLinkId, homeItemId, uid)
+        this.findBookmarkAndNotice(userLinkId, nodeLayoutId, uid)
     }
 
     private fun parseBookmark(bookmark: BookmarkEntity) {
         log.warn("[CHECK] 开始解析域名:${bookmark.rawUrl}")
-        val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }
-            .getOrElse {
+        val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
                 if (it.message.toString().contains("403")) bookmark.antiCrawlerDetected = true
                 bookmark.parseErrMsg = it.message.toString()
                 bookmark.isActivity = false
@@ -66,14 +69,14 @@ class KafkaMessageServiceImpl(
 
     }
 
-    private fun findBookmarkAndNotice(bookmarkUserLinkId: String, homeItemId: String, uid: String) =
-        bookmarkUserLinkMapper
-            // 找到用户自定义书签
-            .findShowById(bookmarkUserLinkId)
-            // 包装为桌面元素
-            .let { HomeItemShow(uid, homeItemId, it.also { it.initLogo() }) }
-            // 通知
-            .also { SocketUtils.homeItemUpdate(uid, it) }.run {}
+    private fun findBookmarkAndNotice(bookmarkUserLinkId: String, layoutNodeId: String, uid: String) {
+        // 找到用户自定义书签
+        val bookmarkShow = bookmarkUserLinkMapper.findShowById(bookmarkUserLinkId).initLogo()
+        // 找到用户的单条布局信息
+        val layoutEntity = layoutNodeMapper.selectById(layoutNodeId)
+        // 通知到前端
+        UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
+    }
 
     // 在BookmarkEntity设置LOGO最大尺寸
     private fun BookmarkEntity.setMaximalLogoSize(maximal: Int) {

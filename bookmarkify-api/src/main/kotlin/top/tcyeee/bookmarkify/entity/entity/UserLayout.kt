@@ -27,16 +27,20 @@ data class UserLayoutNodeEntity(
     @field:Schema(description = "节点类型") val type: NodeTypeEnum = NodeTypeEnum.BOOKMARK,
 
     @field:Schema(description = "用户ID") val uid: String,
-    @field:Schema(description = "节点(文件夹)名称") val name: String,
+    @field:Schema(description = "节点(文件夹)名称") val name: String? = null,
     @field:Schema(description = "添加时间") var createdAt: LocalDateTime = LocalDateTime.now(),
 ) {
+    // 当前仅仅只包含Bookamrk的展示
     fun vo(sort: Long?, bookmark: BookmarkShow?): UserLayoutNodeVO = UserLayoutNodeVO(
-        name = name,
         sort = sort ?: Long.MAX_VALUE,
         typeApp = bookmark
     ).also {
         BeanUtil.copyProperties(this, it)
         if (type == NodeTypeEnum.BOOKMARK) it.typeApp!!.initLogo() // 初始化其中的LOGO
+    }
+
+    fun loadingVO(): UserLayoutNodeVO {
+        return UserLayoutNodeVO()
     }
 }
 

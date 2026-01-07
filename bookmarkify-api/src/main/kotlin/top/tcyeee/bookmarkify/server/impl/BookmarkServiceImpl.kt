@@ -7,12 +7,14 @@ import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
+import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
+import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
-import top.tcyeee.bookmarkify.entity.entity.HomeItem
+import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
-import top.tcyeee.bookmarkify.mapper.HomeItemMapper
+import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IHomeItemService
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
@@ -27,10 +29,10 @@ import top.tcyeee.bookmarkify.utils.yesterday
 @Service
 class BookmarkServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
-    private val homeItemMapper: HomeItemMapper,
     private val homeItemService: IHomeItemService,
     private val projectConfig: ProjectConfig,
     private val kafkaMessageService: IKafkaMessageService,
+    private val nodeMapper: UserLayoutNodeMapper
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
 
     // 获取配置信息
@@ -46,15 +48,15 @@ class BookmarkServiceImpl(
             .last("limit 5")
             .list()
 
-    override fun linkOne(bookmarkId: String, uid: String): HomeItemShow {
+    override fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO {
+        val nodeEntity = UserLayoutNodeEntity(uid = uid).also { nodeMapper.insert(it) }
+
         val userLink = this.findById(bookmarkId)
-            .let { BookmarkUserLink(it, uid) }
+            .let { BookmarkUserLink(it, nodeEntity.id, uid) }
             .also { bookmarkUserLinkMapper.insert(it) }
 
-        val homeItem = HomeItem(uid, userLink.id).also { homeItemMapper.insert(it) }
-
-        return bookmarkUserLinkMapper.findShowById(userLink.id)
-            .let { HomeItemShow(uid, homeItem.id, it.also { it.initLogo() }) }
+        return bookmarkUserLinkMapper.findShowById(userLink.id).initLogo()
+            .let { UserLayoutNodeVO(nodeEntity, it) }
     }
 
     override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow> =
@@ -74,21 +76,22 @@ class BookmarkServiceImpl(
     override fun checkAll() = ktQuery().lt(BookmarkEntity::updateTime, yesterday()).list()
         .forEach(kafkaMessageService::bookmarkParse)
 
-    override fun addOne(url: String, uid: String): HomeItemShow {
-        val bookmarkUrl = WebsiteParser.urlWrapper(url)
+    override fun addOne(url: String, uid: String): UserLayoutNodeVO {
+        // 添加书签信息
+        val bookmarkUrl: BookmarkUrlWrapper = WebsiteParser.urlWrapper(url)
         val bookmark = this.getByHost(bookmarkUrl.urlHost) ?: BookmarkEntity(bookmarkUrl).also { save(it) }
 
-        // 添加用户关联和桌面布局
-        val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark).also { bookmarkUserLinkMapper.insert(it) }
-        val homeItem = HomeItem(uid, userLink.id).also { homeItemMapper.insert(it) }
+        // 添加用户布局信息
+        val nodeEntity = UserLayoutNodeEntity(uid = uid).also { nodeMapper.insert(it) }
+        // 添加用户关联
+        val userLink = BookmarkUserLink(url, uid, nodeEntity.id, bookmark).also { bookmarkUserLinkMapper.insert(it) }
 
         // 返回占位信息,同时通知队列去检查书签
-        if (bookmark.checkFlag) return HomeItemShow(homeItem.id, uid, bookmark.id)
-            .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark, userLink.id, homeItem.id) }
+        if (bookmark.checkFlag) return nodeEntity.loadingVO()
+            .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark, userLink.id, nodeEntity.id) }
 
         // 如果无需更新书签,则直接将旧书签打包为桌面元素返回
-        return bookmarkUserLinkMapper.findShowById(userLink.id)
-            .let { HomeItemShow(uid, homeItem.id, it.initLogo()) }
+        return bookmarkUserLinkMapper.findShowById(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
     }
 
     private fun getByHost(urlHost: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, urlHost).one()

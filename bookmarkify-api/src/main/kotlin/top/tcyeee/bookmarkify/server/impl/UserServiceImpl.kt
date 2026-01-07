@@ -71,8 +71,14 @@ class UserServiceImpl(
     ): UserSessionInfo = if (StpKit.USER.isLogin && BaseUtils.user() != null) {
         BaseUtils.user()!!
     } else {
-        BaseUtils.sessionRegisterDeviceId(request, response, projectConfig).let(this::queryOrRegisterByDeviceId)
-            .also { bookmarkService.setDefaultBookmark(it.id) }.also { StpKit.USER.login(it.id, true) }
+        BaseUtils.sessionRegisterDeviceId(request, response, projectConfig)
+            // 找到设备ID
+            .let(this::queryOrRegisterByDeviceId)
+            // 创建默认书签
+            .also { bookmarkService.setDefaultBookmark(it.id) }
+            // 在权限认证系统中登录
+            .also { StpKit.USER.login(it.id, true) }
+            // 存储会话信息
             .authVO(StpKit.USER.tokenValue).writeToSession()
     }
 
