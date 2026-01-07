@@ -68,7 +68,6 @@ import {
   HomeItemType,
   type BookmarkShow,
   type BookmarkDir,
-  type BookmarkSortParams,
   type UserLayoutNodeVO,
 } from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
@@ -290,9 +289,9 @@ function sort() {
 
   if (!changed) return
 
-  const params: Array<BookmarkSortParams> = []
-  bookmarkStore.homeItems?.forEach((item) => {
-    params.push({ id: item.id, sort: params.length })
+  const params: Record<string, number> = {}
+  bookmarkStore.homeItems?.forEach((item, index) => {
+    params[item.id] = index
   })
   bookmarksSort(params)
 }

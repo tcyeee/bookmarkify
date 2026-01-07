@@ -26,12 +26,12 @@ data class UserPreferenceEntity(
 ) {
 
     // 用户排序数据库
-    val sortMap: Map<String, Long>
+    val sortMap: Map<String, Int>
         get() {
             if (nodeSortMapJson.isNullOrEmpty()) return emptyMap()
             val mapper = jacksonObjectMapper()
-            return runCatching { mapper.readValue<Map<String, Long>>(nodeSortMapJson!!) }
-                .getOrElse { emptyMap() }
+            val map: Map<String, Int> = mapper.readValue(nodeSortMapJson!!)
+            return map
         }
 }
 

@@ -27,7 +27,7 @@ class UserPreferenceServiceImpl(
     override fun upsertByUid(uid: String, params: UserPreferenceUpdateParams): Boolean =
         queryByUid(uid).also { BeanUtil.copyProperties(params, it) }.let { saveOrUpdate(it) }
 
-    override fun sort(uid: String, params: List<LayoutNodeSort>): Boolean =
+    override fun sort(uid: String, params: Map<String, Int>): Boolean =
         ktUpdate()
             .eq(UserPreferenceEntity::uid, uid)
             .set(UserPreferenceEntity::nodeSortMapJson, JSONUtil.toJsonStr(params))
