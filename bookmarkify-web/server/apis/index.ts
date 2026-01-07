@@ -12,16 +12,16 @@ export const captchaVerifyEmail = (params: t.EmailVerifyParams) =>
   http.post('/auth/captcha/verifyEmail', params) as Promise<t.UserInfo>
 
 /* =========[ /bookmark ]========= */
-export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<Array<t.HomeItem>>
+export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<t.UserLayoutNodeVO>
 export const bookmarksSearch = (name: string) => http.post(`/bookmark/search?name=${encodeURIComponent(name)}`) as Promise<Array<any>>
-export const bookmarksAddOne = (url: string) => http.get('/bookmark/addOne', { url: url }) as Promise<t.HomeItem>
-export const bookmarksLinkOne = (bookmarkId: string) => http.get('/bookmark/linkOne', { bookmarkId }) as Promise<t.HomeItem>
+export const bookmarksAddOne = (url: string) => http.get('/bookmark/addOne', { url: url }) as Promise<t.UserLayoutNodeVO>
+export const bookmarksLinkOne = (bookmarkId: string) => http.get('/bookmark/linkOne', { bookmarkId }) as Promise<t.UserLayoutNodeVO>
 export const bookmarksSort = (params: Array<t.BookmarkSortParams>) => http.post('/bookmark/sort', params) as Promise<boolean>
 export const bookmarksDel = (params: Array<string>) => http.post('/bookmark/delete', params) as Promise<boolean>
-export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post('/bookmark/update', params) as Promise<t.Bookmark>
-export const bookmarksUpload = (file: File) => http.upload('/bookmark/upload', file) as Promise<Array<t.Bookmark>>
+export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post('/bookmark/update', params) as Promise<t.BookmarkShow>
+export const bookmarksUpload = (file: File) => http.upload('/bookmark/upload', file) as Promise<Array<t.BookmarkShow>>
 export const bookmarksList = (params?: t.BookmarkListParams) =>
-  http.post('/bookmark/list', params ?? {}) as Promise<Array<t.Bookmark>>
+  http.post('/bookmark/list', params ?? {}) as Promise<Array<t.BookmarkShow>>
 
 /* =========[ /user ]========= */
 export const updateUserInfo = (param: t.UserInfoUpdate) => http.post('/user/updateInfo', param) as Promise<boolean>

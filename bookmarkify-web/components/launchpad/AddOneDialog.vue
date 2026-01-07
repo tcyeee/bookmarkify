@@ -100,14 +100,14 @@
 
 <script lang="ts" setup>
 import { bookmarksAddOne, bookmarksLinkOne, bookmarksSearch } from '@api'
-import type { HomeItem } from '@typing'
+import type { UserLayoutNodeVO } from '@typing'
 import { useBookmarkStore } from '@stores/bookmark.store'
 import { useDebounceFn } from '@vueuse/core'
 
 const sysStore = useSysStore()
 const bookmarkStore = useBookmarkStore()
 
-const emit = defineEmits<{ (e: 'success', res: HomeItem): void }>()
+const emit = defineEmits<{ (e: 'success', res: UserLayoutNodeVO): void }>()
 
 const searchResults = ref<any[]>([])
 const isSearching = ref(false)
@@ -167,7 +167,7 @@ function addOne() {
     return
   }
 
-  bookmarksAddOne(data.input).then((res: HomeItem) => {
+  bookmarksAddOne(data.input).then((res: UserLayoutNodeVO) => {
     handleSuccess(res)
     data.notice = '添加成功!'
     data.input = undefined
@@ -192,7 +192,7 @@ function checkInput() {
 }
 
 function selectBookmark(item: any) {
-  bookmarksLinkOne(item.id).then((res: HomeItem) => {
+  bookmarksLinkOne(item.id).then((res: UserLayoutNodeVO) => {
     handleSuccess(res)
     data.notice = '关联成功!'
     data.input = undefined
@@ -206,7 +206,7 @@ function selectBookmark(item: any) {
 }
 
 // 统一处理成功回调：通知外部并更新本地 store，用于立即显示占位或新书签
-function handleSuccess(res: HomeItem) {
+function handleSuccess(res: UserLayoutNodeVO) {
   emit('success', res)
   if (res?.typeApp) {
     bookmarkStore.homeItems.push(res)

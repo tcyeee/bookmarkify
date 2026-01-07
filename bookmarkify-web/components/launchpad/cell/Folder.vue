@@ -3,12 +3,12 @@
     <div class="w-app h-app rounded-xl bg-gray-300 flex justify-center items-center shadow">
       <div>
         <div class="flex mb-[0.4rem]">
-          <BookmarkLogo v-if="value.bookmarkList.length > 0" sm :bookmark="value.bookmarkList[0]!" class="mr-[0.4rem]" />
-          <BookmarkLogo v-if="value.bookmarkList.length > 1" sm :bookmark="value.bookmarkList[1]!" />
+          <BookmarkLogo v-if="bookmarkList.length > 0" sm :bookmark="bookmarkList[0]!" class="mr-[0.4rem]" />
+          <BookmarkLogo v-if="bookmarkList.length > 1" sm :bookmark="bookmarkList[1]!" />
         </div>
         <div class="flex">
-          <BookmarkLogo v-if="value.bookmarkList.length > 2" sm :bookmark="value.bookmarkList[2]!" class="mr-[0.4rem]" />
-          <BookmarkLogo v-if="value.bookmarkList.length > 3" sm :bookmark="value.bookmarkList[3]!" />
+          <BookmarkLogo v-if="bookmarkList.length > 2" sm :bookmark="bookmarkList[2]!" class="mr-[0.4rem]" />
+          <BookmarkLogo v-if="bookmarkList.length > 3" sm :bookmark="bookmarkList[3]!" />
         </div>
       </div>
     </div>
@@ -17,14 +17,13 @@
 </template>
 
 <script lang="ts" setup>
-import type { Bookmark, BookmarkDir } from '@typing'
+import { computed } from 'vue'
+import type { BookmarkDir } from '@typing'
 
 const props = withDefaults(defineProps<{ value: BookmarkDir; showTitle?: boolean }>(), {
   showTitle: true,
 })
 const { showTitle, value } = toRefs(props)
 
-reactive<{ bookmarks: Array<Bookmark> }>({
-  bookmarks: [],
-})
+const bookmarkList = computed(() => value.value?.bookmarkList ?? [])
 </script>

@@ -20,9 +20,9 @@
 
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
-import type { Bookmark } from '@typing'
+import type { BookmarkShow } from '@typing'
 
-const props = defineProps<{  value: Bookmark}>()
+const props = defineProps<{  value: BookmarkShow}>()
 
 // 状态：错误标记、动态背景色、是否放大
 const hdError = ref(false)
