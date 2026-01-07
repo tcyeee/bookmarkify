@@ -3,7 +3,6 @@ package top.tcyeee.bookmarkify.entity
 import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.EnumUtil
 import cn.hutool.core.util.IdUtil
-import com.baomidou.mybatisplus.annotation.TableId
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.entity.*
@@ -11,7 +10,6 @@ import top.tcyeee.bookmarkify.entity.enums.FunctionType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 import top.tcyeee.bookmarkify.utils.OssUtils
-import java.time.LocalDateTime
 
 data class BookmarkShow(
     @field:Schema(description = "关联书签ID") var bookmarkId: String? = null,
@@ -29,6 +27,7 @@ data class BookmarkShow(
     @JsonIgnore @field:Schema(description = "大图尺寸") var hdSize: Int = 0,
     @JsonIgnore @field:Schema(description = "Host(用于拿不到name的情况下最后显示Title)") var urlHost: String? = null,
     @JsonIgnore @field:Schema(description = "在有manifest的情况下,替换title") var appName: String? = null,
+    @JsonIgnore @field:Schema(description = "用户桌面排布ID") var layoutNodeId: String? = null,
 
     @field:Schema(description = "大图标OSS地址,带权限") var iconHdUrl: String? = null,
 ) {
@@ -141,7 +140,12 @@ data class UserPreferenceVO(
 data class UserLayoutNodeVO(
     @field:Schema(description = "节点ID") val id: String = IdUtil.fastUUID(),
     @field:Schema(description = "父节点ID") val parentId: String? = null,
-    @field:Schema(description = "排序") val sort: Int = Int.MIN_VALUE,
+    @field:Schema(description = "排序") val sort: Long = Long.MIN_VALUE,
     @field:Schema(description = "节点类型") val type: NodeTypeEnum = NodeTypeEnum.BOOKMARK,
     @field:Schema(description = "节点(文件夹)名称") val name: String,
+
+    /* 三选一 */
+    @field:Schema(description = "书签信息") var typeApp: BookmarkShow? = null,
+    @field:Schema(description = "文件夹信息") var typeDir: UserLayoutNodeVO? = null,
+    @field:Schema(description = "系统功能入口") var typeFuc: FunctionType? = null
 )

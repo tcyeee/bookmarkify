@@ -12,10 +12,13 @@ import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.HomeItemSortParams
+import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IHomeItemService
+import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
+import top.tcyeee.bookmarkify.utils.APP_UID
 import top.tcyeee.bookmarkify.utils.BaseUtils
 
 /**
@@ -29,6 +32,7 @@ class BookmarksController(
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val bookmarkService: IBookmarkService,
     private val homeItemService: IHomeItemService,
+    private val layoutNodeService: IUserLayoutNodeService
 ) {
 
     @Operation(summary = "通过书签简称/标题/描述/根域名,搜索书签")
@@ -42,15 +46,21 @@ class BookmarksController(
 
     @PostMapping("/query")
     @Operation(summary = "我的桌面布局")
-    fun query(): List<HomeItemShow> = homeItemService.findShowByUid(BaseUtils.uid())
+    fun query(): UserLayoutNodeVO = layoutNodeService.layout(APP_UID)
 
     @PostMapping("/upload")
     @Operation(summary = "书签上传")
-    fun upload(@RequestParam file: MultipartFile): List<HomeItemShow>? = bookmarkService.importBookmarkFile(file, BaseUtils.uid())
+    fun upload(@RequestParam file: MultipartFile): List<HomeItemShow>? =
+        bookmarkService.importBookmarkFile(file, BaseUtils.uid())
 
+    /**
+     * 这里的排序信息仅仅只更改用户配置中的排序数据库
+     * 所以单将排序信息放到用户配置中，而不是直接写到用户桌面布局信息中, 是考虑到用户每一次排序都会导致大量的数据变动
+     * 处于效率考虑，所以才单独进行拆分, 页面刷新的时候查询到桌面布局信息和用户配置中的排序信息进行组合，然后返回.
+     */
     @PostMapping("/sort")
     @Operation(summary = "排序")
-    fun sort(@RequestBody params: List<HomeItemSortParams>): Boolean = true.also { homeItemService.sort(params) }
+    fun sort(@RequestBody params: List<HomeItemSortParams>): Boolean = layoutNodeService.sort(APP_UID, params)
 
     @PostMapping("/delete")
     @Operation(summary = "删除(仅删除桌面排序)")

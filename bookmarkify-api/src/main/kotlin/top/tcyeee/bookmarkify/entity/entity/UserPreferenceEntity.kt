@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.LocalDateTime
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.ObjectMapper
 
 @TableName("user_preference")
 data class UserPreferenceEntity(
@@ -17,10 +19,18 @@ data class UserPreferenceEntity(
     @field:Schema(description = "书签排列方式") var bookmarkLayout: BookmarkLayoutMode = BookmarkLayoutMode.DEFAULT,
     @field:Schema(description = "是否显示标题") var showTitle: Boolean = true,
     @field:Schema(description = "翻页方式") var pageMode: PageTurnMode = PageTurnMode.VERTICAL_SCROLL,
+    @field:Schema(description = "用户桌面布局") var nodeSortMapJson: String = "{}",  // map结构, key为桌面布局Item-id,value为sort
 
     @field:Schema(description = "更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
-)
+) {
+
+    // 用户排序数据库
+    val sortMap: Map<String, Long>
+        get() = runCatching {
+            ObjectMapper().readValue(nodeSortMapJson, object : TypeReference<Map<String, Long>>() {})
+        }.getOrElse { emptyMap() }
+}
 
 
 /**

@@ -16,6 +16,7 @@ interface IHomeItemService : IService<HomeItem> {
      * 查看我的桌面元素
      * @param uid user id
      */
+    @Deprecated("")
     fun findShowByUid(uid: String): List<HomeItemShow>
 
     /**
@@ -24,6 +25,7 @@ interface IHomeItemService : IService<HomeItem> {
      * @param params 仅有ID-SORT
      * @return status
      */
+    @Deprecated("重新写了布局排序方法")
     fun sort(params: List<HomeItemSortParams>)
 
     fun delete(params: List<String>)

@@ -82,6 +82,7 @@ class HomeItemServiceImpl(
         return placeholders
     }
 
+    @Deprecated("重新写了布局排序方法")
     override fun sort(params: List<HomeItemSortParams>) = params.forEach {
         ktUpdate().set(HomeItem::sort, it.sort).eq(HomeItem::id, it.id).update()
     }

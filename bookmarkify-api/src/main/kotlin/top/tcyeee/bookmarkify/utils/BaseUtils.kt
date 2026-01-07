@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
+import top.tcyeee.bookmarkify.utils.BaseUtils.user
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 
@@ -35,6 +36,8 @@ object BaseUtils {
         return deviceId
     }
 }
+
+val APP_UID: String = user()?.uid ?: throw NullPointerException()
 
 /* base64 to Md5 */
 fun pwd(password64: String): String = SecureUtil.md5(Base64.decodeStr(password64))
