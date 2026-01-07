@@ -83,7 +83,7 @@ const Vuuri = process.client
       setup: () => () => null,
     })
 
-const pageData = computed<Array<UserLayoutNodeVO>>(() => bookmarkStore.homeItems || [])
+const pageData = computed<Array<UserLayoutNodeVO>>(() => bookmarkStore.layoutNode || [])
 const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
 const bookmarkOpenMode = computed<BookmarkOpenMode>(
   () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB,
@@ -170,7 +170,7 @@ watchEffect(() => {
 
 function addBookmark(item: UserLayoutNodeVO) {
   if (item.typeApp != null) {
-    bookmarkStore.homeItems.push(item)
+    bookmarkStore.layoutNode.push(item)
   } else {
     bookmarkStore.addEmpty(item)
   }
@@ -254,13 +254,13 @@ function getItemHeight(item: GridItem) {
 }
 
 function onGridInput(items: GridItem[]) {
-  bookmarkStore.homeItems = items.filter((it): it is UserLayoutNodeVO => !isAddItem(it))
+  bookmarkStore.layoutNode = items.filter((it): it is UserLayoutNodeVO => !isAddItem(it))
 }
 
 function onDragStart() {
   dragState.dragging = true
   dragState.justDropped = false
-  dragState.originalOrder = bookmarkStore.homeItems?.map((item) => item.id)
+  dragState.originalOrder = bookmarkStore.layoutNode?.map((item) => item.id)
 }
 
 function onDragReleaseEnd() {
@@ -278,7 +278,7 @@ function onDragReleaseEnd() {
 
 // 重新排序
 function sort() {
-  const currentOrder = bookmarkStore.homeItems?.map((item) => item.id) ?? []
+  const currentOrder = bookmarkStore.layoutNode?.map((item) => item.id) ?? []
   const previousOrder = dragState.originalOrder
   dragState.originalOrder = undefined
 
@@ -290,7 +290,7 @@ function sort() {
   if (!changed) return
 
   const params: Record<string, number> = {}
-  bookmarkStore.homeItems?.forEach((item, index) => {
+  bookmarkStore.layoutNode?.forEach((item, index) => {
     params[item.id] = index
   })
   bookmarksSort(params)

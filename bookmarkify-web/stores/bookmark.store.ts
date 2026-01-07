@@ -4,7 +4,7 @@ import { bookmarksShowAll } from '@api'
 
 export const useBookmarkStore = defineStore('homeItems', {
   state: () => ({
-    homeItems: [] as Array<UserLayoutNodeVO>, // 用户桌面布局信息
+    layoutNode: [] as Array<UserLayoutNodeVO>, // 用户桌面布局信息
   }),
 
   actions: {
@@ -24,10 +24,10 @@ export const useBookmarkStore = defineStore('homeItems', {
     async update(): Promise<Array<UserLayoutNodeVO>> {
       const res = await bookmarksShowAll()
       const children = res?.children ?? []
-      this.homeItems = this.sortData(children)
-      console.log(`[DEBUG]桌面布局全部信息更新:${this.homeItems?.length}`)
-      if (this.homeItems === undefined) throw new Error('Bookmarks is undefined')
-      return this.homeItems
+      this.layoutNode = this.sortData(children)
+      console.log(`[DEBUG]桌面布局全部信息更新:${this.layoutNode?.length}`)
+      if (this.layoutNode === undefined) throw new Error('Bookmarks is undefined')
+      return this.layoutNode
     },
 
     // 在书签列表中临时插入一个“加载中”的占位项
@@ -37,7 +37,7 @@ export const useBookmarkStore = defineStore('homeItems', {
         ...item,
         type: HomeItemType.BOOKMARK_LOADING,
       }
-      this.homeItems?.push(placeholder)
+      this.layoutNode?.push(placeholder)
     },
 
     // 局部更新某一个桌面布局Item（通常由 WebSocket 推送触发），包含子节点
@@ -55,7 +55,7 @@ export const useBookmarkStore = defineStore('homeItems', {
         }
         return list.some((child) => replace(child.children))
       }
-      replace(this.homeItems)
+      replace(this.layoutNode)
     },
   },
   persist: { storage: piniaPluginPersistedstate.localStorage() },
