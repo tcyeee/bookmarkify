@@ -1,7 +1,6 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
-import top.tcyeee.bookmarkify.entity.HomeItemSortParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 
@@ -13,9 +12,6 @@ import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
  * @date 1/7/26
  */
 interface IUserLayoutNodeService : IService<UserLayoutNodeEntity> {
-
-    // 用户对文件结构进行重新排序
-    fun sort(uid: String, params: List<HomeItemSortParams>): Boolean
 
     /**
      * 拿到用户全部的桌面布局

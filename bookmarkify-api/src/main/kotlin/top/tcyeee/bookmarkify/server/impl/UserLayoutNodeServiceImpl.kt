@@ -2,7 +2,6 @@ package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
-import top.tcyeee.bookmarkify.entity.HomeItemSortParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
@@ -26,10 +25,6 @@ class UserLayoutNodeServiceImpl(
     companion object {
         private const val ROOT_ID = "ROOT"
         private const val ROOT_NAME = "ROOT"
-    }
-
-    override fun sort(uid: String, params: List<HomeItemSortParams>): Boolean {
-        TODO("Not yet implemented")
     }
 
     override fun layout(uid: String): UserLayoutNodeVO {

@@ -11,13 +11,14 @@ import top.tcyeee.bookmarkify.entity.BookmarkShow
 
 import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
 import top.tcyeee.bookmarkify.entity.HomeItemShow
-import top.tcyeee.bookmarkify.entity.HomeItemSortParams
+import top.tcyeee.bookmarkify.entity.LayoutNodeSort
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IHomeItemService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
+import top.tcyeee.bookmarkify.server.IUserPreferenceService
 import top.tcyeee.bookmarkify.utils.APP_UID
 import top.tcyeee.bookmarkify.utils.BaseUtils
 
@@ -32,6 +33,7 @@ class BookmarksController(
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val bookmarkService: IBookmarkService,
     private val homeItemService: IHomeItemService,
+    private val preferenceService: IUserPreferenceService,
     private val layoutNodeService: IUserLayoutNodeService
 ) {
 
@@ -60,7 +62,7 @@ class BookmarksController(
      */
     @PostMapping("/sort")
     @Operation(summary = "排序")
-    fun sort(@RequestBody params: List<HomeItemSortParams>): Boolean = layoutNodeService.sort(APP_UID, params)
+    fun sort(@RequestBody params: List<LayoutNodeSort>): Boolean = preferenceService.sort(APP_UID, params)
 
     @PostMapping("/delete")
     @Operation(summary = "删除(仅删除桌面排序)")
