@@ -64,9 +64,9 @@ export const useAuthStore = defineStore('auth', () => {
             );
         }
 
-        if (userInfo?.realName) {
+        if (userInfo?.nickName) {
           ElNotification({
-            message: `欢迎回来:${userInfo?.realName}`,
+            message: `欢迎回来:${userInfo?.nickName}`,
             title: '登录成功',
             type: 'success',
           });

@@ -55,13 +55,11 @@ data class UserInfoShow(
     @field:Schema(description = "UID") var uid: String,
     @field:Schema(description = "用户名称") var nickName: String,
     @field:Schema(description = "用户头像文件") var avatarUrl: String? = null,
-
-    @field:Schema(description = "真实姓名") var realName: String? = null,
     @field:Schema(description = "角色列表") var roles: List<String>? = null,
     @field:Schema(description = "首页路径") var homePath: String? = null,
 ) {
     constructor(entity: UserEntity, avatarUrl: String?) : this(
-        uid = entity.id, nickName = entity.nickName, avatarUrl = avatarUrl, realName = entity.nickName
+        uid = entity.id, nickName = entity.nickName, avatarUrl = avatarUrl
     )
 }
 
