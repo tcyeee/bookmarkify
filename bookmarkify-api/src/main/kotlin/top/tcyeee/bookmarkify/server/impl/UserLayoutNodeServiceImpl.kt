@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server.impl
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
+import top.tcyeee.bookmarkify.entity.entity.HomeItem
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
@@ -34,7 +35,7 @@ class UserLayoutNodeServiceImpl(
         val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
         // 查询到用户布局信息
         return this.findByUid(uid)
-            .map { it.vo(sortMap[it.id], bookmarkMap[it.id]) }
+            .map { it.vo( sortMap[it.id], bookmarkMap[it.id]) }
             .let { nodeStructure(it) }
     }
 
