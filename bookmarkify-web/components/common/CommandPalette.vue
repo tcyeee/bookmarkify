@@ -134,7 +134,6 @@ rootGroups.set('常用操作', [
   {
     value: 'open-preference-menu',
     label: '偏好设置',
-    iconLeft: 'icon--memory-toggle-switch-off icon-size-16',
     submenu: true,
     hint: '快速调整书签偏好',
     run: async () => {
