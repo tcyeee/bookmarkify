@@ -51,12 +51,12 @@
 </template>
 
 <script lang="ts" setup>
-import type { Bookmark, BookmarkUpdatePrams } from '@typing'
+import type { BookmarkShow, BookmarkUpdatePrams } from '@typing'
 import { bookmarksUpdate } from '@api'
 import { computed, reactive, ref, watch } from 'vue'
 import ActionInput from '../common/ActionInput.vue'
 
-const props = defineProps<{ data: Bookmark | null }>()
+const props = defineProps<{ data: BookmarkShow | null }>()
 
 const detail = computed(() => props.data)
 const saving = ref(false)

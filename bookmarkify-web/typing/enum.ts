@@ -24,9 +24,9 @@ export enum UserFileType {
 
 export enum HomeItemType {
   BOOKMARK = 'BOOKMARK',
+  BOOKMARK_LOADING = 'BOOKMARK_LOADING',
   BOOKMARK_DIR = 'BOOKMARK_DIR',
-  SETTING = 'SETTING',
-  LOADING = 'LOADING',
+  FUNCTION = 'FUNCTION',
 }
 
 export enum SocketTypes {

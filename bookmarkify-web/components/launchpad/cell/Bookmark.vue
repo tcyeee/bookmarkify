@@ -10,10 +10,10 @@
 </template>
 
 <script lang="ts" setup>
-import type { Bookmark } from '@typing'
+import type { BookmarkShow } from '@typing'
 import BookmarkLogo from './BookmarkLogo.vue'
 
-const props = withDefaults(defineProps<{ value: Bookmark; showTitle?: boolean }>(), {
+const props = withDefaults(defineProps<{ value: BookmarkShow; showTitle?: boolean }>(), {
   showTitle: true,
 })
 const { showTitle } = toRefs(props)

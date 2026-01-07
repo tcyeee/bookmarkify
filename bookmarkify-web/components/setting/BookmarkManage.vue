@@ -103,7 +103,7 @@
 
 <script lang="ts" setup>
 import { bookmarksList, bookmarksUpload } from '@api'
-import type { Bookmark } from '@typing'
+import type { BookmarkShow } from '@typing'
 
 const fileInputRef = ref<HTMLInputElement>()
 const selectedFile = ref<File | null>(null)
@@ -112,7 +112,7 @@ const statusMessage = ref('')
 const statusType = ref<'default' | 'success' | 'error'>('default')
 const bookmarksLoading = ref(false)
 const bookmarkError = ref('')
-const bookmarks = ref<Bookmark[]>([])
+const bookmarks = ref<BookmarkShow[]>([])
 const keyword = ref('')
 
 async function handleFileChange(event: Event) {

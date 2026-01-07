@@ -25,17 +25,19 @@
               <LaunchpadAddOne @success="addBookmark" />
             </div>
             <div v-else class="bookmark-drag-handle">
-              <LaunchpadCellBookmark
-                v-if="item.type == 'BOOKMARK_DIR'"
-                :value="item.typeDir"
+              <LaunchpadCellFolder
+                v-if="item.type === HomeItemType.BOOKMARK_DIR"
+                :value="toBookmarkDir(item)"
                 :show-title="showTitle"
                 @click="openDir(item)" />
               <LaunchpadCellBookmark
-                v-else-if="item.type == 'BOOKMARK'"
+                v-else-if="item.type === HomeItemType.BOOKMARK"
                 :value="item.typeApp"
                 :show-title="showTitle"
                 @click="openPage(item.typeApp)" />
-              <LaunchpadCellBookmarkLoading v-else-if="item.type == 'LOADING'" :show-title="showTitle" />
+              <LaunchpadCellBookmarkLoading
+                v-else-if="item.type === HomeItemType.BOOKMARK_LOADING"
+                :show-title="showTitle" />
             </div>
           </div>
         </template>
@@ -59,7 +61,15 @@
 import { defineAsyncComponent, defineComponent } from 'vue'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { bookmarksSort, bookmarksDel } from '@api'
-import { BookmarkLayoutMode, BookmarkOpenMode, type HomeItem, type Bookmark, type BookmarkSortParams } from '@typing'
+import {
+  BookmarkLayoutMode,
+  BookmarkOpenMode,
+  HomeItemType,
+  type BookmarkShow,
+  type BookmarkDir,
+  type BookmarkSortParams,
+  type UserLayoutNodeVO,
+} from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
 
 const sysStore = useSysStore()
@@ -73,14 +83,14 @@ const Vuuri = process.client
       setup: () => () => null,
     })
 
-const pageData = computed<Array<HomeItem>>(() => bookmarkStore.homeItems || [])
+const pageData = computed<Array<UserLayoutNodeVO>>(() => bookmarkStore.homeItems || [])
 const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
 const bookmarkOpenMode = computed<BookmarkOpenMode>(
   () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB,
 )
 
 type AddItem = { id: string; sort: number; type: 'ADD' }
-type GridItem = HomeItem | AddItem
+type GridItem = UserLayoutNodeVO | AddItem
 
 const ADD_ITEM_ID = '__bookmark_add_placeholder__'
 
@@ -124,10 +134,10 @@ const vuuriOptions = {
 }
 
 const data = reactive<{
-  subApps?: Array<Bookmark>
+  subApps?: Array<BookmarkShow>
   subItemId?: string
   bookmarkDetailDialog: boolean
-  bookmarkDetail?: Bookmark
+  bookmarkDetail?: BookmarkShow
 }>({
   bookmarkDetailDialog: false,
 })
@@ -141,7 +151,7 @@ watchEffect(() => {
   sysStore.preventKeyEventsFlag = data.bookmarkDetailDialog
 })
 
-function addBookmark(item: HomeItem) {
+function addBookmark(item: UserLayoutNodeVO) {
   if (item.typeApp != null) {
     bookmarkStore.homeItems.push(item)
   } else {
@@ -149,23 +159,35 @@ function addBookmark(item: HomeItem) {
   }
 }
 
-function openDir(item: HomeItem) {
+function openDir(item: UserLayoutNodeVO) {
   if (dragState.dragging || dragState.justDropped) return
   data.subItemId = item.id
-  data.subApps = item.typeDir.bookmarkList
+  data.subApps = (item.children ?? [])
+    .map((child) => child.typeApp)
+    .filter((child): child is BookmarkShow => Boolean(child))
   window.scrollTo({
     top: 0,
     behavior: 'smooth', // 平滑滚动到顶部，可选
   })
 }
 
-function openPage(bookmark: Bookmark) {
+function toBookmarkDir(item: UserLayoutNodeVO): BookmarkDir {
+  return {
+    name: item.name ?? '文件夹',
+    bookmarkList: (item.children ?? [])
+      .map((child) => child.typeApp)
+      .filter((child): child is BookmarkShow => Boolean(child)),
+  }
+}
+
+function openPage(bookmark: BookmarkShow) {
   if (dragState.dragging || dragState.justDropped) return
   const target = bookmarkOpenMode.value === BookmarkOpenMode.NEW_TAB ? '_blank' : '_self'
   window.open(bookmark.urlFull, target)
 }
 
-function getClickMenu(item: HomeItem) {
+function getClickMenu(item: UserLayoutNodeVO) {
+  if (!item.typeApp) return []
   return [
     {
       label: '查看详情',
@@ -179,13 +201,15 @@ function getClickMenu(item: HomeItem) {
 }
 
 // 查看详情
-function clickDetail(item: HomeItem) {
+function clickDetail(item: UserLayoutNodeVO) {
+  if (!item.typeApp) return
   data.bookmarkDetailDialog = true
   data.bookmarkDetail = item.typeApp
 }
 
 // 删除书签
-function delOne(item: HomeItem) {
+function delOne(item: UserLayoutNodeVO) {
+  if (!item.typeApp) return
   bookmarksDel([item.id])
 
   const index: number = pageData.value?.findIndex((a) => a.id == item.id) || -1
@@ -213,7 +237,7 @@ function getItemHeight(item: GridItem) {
 }
 
 function onGridInput(items: GridItem[]) {
-  bookmarkStore.homeItems = items.filter((it): it is HomeItem => !isAddItem(it))
+  bookmarkStore.homeItems = items.filter((it): it is UserLayoutNodeVO => !isAddItem(it))
 }
 
 function onDragStart() {
