@@ -21,6 +21,7 @@ import top.tcyeee.bookmarkify.server.IKafkaMessageService
 import top.tcyeee.bookmarkify.utils.ChromeBookmarkParser
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 import top.tcyeee.bookmarkify.utils.yesterday
+import java.time.LocalDateTime
 
 /**
  * @author tcyeee
@@ -92,6 +93,33 @@ class BookmarkServiceImpl(
 
         // 如果无需更新书签,则直接将旧书签打包为桌面元素返回
         return bookmarkUserLinkMapper.findShowById(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
+    }
+
+
+    override fun adminListAll(name: String?): List<BookmarkEntity> {
+        if (name.isNullOrBlank()) return ktQuery().list()
+        return ktQuery().like(BookmarkEntity::appName, name).or().like(BookmarkEntity::title, name).or()
+            .like(BookmarkEntity::description, name).or().like(BookmarkEntity::urlHost, name).list()
+    }
+
+    override fun adminUpdateOne(
+        id: String,
+        appName: String?,
+        title: String?,
+        description: String?,
+        iconBase64: String?,
+        isActivity: Boolean?,
+        maximalLogoSize: Int?
+    ): Boolean {
+        val entity = ktQuery().eq(BookmarkEntity::id, id).one() ?: return false
+        appName?.let { entity.appName = it }
+        title?.let { entity.title = it }
+        description?.let { entity.description = it }
+        iconBase64?.let { entity.iconBase64 = it }
+        isActivity?.let { entity.isActivity = it }
+        maximalLogoSize?.let { entity.maximalLogoSize = it }
+        entity.updateTime = LocalDateTime.now()
+        return updateById(entity)
     }
 
     private fun getByHost(urlHost: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, urlHost).one()
