@@ -250,12 +250,11 @@ function sceneToggle(key?: string) {
 
 .fade-main-enter-active,
 .fade-main-leave-active {
-  transition: all 100ms ease-in-out;
+  transition: opacity 120ms ease-in-out;
 }
 
 .fade-main-enter-from,
 .fade-main-leave-to {
-  transform: scale(1.2);
   opacity: 0;
 }
 </style>
