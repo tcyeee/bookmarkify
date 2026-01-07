@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server.impl
 import cn.hutool.captcha.CaptchaUtil
 import cn.hutool.core.util.RandomUtil
 import cn.hutool.core.util.StrUtil
+import cn.hutool.crypto.SecureUtil
 import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import jakarta.servlet.http.Cookie
@@ -118,6 +119,12 @@ class UserServiceImpl(
             it.verified = true
         })
     }
+
+    override fun findByNameAndPwd(account: String, password: String): UserEntity? =
+        ktQuery()
+            .eq(UserEntity::password, SecureUtil.md5(password))
+            .and { it.eq(UserEntity::email, account).or().eq(UserEntity::phone, account) }
+            .one()
 
     override fun verifyEmail(
         request: HttpServletRequest, response: HttpServletResponse, uid: String, params: EmailVerifyParams

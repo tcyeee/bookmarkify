@@ -2,16 +2,12 @@ package top.tcyeee.bookmarkify.controller.admin
 
 import cn.dev33.satoken.annotation.SaIgnore
 import cn.dev33.satoken.stp.SaTokenInfo
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
-import top.tcyeee.bookmarkify.config.entity.AdminLoginConfig
+import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.AdminLoginParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
+import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.StpKit
 
 /**
@@ -20,15 +16,16 @@ import top.tcyeee.bookmarkify.utils.StpKit
  */
 @RestController
 @RequestMapping("/admin")
-class AdminController(private val adminLoginConfig: AdminLoginConfig) {
+class AdminController(
+    private val userService: IUserService
+) {
 
     @SaIgnore
     @PostMapping("/login")
     fun login(@RequestBody params: AdminLoginParams): SaTokenInfo {
-        if (params.account == adminLoginConfig.account &&
-            params.password == adminLoginConfig.password
-        ) {
-            StpKit.ADMIN.login(params.account)
+        val user = userService.findByNameAndPwd(params.account, params.password)
+        if (user != null) {
+            StpKit.ADMIN.login(user.id)
             return StpKit.ADMIN.tokenInfo
         }
         throw CommonException(ErrorType.E109)
