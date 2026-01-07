@@ -1,8 +1,6 @@
 package top.tcyeee.bookmarkify.entity
 
 import cn.hutool.core.bean.BeanUtil
-import cn.hutool.core.util.EnumUtil
-import cn.hutool.core.util.IdUtil
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.entity.*
@@ -22,29 +20,22 @@ data class BookmarkShow(
     @field:Schema(description = "网站活性") var isActivity: Boolean? = null,
     @field:Schema(description = "书签创建时间(Unix秒)") var createTime: Long? = null,
     @field:Schema(description = "目录层级(从根到目标)") var paths: List<String>? = null,
-
     @JsonIgnore @field:Schema(description = "用户ID") var uid: String? = null,
     @JsonIgnore @field:Schema(description = "大图尺寸") var hdSize: Int = 0,
     @JsonIgnore @field:Schema(description = "Host(用于拿不到name的情况下最后显示Title)") var urlHost: String? = null,
     @JsonIgnore @field:Schema(description = "在有manifest的情况下,替换title") var appName: String? = null,
     @JsonIgnore @field:Schema(description = "用户桌面排布ID") var layoutNodeId: String? = null,
-
     @field:Schema(description = "大图标OSS地址,带权限") var iconHdUrl: String? = null,
 ) {
     val isHd: Boolean get() = hdSize > 50
 
-    /**
-     * 设置大图LOGO还有备用Title
-     */
+    /** 设置大图LOGO还有备用Title */
     fun initLogo(): BookmarkShow {
         // 为图片添加签名
-        if (isHd) OssUtils.getLogoUrl(bookmarkId!!, hdSize, 256)
-            .also { iconHdUrl = it }
+        if (isHd) OssUtils.getLogoUrl(bookmarkId!!, hdSize, 256).also { iconHdUrl = it }
 
         // 设置备用title
-        title = appName
-            ?.takeIf { it.isNotBlank() } ?: title
-            ?.takeIf { it.isNotBlank() } ?: urlHost
+        title = appName?.takeIf { it.isNotBlank() } ?: title?.takeIf { it.isNotBlank() } ?: urlHost
         return this
     }
 }
@@ -54,33 +45,23 @@ data class HomeItemShow(
     @field:Schema(description = "UID") var uid: String,
     @field:Schema(description = "序号") var sort: Int = Int.MIN_VALUE,
     @field:Schema(description = "书签类型") var type: HomeItemType = HomeItemType.BOOKMARK,
-
     @field:Schema(description = "书签信息") var typeApp: BookmarkShow? = null,
     @field:Schema(description = "书签组信息") var typeDir: BookmarkDir? = null,
     @field:Schema(description = "系统功能入口") var typeFuc: FunctionType? = null,
-
-    @JsonIgnore var bookmarkId: String? = null,  // 用于新建书签时定位
-) {
-
-    constructor(item: HomeItem, database: Map<String, BookmarkShow>) : this(id = item.id, uid = item.uid) {
-        BeanUtil.copyProperties(item, this)
-        when (item.type) {
-            HomeItemType.BOOKMARK_DIR -> this.typeDir = BookmarkDir(database, item.bookmarkDirJson)
-            HomeItemType.BOOKMARK -> this.typeApp = database[item.bookmarkUserLinkId]
-            HomeItemType.FUNCTION -> this.typeFuc = EnumUtil.getEnumAt(FunctionType::class.java, item.functionId ?: 0)
-        }
-    }
-}
+    @JsonIgnore var bookmarkId: String? = null, // 用于新建书签时定位
+)
 
 data class UserInfoShow(
     @field:Schema(description = "UID") var uid: String,
     @field:Schema(description = "用户名称") var nickName: String,
     @field:Schema(description = "用户头像文件") var avatarUrl: String? = null,
+
+    @field:Schema(description = "真实姓名") var realName: String? = null,
+    @field:Schema(description = "角色列表") var roles: List<String>? = null,
+    @field:Schema(description = "首页路径") var homePath: String? = null,
 ) {
     constructor(entity: UserEntity, avatarUrl: String?) : this(
-        uid = entity.id,
-        nickName = entity.nickName,
-        avatarUrl = avatarUrl
+        uid = entity.id, nickName = entity.nickName, avatarUrl = avatarUrl, realName = entity.nickName
     )
 }
 
@@ -102,9 +83,7 @@ class BacGradientVO(
     @field:Schema(description = "背景渐变方向") var direction: Int,
 )
 
-/**
- * 默认背景资源合集
- */
+/** 默认背景资源合集 */
 data class DefaultBackgroundsResponse(
     @field:Schema(description = "默认渐变背景列表") val gradients: List<BacGradientVO> = emptyList(),
     @field:Schema(description = "默认图片背景列表") val images: List<UserFileVO> = emptyList(),
@@ -121,7 +100,6 @@ data class UserPreferenceVO(
     @field:Schema(description = "书签排列方式") var bookmarkLayout: BookmarkLayoutMode = BookmarkLayoutMode.DEFAULT,
     @field:Schema(description = "是否显示标题") var showTitle: Boolean = true,
     @field:Schema(description = "翻页方式") var pageMode: PageTurnMode = PageTurnMode.VERTICAL_SCROLL,
-
     @field:Schema(description = "背景配置") var imgBacShow: BacSettingVO? = null,
 ) {
     constructor(entity: UserPreferenceEntity) : this() {

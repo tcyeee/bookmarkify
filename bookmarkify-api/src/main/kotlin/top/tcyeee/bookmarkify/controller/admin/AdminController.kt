@@ -16,9 +16,7 @@ import top.tcyeee.bookmarkify.utils.StpKit
  */
 @RestController
 @RequestMapping("/admin")
-class AdminController(
-    private val userService: IUserService
-) {
+class AdminController(private val userService: IUserService) {
 
     @SaIgnore
     @PostMapping("/login")
@@ -33,16 +31,15 @@ class AdminController(
 
     @GetMapping("/info")
     fun info(): UserInfoShow {
-        StpKit.ADMIN.checkLogin()
-        return UserInfoShow(
-            uid = StpKit.ADMIN.loginIdAsString,
-            nickName = "Administrator",
-            avatarUrl = "https://unpkg.com/@vbenjs/static-source@0.1.7/source/avatar-v1.webp"
-        )
+        val info = userService.me(StpKit.ADMIN.loginIdAsString)
+        info.roles = listOf("super")
+        info.homePath = "/dashboard/workspace"
+        return info
     }
 
+    @GetMapping("/codes")
+    fun codes(): List<String> = listOf("AC_100100", "AC_100110", "AC_100120", "AC_100010")
+
     @RequestMapping("/logout")
-    fun logout() {
-        StpKit.ADMIN.logout()
-    }
+    fun logout() = StpKit.ADMIN.logout()
 }
