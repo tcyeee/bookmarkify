@@ -13,6 +13,12 @@ export default defineConfig(async () => {
       ],
       server: {
         proxy: {
+          '/api/admin': {
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/api/, ''),
+            target: 'http://localhost:7001',
+            ws: true,
+          },
           '/api': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/api/, ''),
