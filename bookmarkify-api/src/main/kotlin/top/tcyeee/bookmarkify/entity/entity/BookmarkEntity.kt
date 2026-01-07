@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Max
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
+import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.utils.FileUtils
 import java.io.Serializable
 import java.time.LocalDateTime
@@ -26,7 +27,7 @@ data class BookmarkEntity(
 
     /* URL相关 */
     @TableId var id: String,
-    @field:Max(200) @field:Schema(description = "书签根域名") var urlHost: String,      // sfz.uzuzuz.com.cn
+    @field:Max(200) @field:Schema(description = "书签根域名") var urlHost: String,        // sfz.uzuzuz.com.cn
     @field:Schema(description = "路径URL(不带参数)") var urlPath: String? = null,         // /test/info
     @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
@@ -34,11 +35,13 @@ data class BookmarkEntity(
     @field:Max(100) @field:Schema(description = "书签简称") var appName: String? = null,
     @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
     @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
+
+    /* 图标信息 */
     @field:Schema(description = "小图标base64") var iconBase64: String? = null,
     @field:Schema(description = "最大LOGO尺寸") var maximalLogoSize: Int = 0,
 
     /* 状态信息 */
-    @JsonIgnore @field:Schema(description = "是否反爬") var antiCrawlerDetected: Boolean = false,
+    @JsonIgnore @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.LOADING,
     @JsonIgnore @field:Schema(description = "网站是否活跃") var isActivity: Boolean = false,
     @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
@@ -61,7 +64,7 @@ data class BookmarkEntity(
         this.isActivity = true
         this.title = wrapper.title
         this.description = wrapper.description
-        this.antiCrawlerDetected = wrapper.antiCrawlerDetected
+        this.parseStatus = if(wrapper.antiCrawlerDetected) ParseStatusEnum.BLOCKED else ParseStatusEnum.SUCCESS
         this.updateTime = LocalDateTime.now()
         this.iconBase64 = FileUtils.icoBase64(wrapper.distinctIcons, this.rawUrl)
     }

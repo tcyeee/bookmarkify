@@ -8,6 +8,7 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.enums.KafkaTopicType
+import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
@@ -47,7 +48,7 @@ class KafkaMessageServiceImpl(
     private fun parseBookmark(bookmark: BookmarkEntity) {
         log.warn("[CHECK] 开始解析域名:${bookmark.rawUrl}")
         val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
-                if (it.message.toString().contains("403")) bookmark.antiCrawlerDetected = true
+                if (it.message.toString().contains("403")) bookmark.parseStatus = ParseStatusEnum.BLOCKED
                 bookmark.parseErrMsg = it.message.toString()
                 bookmark.isActivity = false
                 bookmarkMapper.insertOrUpdate(bookmark)
