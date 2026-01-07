@@ -162,6 +162,7 @@ const data = reactive<{
 const dragState = reactive({
   dragging: false,
   justDropped: false,
+  originalOrder: undefined as string[] | undefined,
 })
 
 watchEffect(() => {
@@ -260,6 +261,7 @@ function onGridInput(items: GridItem[]) {
 function onDragStart() {
   dragState.dragging = true
   dragState.justDropped = false
+  dragState.originalOrder = bookmarkStore.homeItems?.map((item) => item.id)
 }
 
 function onDragReleaseEnd() {
@@ -277,6 +279,17 @@ function onDragReleaseEnd() {
 
 // 重新排序
 function sort() {
+  const currentOrder = bookmarkStore.homeItems?.map((item) => item.id) ?? []
+  const previousOrder = dragState.originalOrder
+  dragState.originalOrder = undefined
+
+  const changed =
+    !previousOrder ||
+    previousOrder.length !== currentOrder.length ||
+    previousOrder.some((id, idx) => id !== currentOrder[idx])
+
+  if (!changed) return
+
   const params: Array<BookmarkSortParams> = []
   bookmarkStore.homeItems?.forEach((item) => {
     params.push({ id: item.id, sort: params.length })
