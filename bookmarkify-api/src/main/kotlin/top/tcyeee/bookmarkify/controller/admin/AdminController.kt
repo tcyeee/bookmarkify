@@ -26,7 +26,7 @@ class AdminController(private val adminLoginConfig: AdminLoginConfig) {
     @PostMapping("/login")
     fun login(@RequestBody params: AdminLoginParams): SaTokenInfo {
         if (params.account == adminLoginConfig.account &&
-                        params.password == adminLoginConfig.password
+            params.password == adminLoginConfig.password
         ) {
             StpKit.ADMIN.login(params.account)
             return StpKit.ADMIN.tokenInfo
@@ -38,9 +38,9 @@ class AdminController(private val adminLoginConfig: AdminLoginConfig) {
     fun info(): UserInfoShow {
         StpKit.ADMIN.checkLogin()
         return UserInfoShow(
-                uid = StpKit.ADMIN.loginIdAsString,
-                nickName = "Administrator",
-                avatarUrl = "https://unpkg.com/@vbenjs/static-source@0.1.7/source/avatar-v1.webp"
+            uid = StpKit.ADMIN.loginIdAsString,
+            nickName = "Administrator",
+            avatarUrl = "https://unpkg.com/@vbenjs/static-source@0.1.7/source/avatar-v1.webp"
         )
     }
 
