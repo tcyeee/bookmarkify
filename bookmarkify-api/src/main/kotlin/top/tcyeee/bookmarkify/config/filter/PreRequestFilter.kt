@@ -23,7 +23,6 @@ import top.tcyeee.bookmarkify.config.result.ResultWrapper
  */
 @Order(1)
 @Component
-@WebFilter(filterName = "requestFilter", urlPatterns = ["/*"])
 class PreRequestFilter(private val objectMapper: ObjectMapper) : Filter {
     private val log = LoggerFactory.getLogger(PreRequestFilter::class.java)
 
@@ -42,7 +41,6 @@ class PreRequestFilter(private val objectMapper: ObjectMapper) : Filter {
         val isWebSocket = "/ws".equals(uri, ignoreCase = true)
         val isOptions = method.equals("OPTIONS", ignoreCase = true)
         if (token == null || isOptions || isWebSocket) {
-            if (!isOptions && !isWebSocket) log.info("⛱ send $method request to $uri")
             filterChain.doFilter(request, response)
             return
         }
