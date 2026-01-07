@@ -11,8 +11,8 @@ import java.util.function.Consumer
  */
 data class BookmarkDir(
     var name: String,
-    var bookmarkUserLinkIds: List<String>? = null, // BookmarkUserIds, 用于存储
-    var bookmarkList: List<BookmarkShow>? = null, // 详细书签信息,用于展示
+    var bookmarkUserLinkIds: List<String>? = null,  // BookmarkUserIds, 用于存储
+    var bookmarkList: List<BookmarkShow>? = null,   // 详细书签信息,用于展示
 ) {
 
     constructor(name: String, bookmarkIds: List<String>) : this(

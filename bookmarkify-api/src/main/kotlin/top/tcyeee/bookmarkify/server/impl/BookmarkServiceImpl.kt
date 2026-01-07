@@ -14,6 +14,7 @@ import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.server.IHomeItemService
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
 import top.tcyeee.bookmarkify.utils.ChromeBookmarkParser
 import top.tcyeee.bookmarkify.utils.WebsiteParser
@@ -27,6 +28,7 @@ import top.tcyeee.bookmarkify.utils.yesterday
 class BookmarkServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
     private val homeItemMapper: HomeItemMapper,
+    private val homeItemService: IHomeItemService,
     private val projectConfig: ProjectConfig,
     private val kafkaMessageService: IKafkaMessageService,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
@@ -62,12 +64,11 @@ class BookmarkServiceImpl(
      * 数据读取完成以后,立即返回占位信息
      * 等待书签解析完成以后,通过WebSocket逐个向前端返回解析完成后的数据
      */
-    override fun importBookmarkFile(file: MultipartFile, uid: String): List<BookmarkShow>? {
-        // 拿到原始数据
-        val trim = ChromeBookmarkParser.trim(file)
-        // TODO 生成占位信息并返回
-        // TODO 通过kafka检查数据并通知
-        return emptyList()
+    override fun importBookmarkFile(file: MultipartFile, uid: String): List<HomeItemShow>? {
+        // 1. 解析上传文件，获取扁平化后的书签结构
+        val structures = ChromeBookmarkParser.trim(file)
+        // 2. 将解析结果落库，并立即生成占位 HomeItemShow，同时提交解析任务
+        return homeItemService.chromeBookmarksPackage(structures, uid)
     }
 
     override fun checkAll() = ktQuery().lt(BookmarkEntity::updateTime, yesterday()).list()
@@ -81,7 +82,7 @@ class BookmarkServiceImpl(
         val userLink = BookmarkUserLink(bookmarkUrl, uid, bookmark).also { bookmarkUserLinkMapper.insert(it) }
         val homeItem = HomeItem(uid, userLink.id).also { homeItemMapper.insert(it) }
 
-        // 异步检查 书签如果没有高清icon, 并且updateTime已经超过一天再检查
+        // 返回占位信息,同时通知队列去检查书签
         if (bookmark.checkFlag) return HomeItemShow(homeItem.id, uid, bookmark.id)
             .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark, userLink.id, homeItem.id) }
 

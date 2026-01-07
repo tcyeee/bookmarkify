@@ -50,7 +50,7 @@ data class BookmarkShow(
 data class HomeItemShow(
     @field:Schema(description = "ID") var id: String,
     @field:Schema(description = "UID") var uid: String,
-    @field:Schema(description = "序号") var sort: Int = 99,
+    @field:Schema(description = "序号") var sort: Int = Int.MIN_VALUE,
     @field:Schema(description = "书签类型") var type: HomeItemType = HomeItemType.BOOKMARK,
 
     @field:Schema(description = "书签信息") var typeApp: BookmarkShow? = null,

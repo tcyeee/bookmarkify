@@ -26,16 +26,5 @@ interface IBookmarkService : IService<BookmarkEntity> {
     fun search(name: String): List<BookmarkEntity>
     fun linkOne(bookmarkId: String, uid: String): HomeItemShow
     fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow>
-    fun importBookmarkFile(file: MultipartFile, uid: String): List<BookmarkShow>?
-
-//    /**
-//     * 书签检查(必须是异步)
-//     * ⚠️只允许被Kafka调用,私自调用很可能导致堵塞
-//     *
-//     * @param bookmark 原标签
-//     */
-//    fun parseBookmark(bookmark: Bookmark)
-//
-//    /* 找到用户的书签,然后通知到前端用户 */
-//    fun findBookmarkAndNotice(bookmarkUserLinkId: String, homeItemId: String, uid: String): Unit
+    fun importBookmarkFile(file: MultipartFile, uid: String): List<HomeItemShow>?
 }
