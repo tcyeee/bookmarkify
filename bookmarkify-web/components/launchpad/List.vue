@@ -221,7 +221,7 @@ function getClickMenu(item: UserLayoutNodeVO) {
 function clickDetail(item: UserLayoutNodeVO) {
   if (!item.typeApp) return
   data.bookmarkDetailDialog = true
-  data.bookmarkDetail = item.typeApp
+  data.bookmarkDetail = item.typeApp  
 }
 
 // 删除书签
