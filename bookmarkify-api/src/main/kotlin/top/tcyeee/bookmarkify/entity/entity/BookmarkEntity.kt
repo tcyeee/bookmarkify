@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.entity.entity
 
+import cn.hutool.core.date.LocalDateTimeUtil
 import cn.hutool.core.util.IdUtil
 import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.annotation.TableId
@@ -10,9 +11,9 @@ import jakarta.validation.constraints.Max
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.utils.FileUtils
-import top.tcyeee.bookmarkify.utils.yesterday
 import java.io.Serializable
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 
 /**
  * 书签相关
@@ -43,15 +44,10 @@ data class BookmarkEntity(
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
 ) {
-
     // 拼接后的完整网站
     val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
-
-    // 检查标签,这里为true,说明这个书签需要被检查了
-    val checkFlag get() = updateTime?.isBefore(yesterday()) ?: true
-
     // JSON格式化后的数据
-    val json: String? = JSONUtil.toJsonStr(this)
+    val json: String? get() = JSONUtil.toJsonStr(this)
 
     constructor(url: BookmarkUrlWrapper) : this(
         id = IdUtil.fastUUID(),
@@ -68,6 +64,12 @@ data class BookmarkEntity(
         this.antiCrawlerDetected = wrapper.antiCrawlerDetected
         this.updateTime = LocalDateTime.now()
         this.iconBase64 = FileUtils.icoBase64(wrapper.distinctIcons, this.rawUrl)
+    }
+
+    // 是否需要检查标签,这里为true,说明这个书签需要被检查了
+    fun checkFlag(): Boolean {
+        if (updateTime == null) return true
+        return LocalDateTimeUtil.between(updateTime, LocalDateTime.now(), ChronoUnit.DAYS) > 1
     }
 
 }
