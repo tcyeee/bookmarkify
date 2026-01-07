@@ -32,6 +32,7 @@ data class UserLayoutNodeEntity(
 ) {
     // 当前仅仅只包含Bookamrk的展示
     fun vo(sort: Int?, bookmark: BookmarkShow?): UserLayoutNodeVO = UserLayoutNodeVO(
+        id = this.id,
         sort = sort ?: Int.MAX_VALUE,
         typeApp = bookmark
     ).also {
@@ -40,7 +41,7 @@ data class UserLayoutNodeEntity(
     }
 
     fun loadingVO(): UserLayoutNodeVO {
-        return UserLayoutNodeVO()
+        return UserLayoutNodeVO("")
     }
 }
 

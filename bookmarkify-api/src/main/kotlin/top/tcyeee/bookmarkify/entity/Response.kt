@@ -130,7 +130,7 @@ data class UserPreferenceVO(
 }
 
 data class UserLayoutNodeVO(
-    @field:Schema(description = "节点ID") val id: String = IdUtil.fastUUID(),
+    @field:Schema(description = "节点ID") val id: String,
     @field:Schema(description = "父节点ID") val parentId: String? = null,
     @field:Schema(description = "排序") val sort: Int = Int.MAX_VALUE,
     @field:Schema(description = "节点类型") val type: NodeTypeEnum = NodeTypeEnum.BOOKMARK,
@@ -144,6 +144,7 @@ data class UserLayoutNodeVO(
 
     // 通过书签构造单桌面节点
     constructor(nodeEntity: UserLayoutNodeEntity, bookmarkShow: BookmarkShow) : this(
+        id = nodeEntity.id,
         type = NodeTypeEnum.BOOKMARK,
         typeApp = bookmarkShow
     ) {

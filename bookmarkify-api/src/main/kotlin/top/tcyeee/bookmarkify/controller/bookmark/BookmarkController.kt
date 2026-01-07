@@ -6,17 +6,11 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.throttle.Throttle
-import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
-import top.tcyeee.bookmarkify.entity.BookmarkShow
-
-import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
-import top.tcyeee.bookmarkify.entity.HomeItemShow
-import top.tcyeee.bookmarkify.entity.LayoutNodeSort
-import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
+import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
+import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
-import top.tcyeee.bookmarkify.server.IHomeItemService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
 import top.tcyeee.bookmarkify.utils.APP_UID
@@ -32,9 +26,9 @@ import top.tcyeee.bookmarkify.utils.BaseUtils
 class BookmarksController(
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val bookmarkService: IBookmarkService,
-    private val homeItemService: IHomeItemService,
     private val preferenceService: IUserPreferenceService,
-    private val layoutNodeService: IUserLayoutNodeService
+    private val layoutNodeService: IUserLayoutNodeService,
+    private val layoutNodeMapper: UserLayoutNodeMapper,
 ) {
 
     @Operation(summary = "通过书签简称/标题/描述/根域名,搜索书签")
@@ -66,9 +60,15 @@ class BookmarksController(
     @Operation(summary = "排序")
     fun sort(@RequestBody params: Map<String, Int>): Boolean = preferenceService.sort(APP_UID, params)
 
+    /**
+     * @param params layout元素ID
+     */
     @PostMapping("/delete")
-    @Operation(summary = "删除(仅删除桌面排序)")
-    fun delete(@RequestBody params: List<String>) = params.forEach(homeItemService::deleteOne)
+    @Operation(summary = "删除用户的自定义书签以及桌面元素")
+    fun delete(@RequestBody params: List<String>) = params.forEach {
+        layoutNodeMapper.deleteById(it)
+        bookmarkUserLinkService.deleteOne(it)
+    }
 
     @Throttle
     @PostMapping("/update")

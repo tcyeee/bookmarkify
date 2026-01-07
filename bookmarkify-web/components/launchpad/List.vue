@@ -228,8 +228,7 @@ function clickDetail(item: UserLayoutNodeVO) {
 function delOne(item: UserLayoutNodeVO) {
   if (!item.typeApp) return
   bookmarksDel([item.id])
-
-  const index: number = pageData.value?.findIndex((a) => a.id == item.id) || -1
+  const index = pageData.value?.findIndex((a) => a.id === item.id) ?? -1
   if (index !== -1) pageData.value?.splice(index, 1)
 }
 

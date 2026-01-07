@@ -29,5 +29,6 @@ class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<Bookma
         this.saveBatch(source)
     }
 
-    override fun deleteOne(id: String): Boolean = ktUpdate().eq(BookmarkUserLink::id, id).update()
+    override fun deleteOne(id: String): Boolean =
+        ktUpdate().eq(BookmarkUserLink::id, id).set(BookmarkUserLink::deleted, true).update()
 }
