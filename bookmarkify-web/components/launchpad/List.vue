@@ -20,6 +20,7 @@
           <div
             class="bookmark-item"
             :class="{ 'is-add': isAddItem(item) }"
+            :data-is-add-item="isAddItem(item)"
             @contextmenu="onItemContextMenu($event, item)">
             <div v-if="isAddItem(item)" class="bookmark-add-placeholder">
               <LaunchpadAddOne @success="addBookmark" />
@@ -125,12 +126,28 @@ const addButtonItem = computed<AddItem>(() => ({
 }))
 
 const gridItems = computed<GridItem[]>(() => [...(pageData.value ?? []), addButtonItem.value])
+
+function isAddElement(element?: Element | null) {
+  return element?.getAttribute('data-is-add-item') === 'true'
+}
+
+function isDragHandleEvent(event: any) {
+  const originalEvent = (event?.srcEvent || event?.event || event) as Event | undefined
+  const target = originalEvent?.target as HTMLElement | null
+  return Boolean(target?.closest('.bookmark-drag-handle'))
+}
+
 const vuuriOptions = {
   layout: { fillGaps: true, rounding: false },
   layoutDuration: 250,
   showDuration: 0,
   hideDuration: 0,
   dragReleaseDuration: 50,
+  dragStartPredicate: (item: any, event: any) => {
+    const element = item?.getElement?.() as HTMLElement | undefined
+    if (isAddElement(element)) return false
+    return isDragHandleEvent(event)
+  },
 }
 
 const data = reactive<{
