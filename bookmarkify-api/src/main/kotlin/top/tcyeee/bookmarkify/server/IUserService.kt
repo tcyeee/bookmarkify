@@ -175,4 +175,6 @@ interface IUserService : IService<UserEntity> {
     fun verifyEmail(
         request: HttpServletRequest, response: HttpServletResponse, uid: String, params: EmailVerifyParams
     ): UserSessionInfo
+
+    fun findByNameAndPwd(account: String, password: String): UserEntity?
 }
