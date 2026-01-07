@@ -70,14 +70,6 @@ data class HomeItemShow(
             HomeItemType.FUNCTION -> this.typeFuc = EnumUtil.getEnumAt(FunctionType::class.java, item.functionId ?: 0)
         }
     }
-
-    constructor(id: String, uid: String, bookmarkId: String) : this(
-        id, uid, bookmarkId = bookmarkId, type = HomeItemType.BOOKMARK
-    )
-
-    constructor(uid: String, itemId: String, bookmarkShow: BookmarkShow) : this(
-        id = itemId, uid = uid, typeApp = bookmarkShow
-    )
 }
 
 data class UserInfoShow(
@@ -140,12 +132,21 @@ data class UserPreferenceVO(
 data class UserLayoutNodeVO(
     @field:Schema(description = "节点ID") val id: String = IdUtil.fastUUID(),
     @field:Schema(description = "父节点ID") val parentId: String? = null,
-    @field:Schema(description = "排序") val sort: Long = Long.MIN_VALUE,
+    @field:Schema(description = "排序") val sort: Long = Long.MAX_VALUE,
     @field:Schema(description = "节点类型") val type: NodeTypeEnum = NodeTypeEnum.BOOKMARK,
-    @field:Schema(description = "节点(文件夹)名称") val name: String,
+    @field:Schema(description = "节点(文件夹)名称") val name: String? = null,
 
     /* 三选一 */
     @field:Schema(description = "书签信息") var typeApp: BookmarkShow? = null,
-    @field:Schema(description = "文件夹信息") var typeDir: UserLayoutNodeVO? = null,
-    @field:Schema(description = "系统功能入口") var typeFuc: FunctionType? = null
-)
+    @field:Schema(description = "系统功能入口") var typeFuc: FunctionType? = null,
+    @field:Schema(description = "子节点") val children: MutableList<UserLayoutNodeVO> = mutableListOf()
+) {
+
+    // 通过书签构造单桌面节点
+    constructor(nodeEntity: UserLayoutNodeEntity, bookmarkShow: BookmarkShow) : this(
+        type = NodeTypeEnum.BOOKMARK,
+        typeApp = bookmarkShow
+    ) {
+        BeanUtil.copyProperties(nodeEntity, this)
+    }
+}

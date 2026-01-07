@@ -14,8 +14,8 @@ interface IKafkaMessageService {
      * @param uid user-id
      * @param bookmark bookmark-id
      * @param userLinkId bookmark-user-link-id
-     * @param homeItemId home-item-id
+     * @param nodeLayoutId 关联的桌面布局ID
      */
-    fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, userLinkId: String, homeItemId: String)
+    fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, userLinkId: String, nodeLayoutId: String)
 }
 

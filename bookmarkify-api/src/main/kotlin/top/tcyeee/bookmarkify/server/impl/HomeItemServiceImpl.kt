@@ -4,42 +4,17 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.entity.HomeItemShow
-import top.tcyeee.bookmarkify.entity.HomeItemSortParams
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
-import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.entity.HomeItem
-import top.tcyeee.bookmarkify.entity.enums.HomeItemType
-import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.HomeItemMapper
-import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.server.IHomeItemService
-import top.tcyeee.bookmarkify.server.IKafkaMessageService
 import top.tcyeee.bookmarkify.utils.SystemBookmarkStructure
-import top.tcyeee.bookmarkify.utils.WebsiteParser
-import top.tcyeee.bookmarkify.utils.yesterday
-import java.time.ZoneOffset
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
-import top.tcyeee.bookmarkify.entity.BookmarkShow
 
 /**
  * @author tcyeee
  * @date 4/14/24 15:38
  */
 @Service
-class HomeItemServiceImpl(
-    private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
-    private val bookmarkMapper: BookmarkMapper,
-    private val homeItemMapper: HomeItemMapper,
-    private val kafkaMessageService: IKafkaMessageService,
-) : IHomeItemService, ServiceImpl<HomeItemMapper, HomeItem>() {
-
-    override fun findShowByUid(uid: String): List<HomeItemShow> {
-        val dataMap = bookmarkUserLinkMapper.allBookmarkByUid(uid)
-            .associateBy { it.bookmarkUserLinkId.toString() }
-        return this.getByUid(uid)
-            .map { HomeItemShow(it, dataMap) }
-            .also { this.setIconHd(it) }
-    }
+class HomeItemServiceImpl : IHomeItemService, ServiceImpl<HomeItemMapper, HomeItem>() {
 
     override fun chromeBookmarksPackage(structures: List<SystemBookmarkStructure>, uid: String): List<HomeItemShow> {
         val placeholders = mutableListOf<HomeItemShow>()
@@ -82,11 +57,6 @@ class HomeItemServiceImpl(
         return placeholders
     }
 
-    @Deprecated("重新写了布局排序方法")
-    override fun sort(params: List<HomeItemSortParams>) = params.forEach {
-        ktUpdate().set(HomeItem::sort, it.sort).eq(HomeItem::id, it.id).update()
-    }
-
     override fun delete(params: List<String>) =
         params.forEach { ktUpdate().set(HomeItem::deleted, true).eq(HomeItem::id, it).update() }
 
@@ -97,13 +67,6 @@ class HomeItemServiceImpl(
         ktQuery().eq(HomeItem::uid, sourceUid).eq(HomeItem::deleted, java.lang.Boolean.FALSE).list()
             .apply { this.forEach { it.uid = targetUid } }.also { saveBatch(it) }
 
-    private fun setIconHd(list: List<HomeItemShow>) {
-        list.forEach { item ->
-            if (item.type != HomeItemType.BOOKMARK) return@forEach
-            item.typeApp!!.initLogo()
-        }
-    }
-
-    private fun getByUid(uid: String): List<HomeItem> =
-        ktQuery().eq(HomeItem::uid, uid).eq(HomeItem::deleted, false).orderByAsc(HomeItem::sort).list() ?: emptyList()
+//    private fun getByUid(uid: String): List<HomeItem> =
+//        ktQuery().eq(HomeItem::uid, uid).eq(HomeItem::deleted, false).orderByAsc(HomeItem::sort).list() ?: emptyList()
 }

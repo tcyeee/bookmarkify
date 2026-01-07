@@ -74,33 +74,33 @@ data class BookmarkEntity(
 
 @TableName("bookmark_user_link")
 data class BookmarkUserLink(
-    @TableId var id: String,
+    @TableId val id: String = IdUtil.fastUUID(),
     @field:Max(40) @field:Schema(description = "用户ID") var uid: String,
     @field:Max(40) @field:Schema(description = "书签ID") val bookmarkId: String,
     @field:Max(200) @field:Schema(description = "书签标题(用户写的)") val title: String?,
     @field:Max(1000) @field:Schema(description = "书签备注(用户写的)") val description: String?,
     @field:Max(1000) @field:Schema(description = "书签完整URL(带参数)") val urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
-    @field:Max(200) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String? = null,
+    @field:Max(200) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
 
     @JsonIgnore @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "是否删除") val deleted: Boolean = false,
 ) {
-    constructor(bookmarkUrlWrapper: BookmarkUrlWrapper, uid: String, bookmark: BookmarkEntity) : this(
-        id = IdUtil.fastUUID(),
+    constructor(rawUrl: String, uid: String, nodeId: String, bookmark: BookmarkEntity) : this(
         uid = uid,
         bookmarkId = bookmark.id,
         title = bookmark.title,
         description = bookmark.description,
-        urlFull = bookmarkUrlWrapper.urlRaw,
+        urlFull = rawUrl,
+        layoutNodeId = nodeId,
     )
 
-    constructor(bookmark: BookmarkEntity, uid: String) : this(
-        id = IdUtil.fastUUID(),
+    constructor(bookmark: BookmarkEntity, nodeId: String, uid: String) : this(
         uid = uid,
         bookmarkId = bookmark.id,
         title = bookmark.title,
         description = bookmark.description,
         urlFull = bookmark.rawUrl,
+        layoutNodeId = nodeId,
     )
 }
 
