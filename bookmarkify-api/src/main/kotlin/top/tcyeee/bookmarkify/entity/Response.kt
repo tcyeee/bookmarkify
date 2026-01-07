@@ -2,6 +2,8 @@ package top.tcyeee.bookmarkify.entity
 
 import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.EnumUtil
+import cn.hutool.core.util.IdUtil
+import com.baomidou.mybatisplus.annotation.TableId
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.entity.*
@@ -9,6 +11,7 @@ import top.tcyeee.bookmarkify.entity.enums.FunctionType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 import top.tcyeee.bookmarkify.utils.OssUtils
+import java.time.LocalDateTime
 
 data class BookmarkShow(
     @field:Schema(description = "关联书签ID") var bookmarkId: String? = null,
@@ -134,3 +137,11 @@ data class UserPreferenceVO(
         BeanUtil.copyProperties(entity, this)
     }
 }
+
+data class UserLayoutNodeVO(
+    @field:Schema(description = "节点ID") val id: String = IdUtil.fastUUID(),
+    @field:Schema(description = "父节点ID") val parentId: String? = null,
+    @field:Schema(description = "排序") val sort: Int = Int.MIN_VALUE,
+    @field:Schema(description = "节点类型") val type: NodeTypeEnum = NodeTypeEnum.BOOKMARK,
+    @field:Schema(description = "节点(文件夹)名称") val name: String,
+)

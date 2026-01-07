@@ -9,6 +9,9 @@ import java.time.LocalDateTime
 /**
  * 用户桌面排布,只负责结构,不负责数据
  *
+ * 排序信息因为涉及到读写的问题: 用过一次就会导致很多信息的排序数据产生变动, 于是排序信息被独立拆分到
+ * 用户配置信息中,每次查询的时候先查询桌面布局信息，同时查询用户配置中的排序信息进行组合.
+ *
  * @author tcyeee
  * @date 1/7/26 13:37
  */
@@ -16,7 +19,6 @@ import java.time.LocalDateTime
 data class UserLayoutNodeEntity(
     @TableId @field:Schema(description = "节点ID") val id: String = IdUtil.fastUUID(),
     @field:Schema(description = "父节点ID") val parentId: String? = null,
-    @field:Schema(description = "排序") val sort: Int = Int.MIN_VALUE,
     @field:Schema(description = "节点类型") val type: NodeTypeEnum = NodeTypeEnum.BOOKMARK,
 
     @field:Schema(description = "用户ID") val uid: String,
@@ -25,4 +27,16 @@ data class UserLayoutNodeEntity(
 )
 
 /* 节点类型 */
-enum class NodeTypeEnum { BOOKMARK, BOOKMARK_DIR, FUNCTION }
+enum class NodeTypeEnum {
+    /* 书签 */
+    BOOKMARK,
+
+    /* 用户新添加书签,但是书签还在等待解析 */
+    BOOKMARK_LOADING,
+
+    /* 书签文件夹 */
+    BOOKMARK_DIR,
+
+    /* 功能 */
+    FUNCTION
+}
