@@ -1,10 +1,15 @@
 package top.tcyeee.bookmarkify.entity.entity
 
+import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
+import top.tcyeee.bookmarkify.entity.BookmarkShow
+import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
+import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import java.time.LocalDateTime
+import kotlin.Long
 
 /**
  * 用户桌面排布,只负责结构,不负责数据
@@ -24,7 +29,16 @@ data class UserLayoutNodeEntity(
     @field:Schema(description = "用户ID") val uid: String,
     @field:Schema(description = "节点(文件夹)名称") val name: String,
     @field:Schema(description = "添加时间") var createdAt: LocalDateTime = LocalDateTime.now(),
-)
+) {
+    fun vo(sort: Long?, bookmark: BookmarkShow?): UserLayoutNodeVO = UserLayoutNodeVO(
+        name = name,
+        sort = sort ?: Long.MAX_VALUE,
+        typeApp = bookmark
+    ).also {
+        BeanUtil.copyProperties(this, it)
+        if (type == NodeTypeEnum.BOOKMARK) it.typeApp!!.initLogo() // 初始化其中的LOGO
+    }
+}
 
 /* 节点类型 */
 enum class NodeTypeEnum {

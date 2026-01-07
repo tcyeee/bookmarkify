@@ -46,8 +46,10 @@ data class BookmarkEntity(
 
     // 拼接后的完整网站
     val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
+
     // 检查标签,这里为true,说明这个书签需要被检查了
     val checkFlag get() = updateTime?.isBefore(yesterday()) ?: true
+
     // JSON格式化后的数据
     val json: String? = JSONUtil.toJsonStr(this)
 
@@ -74,13 +76,14 @@ data class BookmarkEntity(
 data class BookmarkUserLink(
     @TableId var id: String,
     @field:Max(40) @field:Schema(description = "用户ID") var uid: String,
-    @field:Max(40) @field:Schema(description = "书签ID") var bookmarkId: String,
-    @field:Max(200) @field:Schema(description = "书签标题(用户写的)") var title: String?,
-    @field:Max(1000) @field:Schema(description = "书签备注(用户写的)") var description: String?,
-    @field:Max(1000) @field:Schema(description = "书签完整URL(带参数)") var urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
+    @field:Max(40) @field:Schema(description = "书签ID") val bookmarkId: String,
+    @field:Max(200) @field:Schema(description = "书签标题(用户写的)") val title: String?,
+    @field:Max(1000) @field:Schema(description = "书签备注(用户写的)") val description: String?,
+    @field:Max(1000) @field:Schema(description = "书签完整URL(带参数)") val urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
+    @field:Max(200) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String? = null,
 
-    @JsonIgnore @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
-    @JsonIgnore @field:Schema(description = "是否删除") var deleted: Boolean = false,
+    @JsonIgnore @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
+    @JsonIgnore @field:Schema(description = "是否删除") val deleted: Boolean = false,
 ) {
     constructor(bookmarkUrlWrapper: BookmarkUrlWrapper, uid: String, bookmark: BookmarkEntity) : this(
         id = IdUtil.fastUUID(),

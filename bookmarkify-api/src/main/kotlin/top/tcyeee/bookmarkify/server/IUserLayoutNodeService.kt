@@ -1,6 +1,8 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
+import top.tcyeee.bookmarkify.entity.HomeItemSortParams
+import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 
 /**
@@ -10,7 +12,16 @@ import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
  * @author tcyeee
  * @date 1/7/26
  */
-interface IUserLayoutNodeService : IService<UserLayoutNodeEntity>{
+interface IUserLayoutNodeService : IService<UserLayoutNodeEntity> {
+
+    // 用户对文件结构进行重新排序
+    fun sort(uid: String, params: List<HomeItemSortParams>): Boolean
+
+    /**
+     * 拿到用户全部的桌面布局
+     * @param uid uid
+     */
+    fun layout(uid: String): UserLayoutNodeVO
 
     /* 用户桌面布局配置 */
     // TODO 用户更新桌面布局配置
@@ -31,7 +42,5 @@ interface IUserLayoutNodeService : IService<UserLayoutNodeEntity>{
     // TODO 用户删除一个文件夹结构
 //    fun deleteFolder(uid: String, folderNodeId: Long): Boolean
 
-    // TODO 用户对文件结构进行重新排序
-//    fun reorderNodes(uid: String, orderedNodeIds: List<Long>): Boolean
 }
 
