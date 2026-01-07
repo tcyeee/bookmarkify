@@ -1,8 +1,10 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import cn.hutool.core.bean.BeanUtil
+import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
+import top.tcyeee.bookmarkify.entity.LayoutNodeSort
 import top.tcyeee.bookmarkify.entity.UserPreferenceUpdateParams
 import top.tcyeee.bookmarkify.entity.UserPreferenceVO
 import top.tcyeee.bookmarkify.entity.entity.UserPreferenceEntity
@@ -24,5 +26,12 @@ class UserPreferenceServiceImpl(
 
     override fun upsertByUid(uid: String, params: UserPreferenceUpdateParams): Boolean =
         queryByUid(uid).also { BeanUtil.copyProperties(params, it) }.let { saveOrUpdate(it) }
+
+    override fun sort(uid: String, params: List<LayoutNodeSort>): Boolean =
+        ktUpdate()
+            .eq(UserPreferenceEntity::uid, uid)
+            .set(UserPreferenceEntity::nodeSortMapJson, JSONUtil.toJsonStr(params))
+            .update()
+
 }
 
