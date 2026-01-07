@@ -16,7 +16,7 @@ export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<t.
 export const bookmarksSearch = (name: string) => http.post(`/bookmark/search?name=${encodeURIComponent(name)}`) as Promise<Array<any>>
 export const bookmarksAddOne = (url: string) => http.get('/bookmark/addOne', { url: url }) as Promise<t.UserLayoutNodeVO>
 export const bookmarksLinkOne = (bookmarkId: string) => http.get('/bookmark/linkOne', { bookmarkId }) as Promise<t.UserLayoutNodeVO>
-export const bookmarksSort = (params: Array<t.BookmarkSortParams>) => http.post('/bookmark/sort', params) as Promise<boolean>
+export const bookmarksSort = (params: Record<string, number>) => http.post('/bookmark/sort', params) as Promise<boolean>
 export const bookmarksDel = (params: Array<string>) => http.post('/bookmark/delete', params) as Promise<boolean>
 export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post('/bookmark/update', params) as Promise<t.BookmarkShow>
 export const bookmarksUpload = (file: File) => http.upload('/bookmark/upload', file) as Promise<Array<t.BookmarkShow>>

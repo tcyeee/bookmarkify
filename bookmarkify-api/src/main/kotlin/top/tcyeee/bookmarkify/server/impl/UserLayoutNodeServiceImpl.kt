@@ -56,7 +56,7 @@ class UserLayoutNodeServiceImpl(
         val root = UserLayoutNodeVO(
             id = ROOT_ID,
             parentId = null,
-            sort = Long.MIN_VALUE,
+            sort = Int.MIN_VALUE,
             type = NodeTypeEnum.BOOKMARK_DIR,
             name = ROOT_NAME,
             children = mutableListOf()

@@ -59,10 +59,12 @@ class BookmarksController(
      * 这里的排序信息仅仅只更改用户配置中的排序数据库
      * 所以单将排序信息放到用户配置中，而不是直接写到用户桌面布局信息中, 是考虑到用户每一次排序都会导致大量的数据变动
      * 处于效率考虑，所以才单独进行拆分, 页面刷新的时候查询到桌面布局信息和用户配置中的排序信息进行组合，然后返回.
+     *
+     * @param params key: layout-node-id , value: sort
      */
     @PostMapping("/sort")
     @Operation(summary = "排序")
-    fun sort(@RequestBody params: List<LayoutNodeSort>): Boolean = preferenceService.sort(APP_UID, params)
+    fun sort(@RequestBody params: Map<String, Int>): Boolean = preferenceService.sort(APP_UID, params)
 
     @PostMapping("/delete")
     @Operation(summary = "删除(仅删除桌面排序)")

@@ -31,8 +31,8 @@ data class UserLayoutNodeEntity(
     @field:Schema(description = "添加时间") var createdAt: LocalDateTime = LocalDateTime.now(),
 ) {
     // 当前仅仅只包含Bookamrk的展示
-    fun vo(sort: Long?, bookmark: BookmarkShow?): UserLayoutNodeVO = UserLayoutNodeVO(
-        sort = sort ?: Long.MAX_VALUE,
+    fun vo(sort: Int?, bookmark: BookmarkShow?): UserLayoutNodeVO = UserLayoutNodeVO(
+        sort = sort ?: Int.MAX_VALUE,
         typeApp = bookmark
     ).also {
         BeanUtil.copyProperties(this, it)
