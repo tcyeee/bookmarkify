@@ -5,10 +5,7 @@
         <h3 class="text-xl font-semibold">书签管理</h3>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">导入 Chrome 书签并快速检索当前账号的链接。</p>
       </div>
-      <label
-        class="cy-btn cy-btn-accent flex items-center gap-2 cursor-pointer"
-        :class="{ 'opacity-70 pointer-events-none': importing }"
-      >
+      <label class="cy-btn cy-btn-accent flex items-center gap-2 cursor-pointer" :class="{ 'opacity-70 pointer-events-none': importing }">
         <input ref="fileInputRef" type="file" accept=".html,.htm" class="hidden" :disabled="importing" @change="handleFileChange" />
         <span class="icon--memory-upload icon-size-20"></span>
         <span>{{ importing ? '导入中…' : '导入书签' }}</span>
@@ -17,14 +14,7 @@
 
     <div class="bg-white dark:bg-slate-950/80 transition-colors rounded-lg border border-slate-200 dark:border-slate-800">
       <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 px-4 py-3">
-        <input
-          v-model="keyword"
-          type="text"
-          placeholder="输入标题、描述或域名搜索"
-          class="cy-input cy-input-sm min-w-[220px] flex-1"
-          :disabled="bookmarksLoading"
-          @keyup.enter="handleSearchBookmarks"
-        />
+        <input v-model="keyword" type="text" placeholder="输入标题、描述或域名搜索" class="cy-input cy-input-sm min-w-[220px] flex-1" :disabled="bookmarksLoading" @keyup.enter="handleSearchBookmarks" />
         <button class="cy-btn cy-btn-soft" :disabled="bookmarksLoading" @click="handleSearchBookmarks">搜索</button>
         <button class="cy-btn cy-btn-ghost" :disabled="bookmarksLoading" @click="handleResetSearch">重置</button>
       </div>
@@ -49,37 +39,17 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-100">
-              <tr
-                v-for="bookmark in bookmarks"
-                :key="bookmark.bookmarkUserLinkId || bookmark.bookmarkId"
-                class="hover:bg-slate-50 dark:hover:bg-slate-900/70 transition-colors"
-              >
+              <tr v-for="bookmark in bookmarks" :key="bookmark.bookmarkUserLinkId || bookmark.bookmarkId" class="hover:bg-slate-50 dark:hover:bg-slate-900/70 transition-colors">
                 <td class="px-4 py-2 align-middle">
                   <div class="flex items-center gap-2 min-w-0">
-                    <div
-                      class="relative h-7 w-7 shrink-0 rounded-md bg-white/70 dark:bg-slate-800 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-700"
-                    >
-                      <span
-                        class="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-white dark:ring-slate-900"
-                        :class="bookmark.isActivity ? 'bg-emerald-500' : 'bg-rose-500'"
-                        aria-hidden="true"
-                      />
+                    <div class="relative h-7 w-7 shrink-0 rounded-md bg-white/70 dark:bg-slate-800 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-700">
+                      <span class="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-white dark:ring-slate-900" :class="bookmark.isActivity ? 'bg-emerald-500' : 'bg-rose-500'" aria-hidden="true" />
                       <div class="h-7 w-7 overflow-hidden rounded-md">
-                        <img
-                          class="h-full w-full object-contain"
-                          :src="bookmark.iconBase64"
-                          :alt="bookmark.title"
-                        />
+                        <img class="h-full w-full object-contain" :src="bookmark.iconBase64" :alt="bookmark.title" />
                       </div>
                     </div>
                     <div class="min-w-0">
-                      <a
-                        class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate hover:text-sky-600 dark:hover:text-sky-400"
-                        :title="bookmark.description || bookmark.urlFull || bookmark.title"
-                        :href="bookmark.urlFull"
-                        target="_blank"
-                        rel="noopener"
-                      >
+                      <a class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate hover:text-sky-600 dark:hover:text-sky-400" :title="bookmark.description || bookmark.urlFull || bookmark.title" :href="bookmark.urlFull" target="_blank" rel="noopener">
                         {{ bookmark.title }}
                       </a>
                       <div class="text-xs text-slate-500 dark:text-slate-400 truncate" :title="bookmark.urlBase">
@@ -184,7 +154,7 @@ async function fetchBookmarks() {
   try {
     const payload = keyword.value.trim() ? { name: keyword.value.trim() } : {}
     const res = await bookmarksList(payload)
-    bookmarks.value = res ?? []
+    bookmarks.value = res?.records ?? []
   } catch (error: any) {
     bookmarkError.value = error?.msg || error?.message || '获取书签失败，请稍后重试。'
   } finally {
