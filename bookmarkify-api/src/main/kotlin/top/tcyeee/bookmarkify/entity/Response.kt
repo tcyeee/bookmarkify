@@ -6,8 +6,10 @@ import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.FunctionType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
+import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 import top.tcyeee.bookmarkify.utils.OssUtils
+import java.time.LocalDateTime
 
 data class BookmarkShow(
     @field:Schema(description = "关联书签ID") var bookmarkId: String? = null,
@@ -128,11 +130,35 @@ data class UserLayoutNodeVO(
     }
 }
 
-data class LogoVO(
-    @field:Schema(description = "base64") var iconBase64: String? = null,
-    @field:Schema(description = "最大LOGO尺寸") var maximalLogoSize: Int = 0,
-    @field:Schema(description = "最近更新时间") var logoCheckFlag: Boolean = false, // 是否主动配置了LOGO
 
-    // TODO LOGO图片类型 ICO-Base64 / PNG
-    // TODO 内边距
-)
+data class BookmarkAdminVO(
+    var id: String,
+    @field:Schema(description = "书签根域名") var urlHost: String,        // sfz.uzuzuz.com.cn
+    @field:Schema(description = "路径URL(不带参数)") var urlPath: String? = null,         // /test/info
+    @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
+
+    /* 基础信息 */
+    @field:Schema(description = "书签简称") var appName: String? = null,
+    @field:Schema(description = "书签标题") var title: String? = null,
+    @field:Schema(description = "书签备注") var description: String? = null,
+
+    @field:Schema(description = "小图标base64") var iconBase64: String? = null,
+    @field:Schema(description = "最大LOGO尺寸") var maximalLogoSize: Int = 0,
+    @field:Schema(description = "图片内边距") var iconPadding: Int = 0,
+
+    /* 状态信息 */
+    @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.LOADING,
+    @field:Schema(description = "网站是否活跃") var isActivity: Boolean = false,
+    @field:Schema(description = "手动认证状态") var verifyFlag: Boolean = false, // 如果该书签信息都没问题, 添加手动认证状态以后, 即可被搜索到
+    @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
+    @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
+    @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
+) {
+    constructor(entity: BookmarkEntity) : this(
+        id = entity.id,
+        urlHost = entity.urlHost,
+        urlScheme = entity.urlScheme,
+    ) {
+        BeanUtil.copyProperties(entity, this)
+    }
+}
