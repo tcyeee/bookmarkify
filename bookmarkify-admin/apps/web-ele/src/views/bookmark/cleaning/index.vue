@@ -51,11 +51,11 @@ const gridOptions: VxeGridProps = {
   ],
   proxyConfig: {
     ajax: {
-      query: async ({ page, form }) => {
+      query: async ({ page }, form) => {
         const res = await getBookmarkListApi({
           currentPage: page.currentPage,
           pageSize: page.pageSize,
-          ...form,
+          ...(form || {}),
         });
         return {
           items: res.records,
