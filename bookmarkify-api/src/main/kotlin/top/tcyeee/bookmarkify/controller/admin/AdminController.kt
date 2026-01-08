@@ -33,7 +33,6 @@ class AdminController(private val userService: IUserService) {
     fun info(): UserInfoShow {
         val info = userService.me(StpKit.ADMIN.loginIdAsString)
         info.roles = listOf("super","ADMIN")
-        info.homePath = "/dashboard/workspace"
         return info
     }
 
