@@ -33,7 +33,8 @@ repositories {
 
 dependencies {
     implementation 'com.github.xiaoymin:knife4j-openapi3-jakarta-spring-boot-starter:4.5.0'
-    implementation 'com.baomidou:mybatis-plus-spring-boot3-starter:3.5.10.1'
+    implementation 'com.baomidou:mybatis-plus-spring-boot3-starter:3.5.15'
+    implementation 'com.baomidou:mybatis-plus-jsqlparser:3.5.15'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
@@ -46,7 +47,7 @@ dependencies {
     implementation 'com.aliyun.oss:aliyun-sdk-oss:3.17.4'
     implementation 'org.postgresql:postgresql:42.7.2'
     implementation 'cn.dev33:sa-token-redis:1.40.0'
-    implementation 'cn.hutool:hutool-all:5.8.25'
+    implementation 'cn.hutool:hutool-all:5.8.40'
     implementation 'org.jsoup:jsoup:1.17.2'
 
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
