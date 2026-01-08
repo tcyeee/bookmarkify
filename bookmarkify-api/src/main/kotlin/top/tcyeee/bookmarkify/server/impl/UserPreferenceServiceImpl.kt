@@ -4,7 +4,6 @@ import cn.hutool.core.bean.BeanUtil
 import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
-import top.tcyeee.bookmarkify.entity.LayoutNodeSort
 import top.tcyeee.bookmarkify.entity.UserPreferenceUpdateParams
 import top.tcyeee.bookmarkify.entity.UserPreferenceVO
 import top.tcyeee.bookmarkify.entity.entity.UserPreferenceEntity
