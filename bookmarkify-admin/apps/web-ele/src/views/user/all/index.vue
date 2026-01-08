@@ -24,6 +24,7 @@ const ElTag = defineAsyncComponent(() =>
 );
 
 const gridOptions: VxeGridProps = {
+  border: true,
   columns: [
     { type: "seq", width: 50 },
     { field: "nickName", title: "昵称", minWidth: 160 },
