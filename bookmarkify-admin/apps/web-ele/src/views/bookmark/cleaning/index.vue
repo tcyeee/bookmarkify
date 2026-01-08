@@ -31,27 +31,31 @@ const ElSwitch = defineAsyncComponent(() =>
 );
 
 const gridOptions: VxeGridProps = {
+  border: true,
   columns: [
     { type: "seq", width: 50 },
-    { field: "appName", title: "App Name", minWidth: 120 },
-    { field: "title", title: "标题", minWidth: 220 },
-    { field: "urlHost", title: "域名", minWidth: 180 },
+    { field: "appName", title: "App Name", minWidth: 120, align: "left" },
+    { field: "title", title: "标题", minWidth: 220, align: "left" },
+    { field: "urlHost", title: "域名", minWidth: 180, align: "left" },
     {
       field: "parseStatus",
       title: "状态",
       width: 140,
+      align: "left",
       slots: { default: "parseStatus" },
     },
     {
       field: "isActivity",
       title: "活跃",
       width: 120,
+      align: "left",
       slots: { default: "activity" },
     },
     {
       field: "updateTime",
       title: "更新时间",
       width: 200,
+      align: "left",
       formatter: ({ cellValue }) => formatDateTime(cellValue),
     },
   ],
