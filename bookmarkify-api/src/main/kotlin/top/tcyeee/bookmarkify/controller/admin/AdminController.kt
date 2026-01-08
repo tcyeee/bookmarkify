@@ -7,6 +7,7 @@ import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.AdminLoginParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
+import top.tcyeee.bookmarkify.entity.entity.RoleEnum
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.StpKit
 
@@ -22,11 +23,11 @@ class AdminController(private val userService: IUserService) {
     @PostMapping("/login")
     fun login(@RequestBody params: AdminLoginParams): SaTokenInfo {
         val user = userService.findByNameAndPwd(params.account, params.password)
-        if (user != null) {
-            StpKit.ADMIN.login(user.id)
-            return StpKit.ADMIN.tokenInfo
-        }
-        throw CommonException(ErrorType.E109)
+            ?: throw CommonException(ErrorType.E109)
+        if (user.role != RoleEnum.ADMIN) throw CommonException(ErrorType.E109)
+
+        StpKit.ADMIN.login(user.id)
+        return StpKit.ADMIN.tokenInfo
     }
 
     @GetMapping("/info")
