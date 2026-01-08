@@ -39,9 +39,6 @@ object BaseUtils {
 
 val APP_UID: String = user()?.uid ?: throw NullPointerException()
 
-/* base64 to Md5 */
-fun pwd(password64: String): String = SecureUtil.md5(Base64.decodeStr(password64))
-
 /* 工具类方法 */
 fun yesterday(): LocalDateTime = LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)
 
