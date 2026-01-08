@@ -30,11 +30,7 @@ class AdminController(private val userService: IUserService) {
     }
 
     @GetMapping("/info")
-    fun info(): UserInfoShow {
-        val info = userService.me(StpKit.ADMIN.loginIdAsString)
-        info.roles = listOf("super","ADMIN")
-        return info
-    }
+    fun info(): UserInfoShow = userService.me(StpKit.ADMIN.loginIdAsString)
 
     @GetMapping("/codes")
     fun codes(): List<String> = listOf("AC_100100", "AC_100110", "AC_100120", "AC_100010")

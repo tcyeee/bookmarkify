@@ -27,7 +27,6 @@ import top.tcyeee.bookmarkify.utils.BaseUtils
 import top.tcyeee.bookmarkify.utils.MailUtils
 import top.tcyeee.bookmarkify.utils.RedisUtils
 import top.tcyeee.bookmarkify.utils.StpKit
-import top.tcyeee.bookmarkify.utils.pwd
 
 /**
  * @author tcyeee
@@ -52,8 +51,7 @@ class UserServiceImpl(
      * @return 用户基础信息 + 头像 + 设置 （没有TOKEN）
      */
     override fun me(uid: String): UserInfoShow =
-        requireNotNull(getById(uid))
-            .let { UserInfoShow(it, it.avatarUrlWithSign()) }
+        requireNotNull(getById(uid)).let { UserInfoShow(it, it.avatarUrlWithSign()) }
 
     fun UserEntity.avatarUrlWithSign(): String? {
         if (StrUtil.isBlank(this.avatarFileId)) return null
@@ -263,7 +261,7 @@ class UserServiceImpl(
     }
 
     override fun del(params: UserDelParams): Boolean =
-        ktUpdate().eq(UserEntity::id, BaseUtils.uid()).eq(UserEntity::password, pwd(params.password))
+        ktUpdate().eq(UserEntity::id, BaseUtils.uid()).eq(UserEntity::password,  SecureUtil.md5(params.password))
             .set(UserEntity::deleted, true).update()
 
     override fun updateUsername(username: String): Boolean =

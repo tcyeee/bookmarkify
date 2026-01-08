@@ -61,7 +61,8 @@ data class UserInfoShow(
     @field:Schema(description = "首页路径") var homePath: String? = null,
 ) {
     constructor(entity: UserEntity, avatarUrl: String?) : this(
-        uid = entity.id, nickName = entity.nickName, avatarUrl = avatarUrl
+        uid = entity.id, nickName = entity.nickName, avatarUrl = avatarUrl,
+        roles = listOf(entity.role.name)
     )
 }
 
