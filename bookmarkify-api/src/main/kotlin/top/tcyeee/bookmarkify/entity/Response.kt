@@ -127,3 +127,12 @@ data class UserLayoutNodeVO(
         BeanUtil.copyProperties(nodeEntity, this)
     }
 }
+
+data class LogoVO(
+    @field:Schema(description = "base64") var iconBase64: String? = null,
+    @field:Schema(description = "最大LOGO尺寸") var maximalLogoSize: Int = 0,
+    @field:Schema(description = "最近更新时间") var logoCheckFlag: Boolean = false, // 是否主动配置了LOGO
+
+    // TODO LOGO图片类型 ICO-Base64 / PNG
+    // TODO 内边距
+)

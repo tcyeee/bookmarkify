@@ -10,7 +10,7 @@ export interface BookmarkEntity {
   description?: string;
   iconBase64?: string;
   maximalLogoSize: number;
-  parseStatus: 'LOADING' | 'SUCCESS' | 'BLOCKED' | 'FAILED' | 'TIMEOUT'; // Add other statuses as needed
+  parseStatus: 'LOADING' | 'SUCCESS' | 'CLOSED' | 'BLOCKED'; // Add other statuses as needed
   isActivity: boolean;
   parseErrMsg?: string;
   createTime: string;
@@ -19,7 +19,7 @@ export interface BookmarkEntity {
 
 export interface BookmarkSearchParams {
   name?: string;
-  status?: string;
+  status?: 'LOADING' | 'SUCCESS' | 'CLOSED' | 'BLOCKED';
   currentPage?: number;
   pageSize?: number;
 }
