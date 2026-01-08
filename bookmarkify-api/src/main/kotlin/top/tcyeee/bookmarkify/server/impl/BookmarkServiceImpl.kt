@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
+import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
@@ -96,12 +97,6 @@ class BookmarkServiceImpl(
     }
 
 
-    override fun adminListAll(name: String?): List<BookmarkEntity> {
-        if (name.isNullOrBlank()) return ktQuery().list()
-        return ktQuery().like(BookmarkEntity::appName, name).or().like(BookmarkEntity::title, name).or()
-            .like(BookmarkEntity::description, name).or().like(BookmarkEntity::urlHost, name).list()
-    }
-
     override fun adminUpdateOne(
         id: String,
         appName: String?,
@@ -121,6 +116,13 @@ class BookmarkServiceImpl(
         entity.updateTime = LocalDateTime.now()
         return updateById(entity)
     }
+
+    override fun adminListAll(params: BookmarkSearchParams): List<BookmarkEntity> {
+        if (params.name.isNullOrBlank()) return ktQuery().list()
+        return ktQuery().like(BookmarkEntity::appName, params.name).or().like(BookmarkEntity::title, params.name).or()
+            .like(BookmarkEntity::description, params.name).or().like(BookmarkEntity::urlHost, params.name).list()
+    }
+
 
     private fun getByHost(urlHost: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, urlHost).one()
     private fun findById(bookmarkId: String): BookmarkEntity =

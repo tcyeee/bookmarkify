@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server
 import com.baomidou.mybatisplus.extension.service.IService
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
+import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
@@ -28,7 +29,6 @@ interface IBookmarkService : IService<BookmarkEntity> {
     fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO
     fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow>
     fun importBookmarkFile(file: MultipartFile, uid: String): List<HomeItemShow>?
-    fun adminListAll(name: String?): List<BookmarkEntity>
     fun adminUpdateOne(
         id: String,
         appName: String? = null,
@@ -38,4 +38,6 @@ interface IBookmarkService : IService<BookmarkEntity> {
         isActivity: Boolean? = null,
         maximalLogoSize: Int? = null
     ): Boolean
+
+    fun adminListAll(params: BookmarkSearchParams): List<BookmarkEntity>
 }
