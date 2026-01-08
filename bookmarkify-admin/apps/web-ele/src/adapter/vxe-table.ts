@@ -1,11 +1,8 @@
 import type { VxeTableGridOptions } from '@vben/plugins/vxe-table';
-
 import { h } from 'vue';
-
 import { setupVbenVxeTable, useVbenVxeGrid } from '@vben/plugins/vxe-table';
-
-import { ElButton, ElImage } from 'element-plus';
-
+import ElButton from "element-plus"
+import ElImage from "element-plus"
 import { useVbenForm } from './form';
 
 setupVbenVxeTable({
