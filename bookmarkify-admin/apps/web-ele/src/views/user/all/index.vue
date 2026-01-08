@@ -4,6 +4,7 @@ import type { VxeGridProps } from "#/adapter/vxe-table";
 import { defineAsyncComponent } from "vue";
 
 import { Page } from "@vben/common-ui";
+import { formatDateTime } from "@vben/utils";
 
 import { useVbenVxeGrid } from "#/adapter/vxe-table";
 import { getAdminUserListApi } from "#/api";
@@ -42,8 +43,18 @@ const gridOptions: VxeGridProps = {
       width: 100,
       slots: { default: "disabled" },
     },
-    { field: "createTime", title: "创建时间", width: 200 },
-    { field: "updateTime", title: "更新时间", width: 200 },
+    {
+      field: "createTime",
+      title: "创建时间",
+      width: 200,
+      formatter: ({ cellValue }) => formatDateTime(cellValue),
+    },
+    {
+      field: "updateTime",
+      title: "更新时间",
+      width: 200,
+      formatter: ({ cellValue }) => formatDateTime(cellValue),
+    },
   ],
   proxyConfig: {
     ajax: {
@@ -94,7 +105,7 @@ const [Grid] = useVbenVxeGrid({
           <ElTag v-else type="info" size="small"> 未验证 </ElTag>
         </template>
         <template #disabled="{ row }">
-          <ElTag v-if="row.disabled" type="danger" size="small"> 状态 </ElTag>
+          <ElTag v-if="row.disabled" type="danger" size="small"> 禁用 </ElTag>
           <ElTag v-else type="success" size="small"> 正常 </ElTag>
         </template>
       </Grid>
