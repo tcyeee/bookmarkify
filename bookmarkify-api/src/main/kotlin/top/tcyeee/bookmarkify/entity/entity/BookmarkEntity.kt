@@ -8,10 +8,8 @@ import com.baomidou.mybatisplus.annotation.TableName
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Max
-import top.tcyeee.bookmarkify.entity.LogoVO
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
-import top.tcyeee.bookmarkify.entity.enums.LogoSizeEnum
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.utils.FileUtils
 import java.io.Serializable
@@ -38,43 +36,19 @@ data class BookmarkEntity(
     @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
     @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
 
-    /*
-     * 书签LOGO
-     *
-     * 大小: S / M / L
-     * 类型: PNG / ICO-Base64
-     * 边距: 10% 20% ...
-     *
-     * 如果ico图标是矢量图, 那么可以用来作为大图的图标
-     *
-     * 请求(图片大小S/M/L)
-     *
-     * []是否使用ico作为大图
-     * []是否包含边距
-     * []
-     *
-     * Small: 固定使用ico图标转变为Base64, 配置: padding(10%)
-     * Middle: 优先使用Img,如果没有则使用ico/base64 配置: padding(10%) Img可能为png并且紧贴外部, 配置padding可以防止这类情况
-     * Large:
-     */
-    // TODO 是否重新定义了书签LOGO
     @field:Schema(description = "小图标base64") var iconBase64: String? = null,
     @field:Schema(description = "最大LOGO尺寸") var maximalLogoSize: Int = 0,
-    @field:Schema(description = "最近更新时间") var logoCheckFlag: Boolean = false, // 是否主动配置了LOGO
+    @field:Schema(description = "图片内边距") var iconPadding: Int = 0,
 
     /* 状态信息 */
     @JsonIgnore @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.LOADING,
     @JsonIgnore @field:Schema(description = "网站是否活跃") var isActivity: Boolean = false,
+    @JsonIgnore @field:Schema(description = "手动认证状态") var verifyFlag: Boolean = false, // 如果该书签信息都没问题, 添加手动认证状态以后, 即可被搜索到
     @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
 
 ) {
-
-    fun logo(size: LogoSizeEnum): LogoVO {
-
-    }
-
     // 拼接后的完整网站
     val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
 
