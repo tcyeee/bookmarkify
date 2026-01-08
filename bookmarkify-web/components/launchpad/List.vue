@@ -14,8 +14,8 @@
         :get-item-width="getItemWidth"
         :get-item-height="getItemHeight"
         @input="onGridInput"
-      @dragStart="onDragStart"
-        @dragReleaseEnd="onDragReleaseEnd">
+        @drag-start="onDragStart"
+        @drag-release-end="onDragReleaseEnd">
         <template #item="{ item }">
           <div
             class="bookmark-item"
@@ -330,7 +330,7 @@ function sort() {
 }
 
 .bookmark-drag-handle {
-  cursor: grab;
+  cursor: pointer;
 }
 
 .bookmark-add-placeholder {
