@@ -1,16 +1,11 @@
 package top.tcyeee.bookmarkify.controller.admin
 
+import cn.dev33.satoken.annotation.SaCheckRole
 import com.baomidou.mybatisplus.core.metadata.IPage
 import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.server.IBookmarkService
 
 /**
@@ -18,8 +13,9 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
  * @date 1/6/26 15:52
  */
 @RestController
+@SaCheckRole("ADMIN")
 @RequestMapping("/admin/bookmark")
-class AdminBookmarkManmegeController(
+class AdminBookmarkManageController(
     private val bookmarkService: IBookmarkService,
 ) {
 

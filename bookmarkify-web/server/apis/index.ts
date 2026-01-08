@@ -21,7 +21,7 @@ export const bookmarksDel = (params: Array<string>) => http.post('/bookmark/dele
 export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post('/bookmark/update', params) as Promise<t.BookmarkShow>
 export const bookmarksUpload = (file: File) => http.upload('/bookmark/upload', file) as Promise<Array<t.BookmarkShow>>
 export const bookmarksList = (params?: t.BookmarkListParams) =>
-  http.post('/bookmark/list', params ?? {}) as Promise<Array<t.BookmarkShow>>
+  http.post('/bookmark/list', params ?? {}) as Promise<t.BookmarkPage<t.BookmarkShow>>
 
 /* =========[ /user ]========= */
 export const updateUserInfo = (param: t.UserInfoUpdate) => http.post('/user/updateInfo', param) as Promise<boolean>

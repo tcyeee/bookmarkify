@@ -48,6 +48,13 @@ export interface BookmarkListParams {
   pageSize?: number
 }
 
+export interface BookmarkPage<T = BookmarkShow> {
+  records: Array<T>
+  total: number
+  current: number
+  size: number
+}
+
 export interface BookmarkUpdatePrams {
   linkId: string
   title: string

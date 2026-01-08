@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.utils
 
 import cn.dev33.satoken.stp.StpLogic
+import top.tcyeee.bookmarkify.entity.entity.RoleEnum
 
 
 /**
@@ -9,6 +10,6 @@ import cn.dev33.satoken.stp.StpLogic
  * @date 1/5/26 18:56
  */
 object StpKit {
-    val ADMIN: StpLogic = StpLogic("admin")
-    val USER: StpLogic = StpLogic("user")
+    val ADMIN: StpLogic = StpLogic(RoleEnum.ADMIN.name)
+    val USER: StpLogic = StpLogic(RoleEnum.USER.name)
 }
