@@ -52,3 +52,19 @@ data class BookmarkSearchParams(var name: String?, var status: ParseStatusEnum?)
         return query
     }
 }
+
+data class UserSearchParams(
+    var name: String? = null,
+) : PageBean() {
+    fun toWrapper(): Wrapper<UserEntity> {
+        val query = KtQueryWrapper(UserEntity::class.java)
+        if (!name.isNullOrBlank()) {
+            query.and {
+                it.like(UserEntity::nickName, name)
+                    .or().like(UserEntity::email, name)
+                    .or().like(UserEntity::phone, name)
+            }
+        }
+        return query
+    }
+}

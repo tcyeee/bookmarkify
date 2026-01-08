@@ -163,3 +163,25 @@ data class BookmarkAdminVO(
         BeanUtil.copyProperties(entity, this)
     }
 }
+
+data class UserAdminVO(
+    @field:Schema(description = "用户ID") var id: String,
+    @field:Schema(description = "用户昵称") var nickName: String,
+    @field:Schema(description = "设备UID") var deviceId: String,
+    @field:Schema(description = "邮箱") var email: String? = null,
+    @field:Schema(description = "手机号") var phone: String? = null,
+    @field:Schema(description = "用户角色") var role: RoleEnum = RoleEnum.USER,
+    @field:Schema(description = "是否被删除") var deleted: Boolean = false,
+    @field:Schema(description = "是否禁用") var disabled: Boolean = false,
+    @field:Schema(description = "是否已验证") var verified: Boolean = false,
+    @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
+    @field:Schema(description = "更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
+) {
+    constructor(entity: UserEntity) : this(
+        id = entity.id,
+        nickName = entity.nickName,
+        deviceId = entity.deviceId,
+    ) {
+        BeanUtil.copyProperties(entity, this)
+    }
+}
