@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.server.IBookmarkService
@@ -24,7 +25,7 @@ class AdminBookmarkManmegeController(
 
     // 按条件获取全部的书签信息（带搜索与状态等筛选条件）
     @PostMapping("/all")
-    fun getAllBookmarks(@RequestBody params: BookmarkSearchParams): IPage<BookmarkEntity> =
+    fun getAllBookmarks(@RequestBody params: BookmarkSearchParams): IPage<BookmarkAdminVO> =
         bookmarkService.adminListAll(params)
 
     // 修改单个书签信息 (使用POST替换PUT)

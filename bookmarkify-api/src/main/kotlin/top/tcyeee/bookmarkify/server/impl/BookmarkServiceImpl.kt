@@ -2,10 +2,12 @@ package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
+import mapPage
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
+import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.HomeItemShow
@@ -118,9 +120,10 @@ class BookmarkServiceImpl(
         return updateById(entity)
     }
 
-    override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkEntity> {
-        val page = params.toPage<BookmarkEntity>()
-        return baseMapper.selectPage(page, params.toWrapper())
+    override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> {
+        return baseMapper
+            .selectPage(params.toPage(), params.toWrapper())
+            .mapPage { BookmarkAdminVO(it) }
     }
 
 
