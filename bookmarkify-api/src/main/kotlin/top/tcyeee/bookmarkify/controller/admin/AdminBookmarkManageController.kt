@@ -13,7 +13,7 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
  * @date 1/6/26 15:52
  */
 @RestController
-@SaCheckRole(value = ["ADMIN"])
+@SaCheckRole(value = ["ADMIN"], type = "ADMIN")
 @RequestMapping("/admin/bookmark")
 class AdminBookmarkManageController(
     private val bookmarkService: IBookmarkService,
