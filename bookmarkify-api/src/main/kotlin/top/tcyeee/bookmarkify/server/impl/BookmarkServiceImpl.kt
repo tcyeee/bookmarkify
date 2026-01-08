@@ -1,8 +1,9 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.core.metadata.IPage
+import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
-import mapPage
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
@@ -121,9 +122,13 @@ class BookmarkServiceImpl(
     }
 
     override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> {
+
+//        Page{records=[这里有11条数据], total=0, size=10, current=1, orders=[], optimizeCountSql=true, searchCount=true, optimizeJoinOfCountSql=true, maxLimit=null, countId='null'}
+        val selectPage = baseMapper.selectPage(Page(1,10), KtQueryWrapper(BookmarkEntity::class.java))
+
         return baseMapper
             .selectPage(params.toPage(), params.toWrapper())
-            .mapPage { BookmarkAdminVO(it) }
+            .convert { BookmarkAdminVO(it) }
     }
 
 
