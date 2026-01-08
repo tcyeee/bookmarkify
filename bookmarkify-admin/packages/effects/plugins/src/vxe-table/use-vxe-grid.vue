@@ -111,6 +111,7 @@ const enableCollapseButton = computed(() => formHeight.value > 300);
 
 const [Form, formApi] = useTableForm({
   compact: true,
+  submitOnChange: true,
   handleSubmit: async () => {
     const formValues = await formApi.getValues();
     formApi.setLatestSubmissionValues(toRaw(formValues));
@@ -121,7 +122,6 @@ const [Form, formApi] = useTableForm({
     await formApi.resetForm();
     const formValues = await formApi.getValues();
     formApi.setLatestSubmissionValues(formValues);
-    // 如果值发生了变化，submitOnChange会触发刷新。所以只在submitOnChange为false或者值没有发生变化时，手动刷新
     if (isEqual(prevValues, formValues) || !formOptions.value?.submitOnChange) {
       props.api.reload(formValues);
     }
@@ -132,9 +132,7 @@ const [Form, formApi] = useTableForm({
     },
   },
   showCollapseButton: false,
-  submitButtonOptions: {
-    content: computed(() => "搜索"),
-  },
+  showDefaultActions: false,
   wrapperClass: "grid-cols-1 md:grid-cols-2 lg:grid-cols-3",
 });
 
