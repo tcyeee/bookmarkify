@@ -4,6 +4,7 @@ import type { VxeGridProps } from "#/adapter/vxe-table";
 import { defineAsyncComponent } from "vue";
 
 import { Page } from "@vben/common-ui";
+import { formatDateTime } from "@vben/utils";
 
 import { useVbenVxeGrid } from "#/adapter/vxe-table";
 import { getBookmarkListApi } from "#/api/bookmark";
@@ -47,7 +48,12 @@ const gridOptions: VxeGridProps = {
       width: 120,
       slots: { default: "activity" },
     },
-    { field: "updateTime", title: "更新时间", width: 200 },
+    {
+      field: "updateTime",
+      title: "更新时间",
+      width: 200,
+      formatter: ({ cellValue }) => formatDateTime(cellValue),
+    },
   ],
   proxyConfig: {
     ajax: {
