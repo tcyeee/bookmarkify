@@ -13,7 +13,7 @@ import {
 } from '@vben/request';
 import { useAccessStore } from '@vben/stores';
 
-import { ElMessage } from 'element-plus';
+import ElMessage from 'element-plus';
 
 import { useAuthStore } from '#/store';
 
@@ -99,6 +99,13 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       const responseData = error?.response?.data ?? {};
       const errorMessage = responseData?.error ?? responseData?.message ?? responseData?.msg ?? '';
       const errorCode = responseData?.code ?? 0;
+
+      if (errorCode === 101) {
+        const authStore = useAuthStore();
+        ElMessage.error(errorMessage || msg);
+        void authStore.logout();
+        return;
+      }
 
       if (errorCode >= 100 && errorCode < 200) {
         ElMessage.error(errorMessage || msg);
