@@ -1,11 +1,11 @@
 package top.tcyeee.bookmarkify.entity
 
+import com.baomidou.mybatisplus.core.conditions.Wrapper
+import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.config.result.PageBean
-import top.tcyeee.bookmarkify.entity.entity.BackgroundType
-import top.tcyeee.bookmarkify.entity.entity.BookmarkLayoutMode
-import top.tcyeee.bookmarkify.entity.entity.BookmarkOpenMode
-import top.tcyeee.bookmarkify.entity.entity.PageTurnMode
+import top.tcyeee.bookmarkify.entity.entity.*
+import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 
 data class UserPreferenceUpdateParams(
     @field:Schema(description = "主页背景配置ID") var backgroundConfigId: String? = null,
@@ -36,4 +36,19 @@ data class UserDelParams(val password: String)
 data class UserInfoUpdateParams(var nickName: String, var phone: String?)
 data class BookmarkUpdatePrams(var linkId: String, var title: String, var description: String)
 data class AdminLoginParams(val account: String, val password: String)
-data class BookmarkSearchParams(var name: String?, var status: String?): PageBean()
+
+data class BookmarkSearchParams(var name: String?, var status: ParseStatusEnum?) : PageBean() {
+    fun toWrapper(): Wrapper<BookmarkEntity> {
+        val query = KtQueryWrapper(BookmarkEntity::class.java)
+        if (!name.isNullOrBlank()) {
+            query.and {
+                it.like(BookmarkEntity::appName, name)
+                    .or().like(BookmarkEntity::title, name)
+                    .or().like(BookmarkEntity::description, name)
+                    .or().like(BookmarkEntity::urlHost, name)
+            }
+        }
+        if (status != null) query.eq(BookmarkEntity::parseStatus, status)
+        return query
+    }
+}

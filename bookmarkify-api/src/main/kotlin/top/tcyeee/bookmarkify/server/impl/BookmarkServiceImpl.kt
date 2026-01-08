@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server.impl
 
+import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
@@ -117,10 +118,9 @@ class BookmarkServiceImpl(
         return updateById(entity)
     }
 
-    override fun adminListAll(params: BookmarkSearchParams): List<BookmarkEntity> {
-        if (params.name.isNullOrBlank()) return ktQuery().list()
-        return ktQuery().like(BookmarkEntity::appName, params.name).or().like(BookmarkEntity::title, params.name).or()
-            .like(BookmarkEntity::description, params.name).or().like(BookmarkEntity::urlHost, params.name).list()
+    override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkEntity> {
+        val page = params.toPage<BookmarkEntity>()
+        return baseMapper.selectPage(page, params.toWrapper())
     }
 
 
