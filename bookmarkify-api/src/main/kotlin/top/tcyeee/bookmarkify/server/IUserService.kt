@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server
 
+import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.IService
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -11,9 +12,11 @@ import top.tcyeee.bookmarkify.entity.CaptchaSmsParams
 import top.tcyeee.bookmarkify.entity.EmailVerifyParams
 import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.entity.SmsVerifyParams
+import top.tcyeee.bookmarkify.entity.UserAdminVO
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.UserInfoUpdateParams
+import top.tcyeee.bookmarkify.entity.UserSearchParams
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
 import top.tcyeee.bookmarkify.entity.entity.UserEntity
@@ -177,4 +180,6 @@ interface IUserService : IService<UserEntity> {
     ): UserSessionInfo
 
     fun findByNameAndPwd(account: String, password: String): UserEntity?
+
+    fun adminListAll(params: UserSearchParams): IPage<UserAdminVO>
 }

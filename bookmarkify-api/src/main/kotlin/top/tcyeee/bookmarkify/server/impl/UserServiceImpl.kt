@@ -5,6 +5,8 @@ import cn.hutool.core.util.RandomUtil
 import cn.hutool.core.util.StrUtil
 import cn.hutool.crypto.SecureUtil
 import cn.hutool.json.JSONUtil
+import com.baomidou.mybatisplus.core.metadata.IPage
+import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import jakarta.servlet.http.Cookie
 import jakarta.servlet.http.HttpServletRequest
@@ -276,4 +278,9 @@ class UserServiceImpl(
 
     override fun changeMail(mail: String): Boolean =
         ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::email, mail).update()
+
+    override fun adminListAll(params: UserSearchParams): IPage<UserAdminVO> =
+        baseMapper
+            .selectPage(params.toPage(), KtQueryWrapper(UserEntity::class.java))
+            .convert { UserAdminVO(it) }
 }
