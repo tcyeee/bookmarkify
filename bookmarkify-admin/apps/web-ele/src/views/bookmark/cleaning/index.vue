@@ -42,7 +42,7 @@ const [Grid] = useVbenVxeGrid({
   formOptions: {
     schema: [
       {
-        field: "name",
+        fieldName: "name",
         label: "搜索",
         component: "Input",
         componentProps: {
@@ -50,16 +50,15 @@ const [Grid] = useVbenVxeGrid({
         },
       },
       {
-        field: "status",
+        fieldName: "status",
         label: "状态",
         component: "Select",
         componentProps: {
           options: [
             { label: "Loading", value: "LOADING" },
             { label: "Success", value: "SUCCESS" },
+            { label: "Closed", value: "CLOSED" },
             { label: "Blocked", value: "BLOCKED" },
-            { label: "Failed", value: "FAILED" },
-            { label: "Timeout", value: "TIMEOUT" },
           ],
           placeholder: "请选择状态",
         },
