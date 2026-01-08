@@ -13,6 +13,8 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
  * @author tcyeee
  * @date 3/10/24 15:45
  */
+import com.baomidou.mybatisplus.core.metadata.IPage
+
 interface IBookmarkService : IService<BookmarkEntity> {
     /* 每天检查数据库所有书签活性 */
     fun checkAll()
@@ -39,5 +41,5 @@ interface IBookmarkService : IService<BookmarkEntity> {
         maximalLogoSize: Int? = null
     ): Boolean
 
-    fun adminListAll(params: BookmarkSearchParams): List<BookmarkEntity>
+    fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkEntity>
 }

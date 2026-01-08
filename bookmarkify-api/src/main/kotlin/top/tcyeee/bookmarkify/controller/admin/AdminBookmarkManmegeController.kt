@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.controller.admin
 
+import com.baomidou.mybatisplus.core.metadata.IPage
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -23,7 +24,7 @@ class AdminBookmarkManmegeController(
 
     // 按条件获取全部的书签信息（带搜索与状态等筛选条件）
     @PostMapping("/all")
-    fun getAllBookmarks(@RequestBody params: BookmarkSearchParams): List<BookmarkEntity> =
+    fun getAllBookmarks(@RequestBody params: BookmarkSearchParams): IPage<BookmarkEntity> =
         bookmarkService.adminListAll(params)
 
     // 修改单个书签信息 (使用POST替换PUT)
