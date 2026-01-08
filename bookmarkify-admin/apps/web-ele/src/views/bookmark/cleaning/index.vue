@@ -66,7 +66,7 @@ const [Grid] = useVbenVxeGrid({
     ],
   },
   gridOptions,
-});
+} as any);
 </script>
 
 <template>
