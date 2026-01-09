@@ -31,7 +31,7 @@ const gridOptions: VxeGridProps = {
     { field: "deviceId", title: "设备UID", minWidth: 220 },
     { field: "email", title: "邮箱", minWidth: 200 },
     { field: "phone", title: "手机号", minWidth: 160 },
-    { field: "role", title: "角色", width: 120 },
+    { field: "role", title: "角色", width: 140, slots: { default: "role" } },
     {
       field: "verified",
       title: "已验证",
@@ -101,6 +101,20 @@ const [Grid] = useVbenVxeGrid({
         </div>
       </template>
       <Grid>
+        <template #role="{ row }">
+          <ElTag v-if="row.role === 'ADMIN'" type="danger" size="small">
+            管理员
+          </ElTag>
+          <ElTag v-else-if="row.role === 'MODERATOR'" type="warning" size="small">
+            协管
+          </ElTag>
+          <ElTag v-else-if="row.role === 'USER'" type="success" size="small">
+            普通用户
+          </ElTag>
+          <ElTag v-else type="info" size="small">
+            {{ row.role || "未知" }}
+          </ElTag>
+        </template>
         <template #verified="{ row }">
           <ElTag v-if="row.verified" type="success" size="small"> 已验证 </ElTag>
           <ElTag v-else type="info" size="small"> 未验证 </ElTag>
