@@ -2,10 +2,10 @@
   <div
     class="relative select-none w-screen min-h-screen px-4 sm:px-[7vw] md:px-[10vw] lg:px-[12vw] pt-[10vh] overflow-x-hidden"
     :style="renderBackgroundStyle">
-    <div class="w-full min-h-screen">
+    <div class="w-full">
       <NuxtPage />
     </div>
-    <AddBookmarkFab />
+    <CommonAddBookmarkFab />
   </div>
 </template>
 
@@ -13,6 +13,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { BackgroundType, type BacSettingVO } from '@typing'
 import { getImageUrl, getImageUrlByUserFile } from '@config/image.config'
+import { usePreferenceStore } from '@stores/preference.store'
 
 const preferenceStore = usePreferenceStore()
 const backgroundSetting = computed<BacSettingVO | null>(() => preferenceStore.preference?.imgBacShow ?? null)
