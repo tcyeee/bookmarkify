@@ -1,9 +1,8 @@
 <template>
-  {{ preferenceStore.preference }}
-<!-- 完整APP列表 -->
-<div ref="outerRef" class="flex w-full justify-center">
-  <!-- APP列表容器：min-width 保证不被外层挤压 -->
-  <div class="w-full flex justify-center" :style="gridContainerStyle">
+  <!-- 完整APP列表 -->
+  <div ref="outerRef" class="flex w-full justify-center">
+    <!-- APP列表容器：min-width 保证不被外层挤压 -->
+    <div class="w-full flex justify-center" :style="gridContainerStyle">
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
         <Vuuri
@@ -19,33 +18,7 @@
           @drag-start="onDragStart"
           @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
-
-            <div
-              class="flex w-(--cell-size) flex-col items-center border border-gray-300 border-dashed"
-              @click="onItemClick(item)">
-              <div
-                class="flex h-(--cell-size) w-(--cell-size) select-none items-center justify-center border-4 border-gray-300 rounded-3xl text-4xl font-bold text-white shadow opacity-80"
-                :style="{ backgroundColor: item.color }">
-                {{ item.value }}
-              </div>
-              <div
-                class="mt-1 flex h-(--title-height) w-full items-center justify-center rounded bg-gray-200 text-sm font-semibold text-gray-600">
-                APP-{{ item.value }}
-              </div>
-            </div>
-
-              <!-- <LaunchpadCellFolder
-                v-if="item.type === HomeItemType.BOOKMARK_DIR"
-                :value="toBookmarkDir(item)"
-                :show-title="showTitle"                />
-              <LaunchpadCellBookmark
-                v-else-if="item.type === HomeItemType.BOOKMARK"
-                :value="item.typeApp"
-                :show-title="showTitle"
-                @click="openPage(item.typeApp)" />
-              <LaunchpadCellBookmarkLoading
-                v-else-if="item.type === HomeItemType.BOOKMARK_LOADING"
-                :show-title="showTitle" /> -->
+            <LaunchItem :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" />
           </template>
         </Vuuri>
       </ClientOnly>
@@ -54,15 +27,9 @@
 </template>
 
 <script lang="ts" setup>
-import {
-  BookmarkOpenMode,
-  HomeItemType,
-  type BookmarkDir,
-  type BookmarkShow,
-  type UserLayoutNodeVO,
-} from '@typing';
+import { type UserLayoutNodeVO } from '@typing'
 import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-definePageMeta({ middleware: 'auth',  layout: 'launch' })
+definePageMeta({ middleware: 'auth', layout: 'launch' })
 
 type GridItem = { id: number; value: number; color: string }
 
@@ -70,10 +37,6 @@ const bookmarkStore = useBookmarkStore()
 const preferenceStore = usePreferenceStore()
 
 const pageData = computed<Array<UserLayoutNodeVO>>(() => bookmarkStore.layoutNode || [])
-const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
-const bookmarkOpenMode = computed<BookmarkOpenMode>(
-  () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB,
-)
 
 /** 单元格尺寸与间距，跟随用户偏好 */
 const CELL_SIZE = computed(() => preferenceStore.bookmarkCellSizePx)
@@ -140,40 +103,18 @@ const recalcColumns = () => {
   columnCount.value = next
 }
 
-/** 初始化示例数据：50 个带随机色块的占位项 */
 onMounted(() => {
   recalcColumns()
   watch([CELL_SIZE, CELL_GAP], () => recalcColumns())
   resizeObserver = new ResizeObserver(() => recalcColumns())
   if (outerRef.value) resizeObserver.observe(outerRef.value)
   window.addEventListener('resize', recalcColumns)
-
-  items.value = Array.from({ length: 120 }, (_, idx) => ({
-    id: idx + 1,
-    value: idx + 1,
-    color: randomColor(),
-  }))
 })
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   window.removeEventListener('resize', recalcColumns)
 })
-
-/** 生成柔和的 HSL 随机色，避免过亮或过暗 */
-function randomColor() {
-  const h = Math.floor(Math.random() * 360)
-  const s = 65 + Math.floor(Math.random() * 20) // 65-84%
-  const l = 48 + Math.floor(Math.random() * 12) // 48-59%
-  return `hsl(${h} ${s}% ${l}%)`
-}
-
-/** 点击 APP 时输出名称，便于调试 */
-function onItemClick(item: GridItem) {
-  // 拖拽完成瞬间可能触发 click，这里做保护
-  if (dragState.dragging || dragState.justDropped) return
-  console.log(`点击 APP：APP-${item.value}`)
-}
 
 /** Vuuri 拖拽开始与结束，用于避免点击冲突 */
 function onDragStart() {
@@ -201,21 +142,6 @@ function onGridInput(newItems: GridItem[]) {
   if (dragState.dragging) {
     dragState.pendingOrder = newItems.map((it) => `APP-${it.value}`)
   }
-}
-
-function toBookmarkDir(item: UserLayoutNodeVO): BookmarkDir {
-  return {
-    name: item.name ?? '文件夹',
-    bookmarkList: (item.children ?? [])
-      .map((child) => child.typeApp)
-      .filter((child): child is BookmarkShow => Boolean(child)),
-  }
-}
-
-function openPage(bookmark: BookmarkShow) {
-  if (dragState.dragging || dragState.justDropped) return
-  const target = bookmarkOpenMode.value === BookmarkOpenMode.NEW_TAB ? '_blank' : '_self'
-  window.open(bookmark.urlFull, target)
 }
 </script>
 
