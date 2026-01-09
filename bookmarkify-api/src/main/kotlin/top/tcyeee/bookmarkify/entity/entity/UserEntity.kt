@@ -23,7 +23,7 @@ data class UserEntity(
     @field:Size(max = 20) @field:Schema(description = "手机号") var phone: String? = null,
     @field:Size(max = 200) @field:Schema(description = "用户密码MD5") var password: String? = null,
     @field:Schema(description = "头像文件地址") var avatarFileId: String? = null,
-    @field:Schema(description = "用户角色 默认'NONE'") var role: RoleEnum = RoleEnum.USER,
+    @field:Schema(description = "用户角色 默认'USER'") var role: RoleEnum = RoleEnum.USER,
     @field:Schema(description = "创建时间") var updateTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "是否已经被删除") var deleted: Boolean = false,

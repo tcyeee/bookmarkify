@@ -56,7 +56,7 @@ type GridItem = { id: number; value: number; color: string }
 
 /** 单元格尺寸与间距，可按需集中调节 */
 const CELL_SIZE = 120
-const CELL_GAP = 20
+const CELL_GAP = 50
 const TITLE_HEIGHT = 28
 const COLUMN_WIDTH = CELL_SIZE + CELL_GAP
 
@@ -84,7 +84,8 @@ const gridStyle = computed(() => ({
 
 /** 控制 Vuuri 容器宽度，使列在左右留白时仍居中 */
 const vuuriStyle = computed(() => ({
-  width: `${columnCount.value * COLUMN_WIDTH}px`,
+  // 真实宽度 = 每列外宽相加 - 尾部多余 gap；与列数计算保持一致
+  width: `${max(1, columnCount.value) * COLUMN_WIDTH - CELL_GAP}px`,
 }))
 
 /** Vuuri 布局与动画配置 */
