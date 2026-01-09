@@ -1,27 +1,36 @@
 <template>
+  <!-- 整个APP列表 -->
   <div ref="outerRef" class="w-full flex justify-center bg-gray-100">
+    <!-- APP列表的容器 -->
     <div
       class="grid"
       :style="{
         gap: `${gap}px`,
         width: `${gridWidth}px`,
         gridTemplateColumns: `repeat(${cols}, ${boxSize}px)`,
-        visibility: ready ? 'visible' : 'hidden'
-      }"
-    >
+        visibility: ready ? 'visible' : 'hidden',
+      }">
+      <!-- APP列表的内部容器(无样式) -->
       <div class="contents">
+        <!-- APP-ITEM -->
         <div
           v-for="item in items"
           :key="item.value"
-          class="flex justify-center items-center border border-gray-300 border-dashed text-white font-semibold"
-        >
-         <div class="text-center flex justify-center items-center border-2 rounded-2xl"
-                   :style="{
-            width: `${boxSize}px`,
-            height: `${boxSize}px`,
-            backgroundColor: item.color
-          }"
-         >{{ item.value }}</div>
+          class="border border-gray-300 border-dashed flex-col">
+          <!-- APP-LOGO -->
+          <div
+            class="text-center flex justify-center items-center border-4 rounded-3xl border-gray-300"
+            :style="{
+              width: `${boxSize}px`,
+              height: `${boxSize}px`,
+              backgroundColor: item.color,
+            }">
+            {{ item.value }}
+          </div>
+          <!-- APP-NAME -->
+          <div class="text-center text-sm font-semibold bg-gray-200 rounded mt-1 text-gray-600">
+            APP-{{ item.value }}
+          </div>
         </div>
       </div>
     </div>
@@ -34,7 +43,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 definePageMeta({ layout: 'launch' })
 
 const boxSize = ref(120)
-const gap = 10
+const gap = 20
 const cols = ref(1)
 const outerRef = ref<HTMLElement | null>(null)
 const ready = ref(false)
@@ -59,7 +68,7 @@ onMounted(() => {
   window.addEventListener('resize', recalcCols)
   items.value = Array.from({ length: 50 }, (_, idx) => ({
     value: idx + 1,
-    color: randomColor()
+    color: randomColor(),
   }))
 })
 
