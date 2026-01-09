@@ -6,6 +6,7 @@
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
         <Vuuri
+          :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}`"
           class="demo-grid"
           :style="vuuriStyle"
           :model-value="pageData"
