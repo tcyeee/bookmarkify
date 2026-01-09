@@ -144,6 +144,5 @@ function onGridInput(list: UserLayoutNodeVO[]) {
   justify-content: center;
   align-items: center;
   box-sizing: border-box;
-  border: 1px dashed gray;
 }
 </style>
