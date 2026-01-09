@@ -1,12 +1,4 @@
 <template>
-<div>{{ CELL_SIZE + CELL_GAP }}</div>
-<div>-------</div>
-<div>{{  CELL_GAP }}</div>
-<div>-------</div>
-<div>{{ preferenceStore.bookmarkCellSizePx }}</div>
-<div>-------</div>
-<div>{{ preferenceStore.bookmarkGapPx }}</div>
-<div>-------</div>
   <!-- 完整APP列表 -->
   <div ref="outerRef" class="flex w-full justify-center">
     <!-- APP列表容器：min-width 保证不被外层挤压 -->
