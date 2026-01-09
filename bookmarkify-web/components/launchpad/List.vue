@@ -3,7 +3,7 @@
     <!-- 一级菜单 -->
     <ClientOnly>
       <Vuuri
-        :key="bookmarkLayoutKey"
+        :key="bookmarkGapKey"
         v-show="!data.subItemId"
         class="bookmark-grid"
         :model-value="gridItems"
@@ -63,7 +63,7 @@ import { defineAsyncComponent, defineComponent } from 'vue'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { bookmarksSort, bookmarksDel } from '@api'
 import {
-  BookmarkLayoutMode,
+  BookmarkGapMode,
   BookmarkOpenMode,
   HomeItemType,
   type BookmarkShow,
@@ -95,19 +95,19 @@ type GridItem = UserLayoutNodeVO | AddItem
 const ADD_ITEM_ID = '__bookmark_add_placeholder__'
 
 const layoutConfig = computed(() => {
-  const layout = preferenceStore.preference?.bookmarkLayout ?? BookmarkLayoutMode.DEFAULT
+  const layout = preferenceStore.preference?.bookmarkGap ?? BookmarkGapMode.DEFAULT
   switch (layout) {
-    case BookmarkLayoutMode.COMPACT:
+    case BookmarkGapMode.COMPACT:
       return { gap: 1.5, size: 4.25 }
-    case BookmarkLayoutMode.SPACIOUS:
+    case BookmarkGapMode.SPACIOUS:
       return { gap: 4, size: 6 }
-    case BookmarkLayoutMode.DEFAULT:
+    case BookmarkGapMode.DEFAULT:
     default:
       return { gap: 3, size: 5 }
   }
 })
 
-const bookmarkLayoutKey = computed(() => preferenceStore.preference?.bookmarkLayout ?? BookmarkLayoutMode.DEFAULT)
+const bookmarkGapKey = computed(() => preferenceStore.preference?.bookmarkGap ?? BookmarkGapMode.DEFAULT)
 const gridGap = computed<number>(() => layoutConfig.value.gap)
 const bookmarkGapRem = computed<string>(() => `${gridGap.value}rem`)
 const bookmarkSize = computed<string>(() => `${layoutConfig.value.size}rem`)

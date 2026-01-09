@@ -47,7 +47,7 @@ export enum BookmarkOpenMode {
   NEW_TAB = 'NEW_TAB',
 }
 
-export enum BookmarkLayoutMode {
+export enum BookmarkGapMode {
   COMPACT = 'COMPACT',
   DEFAULT = 'DEFAULT',
   SPACIOUS = 'SPACIOUS',
