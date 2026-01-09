@@ -1,5 +1,5 @@
 <template>
-  <dialog id="dialog_add" class="cy-modal">
+  <dialog id="dialog_add" ref="dialogRef" class="cy-modal">
     <div class="cy-modal-box max-w-2xl bg-linear-to-b from-white to-slate-50 border border-gray-100 shadow-xl">
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-start gap-3">
@@ -109,6 +109,7 @@ const bookmarkStore = useBookmarkStore()
 
 const emit = defineEmits<{ (e: 'success', res: UserLayoutNodeVO): void }>()
 
+const dialogRef = ref<HTMLDialogElement | null>(null)
 const searchResults = ref<any[]>([])
 const isSearching = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
@@ -134,9 +135,23 @@ watchEffect(() => {
   toggleAddDialog(sysStore.addBookmarkDialogVisible)
 })
 
+onMounted(() => {
+  dialogRef.value?.addEventListener('close', handleNativeClose)
+  dialogRef.value?.addEventListener('cancel', handleNativeClose)
+})
+
+onBeforeUnmount(() => {
+  dialogRef.value?.removeEventListener('close', handleNativeClose)
+  dialogRef.value?.removeEventListener('cancel', handleNativeClose)
+})
+
+function handleNativeClose() {
+  if (sysStore.addBookmarkDialogVisible) sysStore.addBookmarkDialogVisible = false
+}
+
 function toggleAddDialog(flag: boolean) {
   if (!import.meta.client) return
-  const element = document.getElementById('dialog_add') as HTMLDialogElement
+  const element = dialogRef.value || (document.getElementById('dialog_add') as HTMLDialogElement | null)
   if (!element) return
   if (flag) {
     element.showModal()
