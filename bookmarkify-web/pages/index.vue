@@ -18,7 +18,7 @@
           @drag-start="onDragStart"
           @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
-              <LaunchItem :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" />
+            <LaunchItem :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" />
           </template>
         </Vuuri>
       </ClientOnly>
@@ -40,7 +40,7 @@ const pageData = computed<Array<UserLayoutNodeVO>>(() => bookmarkStore.layoutNod
 const CELL_SIZE = computed(() => preferenceStore.bookmarkCellSizePx)
 const CELL_GAP = computed(() => preferenceStore.bookmarkGapPx)
 
-const TITLE_HEIGHT = computed(() => preferenceStore.preference?.showTitle ? 28 : 0)
+const TITLE_HEIGHT = computed(() => (preferenceStore.preference?.showTitle ? 28 : 0))
 const COLUMN_WIDTH = computed(() => CELL_SIZE.value + CELL_GAP.value)
 
 /** 客户端按需加载 Vuuri；服务端阶段返回空占位以规避报错 */
