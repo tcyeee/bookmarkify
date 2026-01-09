@@ -18,7 +18,22 @@
           @drag-start="onDragStart"
           @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
-              <LaunchpadCellFolder
+
+            <div
+              class="flex w-(--cell-size) flex-col items-center border border-gray-300 border-dashed"
+              @click="onItemClick(item)">
+              <div
+                class="flex h-(--cell-size) w-(--cell-size) select-none items-center justify-center border-4 border-gray-300 rounded-3xl text-4xl font-bold text-white shadow opacity-80"
+                :style="{ backgroundColor: item.color }">
+                {{ item.value }}
+              </div>
+              <div
+                class="mt-1 flex h-(--title-height) w-full items-center justify-center rounded bg-gray-200 text-sm font-semibold text-gray-600">
+                APP-{{ item.value }}
+              </div>
+            </div>
+
+              <!-- <LaunchpadCellFolder
                 v-if="item.type === HomeItemType.BOOKMARK_DIR"
                 :value="toBookmarkDir(item)"
                 :show-title="showTitle"                />
@@ -29,7 +44,7 @@
                 @click="openPage(item.typeApp)" />
               <LaunchpadCellBookmarkLoading
                 v-else-if="item.type === HomeItemType.BOOKMARK_LOADING"
-                :show-title="showTitle" />
+                :show-title="showTitle" /> -->
           </template>
         </Vuuri>
       </ClientOnly>
@@ -38,8 +53,15 @@
 </template>
 
 <script lang="ts" setup>
-import { BookmarkOpenMode, HomeItemType, type BookmarkDir, type BookmarkShow, type UserLayoutNodeVO } from '@typing';
-import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import {
+  BookmarkImageSize,
+  BookmarkOpenMode,
+  HomeItemType,
+  type BookmarkDir,
+  type BookmarkShow,
+  type UserLayoutNodeVO,
+} from '@typing';
+import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 definePageMeta({ middleware: 'auth',  layout: 'launch' })
 
 type GridItem = { id: number; value: number; color: string }
@@ -53,12 +75,21 @@ const bookmarkOpenMode = computed<BookmarkOpenMode>(
   () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB,
 )
 
-/** 单元格尺寸与间距，可按需集中调节 */
-const CELL_SIZE = 120
-const CELL_GAP = 35
+/** 单元格尺寸与间距，跟随用户偏好 */
+const CELL_PRESETS: Record<BookmarkImageSize, { size: number; gap: number }> = {
+  [BookmarkImageSize.LARGE]: { size: 140, gap: 40 },
+  [BookmarkImageSize.MEDIUM]: { size: 120, gap: 35 },
+  [BookmarkImageSize.SMALL]: { size: 100, gap: 30 },
+}
+const bookmarkImageSize = computed<BookmarkImageSize>(
+  () => preferenceStore.preference?.bookmarkImageSize ?? BookmarkImageSize.MEDIUM,
+)
+const cellConfig = computed(() => CELL_PRESETS[bookmarkImageSize.value])
+const CELL_SIZE = computed(() => cellConfig.value.size)
+const CELL_GAP = computed(() => cellConfig.value.gap)
 
 const TITLE_HEIGHT = 28
-const COLUMN_WIDTH = CELL_SIZE + CELL_GAP
+const COLUMN_WIDTH = computed(() => CELL_SIZE.value + CELL_GAP.value)
 
 /** 客户端按需加载 Vuuri；服务端阶段返回空占位以规避报错 */
 const Vuuri = import.meta.client
@@ -77,8 +108,8 @@ let resizeObserver: ResizeObserver | null = null
 
 /** 将尺寸写入 CSS 变量，模板与样式保持一致 */
 const gridStyle = computed(() => ({
-  '--cell-size': `${CELL_SIZE}px`,
-  '--cell-gap': `${CELL_GAP}px`,
+  '--cell-size': `${CELL_SIZE.value}px`,
+  '--cell-gap': `${CELL_GAP.value}px`,
   '--title-height': `${TITLE_HEIGHT}px`,
 }))
 
@@ -91,7 +122,7 @@ const gridContainerStyle = computed(() => ({
 /** 控制 Vuuri 容器宽度，使列在左右留白时仍居中 */
 const vuuriStyle = computed(() => ({
   // 真实宽度 = 每列外宽相加 - 尾部多余 gap；与列数计算保持一致
-  width: `${Math.max(1, columnCount.value) * COLUMN_WIDTH}px`,
+  width: `${Math.max(1, columnCount.value) * COLUMN_WIDTH.value}px`,
 }))
 
 /** Vuuri 布局与动画配置 */
@@ -114,13 +145,14 @@ const recalcColumns = () => {
   const container = outerRef.value
   if (!container) return
   const available = container.clientWidth
-  const next = Math.max(1, Math.floor((available + CELL_GAP) / COLUMN_WIDTH))
+  const next = Math.max(1, Math.floor((available + CELL_GAP.value) / COLUMN_WIDTH.value))
   columnCount.value = next
 }
 
 /** 初始化示例数据：50 个带随机色块的占位项 */
 onMounted(() => {
   recalcColumns()
+  watch([CELL_SIZE, CELL_GAP], () => recalcColumns())
   resizeObserver = new ResizeObserver(() => recalcColumns())
   if (outerRef.value) resizeObserver.observe(outerRef.value)
   window.addEventListener('resize', recalcColumns)
