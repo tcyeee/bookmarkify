@@ -1,9 +1,24 @@
-<!-- 系统主界面/用来展示用户的全部书签 -->
 <template>
-  <div class="">内容部分1</div>
+  <div class="flex flex-wrap">
+    <!-- 这是一个带有边框的正方形,边长可以在代码中设置 -->
+    <div
+      v-for="i in 50"
+      :key="i"
+      class="flex justify-center items-center bg-white border border-gray-300 border-dashed shrink-0"
+      :style="{
+        width: `${boxSize}px`,
+        height: `${boxSize}px`
+      }"
+    >
+      {{ i }}
+    </div>
+  </div>
 </template>
 
 <script lang="ts" setup>
-definePageMeta({  layout: 'launch'})
+import { ref } from 'vue'
 
+definePageMeta({ layout: 'launch' })
+
+const boxSize = ref(150)
 </script>
