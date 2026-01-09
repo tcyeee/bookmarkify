@@ -5,6 +5,7 @@
     <div class="w-full min-h-screen">
       <NuxtPage />
     </div>
+    <AddBookmarkFab />
   </div>
 </template>
 
@@ -12,10 +13,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { BackgroundType, type BacSettingVO } from '@typing'
 import { getImageUrl, getImageUrlByUserFile } from '@config/image.config'
-import { usePreferenceStore } from '@stores/preference.store'
 
 const preferenceStore = usePreferenceStore()
-
 const backgroundSetting = computed<BacSettingVO | null>(() => preferenceStore.preference?.imgBacShow ?? null)
 
 const backgroundUrl = computed(() => {
@@ -64,9 +63,5 @@ onMounted(() => {
   hydrated.value = true
 })
 
-const renderBackgroundStyle = computed(() =>
-  hydrated.value
-    ? backgroundStyle.value
-    : {backgroundColor: '#f8fafc'}
-)
+const renderBackgroundStyle = computed(() => (hydrated.value ? backgroundStyle.value : { backgroundColor: '#f8fafc' }))
 </script>
