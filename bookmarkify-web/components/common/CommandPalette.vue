@@ -218,7 +218,7 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         },
         {
           value: 'pref-layout-toggle',
-          label: '书签排列方式',
+          label: '书签间距',
           badges: [
             { label: '紧凑', value: BookmarkLayoutMode.COMPACT, active: pref.bookmarkLayout === BookmarkLayoutMode.COMPACT },
             { label: '默认', value: BookmarkLayoutMode.DEFAULT, active: pref.bookmarkLayout === BookmarkLayoutMode.DEFAULT },
