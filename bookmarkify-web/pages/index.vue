@@ -18,6 +18,7 @@
           @drag-start="onDragStart"
           @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
+            <!-- TODO 内部组件重构还未完成 -->
             <LaunchItem :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" />
           </template>
         </Vuuri>

@@ -1,43 +1,119 @@
 <template>
- <LaunchpadCellBookmark
-                v-if="item.type === HomeItemType.BOOKMARK"
-                :value="item.typeApp as BookmarkShow"
-                :show-title="showTitle"
-                @click="openPage(item.typeApp)" /> 
-
-
-                  <!-- <div
-    class="flex w-(--cell-size) flex-col items-center border border-gray-300 border-dashed"
-    @click="handleClick">
-    <div
-      class="flex h-(--cell-size) w-(--cell-size) select-none items-center justify-center border-4 border-gray-300 rounded-3xl text-4xl font-bold text-white shadow opacity-80"
-      :style="{ backgroundColor: item.color }">
-      {{ item.value }}
+  <div
+    class="bookmark-item"
+    :class="{ 'is-add': isAddItem(item) }"
+    :data-is-add-item="isAddItem(item)"
+    @contextmenu="onItemContextMenu($event, item)">
+    <div v-if="isAddItem(item)" class="bookmark-add-placeholder">
+      <LaunchpadAddOne @success="addBookmark" />
     </div>
-    <div
-      class="mt-1 flex h-(--title-height) w-full items-center justify-center rounded bg-gray-200 text-sm font-semibold text-gray-600">
-      APP-{{ item.value }}
+    <div v-else class="bookmark-drag-handle">
+      <LaunchpadCellFolder
+        v-if="item.type === HomeItemType.BOOKMARK_DIR"
+        :value="toBookmarkDir(item)"
+        :show-title="showTitle"
+        @click="openDir(item)" />
+      <LaunchpadCellBookmark
+        v-else-if="item.type === HomeItemType.BOOKMARK"
+        :value="item.typeApp!"
+        :show-title="showTitle"
+        @click="openPage(item.typeApp!)" />
+      <LaunchpadCellBookmarkLoading
+        v-else-if="item.type === HomeItemType.BOOKMARK_LOADING"
+        :show-title="showTitle" />
     </div>
-  </div> -->
-
-
-
-              <!-- <LaunchpadCellFolder
-                v-if="item.type === HomeItemType.BOOKMARK_DIR"
-                :value="toBookmarkDir(item)"
-                :show-title="showTitle"                />
-              <LaunchpadCellBookmark
-                v-else-if="item.type === HomeItemType.BOOKMARK"
-                :value="item.typeApp"
-                :show-title="showTitle"
-                @click="openPage(item.typeApp)" />
-              <LaunchpadCellBookmarkLoading
-                v-else-if="item.type === HomeItemType.BOOKMARK_LOADING"
-                :show-title="showTitle" /> -->
-
+  </div>
 </template>
 
 <script setup lang="ts">
-import { HomeItemType, type UserLayoutNodeVO } from '@typing'
-const props = defineProps<{ item: UserLayoutNodeVO }>()
+import { computed } from 'vue'
+import ContextMenu from '@imengyu/vue3-context-menu'
+import { bookmarksDel } from '@api'
+import { BookmarkOpenMode, HomeItemType, type BookmarkDir, type BookmarkShow, type UserLayoutNodeVO } from '@typing'
+import { usePreferenceStore } from '@stores/preference.store'
+
+type AddItem = { id: string; sort: number; type: 'ADD' }
+type GridItem = UserLayoutNodeVO | AddItem
+
+const ADD_ITEM_ID = '__bookmark_add_placeholder__'
+
+const props = defineProps<{
+  item: GridItem
+  toggleDrag?: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'open-dir', item: UserLayoutNodeVO): void
+  (e: 'show-detail', bookmark: BookmarkShow): void
+}>()
+
+const bookmarkStore = useBookmarkStore()
+const preferenceStore = usePreferenceStore()
+
+const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
+const bookmarkOpenMode = computed<BookmarkOpenMode>(
+  () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB,
+)
+
+function isAddItem(item: GridItem): item is AddItem {
+  return item.id === ADD_ITEM_ID || (item as AddItem).type === 'ADD'
+}
+
+function addBookmark(item: UserLayoutNodeVO) {
+  if (item.typeApp != null) {
+    bookmarkStore.layoutNode.push(item)
+  } else {
+    bookmarkStore.addEmpty(item)
+  }
+}
+
+function toBookmarkDir(item: UserLayoutNodeVO): BookmarkDir {
+  return {
+    name: item.name ?? '文件夹',
+    bookmarkList: (item.children ?? [])
+      .map((child) => child.typeApp)
+      .filter((child): child is BookmarkShow => Boolean(child)),
+  }
+}
+
+function openDir(item: UserLayoutNodeVO) {
+  if (props.toggleDrag) return
+  emit('open-dir', item)
+}
+
+function openPage(bookmark: BookmarkShow) {
+  if (props.toggleDrag) return
+  const target = bookmarkOpenMode.value === BookmarkOpenMode.NEW_TAB ? '_blank' : '_self'
+  window.open(bookmark.urlFull, target)
+}
+
+async function delOne(item: UserLayoutNodeVO) {
+  if (props.toggleDrag || isAddItem(item)) return
+  try {
+    await bookmarksDel([item.id])
+    const index = bookmarkStore.layoutNode.findIndex((it) => it.id === item.id)
+    if (index !== -1) bookmarkStore.layoutNode.splice(index, 1)
+  } catch (error) {
+    console.error('[LaunchItem] 删除书签失败', error)
+  }
+}
+
+function getClickMenu(item: UserLayoutNodeVO) {
+  if (!item.typeApp) return []
+  return [
+    {
+      label: '查看详情',
+      onClick: () => emit('show-detail', item.typeApp!),
+    },
+    {
+      label: '删除书签',
+      onClick: () => delOne(item),
+    },
+  ]
+}
+
+function onItemContextMenu(e: MouseEvent, item: GridItem) {
+  if (props.toggleDrag || isAddItem(item) || !('typeApp' in item) || !item.typeApp) return
+  ContextMenu.showContextMenu({ items: getClickMenu(item), x: e.x, y: e.y })
+}
 </script>
