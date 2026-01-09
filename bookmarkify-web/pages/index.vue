@@ -28,6 +28,7 @@
 </template>
 
 <script lang="ts" setup>
+import { bookmarksSort } from '@api'
 import { type UserLayoutNodeVO } from '@typing'
 import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 definePageMeta({ middleware: 'auth', layout: 'launch' })
@@ -108,7 +109,11 @@ function onDragReleaseEnd() {
   dragState.dragging = false
   dragState.justDropped = true
   if (dragState.pendingOrder) {
-    console.log(`拖拽后的排序：${dragState.pendingOrder.join(', ')}`)
+    const params: Record<string, number> = {}
+    bookmarkStore.layoutNode?.forEach((item, index) => {
+      params[item.id] = index
+    })
+    bookmarksSort(params)
     dragState.pendingOrder = null
   }
   // 下一帧重置，避免释放瞬间触发点击
@@ -120,10 +125,7 @@ function onDragReleaseEnd() {
 /** Vuuri input 事件：排序数据更新 */
 function onGridInput(list: UserLayoutNodeVO[]) {
   bookmarkStore.layoutNode = list
-  if (dragState.dragging) {
-    // TODO,接入正式代码
-    dragState.pendingOrder = list.map((it) => `APP-${it.name}`)
-  }
+  if (dragState.dragging) dragState.pendingOrder = list.map((it, index) => `${it.id},${index + 1}`)
 }
 </script>
 
