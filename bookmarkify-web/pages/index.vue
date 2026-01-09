@@ -1,34 +1,70 @@
 <template>
-  <ListPad>
+  <div ref="outerRef" class="w-full flex justify-center bg-amber-200">
     <div
-      v-for="item in items"
-      :key="item.value"
-      class="flex justify-center items-center border border-gray-300 border-dashed text-white font-semibold"
+      class="grid"
       :style="{
-        width: `${boxSize}px`,
-        height: `${boxSize}px`,
-        backgroundColor: item.color
+        gap: `${gap}px`,
+        width: `${gridWidth}px`,
+        gridTemplateColumns: `repeat(${cols}, ${boxSize}px)`,
+        visibility: ready ? 'visible' : 'hidden'
       }"
     >
-      {{ item.value }}
+      <div class="contents">
+        <div
+          v-for="item in items"
+          :key="item.value"
+          class="flex justify-center items-center border border-gray-300 border-dashed text-white font-semibold"
+          :style="{
+            width: `${boxSize}px`,
+            height: `${boxSize}px`,
+            backgroundColor: item.color
+          }"
+        >
+          {{ item.value }}
+        </div>
+      </div>
     </div>
-  </ListPad>
+  </div>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, ref } from 'vue'
-import ListPad from '~/components/launch/ListPad.vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 definePageMeta({ layout: 'launch' })
 
 const boxSize = ref(150)
+const gap = 0
+const cols = ref(1)
+const outerRef = ref<HTMLElement | null>(null)
+const ready = ref(false)
 const items = ref<{ value: number; color: string }[]>([])
+let resizeObserver: ResizeObserver | null = null
+
+const gridWidth = computed(() => cols.value * boxSize.value + Math.max(cols.value - 1, 0) * gap)
+
+const recalcCols = () => {
+  const container = outerRef.value
+  if (!container) return
+  const available = container.clientWidth
+  const next = Math.max(1, Math.floor((available + gap) / (boxSize.value + gap)))
+  cols.value = next
+  ready.value = true
+}
 
 onMounted(() => {
+  recalcCols()
+  resizeObserver = new ResizeObserver(() => recalcCols())
+  if (outerRef.value) resizeObserver.observe(outerRef.value)
+  window.addEventListener('resize', recalcCols)
   items.value = Array.from({ length: 50 }, (_, idx) => ({
     value: idx + 1,
     color: randomColor()
   }))
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  window.removeEventListener('resize', recalcCols)
 })
 
 const randomColor = () => {
