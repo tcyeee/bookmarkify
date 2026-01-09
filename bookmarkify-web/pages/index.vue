@@ -1,41 +1,38 @@
 <template>
   <!-- 完整APP列表 -->
-<div class="flex w-full justify-center bg-gray-100">
-  <!-- APP列表容器 -->
-  <div
-    class="w-full bg-amber-50"
-    :style="gridStyle">
-    <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
-    <ClientOnly>
-      <Vuuri
-        class="demo-grid min-h-[calc(var(--cell-size)+var(--cell-gap)+var(--title-height))]"
-        :model-value="items"
-        item-key="id"
-        :options="vuuriOptions"
-        :drag-enabled="false"
-        :get-item-width="getItemWidth"
-        :get-item-height="getItemHeight">
-        <template #item="{ item }">
-          <!-- APP_LOGO和APP_标题 -->
-          <div class="flex w-(--cell-size) flex-col items-center border border-gray-400 border-dashed">
-            <!-- APP_LOGO -->
-            <div
-              class="flex h-(--cell-size) w-(--cell-size) select-none items-center 
-              justify-center border-4 border-gray-300 rounded-3xl text-4xl font-bold text-white shadow opacity-80"
-              :style="{ backgroundColor: item.color }">
-              {{ item.value }}
+  <div class="flex w-full justify-center bg-gray-100">
+    <!-- APP列表容器 -->
+    <div class="w-full" :style="gridStyle">
+      <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
+      <ClientOnly>
+        <Vuuri
+          class="demo-grid min-h-[calc(var(--cell-size)+var(--cell-gap)+var(--title-height))] bg-amber-300"
+          :model-value="items"
+          item-key="id"
+          :options="vuuriOptions"
+          :drag-enabled="true"
+          :get-item-width="getItemWidth"
+          :get-item-height="getItemHeight">
+          <template #item="{ item }">
+            <!-- APP_LOGO和APP_标题 -->
+            <div class="flex w-(--cell-size) flex-col items-center border border-gray-400 border-dashed">
+              <!-- APP_LOGO -->
+              <div
+                class="flex h-(--cell-size) w-(--cell-size) select-none items-center justify-center border-4 border-gray-300 rounded-3xl text-4xl font-bold text-white shadow opacity-80"
+                :style="{ backgroundColor: item.color }">
+                {{ item.value }}
+              </div>
+              <!-- APP_标题 -->
+              <div
+                class="mt-1 flex h-(--title-height) w-full items-center justify-center rounded bg-gray-200 text-sm font-semibold text-gray-600">
+                APP-{{ item.value }}
+              </div>
             </div>
-            <!-- APP_标题 -->
-            <div
-              class="mt-1 flex h-(--title-height) w-full items-center justify-center rounded bg-gray-200 text-sm font-semibold text-gray-600">
-              APP-{{ item.value }}
-            </div>
-          </div>
-        </template>
-      </Vuuri>
-    </ClientOnly>
+          </template>
+        </Vuuri>
+      </ClientOnly>
+    </div>
   </div>
-</div>
 </template>
 
 <script lang="ts" setup>
@@ -81,8 +78,7 @@ const vuuriOptions = {
 
 /** 告诉 Vuuri 每个 item 的宽高（含间距），用于正确计算列数与动画 */
 const getItemWidth = () => `calc(var(--cell-size) + var(--cell-gap))`
-const getItemHeight = () =>
-  `calc(var(--cell-size) + var(--cell-gap) + var(--title-height))`
+const getItemHeight = () => `calc(var(--cell-size) + var(--cell-gap) + var(--title-height))`
 
 /** 初始化示例数据：50 个带随机色块的占位项 */
 onMounted(() => {
