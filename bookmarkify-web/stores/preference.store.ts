@@ -18,6 +18,17 @@ import {
 } from '@api'
 import { getImageUrl, getImageUrlByUserFile } from '@config/image.config'
 
+const BOOKMARK_GAP_MAP: Record<BookmarkGapMode, number> = {
+    [BookmarkGapMode.COMPACT]: 24,
+    [BookmarkGapMode.DEFAULT]: 35,
+    [BookmarkGapMode.SPACIOUS]: 48,
+}
+const BOOKMARK_SIZE_MAP: Record<BookmarkImageSize, number> = {
+    [BookmarkImageSize.LARGE]: 140,
+    [BookmarkImageSize.MEDIUM]: 120,
+    [BookmarkImageSize.SMALL]: 100,
+}
+
 export const usePreferenceStore = defineStore('preference', {
     state: () => ({
         // 用户偏好数据（若未拉取则为 undefined，拉取失败为 null）
@@ -35,6 +46,17 @@ export const usePreferenceStore = defineStore('preference', {
         // 是否正在上传自定义背景图
         imageBackgroundUploading: false as boolean,
     }),
+
+    getters: {
+        bookmarkGapPx: (state): number => {
+            const mode = state.preference?.bookmarkGap ?? BookmarkGapMode.DEFAULT
+            return BOOKMARK_GAP_MAP[mode] ?? BOOKMARK_GAP_MAP[BookmarkGapMode.DEFAULT]
+        },
+        bookmarkCellSizePx: (state): number => {
+            const size = state.preference?.bookmarkImageSize ?? BookmarkImageSize.MEDIUM
+            return BOOKMARK_SIZE_MAP[size] ?? BOOKMARK_SIZE_MAP[BookmarkImageSize.MEDIUM]
+        },
+    },
 
     actions: {
         async fetchPreference(): Promise<UserPreference | null> {
