@@ -1,9 +1,5 @@
 {
-  "cSpell.words": [
-    "baomidou",
-    "muuri",
-    "mybatisplus"
-  ],
+  "cSpell.words": ["baomidou", "muuri", "mybatisplus", "recalc"],
   "java.configuration.updateBuildConfiguration": "interactive",
   "java.compile.nullAnalysis.mode": "automatic"
 }
