@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import type { VxeGridProps } from "#/adapter/vxe-table";
+import type { BookmarkEntity } from "#/api/bookmark";
 
-import { defineAsyncComponent } from "vue";
+import { defineAsyncComponent, ref } from "vue";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
@@ -28,6 +29,13 @@ const ElSwitch = defineAsyncComponent(() =>
     import("element-plus/es/components/switch/index"),
     import("element-plus/es/components/switch/style/css"),
   ]).then(([res]) => res.ElSwitch)
+);
+
+const ElDialog = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/dialog/index"),
+    import("element-plus/es/components/dialog/style/css"),
+  ]).then(([res]) => res.ElDialog)
 );
 
 const gridOptions: VxeGridProps = {
@@ -76,6 +84,14 @@ const gridOptions: VxeGridProps = {
   },
 };
 
+const detailVisible = ref(false);
+const currentRow = ref<BookmarkEntity | null>(null);
+
+function handleCellClick({ row }: { row: BookmarkEntity }) {
+  currentRow.value = row;
+  detailVisible.value = true;
+}
+
 const [Grid] = useVbenVxeGrid({
   formOptions: {
     schema: [
@@ -117,7 +133,7 @@ const [Grid] = useVbenVxeGrid({
           <span>书签清理列表</span>
         </div>
       </template>
-      <Grid>
+      <Grid @cell-click="handleCellClick">
         <template #parseStatus="{ row }">
           <ElTag v-if="row.parseStatus === 'SUCCESS'" type="success" size="small">
             成功
@@ -140,6 +156,21 @@ const [Grid] = useVbenVxeGrid({
           </div>
         </template>
       </Grid>
+      <ElDialog v-model="detailVisible" title="书签详情" width="600px">
+        <div v-if="currentRow" class="space-y-2">
+          <div>App Name：{{ currentRow.appName || "-" }}</div>
+          <div>标题：{{ currentRow.title || "-" }}</div>
+          <div>域名：{{ currentRow.urlHost }}</div>
+          <div>路径：{{ currentRow.urlPath || "-" }}</div>
+          <div>协议：{{ currentRow.urlScheme }}</div>
+          <div>描述：{{ currentRow.description || "-" }}</div>
+          <div>状态：{{ currentRow.parseStatus }}</div>
+          <div>活跃：{{ currentRow.isActivity ? "活跃" : "不活跃" }}</div>
+          <div>错误信息：{{ currentRow.parseErrMsg || "-" }}</div>
+          <div>创建时间：{{ currentRow.createTime }}</div>
+          <div>更新时间：{{ currentRow.updateTime || "-" }}</div>
+        </div>
+      </ElDialog>
     </ElCard>
   </Page>
 </template>
