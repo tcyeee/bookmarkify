@@ -1,6 +1,5 @@
 <template>
   <div
-    class="border border-dashed border-gray-300"
     :class="{ 'is-add': isAddItem(item) }"
     :data-is-add-item="isAddItem(item)"
     @contextmenu="onItemContextMenu($event, item)">
