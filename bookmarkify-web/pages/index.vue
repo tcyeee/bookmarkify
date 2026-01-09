@@ -1,4 +1,12 @@
 <template>
+<div>{{ CELL_SIZE + CELL_GAP }}</div>
+<div>-------</div>
+<div>{{  CELL_GAP }}</div>
+<div>-------</div>
+<div>{{ preferenceStore.bookmarkCellSizePx }}</div>
+<div>-------</div>
+<div>{{ preferenceStore.bookmarkGapPx }}</div>
+<div>-------</div>
   <!-- 完整APP列表 -->
   <div ref="outerRef" class="flex w-full justify-center">
     <!-- APP列表容器：min-width 保证不被外层挤压 -->
@@ -12,8 +20,8 @@
           item-key="id"
           :options="vuuriOptions"
           :drag-enabled="true"
-          :get-item-width="() => `${CELL_SIZE + CELL_GAP - 30}px`"
-          :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT - 30}px`"
+          :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`"
+          :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`"
           @input="onGridInput"
           @drag-start="onDragStart"
           @drag-release-end="onDragReleaseEnd">
@@ -40,7 +48,7 @@ const pageData = computed<Array<UserLayoutNodeVO>>(() => bookmarkStore.layoutNod
 const CELL_SIZE = computed(() => preferenceStore.bookmarkCellSizePx)
 const CELL_GAP = computed(() => preferenceStore.bookmarkGapPx)
 
-const TITLE_HEIGHT = 28
+const TITLE_HEIGHT = computed(() => preferenceStore.preference?.showTitle ? 28 : 0)
 const COLUMN_WIDTH = computed(() => CELL_SIZE.value + CELL_GAP.value)
 
 /** 客户端按需加载 Vuuri；服务端阶段返回空占位以规避报错 */
@@ -143,7 +151,6 @@ function onGridInput(list: UserLayoutNodeVO[]) {
   justify-content: center;
   align-items: center;
   box-sizing: border-box;
-  background-color: cadetblue;
   border: 1px dashed gray;
 }
 </style>

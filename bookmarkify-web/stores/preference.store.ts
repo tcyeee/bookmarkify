@@ -19,7 +19,7 @@ import {
 import { getImageUrl, getImageUrlByUserFile } from '@config/image.config'
 
 const BOOKMARK_GAP_MAP: Record<BookmarkGapMode, number> = {
-    [BookmarkGapMode.COMPACT]: 1,
+    [BookmarkGapMode.COMPACT]: 15,
     [BookmarkGapMode.DEFAULT]: 24,
     [BookmarkGapMode.SPACIOUS]: 35,
 }
