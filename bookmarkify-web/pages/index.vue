@@ -66,7 +66,11 @@ const Vuuri = import.meta.client
   : defineComponent({ name: 'VuuriPlaceholder', setup: () => () => null })
 
 const items = ref<GridItem[]>([])
-const dragState = reactive({ dragging: false, justDropped: false })
+const dragState = reactive<{ dragging: boolean; justDropped: boolean; pendingOrder: string[] | null }>({
+  dragging: false,
+  justDropped: false,
+  pendingOrder: null,
+})
 const outerRef = ref<HTMLElement | null>(null)
 const columnCount = ref(1)
 let resizeObserver: ResizeObserver | null = null
@@ -145,11 +149,16 @@ function onItemClick(item: GridItem) {
 function onDragStart() {
   dragState.dragging = true
   dragState.justDropped = false
+  dragState.pendingOrder = null
 }
 
 function onDragReleaseEnd() {
   dragState.dragging = false
   dragState.justDropped = true
+  if (dragState.pendingOrder) {
+    console.log(`拖拽后的排序：${dragState.pendingOrder.join(', ')}`)
+    dragState.pendingOrder = null
+  }
   // 下一帧重置，避免释放瞬间触发点击
   requestAnimationFrame(() => {
     dragState.justDropped = false
@@ -159,10 +168,8 @@ function onDragReleaseEnd() {
 /** Vuuri input 事件：排序数据更新 */
 function onGridInput(newItems: GridItem[]) {
   items.value = newItems
-  // 仅在拖拽产生的排序时打印
-  if (dragState.dragging || dragState.justDropped) {
-    const order = newItems.map((it) => `APP-${it.value}`).join(', ')
-    console.log(`拖拽后的排序：${order}`)
+  if (dragState.dragging) {
+    dragState.pendingOrder = newItems.map((it) => `APP-${it.value}`)
   }
 }
 </script>
