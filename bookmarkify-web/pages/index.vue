@@ -2,23 +2,23 @@
   <!-- 完整APP列表 -->
   <div ref="outerRef" class="flex w-full justify-center">
     <!-- APP列表容器：min-width 保证不被外层挤压 -->
-    <div class="w-full flex justify-center" :style="gridContainerStyle">
+    <div class="w-full flex justify-center">
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
         <Vuuri
-          class="demo-grid min-h-[calc(var(--cell-size)+var(--cell-gap)+var(--title-height))]"
+          class="demo-grid"
           :style="vuuriStyle"
           :model-value="pageData"
           item-key="id"
           :options="vuuriOptions"
           :drag-enabled="true"
-          :get-item-width="getItemWidth"
-          :get-item-height="getItemHeight"
+          :get-item-width="() => `${CELL_SIZE + CELL_GAP - 30}px`"
+          :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT - 30}px`"
           @input="onGridInput"
           @drag-start="onDragStart"
           @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
-            <LaunchItem :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" />
+              <LaunchItem :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" />
           </template>
         </Vuuri>
       </ClientOnly>
@@ -30,8 +30,6 @@
 import { type UserLayoutNodeVO } from '@typing'
 import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 definePageMeta({ middleware: 'auth', layout: 'launch' })
-
-type GridItem = { id: number; value: number; color: string }
 
 const bookmarkStore = useBookmarkStore()
 const preferenceStore = usePreferenceStore()
@@ -50,7 +48,6 @@ const Vuuri = import.meta.client
   ? defineAsyncComponent(() => import('vuuri'))
   : defineComponent({ name: 'VuuriPlaceholder', setup: () => () => null })
 
-const items = ref<GridItem[]>([])
 const dragState = reactive<{ dragging: boolean; justDropped: boolean; pendingOrder: string[] | null }>({
   dragging: false,
   justDropped: false,
@@ -59,19 +56,6 @@ const dragState = reactive<{ dragging: boolean; justDropped: boolean; pendingOrd
 const outerRef = ref<HTMLElement | null>(null)
 const columnCount = ref(1)
 let resizeObserver: ResizeObserver | null = null
-
-/** 将尺寸写入 CSS 变量，模板与样式保持一致 */
-const gridStyle = computed(() => ({
-  '--cell-size': `${CELL_SIZE.value}px`,
-  '--cell-gap': `${CELL_GAP.value}px`,
-  '--title-height': `${TITLE_HEIGHT}px`,
-}))
-
-/** 容器样式：携带 CSS 变量并确保宽度不小于内部网格 */
-const gridContainerStyle = computed(() => ({
-  ...gridStyle.value,
-  minWidth: vuuriStyle.value.width,
-}))
 
 /** 控制 Vuuri 容器宽度，使列在左右留白时仍居中 */
 const vuuriStyle = computed(() => ({
@@ -89,10 +73,6 @@ const vuuriOptions = {
   // 需要轻微移动才开始拖拽，避免单击被当作拖拽而吃掉 click
   dragStartPredicate: { distance: 8, delay: 0 },
 }
-
-/** 告诉 Vuuri 每个 item 的宽高（含间距），用于正确计算列数与动画 */
-const getItemWidth = () => `calc(var(--cell-size) + var(--cell-gap))`
-const getItemHeight = () => `calc(var(--cell-size) + var(--cell-gap) + var(--title-height))`
 
 /** 根据可用宽度重新计算列数，确保容器宽度与列数对齐 */
 const recalcColumns = () => {
@@ -137,10 +117,11 @@ function onDragReleaseEnd() {
 }
 
 /** Vuuri input 事件：排序数据更新 */
-function onGridInput(newItems: GridItem[]) {
-  items.value = newItems
+function onGridInput(list: UserLayoutNodeVO[]) {
+  bookmarkStore.layoutNode = list
   if (dragState.dragging) {
-    dragState.pendingOrder = newItems.map((it) => `APP-${it.value}`)
+    // TODO,接入正式代码
+    dragState.pendingOrder = list.map((it) => `APP-${it.name}`)
   }
 }
 </script>
@@ -162,5 +143,7 @@ function onGridInput(newItems: GridItem[]) {
   justify-content: center;
   align-items: center;
   box-sizing: border-box;
+  background-color: cadetblue;
+  border: 1px dashed gray;
 }
 </style>
