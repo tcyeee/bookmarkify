@@ -6,7 +6,7 @@
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
         <Vuuri
-          class="demo-grid min-h-[calc(var(--cell-size)+var(--cell-gap)+var(--title-height))] bg-amber-300"
+          class="demo-grid min-h-[calc(var(--cell-size)+var(--cell-gap)+var(--title-height))] bg-gray-400"
           :model-value="items"
           item-key="id"
           :options="vuuriOptions"
@@ -15,7 +15,7 @@
           :get-item-height="getItemHeight">
           <template #item="{ item }">
             <!-- APP_LOGO和APP_标题 -->
-            <div class="flex w-(--cell-size) flex-col items-center border border-gray-400 border-dashed">
+            <div class="flex w-(--cell-size) flex-col items-center border border-gray-300 border-dashed">
               <!-- APP_LOGO -->
               <div
                 class="flex h-(--cell-size) w-(--cell-size) select-none items-center justify-center border-4 border-gray-300 rounded-3xl text-4xl font-bold text-white shadow opacity-80"
