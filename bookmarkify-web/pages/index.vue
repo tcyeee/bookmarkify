@@ -1,8 +1,8 @@
 <template>
-  <!-- 完整APP列表 -->
-  <div ref="outerRef" class="flex w-full justify-center bg-gray-100">
-    <!-- APP列表容器 -->
-    <div class="w-full flex justify-center" :style="gridStyle">
+<!-- 完整APP列表 -->
+<div ref="outerRef" class="flex w-full justify-center bg-gray-100">
+  <!-- APP列表容器：min-width 保证不被外层挤压 -->
+  <div class="w-full flex justify-center" :style="gridContainerStyle">
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
         <Vuuri
@@ -82,10 +82,16 @@ const gridStyle = computed(() => ({
   '--title-height': `${TITLE_HEIGHT}px`,
 }))
 
+/** 容器样式：携带 CSS 变量并确保宽度不小于内部网格 */
+const gridContainerStyle = computed(() => ({
+  ...gridStyle.value,
+  minWidth: vuuriStyle.value.width,
+}))
+
 /** 控制 Vuuri 容器宽度，使列在左右留白时仍居中 */
 const vuuriStyle = computed(() => ({
   // 真实宽度 = 每列外宽相加 - 尾部多余 gap；与列数计算保持一致
-  width: `${max(1, columnCount.value) * COLUMN_WIDTH - CELL_GAP}px`,
+  width: `${Math.max(1, columnCount.value) * COLUMN_WIDTH}px`,
 }))
 
 /** Vuuri 布局与动画配置 */
@@ -119,7 +125,7 @@ onMounted(() => {
   if (outerRef.value) resizeObserver.observe(outerRef.value)
   window.addEventListener('resize', recalcColumns)
 
-  items.value = Array.from({ length: 50 }, (_, idx) => ({
+  items.value = Array.from({ length: 12 }, (_, idx) => ({
     id: idx + 1,
     value: idx + 1,
     color: randomColor(),
