@@ -1,12 +1,12 @@
 <template>
 <!-- 完整APP列表 -->
-<div ref="outerRef" class="flex w-full justify-center bg-gray-100">
+<div ref="outerRef" class="flex w-full justify-center">
   <!-- APP列表容器：min-width 保证不被外层挤压 -->
   <div class="w-full flex justify-center" :style="gridContainerStyle">
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
         <Vuuri
-          class="demo-grid min-h-[calc(var(--cell-size)+var(--cell-gap)+var(--title-height))] bg-gray-400"
+          class="demo-grid min-h-[calc(var(--cell-size)+var(--cell-gap)+var(--title-height))]"
           :style="vuuriStyle"
           :model-value="items"
           item-key="id"
@@ -56,7 +56,7 @@ type GridItem = { id: number; value: number; color: string }
 
 /** 单元格尺寸与间距，可按需集中调节 */
 const CELL_SIZE = 120
-const CELL_GAP = 50
+const CELL_GAP = 35
 const TITLE_HEIGHT = 28
 const COLUMN_WIDTH = CELL_SIZE + CELL_GAP
 
