@@ -76,6 +76,9 @@ export const useAuthStore = defineStore('auth', {
             const webSocketStore = useWebSocketStore()
             webSocketStore.connect(user.token)
 
+            const preferenceStore = usePreferenceStore()
+            preferenceStore.fetchPreference()
+
             return Promise.resolve(this.account as UserInfo)
         },
 
