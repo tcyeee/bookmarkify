@@ -8,70 +8,67 @@ import { formatDateTime } from "@vben/utils";
 
 import { getAdminUserListApi } from "#/api";
 
-function createAsyncElComponent(
-  importer: () => Promise<any>,
-  styleImporter: () => Promise<unknown>,
-  exportName: string
-) {
-  return defineAsyncComponent(() =>
-    Promise.all([importer(), styleImporter()]).then(
-      ([res]) => (res as any)[exportName]
-    )
-  );
-}
-
-const ElCard = createAsyncElComponent(
-  () => import("element-plus/es/components/card/index"),
-  () => import("element-plus/es/components/card/style/css"),
-  "ElCard"
+const ElCard = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/card/index"),
+    import("element-plus/es/components/card/style/css"),
+  ]).then(([res]) => res.ElCard)
 );
 
-const ElTag = createAsyncElComponent(
-  () => import("element-plus/es/components/tag/index"),
-  () => import("element-plus/es/components/tag/style/css"),
-  "ElTag"
+const ElTable = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/table/index"),
+    import("element-plus/es/components/table/style/css"),
+  ]).then(([res]) => res.ElTable)
 );
 
-const ElTable = createAsyncElComponent(
-  () => import("element-plus/es/components/table/index"),
-  () => import("element-plus/es/components/table/style/css"),
-  "ElTable"
+const ElTableColumn = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/table/index"),
+    import("element-plus/es/components/table/style/css"),
+  ]).then(([res]) => res.ElTableColumn)
 );
 
-const ElTableColumn = createAsyncElComponent(
-  () => import("element-plus/es/components/table/index"),
-  () => import("element-plus/es/components/table/style/css"),
-  "ElTableColumn"
+const ElForm = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/form/index"),
+    import("element-plus/es/components/form/style/css"),
+  ]).then(([res]) => res.ElForm)
 );
 
-const ElForm = createAsyncElComponent(
-  () => import("element-plus/es/components/form/index"),
-  () => import("element-plus/es/components/form/style/css"),
-  "ElForm"
+const ElFormItem = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/form/index"),
+    import("element-plus/es/components/form/style/css"),
+  ]).then(([res]) => res.ElFormItem)
 );
 
-const ElFormItem = createAsyncElComponent(
-  () => import("element-plus/es/components/form/index"),
-  () => import("element-plus/es/components/form/style/css"),
-  "ElFormItem"
+const ElInput = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/input/index"),
+    import("element-plus/es/components/input/style/css"),
+  ]).then(([res]) => res.ElInput)
 );
 
-const ElInput = createAsyncElComponent(
-  () => import("element-plus/es/components/input/index"),
-  () => import("element-plus/es/components/input/style/css"),
-  "ElInput"
+const ElButton = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/button/index"),
+    import("element-plus/es/components/button/style/css"),
+  ]).then(([res]) => res.ElButton)
 );
 
-const ElButton = createAsyncElComponent(
-  () => import("element-plus/es/components/button/index"),
-  () => import("element-plus/es/components/button/style/css"),
-  "ElButton"
+const ElPagination = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/pagination/index"),
+    import("element-plus/es/components/pagination/style/css"),
+  ]).then(([res]) => res.ElPagination)
 );
 
-const ElPagination = createAsyncElComponent(
-  () => import("element-plus/es/components/pagination/index"),
-  () => import("element-plus/es/components/pagination/style/css"),
-  "ElPagination"
+const ElTag = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/tag/index"),
+    import("element-plus/es/components/tag/style/css"),
+  ]).then(([res]) => res.ElTag)
 );
 
 const loading = ref(false);
