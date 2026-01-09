@@ -232,18 +232,70 @@ onMounted(() => {
         <ElPagination v-model:current-page="pagination.currentPage" v-model:page-size="pagination.pageSize" :page-sizes="[10, 20, 50, 100]" :total="pagination.total" layout="total, sizes, prev, pager, next, jumper" @current-change="handleCurrentChange" @size-change="handleSizeChange" />
       </div>
       <ElDialog v-model="detailVisible" title="书签详情" width="600px">
-        <div v-if="currentRow" class="space-y-2">
-          <div>App Name：{{ currentRow.appName || "-" }}</div>
-          <div>标题：{{ currentRow.title || "-" }}</div>
-          <div>域名：{{ currentRow.urlHost }}</div>
-          <div>路径：{{ currentRow.urlPath || "-" }}</div>
-          <div>协议：{{ currentRow.urlScheme }}</div>
-          <div>描述：{{ currentRow.description || "-" }}</div>
-          <div>状态：{{ currentRow.parseStatus }}</div>
-          <div>活跃：{{ currentRow.isActivity ? "活跃" : "不活跃" }}</div>
-          <div>错误信息：{{ currentRow.parseErrMsg || "-" }}</div>
-          <div>创建时间：{{ currentRow.createTime }}</div>
-          <div>更新时间：{{ currentRow.updateTime || "-" }}</div>
+        <div v-if="currentRow" class="space-y-3 text-sm">
+          <div class="flex">
+            <span class="w-24 text-gray-500">App Name</span>
+            <span class="flex-1 font-medium break-all">{{ currentRow.appName || "-" }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 text-gray-500">标题</span>
+            <span class="flex-1 font-medium break-all">{{ currentRow.title || "-" }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 text-gray-500">域名</span>
+            <span class="flex-1 break-all">{{ currentRow.urlHost }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 text-gray-500">路径</span>
+            <span class="flex-1 break-all">{{ currentRow.urlPath || "-" }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 text-gray-500">协议</span>
+            <span class="flex-1">{{ currentRow.urlScheme }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 text-gray-500">描述</span>
+            <span class="flex-1 break-all">{{ currentRow.description || "-" }}</span>
+          </div>
+          <div class="flex items-center">
+            <span class="w-24 text-gray-500">状态</span>
+            <div>
+              <ElTag v-if="currentRow.parseStatus === 'SUCCESS'" type="success" size="small">
+                成功
+              </ElTag>
+              <ElTag v-else-if="currentRow.parseStatus === 'LOADING'" type="info" size="small">
+                解析中
+              </ElTag>
+              <ElTag v-else-if="currentRow.parseStatus === 'CLOSED'" type="warning" size="small">
+                已关闭
+              </ElTag>
+              <ElTag v-else-if="currentRow.parseStatus === 'BLOCKED'" type="danger" size="small">
+                已阻止
+              </ElTag>
+              <ElTag v-else size="small">
+                {{ currentRow.parseStatus || "未知" }}
+              </ElTag>
+            </div>
+          </div>
+          <div class="flex items-center">
+            <span class="w-24 text-gray-500">活跃</span>
+            <div class="flex items-center gap-2">
+              <ElSwitch :model-value="currentRow.isActivity" active-color="#13ce66" inactive-color="#ff4949" disabled />
+              <span>{{ currentRow.isActivity ? "活跃" : "不活跃" }}</span>
+            </div>
+          </div>
+          <div class="flex">
+            <span class="w-24 text-gray-500">错误信息</span>
+            <span class="flex-1 break-all">{{ currentRow.parseErrMsg || "-" }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 text-gray-500">创建时间</span>
+            <span class="flex-1">{{ formatDateTime(currentRow.createTime) }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 text-gray-500">更新时间</span>
+            <span class="flex-1">{{ formatDateTime(currentRow.updateTime) }}</span>
+          </div>
         </div>
       </ElDialog>
     </ElCard>

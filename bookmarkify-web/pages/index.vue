@@ -8,7 +8,7 @@
         <Vuuri
           class="demo-grid min-h-[calc(var(--cell-size)+var(--cell-gap)+var(--title-height))]"
           :style="vuuriStyle"
-          :model-value="items"
+          :model-value="pageData"
           item-key="id"
           :options="vuuriOptions"
           :drag-enabled="true"
@@ -18,22 +18,18 @@
           @drag-start="onDragStart"
           @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
-            <!-- APP_LOGO和APP_标题 -->
-            <div
-              class="flex w-(--cell-size) flex-col items-center border border-gray-300 border-dashed"
-              @click="onItemClick(item)">
-              <!-- APP_LOGO -->
-              <div
-                class="flex h-(--cell-size) w-(--cell-size) select-none items-center justify-center border-4 border-gray-300 rounded-3xl text-4xl font-bold text-white shadow opacity-80"
-                :style="{ backgroundColor: item.color }">
-                {{ item.value }}
-              </div>
-              <!-- APP_标题 -->
-              <div
-                class="mt-1 flex h-(--title-height) w-full items-center justify-center rounded bg-gray-200 text-sm font-semibold text-gray-600">
-                APP-{{ item.value }}
-              </div>
-            </div>
+              <LaunchpadCellFolder
+                v-if="item.type === HomeItemType.BOOKMARK_DIR"
+                :value="toBookmarkDir(item)"
+                :show-title="showTitle"                />
+              <LaunchpadCellBookmark
+                v-else-if="item.type === HomeItemType.BOOKMARK"
+                :value="item.typeApp"
+                :show-title="showTitle"
+                @click="openPage(item.typeApp)" />
+              <LaunchpadCellBookmarkLoading
+                v-else-if="item.type === HomeItemType.BOOKMARK_LOADING"
+                :show-title="showTitle" />
           </template>
         </Vuuri>
       </ClientOnly>
@@ -42,21 +38,25 @@
 </template>
 
 <script lang="ts" setup>
-/**
- * 使用 Vuuri 重写首页网格：
- * - Vuuri 是 Muuri 的 Vue 适配器，支持自动填补空隙、动画过渡。
- * - 客户端按需加载，避免 SSR 阶段因缺少 DOM / window 报错。
- * - item 尺寸统一由回调返回，保持与 CSS 变量同步，便于后续统一调节。
- */
+import { BookmarkOpenMode, HomeItemType, type BookmarkDir, type BookmarkShow, type UserLayoutNodeVO } from '@typing';
 import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-
-definePageMeta({ layout: 'launch' })
+definePageMeta({ middleware: 'auth',  layout: 'launch' })
 
 type GridItem = { id: number; value: number; color: string }
+
+const bookmarkStore = useBookmarkStore()
+const preferenceStore = usePreferenceStore()
+
+const pageData = computed<Array<UserLayoutNodeVO>>(() => bookmarkStore.layoutNode || [])
+const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
+const bookmarkOpenMode = computed<BookmarkOpenMode>(
+  () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB,
+)
 
 /** 单元格尺寸与间距，可按需集中调节 */
 const CELL_SIZE = 120
 const CELL_GAP = 35
+
 const TITLE_HEIGHT = 28
 const COLUMN_WIDTH = CELL_SIZE + CELL_GAP
 
@@ -125,7 +125,7 @@ onMounted(() => {
   if (outerRef.value) resizeObserver.observe(outerRef.value)
   window.addEventListener('resize', recalcColumns)
 
-  items.value = Array.from({ length: 12 }, (_, idx) => ({
+  items.value = Array.from({ length: 120 }, (_, idx) => ({
     id: idx + 1,
     value: idx + 1,
     color: randomColor(),
@@ -178,6 +178,21 @@ function onGridInput(newItems: GridItem[]) {
   if (dragState.dragging) {
     dragState.pendingOrder = newItems.map((it) => `APP-${it.value}`)
   }
+}
+
+function toBookmarkDir(item: UserLayoutNodeVO): BookmarkDir {
+  return {
+    name: item.name ?? '文件夹',
+    bookmarkList: (item.children ?? [])
+      .map((child) => child.typeApp)
+      .filter((child): child is BookmarkShow => Boolean(child)),
+  }
+}
+
+function openPage(bookmark: BookmarkShow) {
+  if (dragState.dragging || dragState.justDropped) return
+  const target = bookmarkOpenMode.value === BookmarkOpenMode.NEW_TAB ? '_blank' : '_self'
+  window.open(bookmark.urlFull, target)
 }
 </script>
 
