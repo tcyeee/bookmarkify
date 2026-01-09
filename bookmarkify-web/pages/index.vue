@@ -1,12 +1,13 @@
 <template>
   <!-- 完整APP列表 -->
-  <div class="flex w-full justify-center bg-gray-100">
+  <div ref="outerRef" class="flex w-full justify-center bg-gray-100">
     <!-- APP列表容器 -->
-    <div class="w-full" :style="gridStyle">
+    <div class="w-full flex justify-center" :style="gridStyle">
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
         <Vuuri
           class="demo-grid min-h-[calc(var(--cell-size)+var(--cell-gap)+var(--title-height))] bg-gray-400"
+          :style="vuuriStyle"
           :model-value="items"
           item-key="id"
           :options="vuuriOptions"
@@ -42,7 +43,7 @@
  * - 客户端按需加载，避免 SSR 阶段因缺少 DOM / window 报错。
  * - item 尺寸统一由回调返回，保持与 CSS 变量同步，便于后续统一调节。
  */
-import { computed, defineAsyncComponent, defineComponent, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 
 definePageMeta({ layout: 'launch' })
 
@@ -52,6 +53,7 @@ type GridItem = { id: number; value: number; color: string }
 const CELL_SIZE = 120
 const CELL_GAP = 20
 const TITLE_HEIGHT = 28
+const COLUMN_WIDTH = CELL_SIZE + CELL_GAP
 
 /** 客户端按需加载 Vuuri；服务端阶段返回空占位以规避报错 */
 const Vuuri = import.meta.client
@@ -59,12 +61,20 @@ const Vuuri = import.meta.client
   : defineComponent({ name: 'VuuriPlaceholder', setup: () => () => null })
 
 const items = ref<GridItem[]>([])
+const outerRef = ref<HTMLElement | null>(null)
+const columnCount = ref(1)
+let resizeObserver: ResizeObserver | null = null
 
 /** 将尺寸写入 CSS 变量，模板与样式保持一致 */
 const gridStyle = computed(() => ({
   '--cell-size': `${CELL_SIZE}px`,
   '--cell-gap': `${CELL_GAP}px`,
   '--title-height': `${TITLE_HEIGHT}px`,
+}))
+
+/** 控制 Vuuri 容器宽度，使列在左右留白时仍居中 */
+const vuuriStyle = computed(() => ({
+  width: `${columnCount.value * COLUMN_WIDTH}px`,
 }))
 
 /** Vuuri 布局与动画配置 */
@@ -80,13 +90,32 @@ const vuuriOptions = {
 const getItemWidth = () => `calc(var(--cell-size) + var(--cell-gap))`
 const getItemHeight = () => `calc(var(--cell-size) + var(--cell-gap) + var(--title-height))`
 
+/** 根据可用宽度重新计算列数，确保容器宽度与列数对齐 */
+const recalcColumns = () => {
+  const container = outerRef.value
+  if (!container) return
+  const available = container.clientWidth
+  const next = Math.max(1, Math.floor((available + CELL_GAP) / COLUMN_WIDTH))
+  columnCount.value = next
+}
+
 /** 初始化示例数据：50 个带随机色块的占位项 */
 onMounted(() => {
+  recalcColumns()
+  resizeObserver = new ResizeObserver(() => recalcColumns())
+  if (outerRef.value) resizeObserver.observe(outerRef.value)
+  window.addEventListener('resize', recalcColumns)
+
   items.value = Array.from({ length: 50 }, (_, idx) => ({
     id: idx + 1,
     value: idx + 1,
     color: randomColor(),
   }))
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  window.removeEventListener('resize', recalcColumns)
 })
 
 /** 生成柔和的 HSL 随机色，避免过亮或过暗 */
@@ -100,7 +129,7 @@ function randomColor() {
 
 <style>
 .demo-grid {
-  width: 100%;
+  margin: 0 auto;
   /* 移除 Muuri 默认 margin，完全由 gap 控制间距 */
 }
 
