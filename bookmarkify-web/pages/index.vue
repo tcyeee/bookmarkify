@@ -1,32 +1,41 @@
 <template>
-  <!-- 页面容器：居中承载 Vuuri 网格 -->
-  <div class="page-wrapper">
-    <div class="grid-shell bg-amber-100" :style="gridStyle">
-      <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
-      <ClientOnly>
-        <Vuuri
-          class="demo-grid"
-          :model-value="items"
-          item-key="id"
-          :options="vuuriOptions"
-          :drag-enabled="false"
-          :get-item-width="getItemWidth"
-          :get-item-height="getItemHeight">
-          <template #item="{ item }">
-            <!-- 单个卡片：色块 + 标题，可作为后续拖拽的基础 -->
-            <div class="demo-card">
-              <div class="demo-card__logo" :style="{ backgroundColor: item.color }">
-                {{ item.value }}
-              </div>
-              <div class="demo-card__label">
-                APP-{{ item.value }}
-              </div>
+  <!-- 完整APP列表 -->
+<div class="flex w-full justify-center bg-gray-100">
+  <!-- APP列表容器 -->
+  <div
+    class="w-full bg-amber-50"
+    :style="gridStyle">
+    <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
+    <ClientOnly>
+      <Vuuri
+        class="demo-grid min-h-[calc(var(--cell-size)+var(--cell-gap)+var(--title-height))]"
+        :model-value="items"
+        item-key="id"
+        :options="vuuriOptions"
+        :drag-enabled="false"
+        :get-item-width="getItemWidth"
+        :get-item-height="getItemHeight">
+        <template #item="{ item }">
+          <!-- APP_LOGO和APP_标题 -->
+          <div class="flex w-(--cell-size) flex-col items-center border border-gray-400 border-dashed">
+            <!-- APP_LOGO -->
+            <div
+              class="flex h-(--cell-size) w-(--cell-size) select-none items-center 
+              justify-center border-4 border-gray-300 rounded-3xl text-4xl font-bold text-white shadow opacity-80"
+              :style="{ backgroundColor: item.color }">
+              {{ item.value }}
             </div>
-          </template>
-        </Vuuri>
-      </ClientOnly>
-    </div>
+            <!-- APP_标题 -->
+            <div
+              class="mt-1 flex h-(--title-height) w-full items-center justify-center rounded bg-gray-200 text-sm font-semibold text-gray-600">
+              APP-{{ item.value }}
+            </div>
+          </div>
+        </template>
+      </Vuuri>
+    </ClientOnly>
   </div>
+</div>
 </template>
 
 <script lang="ts" setup>
@@ -48,7 +57,7 @@ const CELL_GAP = 20
 const TITLE_HEIGHT = 28
 
 /** 客户端按需加载 Vuuri；服务端阶段返回空占位以规避报错 */
-const Vuuri = process.client
+const Vuuri = import.meta.client
   ? defineAsyncComponent(() => import('vuuri'))
   : defineComponent({ name: 'VuuriPlaceholder', setup: () => () => null })
 
@@ -94,29 +103,11 @@ function randomColor() {
 </script>
 
 <style>
-.page-wrapper {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  background: #f5f5f5;
-}
-
-.grid-shell {
-  width: 100%;
-  max-width: 1400px;
-  padding: 32px 20px;
-  box-sizing: border-box;
-  --cell-size: 120px;
-  --cell-gap: 20px;
-  --title-height: 28px;
-}
-
 .demo-grid {
   width: 100%;
-  min-height: calc(var(--cell-size) + var(--cell-gap) + var(--title-height));
+  /* 移除 Muuri 默认 margin，完全由 gap 控制间距 */
 }
 
-/* 移除 Muuri 默认 margin，完全由 gap 控制间距 */
 .demo-grid .muuri-item {
   margin: 0;
 }
@@ -128,36 +119,5 @@ function randomColor() {
   justify-content: center;
   align-items: center;
   box-sizing: border-box;
-}
-
-.demo-card {
-  width: var(--cell-size);
-}
-
-.demo-card__logo {
-  width: var(--cell-size);
-  height: var(--cell-size);
-  border-radius: 28px;
-  color: #fff;
-  font-size: 42px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  user-select: none;
-}
-
-.demo-card__label {
-  margin-top: 8px;
-  height: var(--title-height);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  background: #e5e7eb;
-  color: #4b5563;
-  font-weight: 600;
-  font-size: 14px;
 }
 </style>
