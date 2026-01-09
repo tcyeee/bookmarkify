@@ -55,7 +55,6 @@
 
 <script lang="ts" setup>
 import {
-  BookmarkImageSize,
   BookmarkOpenMode,
   HomeItemType,
   type BookmarkDir,
@@ -77,17 +76,8 @@ const bookmarkOpenMode = computed<BookmarkOpenMode>(
 )
 
 /** 单元格尺寸与间距，跟随用户偏好 */
-const CELL_PRESETS: Record<BookmarkImageSize, { size: number; gap: number }> = {
-  [BookmarkImageSize.LARGE]: { size: 140, gap: 40 },
-  [BookmarkImageSize.MEDIUM]: { size: 120, gap: 35 },
-  [BookmarkImageSize.SMALL]: { size: 100, gap: 30 },
-}
-const bookmarkImageSize = computed<BookmarkImageSize>(
-  () => preferenceStore.preference?.bookmarkImageSize ?? BookmarkImageSize.MEDIUM,
-)
-const cellConfig = computed(() => CELL_PRESETS[bookmarkImageSize.value])
-const CELL_SIZE = computed(() => cellConfig.value.size)
-const CELL_GAP = computed(() => cellConfig.value.gap)
+const CELL_SIZE = computed(() => preferenceStore.bookmarkCellSizePx)
+const CELL_GAP = computed(() => preferenceStore.bookmarkGapPx)
 
 const TITLE_HEIGHT = 28
 const COLUMN_WIDTH = computed(() => CELL_SIZE.value + CELL_GAP.value)
