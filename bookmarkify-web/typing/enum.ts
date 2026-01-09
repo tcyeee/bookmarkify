@@ -53,6 +53,12 @@ export enum BookmarkLayoutMode {
   SPACIOUS = 'SPACIOUS',
 }
 
+export enum BookmarkImageSize {
+  LARGE = 'LARGE',
+  MEDIUM = 'MEDIUM',
+  SMALL = 'SMALL',
+}
+
 export enum PageTurnMode {
   VERTICAL_SCROLL = 'VERTICAL_SCROLL',
   HORIZONTAL_PAGE = 'HORIZONTAL_PAGE',

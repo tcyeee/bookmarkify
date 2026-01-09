@@ -1,4 +1,10 @@
-import type { BackgroundType, BookmarkLayoutMode, BookmarkOpenMode, PageTurnMode } from './enum'
+import type {
+  BackgroundType,
+  BookmarkImageSize,
+  BookmarkLayoutMode,
+  BookmarkOpenMode,
+  PageTurnMode,
+} from './enum'
 import type { UserFile, UserFileVO } from './user'
 
 export interface UserPreferenceVO {
@@ -52,6 +58,7 @@ export interface UserPreference {
   bookmarkOpenMode: BookmarkOpenMode
   minimalMode: boolean
   bookmarkLayout: BookmarkLayoutMode
+  bookmarkImageSize: BookmarkImageSize
   showTitle: boolean
   pageMode: PageTurnMode
   imgBacShow?: BacSettingVO | null

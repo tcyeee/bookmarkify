@@ -79,7 +79,13 @@
 import { ref, watch, computed } from 'vue'
 import { useMagicKeys, onKeyStroke } from '@vueuse/core'
 import { Command } from 'vue-command-palette'
-import { BookmarkLayoutMode, BookmarkOpenMode, PageTurnMode, type UserPreference } from '@typing'
+import {
+  BookmarkImageSize,
+  BookmarkLayoutMode,
+  BookmarkOpenMode,
+  PageTurnMode,
+  type UserPreference,
+} from '@typing'
 import { useAuthStore } from '@stores/auth.store'
 import { usePreferenceStore } from '@stores/preference.store'
 
@@ -105,6 +111,7 @@ function createDefaultPreference(): UserPreference {
     bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
     minimalMode: false,
     bookmarkLayout: BookmarkLayoutMode.DEFAULT,
+    bookmarkImageSize: BookmarkImageSize.MEDIUM,
     showTitle: true,
     pageMode: PageTurnMode.VERTICAL_SCROLL,
     imgBacShow: undefined,
@@ -227,6 +234,16 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
           run: () => toggleLayoutMode(),
         },
         {
+          value: 'pref-logo-size-toggle',
+          label: '书签图片大小',
+          badges: [
+            { label: '大', value: BookmarkImageSize.LARGE, active: pref.bookmarkImageSize === BookmarkImageSize.LARGE },
+            { label: '中', value: BookmarkImageSize.MEDIUM, active: pref.bookmarkImageSize === BookmarkImageSize.MEDIUM },
+            { label: '小', value: BookmarkImageSize.SMALL, active: pref.bookmarkImageSize === BookmarkImageSize.SMALL },
+          ],
+          run: () => toggleLogoSize(),
+        },
+        {
           value: 'pref-page-mode-toggle',
           label: '翻页方式',
           badges: [
@@ -335,6 +352,14 @@ function toggleLayoutMode() {
   applyPreferencePatch({ bookmarkLayout: next })
 }
 
+function toggleLogoSize() {
+  const order = [BookmarkImageSize.LARGE, BookmarkImageSize.MEDIUM, BookmarkImageSize.SMALL]
+  const current = currentPreference.value.bookmarkImageSize
+  const idx = order.indexOf(current)
+  const next = order[(idx + 1) % order.length]
+  applyPreferencePatch({ bookmarkImageSize: next })
+}
+
 function togglePageMode() {
   const next =
     currentPreference.value.pageMode === PageTurnMode.VERTICAL_SCROLL
@@ -351,6 +376,9 @@ function handleBadgeClick(itemValue: string, badgeValue: any) {
       break
     case 'pref-layout-toggle':
       applyPreferencePatch({ bookmarkLayout: badgeValue as BookmarkLayoutMode })
+      break
+    case 'pref-logo-size-toggle':
+      applyPreferencePatch({ bookmarkImageSize: badgeValue as BookmarkImageSize })
       break
     case 'pref-page-mode-toggle':
       applyPreferencePatch({ pageMode: badgeValue as PageTurnMode })

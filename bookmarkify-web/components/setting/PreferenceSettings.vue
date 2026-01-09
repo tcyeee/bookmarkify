@@ -39,6 +39,18 @@
 
         <div class="flex flex-wrap items-start gap-3 py-4">
           <div class="flex-1 space-y-1 min-w-[220px]">
+            <div class="text-sm font-semibold">书签图片大小</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">控制书签 Logo 显示尺寸。</p>
+          </div>
+          <select v-model="preferenceForm.bookmarkImageSize" class="cy-input cy-input-sm w-44">
+            <option :value="BookmarkImageSize.LARGE">大</option>
+            <option :value="BookmarkImageSize.MEDIUM">中（默认）</option>
+            <option :value="BookmarkImageSize.SMALL">小</option>
+          </select>
+        </div>
+
+        <div class="flex flex-wrap items-start gap-3 py-4">
+          <div class="flex-1 space-y-1 min-w-[220px]">
             <div class="text-sm font-semibold">翻页方式</div>
             <p class="text-xs text-slate-500 dark:text-slate-400">垂直滚动或横向翻页。</p>
           </div>
@@ -94,7 +106,13 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { BookmarkLayoutMode, BookmarkOpenMode, PageTurnMode, type UserPreference } from '@typing'
+import {
+  BookmarkImageSize,
+  BookmarkLayoutMode,
+  BookmarkOpenMode,
+  PageTurnMode,
+  type UserPreference,
+} from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
 
 const preferenceStore = usePreferenceStore()
@@ -113,6 +131,7 @@ function createDefaultPreference(): UserPreference {
     bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
     minimalMode: false,
     bookmarkLayout: BookmarkLayoutMode.DEFAULT,
+    bookmarkImageSize: BookmarkImageSize.MEDIUM,
     showTitle: true,
     pageMode: PageTurnMode.VERTICAL_SCROLL,
     imgBacShow: undefined,

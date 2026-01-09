@@ -17,6 +17,7 @@ data class UserPreferenceEntity(
     @field:Schema(description = "书签打开方式") var bookmarkOpenMode: BookmarkOpenMode = BookmarkOpenMode.NEW_TAB,
     @field:Schema(description = "是否开启极简模式") var minimalMode: Boolean = false,
     @field:Schema(description = "书签间距") var bookmarkLayout: BookmarkLayoutMode = BookmarkLayoutMode.DEFAULT,
+    @field:Schema(description = "书签图片大小") var bookmarkImageSize: BookmarkImageSize = BookmarkImageSize.MEDIUM,
     @field:Schema(description = "是否显示标题") var showTitle: Boolean = true,
     @field:Schema(description = "翻页方式") var pageMode: PageTurnMode = PageTurnMode.VERTICAL_SCROLL,
     @field:Schema(description = "用户桌面布局") var nodeSortMapJson: String? = null,  // map结构, key为桌面布局Item-id,value为sort, 数据库(PostgreSQL)对应为json类型
@@ -48,4 +49,5 @@ data class UserPreferenceEntity(
  */
 enum class BookmarkOpenMode { CURRENT_TAB, NEW_TAB }
 enum class BookmarkLayoutMode { COMPACT, DEFAULT, SPACIOUS }
+enum class BookmarkImageSize { LARGE, MEDIUM, SMALL }
 enum class PageTurnMode { VERTICAL_SCROLL, HORIZONTAL_PAGE }
