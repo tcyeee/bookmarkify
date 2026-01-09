@@ -136,7 +136,7 @@ function createDefaultPreference(): UserPreference {
         bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
         minimalMode: false,
         bookmarkLayout: BookmarkLayoutMode.DEFAULT,
-    bookmarkImageSize: BookmarkImageSize.MEDIUM,
+        bookmarkImageSize: BookmarkImageSize.MEDIUM,
         showTitle: true,
         pageMode: PageTurnMode.VERTICAL_SCROLL,
         imgBacShow: undefined,
