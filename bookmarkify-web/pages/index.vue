@@ -13,10 +13,15 @@
           :options="vuuriOptions"
           :drag-enabled="true"
           :get-item-width="getItemWidth"
-          :get-item-height="getItemHeight">
+          :get-item-height="getItemHeight"
+          @input="onGridInput"
+          @drag-start="onDragStart"
+          @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
             <!-- APP_LOGO和APP_标题 -->
-            <div class="flex w-(--cell-size) flex-col items-center border border-gray-300 border-dashed">
+            <div
+              class="flex w-(--cell-size) flex-col items-center border border-gray-300 border-dashed"
+              @click="onItemClick(item)">
               <!-- APP_LOGO -->
               <div
                 class="flex h-(--cell-size) w-(--cell-size) select-none items-center justify-center border-4 border-gray-300 rounded-3xl text-4xl font-bold text-white shadow opacity-80"
@@ -43,7 +48,7 @@
  * - 客户端按需加载，避免 SSR 阶段因缺少 DOM / window 报错。
  * - item 尺寸统一由回调返回，保持与 CSS 变量同步，便于后续统一调节。
  */
-import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 definePageMeta({ layout: 'launch' })
 
@@ -61,6 +66,7 @@ const Vuuri = import.meta.client
   : defineComponent({ name: 'VuuriPlaceholder', setup: () => () => null })
 
 const items = ref<GridItem[]>([])
+const dragState = reactive({ dragging: false, justDropped: false })
 const outerRef = ref<HTMLElement | null>(null)
 const columnCount = ref(1)
 let resizeObserver: ResizeObserver | null = null
@@ -84,6 +90,8 @@ const vuuriOptions = {
   showDuration: 150,
   hideDuration: 150,
   dragReleaseDuration: 0,
+  // 需要轻微移动才开始拖拽，避免单击被当作拖拽而吃掉 click
+  dragStartPredicate: { distance: 8, delay: 0 },
 }
 
 /** 告诉 Vuuri 每个 item 的宽高（含间距），用于正确计算列数与动画 */
@@ -124,6 +132,38 @@ function randomColor() {
   const s = 65 + Math.floor(Math.random() * 20) // 65-84%
   const l = 48 + Math.floor(Math.random() * 12) // 48-59%
   return `hsl(${h} ${s}% ${l}%)`
+}
+
+/** 点击 APP 时输出名称，便于调试 */
+function onItemClick(item: GridItem) {
+  // 拖拽完成瞬间可能触发 click，这里做保护
+  if (dragState.dragging || dragState.justDropped) return
+  console.log(`点击 APP：APP-${item.value}`)
+}
+
+/** Vuuri 拖拽开始与结束，用于避免点击冲突 */
+function onDragStart() {
+  dragState.dragging = true
+  dragState.justDropped = false
+}
+
+function onDragReleaseEnd() {
+  dragState.dragging = false
+  dragState.justDropped = true
+  // 下一帧重置，避免释放瞬间触发点击
+  requestAnimationFrame(() => {
+    dragState.justDropped = false
+  })
+}
+
+/** Vuuri input 事件：排序数据更新 */
+function onGridInput(newItems: GridItem[]) {
+  items.value = newItems
+  // 仅在拖拽产生的排序时打印
+  if (dragState.dragging || dragState.justDropped) {
+    const order = newItems.map((it) => `APP-${it.value}`).join(', ')
+    console.log(`拖拽后的排序：${order}`)
+  }
 }
 </script>
 

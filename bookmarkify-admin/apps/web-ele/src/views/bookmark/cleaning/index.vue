@@ -122,6 +122,9 @@ const [Grid] = useVbenVxeGrid({
     ],
   },
   gridOptions,
+  gridEvents: {
+    cellClick: handleCellClick,
+  },
 } as any);
 </script>
 
@@ -133,7 +136,7 @@ const [Grid] = useVbenVxeGrid({
           <span>书签清理列表</span>
         </div>
       </template>
-      <Grid @cell-click="handleCellClick">
+      <Grid>
         <template #parseStatus="{ row }">
           <ElTag v-if="row.parseStatus === 'SUCCESS'" type="success" size="small">
             成功
