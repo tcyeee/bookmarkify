@@ -19,7 +19,7 @@
           class="border border-gray-300 border-dashed flex-col">
           <!-- APP-LOGO -->
           <div
-            class="text-center flex justify-center items-center border-4 rounded-3xl border-gray-300"
+            class="text-center flex justify-center items-center border-4 rounded-3xl border-gray-300 text-white text-5xl font-semibold shadow opacity-80"
             :style="{
               width: `${boxSize}px`,
               height: `${boxSize}px`,
