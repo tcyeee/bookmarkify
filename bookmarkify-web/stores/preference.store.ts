@@ -19,9 +19,9 @@ import {
 import { getImageUrl, getImageUrlByUserFile } from '@config/image.config'
 
 const BOOKMARK_GAP_MAP: Record<BookmarkGapMode, number> = {
-    [BookmarkGapMode.COMPACT]: 24,
-    [BookmarkGapMode.DEFAULT]: 35,
-    [BookmarkGapMode.SPACIOUS]: 48,
+    [BookmarkGapMode.COMPACT]: 10,
+    [BookmarkGapMode.DEFAULT]: 24,
+    [BookmarkGapMode.SPACIOUS]: 35,
 }
 const BOOKMARK_SIZE_MAP: Record<BookmarkImageSize, number> = {
     [BookmarkImageSize.LARGE]: 140,
