@@ -1,7 +1,7 @@
 <template>
   <div
     class="relative select-none w-screen min-h-screen px-4 sm:px-[7vw] md:px-[10vw] lg:px-[12vw] pt-[10vh] overflow-x-hidden"
-    :style="backgroundStyle">
+    :style="renderBackgroundStyle">
     <div class="w-full min-h-screen">
       <NuxtPage />
     </div>
@@ -9,7 +9,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { BackgroundType, type BacSettingVO } from '@typing'
 import { getImageUrl, getImageUrlByUserFile } from '@config/image.config'
 import { usePreferenceStore } from '@stores/preference.store'
@@ -57,4 +57,16 @@ const backgroundStyle = computed(() => {
     backgroundColor: '#f8fafc',
   }
 })
+
+// 让首屏 SSR 与客户端首帧保持一致，避免 hydration style mismatch
+const hydrated = ref(false)
+onMounted(() => {
+  hydrated.value = true
+})
+
+const renderBackgroundStyle = computed(() =>
+  hydrated.value
+    ? backgroundStyle.value
+    : {backgroundColor: '#f8fafc'}
+)
 </script>
