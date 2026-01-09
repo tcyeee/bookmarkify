@@ -27,7 +27,7 @@
 
         <div class="flex flex-wrap items-start gap-3 py-4">
           <div class="flex-1 space-y-1 min-w-[220px]">
-            <div class="text-sm font-semibold">书签排列方式</div>
+            <div class="text-sm font-semibold">书签间距</div>
             <p class="text-xs text-slate-500 dark:text-slate-400">紧凑、默认或宽松排布。</p>
           </div>
           <select v-model="preferenceForm.bookmarkLayout" class="cy-input cy-input-sm w-44">
