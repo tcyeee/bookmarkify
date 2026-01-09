@@ -24,9 +24,9 @@ const BOOKMARK_GAP_MAP: Record<BookmarkGapMode, number> = {
     [BookmarkGapMode.SPACIOUS]: 35,
 }
 const BOOKMARK_SIZE_MAP: Record<BookmarkImageSize, number> = {
-    [BookmarkImageSize.LARGE]: 140,
-    [BookmarkImageSize.MEDIUM]: 120,
-    [BookmarkImageSize.SMALL]: 100,
+    [BookmarkImageSize.LARGE]: 100,
+    [BookmarkImageSize.MEDIUM]: 80,
+    [BookmarkImageSize.SMALL]: 60,
 }
 
 export const usePreferenceStore = defineStore('preference', {

@@ -7,13 +7,19 @@
     ]"
     :style="isDev ? { '--dev-outline-color': devOutlineColor } : undefined">
     <!-- 内层 Logo：默认白底，必要时覆盖主色与淡白蒙版 -->
-    <div class="h-20 w-20 bg-white flex justify-center items-center" :style="logoStyle">
+    <div class="bg-white flex justify-center items-center" :style="[logoSizeStyle, logoStyle]">
       <!-- 优先使用高清图 -->
       <img v-if="props.value.iconHdUrl && !hdError" :src="props.value.iconHdUrl" alt="" @error="onHdError" />
       <!-- base64 图：可按尺寸放大 -->
-      <img v-else-if="!iconError" :class="base64SizeClass" :src="base64Src" alt="" @error="onIconError" />
+      <img
+        v-else-if="!iconError"
+        :style="base64Style"
+        :src="base64Src"
+        alt=""
+        @error="onIconError"
+      />
       <!-- 最终兜底头像 -->
-      <img v-else class="w-8 h-8" src="/avatar/default.png" alt="" />
+      <img v-else :style="fallbackStyle" src="/avatar/default.png" alt="" />
     </div>
   </div>
 </template>
@@ -22,13 +28,14 @@
 import { computed, ref, watch } from 'vue'
 import type { BookmarkShow } from '@typing'
 
-const props = defineProps<{  value: BookmarkShow}>()
+const props = defineProps<{ value: BookmarkShow; size?: number }>()
 
 // 状态：错误标记、动态背景色、是否放大
 const hdError = ref(false)
 const iconError = ref(false)
 const backgroundColor = ref('#ffffff')
 const shouldUpscale = ref(false)
+const logoSize = computed(() => props.size ?? 80)
 
 // 开发环境标记
 const isDev = computed(() => isLocalhostOrIP(props.value.urlFull))
@@ -38,6 +45,10 @@ const shouldUseBase64 = computed(
 )
 const devOutlineColor = computed(() => backgroundColor.value || '#ffffff')
 // base64 时叠加主色与淡白蒙版
+const logoSizeStyle = computed(() => ({
+  width: `${logoSize.value}px`,
+  height: `${logoSize.value}px`,
+}))
 const logoStyle = computed(() =>
   shouldUseBase64.value
     ? {
@@ -46,8 +57,18 @@ const logoStyle = computed(() =>
       }
     : undefined,
 )
-// base64 尺寸：ico 大于等于 64px 时放大
-const base64SizeClass = computed(() => (shouldUpscale.value ? 'w-12 h-12' : 'w-8 h-8'))
+// base64 尺寸：随外部 size 同步，保持原有比例
+const base64PixelSize = computed(() =>
+  Math.round(logoSize.value * (shouldUpscale.value ? 0.6 : 0.4)),
+)
+const base64Style = computed(() => ({
+  width: `${base64PixelSize.value}px`,
+  height: `${base64PixelSize.value}px`,
+}))
+const fallbackStyle = computed(() => ({
+  width: `${Math.round(logoSize.value * 0.4)}px`,
+  height: `${Math.round(logoSize.value * 0.4)}px`,
+}))
 const base64Src = computed(() => buildBase64DataUrl(props.value.iconBase64))
 
 function onHdError() {
