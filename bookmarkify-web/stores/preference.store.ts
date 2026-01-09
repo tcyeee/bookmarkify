@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import {
     BackgroundType,
     BookmarkImageSize,
-    BookmarkLayoutMode,
+    BookmarkGapMode,
     BookmarkOpenMode,
     PageTurnMode,
     type BacGradientVO,
@@ -135,7 +135,7 @@ function createDefaultPreference(): UserPreference {
     return {
         bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
         minimalMode: false,
-        bookmarkLayout: BookmarkLayoutMode.DEFAULT,
+        bookmarkGap: BookmarkGapMode.DEFAULT,
         bookmarkImageSize: BookmarkImageSize.MEDIUM,
         showTitle: true,
         pageMode: PageTurnMode.VERTICAL_SCROLL,

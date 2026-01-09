@@ -81,7 +81,7 @@ import { useMagicKeys, onKeyStroke } from '@vueuse/core'
 import { Command } from 'vue-command-palette'
 import {
   BookmarkImageSize,
-  BookmarkLayoutMode,
+  BookmarkGapMode,
   BookmarkOpenMode,
   PageTurnMode,
   type UserPreference,
@@ -110,7 +110,7 @@ function createDefaultPreference(): UserPreference {
   return {
     bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
     minimalMode: false,
-    bookmarkLayout: BookmarkLayoutMode.DEFAULT,
+    bookmarkGap: BookmarkGapMode.DEFAULT,
     bookmarkImageSize: BookmarkImageSize.MEDIUM,
     showTitle: true,
     pageMode: PageTurnMode.VERTICAL_SCROLL,
@@ -227,9 +227,9 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
           value: 'pref-layout-toggle',
           label: '书签间距',
           badges: [
-            { label: '紧凑', value: BookmarkLayoutMode.COMPACT, active: pref.bookmarkLayout === BookmarkLayoutMode.COMPACT },
-            { label: '默认', value: BookmarkLayoutMode.DEFAULT, active: pref.bookmarkLayout === BookmarkLayoutMode.DEFAULT },
-            { label: '宽松', value: BookmarkLayoutMode.SPACIOUS, active: pref.bookmarkLayout === BookmarkLayoutMode.SPACIOUS },
+            { label: '紧凑', value: BookmarkGapMode.COMPACT, active: pref.bookmarkGap === BookmarkGapMode.COMPACT },
+            { label: '默认', value: BookmarkGapMode.DEFAULT, active: pref.bookmarkGap === BookmarkGapMode.DEFAULT },
+            { label: '宽松', value: BookmarkGapMode.SPACIOUS, active: pref.bookmarkGap === BookmarkGapMode.SPACIOUS },
           ],
           run: () => toggleLayoutMode(),
         },
@@ -345,11 +345,11 @@ function toggleOpenMode() {
 }
 
 function toggleLayoutMode() {
-  const order = [BookmarkLayoutMode.COMPACT, BookmarkLayoutMode.DEFAULT, BookmarkLayoutMode.SPACIOUS]
-  const current = currentPreference.value.bookmarkLayout
+  const order = [BookmarkGapMode.COMPACT, BookmarkGapMode.DEFAULT, BookmarkGapMode.SPACIOUS]
+  const current = currentPreference.value.bookmarkGap
   const idx = order.indexOf(current)
   const next = order[(idx + 1) % order.length]
-  applyPreferencePatch({ bookmarkLayout: next })
+  applyPreferencePatch({ bookmarkGap: next })
 }
 
 function toggleLogoSize() {
@@ -375,7 +375,7 @@ function handleBadgeClick(itemValue: string, badgeValue: any) {
       applyPreferencePatch({ bookmarkOpenMode: badgeValue as BookmarkOpenMode })
       break
     case 'pref-layout-toggle':
-      applyPreferencePatch({ bookmarkLayout: badgeValue as BookmarkLayoutMode })
+      applyPreferencePatch({ bookmarkGap: badgeValue as BookmarkGapMode })
       break
     case 'pref-logo-size-toggle':
       applyPreferencePatch({ bookmarkImageSize: badgeValue as BookmarkImageSize })

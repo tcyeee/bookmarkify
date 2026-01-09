@@ -1,4 +1,5 @@
 <template>
+  {{ preferenceStore.preference }}
 <!-- 完整APP列表 -->
 <div ref="outerRef" class="flex w-full justify-center">
   <!-- APP列表容器：min-width 保证不被外层挤压 -->

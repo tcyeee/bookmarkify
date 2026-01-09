@@ -30,10 +30,10 @@
             <div class="text-sm font-semibold">书签间距</div>
             <p class="text-xs text-slate-500 dark:text-slate-400">紧凑、默认或宽松排布。</p>
           </div>
-          <select v-model="preferenceForm.bookmarkLayout" class="cy-input cy-input-sm w-44">
-            <option :value="BookmarkLayoutMode.COMPACT">紧凑</option>
-            <option :value="BookmarkLayoutMode.DEFAULT">默认</option>
-            <option :value="BookmarkLayoutMode.SPACIOUS">宽松</option>
+          <select v-model="preferenceForm.bookmarkGap" class="cy-input cy-input-sm w-44">
+            <option :value="BookmarkGapMode.COMPACT">紧凑</option>
+            <option :value="BookmarkGapMode.DEFAULT">默认</option>
+            <option :value="BookmarkGapMode.SPACIOUS">宽松</option>
           </select>
         </div>
 
@@ -108,7 +108,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   BookmarkImageSize,
-  BookmarkLayoutMode,
+  BookmarkGapMode,
   BookmarkOpenMode,
   PageTurnMode,
   type UserPreference,
@@ -130,7 +130,7 @@ function createDefaultPreference(): UserPreference {
   return {
     bookmarkOpenMode: BookmarkOpenMode.CURRENT_TAB,
     minimalMode: false,
-    bookmarkLayout: BookmarkLayoutMode.DEFAULT,
+    bookmarkGap: BookmarkGapMode.DEFAULT,
     bookmarkImageSize: BookmarkImageSize.MEDIUM,
     showTitle: true,
     pageMode: PageTurnMode.VERTICAL_SCROLL,

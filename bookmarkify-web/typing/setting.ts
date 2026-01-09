@@ -1,7 +1,7 @@
 import type {
   BackgroundType,
   BookmarkImageSize,
-  BookmarkLayoutMode,
+  BookmarkGapMode,
   BookmarkOpenMode,
   PageTurnMode,
 } from './enum'
@@ -57,7 +57,7 @@ export interface UserInfo {
 export interface UserPreference {
   bookmarkOpenMode: BookmarkOpenMode
   minimalMode: boolean
-  bookmarkLayout: BookmarkLayoutMode
+  bookmarkGap: BookmarkGapMode
   bookmarkImageSize: BookmarkImageSize
   showTitle: boolean
   pageMode: PageTurnMode
