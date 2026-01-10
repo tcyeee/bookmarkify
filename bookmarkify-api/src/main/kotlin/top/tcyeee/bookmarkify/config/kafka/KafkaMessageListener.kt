@@ -32,6 +32,7 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
         when (obj.getStr("action")) {
             KafkaMethodsEnums.PARSE_NOTICE_EXISTING.name -> handleExisting(obj)
             KafkaMethodsEnums.PARSE_NOTICE_NEW.name -> handleNew(obj)
+            KafkaMethodsEnums.BOOKMARK_PARSE_AND_RESET_USER_ITEM.name -> bookmarkParseAndResetUserItem(obj)
             else -> throw CommonException(ErrorType.E231)
         }
     }
@@ -49,5 +50,11 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
         val bookmark = obj.getJSONObject("bookmark").toBean(BookmarkEntity::class.java)
         val parentNodeId = obj.getStr("parentNodeId")
         bookmarkService.bookmarkParseAndNotice(uid, bookmark, parentNodeId)
+    }
+
+    private fun bookmarkParseAndResetUserItem(obj: JSONObject) {
+        val uid = obj.getStr("uid")
+        val rawUrl = obj.getStr("rawUrl")
+        bookmarkService.bookmarkParseAndResetUserItem(uid, rawUrl)
     }
 }

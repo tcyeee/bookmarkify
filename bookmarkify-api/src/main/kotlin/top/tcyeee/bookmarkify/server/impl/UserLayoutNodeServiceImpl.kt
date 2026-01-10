@@ -43,15 +43,11 @@ class UserLayoutNodeServiceImpl(
             .let { nodeStructure(it) }
     }
 
-    override fun batchInsertBookmarkFolder(structures: List<SystemBookmarkStructure>, uid: String) =
-        structures.forEach { insertBookmarkFolder(it, uid) }
-
     override fun insertBookmarkFolder(structures: SystemBookmarkStructure, uid: String) {
         val dir: UserLayoutNodeEntity? =
             if (structures.isRoot) null else structures.initFolder(uid).also { layoutNodeMapper.insert(it) }
         structures.bookmarks.forEach { kafkaMessageService.bookmarkParseAndNotice(uid, BookmarkEntity(it), dir?.id) }
     }
-
 
     private fun findByUid(uid: String): List<UserLayoutNodeEntity> =
         ktQuery().eq(UserLayoutNodeEntity::uid, uid).list() ?: emptyList()

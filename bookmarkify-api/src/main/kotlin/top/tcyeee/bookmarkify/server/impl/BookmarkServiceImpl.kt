@@ -18,6 +18,7 @@ import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
 import top.tcyeee.bookmarkify.mapper.WebsiteLogoMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.utils.ChromeBookmarkParser
@@ -41,6 +42,7 @@ class BookmarkServiceImpl(
     private val layoutNodeService: IUserLayoutNodeService,
     private val layoutNodeMapper: UserLayoutNodeMapper,
     private val websiteLogoMapper: WebsiteLogoMapper,
+    private val bookmarkUserLinkService: IBookmarkUserLinkService,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
 
     // 获取配置信息
@@ -70,8 +72,20 @@ class BookmarkServiceImpl(
     override fun importBookmarkFile(file: MultipartFile, uid: String): UserLayoutNodeVO {
         // 1. 解析上传文件，获取扁平化后的书签结构
         val structures: List<SystemBookmarkStructure> = ChromeBookmarkParser.trim(file)
-        // 2. 将解析结果落库，同时提交解析任务
-        layoutNodeService.batchInsertBookmarkFolder(structures, uid)
+        // 2.保存所有的文件夹,同时保存ID
+        structures.map { item -> UserLayoutNodeEntity(uid = uid, name = item.folderName).also { item.nodeId = it.id } }
+            .also { nodeMapper.insert(it) }
+        // 3.初始化全部的用户布局item和自定义标签,同时保存
+        // 因为这里用户的自定义书签是已知的,但是不确定源书签不会在数据库中存在,所以先存储用户的自定义书签,关联书签ID设置为LOADING,
+        // 然后对每个源书签单独检查,每检查完一个源书签,就根据源书签host,去找到用户书签的host,将书签ID补上.
+        structures.flatMap { node -> node.bookmarks.map { it.pair(uid) } }
+            .also { data -> layoutNodeMapper.insert(data.map { it.first }) }
+            .also { data -> bookmarkUserLinkMapper.insert(data.map { it.second }) }
+
+        // 4.数据清洗,只保留raw-url, 解析为源书签,解析以后,重新绑定用户自定义书签
+        structures.flatMap { it.bookmarks }.map { it.url }
+            .forEach { url -> kafkaMessageService.bookmarkParseAndResetUserItem(uid, url) }
+
         // 重新获取书签数据
         return layoutNodeService.layout(uid)
     }
@@ -120,6 +134,12 @@ class BookmarkServiceImpl(
         // 通知到前端
         UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
     }
+
+    override fun bookmarkParseAndResetUserItem(uid: String, rawUrl: String) =
+        WebsiteParser.urlWrapper(rawUrl)
+            .let { BookmarkEntity(it) }
+            .also { this.parseBookmarkAndSave(it) }
+            .also { bookmarkUserLinkService.resetBookmarkId(uid, it.urlHost, it.id) }.run {}
 
     /**
      * 解析书签,保存书签到根节点,并通知到用户

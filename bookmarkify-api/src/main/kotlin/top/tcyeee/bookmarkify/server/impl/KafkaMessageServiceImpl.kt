@@ -16,6 +16,10 @@ class KafkaMessageServiceImpl(
     private val kafkaTemplate: KafkaTemplate<String, String>,
 ) : IKafkaMessageService {
     private val log = LoggerFactory.getLogger(javaClass)
+    override fun bookmarkParseAndResetUserItem(uid: String, rawUrl: String) = JSONUtil.createObj()
+        .set("action", KafkaMethodsEnums.BOOKMARK_PARSE_AND_RESET_USER_ITEM.name)
+        .set("uid", uid).set("rawUrl", rawUrl).toString()
+        .let { this.send(it) }
 
     override fun bookmarkParse(bookmark: BookmarkEntity) = send(bookmark.json)
 
@@ -26,9 +30,11 @@ class KafkaMessageServiceImpl(
         .let { this.send(it) }
 
     override fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, parentNodeId: String?) =
-        JSONUtil.createObj().set("action", KafkaMethodsEnums.PARSE_NOTICE_NEW.name).set("uid", uid)
+        JSONUtil.createObj().set("action", KafkaMethodsEnums.PARSE_NOTICE_NEW.name)
+            .set("uid", uid)
             .set("bookmark", bookmark)
-            .set("parentNodeId", parentNodeId).toString().let { this.send(it) }
+            .set("parentNodeId", parentNodeId).toString()
+            .let { this.send(it) }
 
     private fun send(message: String?) {
         val type = KafkaTopicEnums.BOOKMARK_PRASE

@@ -12,4 +12,5 @@ interface IBookmarkUserLinkService : IService<BookmarkUserLink> {
     fun updateOne(params: BookmarkUpdatePrams): Boolean
     fun copy(sourceUid: String, targetUid: String)
     fun deleteOne(id: String): Boolean
+    fun resetBookmarkId(uid: String, urlHost: String, bookmarkId: String): Boolean
 }

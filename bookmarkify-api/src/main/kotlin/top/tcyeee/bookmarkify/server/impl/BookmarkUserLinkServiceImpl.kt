@@ -31,4 +31,11 @@ class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<Bookma
 
     override fun deleteOne(id: String): Boolean =
         ktUpdate().eq(BookmarkUserLink::id, id).set(BookmarkUserLink::deleted, true).update()
+
+    override fun resetBookmarkId(uid: String, urlHost: String, bookmarkId: String):Boolean =
+        ktUpdate()
+            .eq(BookmarkUserLink::uid, uid)
+            .like(BookmarkUserLink::urlFull, urlHost)
+            .set(BookmarkUserLink::bookmarkId, bookmarkId)
+            .update()
 }

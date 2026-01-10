@@ -22,8 +22,5 @@ interface IUserLayoutNodeService : IService<UserLayoutNodeEntity> {
 
     // 添加单条书签文件夹(节点),如果为ROOT,则处于根节点
     fun insertBookmarkFolder(structures: SystemBookmarkStructure, uid: String)
-
-    // 批量添加书签文件夹,如果为ROOT,则处于根节点
-    fun batchInsertBookmarkFolder(structures: List<SystemBookmarkStructure>, uid: String)
 }
 

@@ -8,11 +8,10 @@ import com.baomidou.mybatisplus.annotation.TableName
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Max
-import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
-import top.tcyeee.bookmarkify.utils.ChromeBookmarkRowData
+import top.tcyeee.bookmarkify.utils.ChromeBookmarkRawData
 import top.tcyeee.bookmarkify.utils.FileUtils
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 import java.io.Serializable
@@ -64,7 +63,7 @@ data class BookmarkEntity(
         urlPath = url.urlPath,
     )
 
-    constructor(chromeRowDate: ChromeBookmarkRowData) : this(
+    constructor(chromeRowDate: ChromeBookmarkRawData) : this(
         id = IdUtil.fastUUID(),
         title = chromeRowDate.title,
         urlHost = "",
@@ -97,9 +96,9 @@ data class BookmarkEntity(
 data class BookmarkUserLink(
     @TableId val id: String = IdUtil.fastUUID(),
     @field:Max(40) @field:Schema(description = "用户ID") var uid: String,
-    @field:Max(40) @field:Schema(description = "书签ID") val bookmarkId: String,
-    @field:Max(200) @field:Schema(description = "书签标题(用户写的)") val title: String?,
-    @field:Max(1000) @field:Schema(description = "书签备注(用户写的)") val description: String?,
+    @field:Max(40) @field:Schema(description = "书签ID") val bookmarkId: String?,  // 书签ID可能为null,在用户批量添加的时候,只会添加用户自定义书签,而不会关联到源书签
+    @field:Max(200) @field:Schema(description = "书签标题(用户写的)") val title: String? = null,
+    @field:Max(1000) @field:Schema(description = "书签备注(用户写的)") val description: String? = null,
     @field:Max(1000) @field:Schema(description = "书签完整URL(带参数)") val urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
     @field:Max(200) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
 
@@ -121,6 +120,18 @@ data class BookmarkUserLink(
         title = bookmark.title,
         description = bookmark.description,
         urlFull = bookmark.rawUrl,
+        layoutNodeId = nodeId,
+    )
+
+    /**
+     *  在批量添加自定义书签的时候,用户的自定义书签是确定的,可以批量添加,但是不确定源书签不会在数据库中存在,所以先存储用户的自定义书签,关联书签ID设置为LOADING,
+     *  后续对每个源书签单独检查,每检查完一个源书签,就根据源书签host,去找到用户书签的host,将书签ID补上.
+     */
+    constructor(uid: String, nodeId: String, raw: ChromeBookmarkRawData) : this(
+        uid = uid,
+        bookmarkId = "LOADING",
+        title = raw.title,
+        urlFull = raw.url,
         layoutNodeId = nodeId,
     )
 }
