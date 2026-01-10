@@ -12,8 +12,6 @@ enum class KafkaTopicEnums {
 }
 
 enum class KafkaMethodsEnums {
-    /* 已存在关联的解析并通知 */
     PARSE_NOTICE_EXISTING,
-    /* 新建布局与关联的解析并通知 */
     PARSE_NOTICE_NEW,
 }
