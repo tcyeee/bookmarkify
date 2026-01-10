@@ -14,6 +14,7 @@ data class UserPreferenceUpdateParams(
     @field:Schema(description = "书签间距") var bookmarkGap: BookmarkGapMode = BookmarkGapMode.DEFAULT,
     @field:Schema(description = "书签图片大小") var bookmarkImageSize: BookmarkImageSize = BookmarkImageSize.MEDIUM,
     @field:Schema(description = "是否显示标题") var showTitle: Boolean = true,
+    @field:Schema(description = "是否显示桌面增加入口") var showDesktopAddEntry: Boolean = true,
     @field:Schema(description = "翻页方式") var pageMode: PageTurnMode = PageTurnMode.VERTICAL_SCROLL,
 )
 
