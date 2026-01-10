@@ -31,16 +31,7 @@ interface IBookmarkService : IService<BookmarkEntity> {
     fun search(name: String): List<BookmarkEntity>
     fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO
     fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow>
-    fun importBookmarkFile(file: MultipartFile, uid: String): List<HomeItemShow>?
-    fun adminUpdateOne(
-        id: String,
-        appName: String? = null,
-        title: String? = null,
-        description: String? = null,
-        iconBase64: String? = null,
-        isActivity: Boolean? = null,
-        maximalLogoSize: Int? = null
-    ): Boolean
+    fun importBookmarkFile(file: MultipartFile, uid: String): UserLayoutNodeVO
 
     fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO>
 }

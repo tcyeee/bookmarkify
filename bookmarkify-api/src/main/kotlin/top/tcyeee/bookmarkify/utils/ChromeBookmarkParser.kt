@@ -2,10 +2,13 @@ package top.tcyeee.bookmarkify.utils
 
 import cn.hutool.core.util.StrUtil
 import cn.hutool.http.HtmlUtil
+import com.fasterxml.jackson.annotation.JsonIgnore
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.log
+import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
+import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.LocalDateTime
@@ -29,7 +32,13 @@ data class ChromeBookmarkStructure(
 data class SystemBookmarkStructure(
     val folderName: String,
     val bookmarks: List<ChromeBookmarkRowData>,
-)
+
+    @JsonIgnore val nodeId: String? = null, // nodeID,仅用临时记录
+) {
+    val isRoot: Boolean get() = folderName == "ROOT"
+
+    fun initFolder(uid: String) = UserLayoutNodeEntity(type = NodeTypeEnum.BOOKMARK_DIR, uid = uid, name = folderName)
+}
 
 /**
  * Chrome 书签解析工具

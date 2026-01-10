@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server
 import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
+import top.tcyeee.bookmarkify.utils.SystemBookmarkStructure
 
 /**
  * 用户桌面排布节点
@@ -19,24 +20,10 @@ interface IUserLayoutNodeService : IService<UserLayoutNodeEntity> {
      */
     fun layout(uid: String): UserLayoutNodeVO
 
-    /* 用户桌面布局配置 */
-    // TODO 用户更新桌面布局配置
-    // TODO 拿到用户的全部桌面布局配置数据库
+    // 添加单条书签文件夹(节点),如果为ROOT,则处于根节点
+    fun insertBookmarkFolder(structures: SystemBookmarkStructure, uid: String)
 
-    // TODO 拿到用户全部的桌面布局
-//    fun getUserLayout(uid: String): List<UserLayoutNodeVO>
-
-    // TODO 根据用户上传的URL生成占位符
-//    fun createPlaceholderFromUrl(uid: String, rawUrl: String): UserLayoutNodeVO
-
-    // TODO 处理用户导入的Chrome书签文档批量生成占位符,返回全部的用户桌面布局
-//    fun batchCreatePlaceholdersFromChrome(uid: String, bookmarkFile: InputStream): List<UserLayoutNodeVO>
-
-    // TODO 用户通过拖动叠加两个书签LOGO创建新的文件夹结构(未命名),返回用户的全部桌面布局
-//    fun createFolder(uid: String, bookmarkIds: List<String>): UserLayoutNodeEntity
-
-    // TODO 用户删除一个文件夹结构
-//    fun deleteFolder(uid: String, folderNodeId: Long): Boolean
-
+    // 批量添加书签文件夹,如果为ROOT,则处于根节点
+    fun batchInsertBookmarkFolder(structures: List<SystemBookmarkStructure>, uid: String)
 }
 
