@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server.impl
 
+import cn.hutool.json.JSONUtil
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
@@ -31,14 +32,13 @@ class KafkaMessageServiceImpl(
 ) : IKafkaMessageService {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    override fun bookmarkParse(bookmark: BookmarkEntity) {
-        val type = KafkaTopicType.BOOKMARK_PRASE
-        kafkaTemplate.send(type.name, bookmark.json).whenComplete { res, err ->
-            if (err != null) throw CommonException(ErrorType.E229, "type:${type.name},error:${err.message}")
-            val metadata = res.recordMetadata
-            log.info("[Kafka] send topic=${metadata.topic()} partition=${metadata.partition()} offset=${metadata.offset()}")
-        }
-    }
+    override fun bookmarkParse(bookmark: BookmarkEntity) = send(bookmark.json)
+
+    override fun bookmarkParse(uid: String, bookmark: BookmarkEntity) = JSONUtil.createObj()
+        .set("uid", uid)
+        .set("bookmark", bookmark)
+        .toString()
+        .let { this.send(it) }
 
     override fun bookmarkParseAndNotice(
         uid: String,
@@ -50,7 +50,6 @@ class KafkaMessageServiceImpl(
         this.findBookmarkAndNotice(userLinkId, nodeLayoutId, uid)
     }
 
-
     override fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, parentNodeId: String?) {
         // 保存书签信息
         this.parseBookmarkAndSave(bookmark)
@@ -61,9 +60,6 @@ class KafkaMessageServiceImpl(
         // 保存用户与书签的关联
         this.findBookmarkAndNotice(userLinkEntity.id, layoutEntity.id, uid)
     }
-
-    private fun parseBookmarkAndSave(rawUrl: String): BookmarkEntity =
-        WebsiteParser.urlWrapper(rawUrl).let { BookmarkEntity(it) }.also { parseBookmarkAndSave(it) }
 
     /**
      * 1.解析书签
@@ -117,6 +113,15 @@ class KafkaMessageServiceImpl(
         this.isActivity = true
         this.updateTime = LocalDateTime.now()
         bookmarkMapper.insertOrUpdate(this)
+    }
+
+    private fun send(message: String?) {
+        val type = KafkaTopicType.BOOKMARK_PRASE
+        kafkaTemplate.send(type.name, message).whenComplete { res, err ->
+            if (err != null) throw CommonException(ErrorType.E229, "type:${type.name},error:${err.message}")
+            val metadata = res.recordMetadata
+            log.info("[Kafka] send topic=${metadata.topic()} partition=${metadata.partition()} offset=${metadata.offset()}")
+        }
     }
 }
 
