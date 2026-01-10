@@ -8,7 +8,6 @@ interface IKafkaMessageService {
      * @param bookmark bookmark
      */
     fun bookmarkParse(bookmark: BookmarkEntity)
-    fun bookmarkParse(uid: String, bookmark: BookmarkEntity)
 
     /**
      * 解析书签,保存书签到根节点,并通知到用户
