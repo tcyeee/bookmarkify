@@ -7,6 +7,8 @@ import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.log
+import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
+import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import java.nio.charset.StandardCharsets
@@ -15,25 +17,28 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.ArrayDeque
 
-data class ChromeBookmarkRowData(
+data class ChromeBookmarkRawData(
     val title: String,
     val url: String,
     val createTime: LocalDateTime?,
     val iconBase64: String?,
     val paths: String,
-)
+){
+    fun pair(uid: String): Pair<UserLayoutNodeEntity, BookmarkUserLink> =
+        UserLayoutNodeEntity(uid = uid).let { Pair(it, BookmarkUserLink(uid, it.id, this)) }
+}
 
 data class ChromeBookmarkStructure(
     val folderName: String,
-    val bookmarks: List<ChromeBookmarkRowData>,
+    val bookmarks: List<ChromeBookmarkRawData>,
     val childFolder: List<ChromeBookmarkStructure>,
 )
 
 data class SystemBookmarkStructure(
     val folderName: String,
-    val bookmarks: List<ChromeBookmarkRowData>,
+    val bookmarks: List<ChromeBookmarkRawData>,
 
-    @JsonIgnore val nodeId: String? = null, // nodeID,仅用临时记录
+    @JsonIgnore var nodeId: String? = null, // nodeID,仅用临时记录
 ) {
     val isRoot: Boolean get() = folderName == "ROOT"
 
@@ -140,7 +145,7 @@ object ChromeBookmarkParser {
 
     fun parseContent(content: String): ChromeBookmarkStructure {
         val pathStack = ArrayDeque<String>()
-        val result = mutableListOf<ChromeBookmarkRowData>()
+        val result = mutableListOf<ChromeBookmarkRawData>()
 
         content.lineSequence().forEach { rawLine ->
             val line = rawLine.trim()
@@ -171,7 +176,7 @@ object ChromeBookmarkParser {
     }.getOrNull()
 
     /** 解析单个书签节点 */
-    private fun parseBookmark(line: String, pathStack: ArrayDeque<String>): ChromeBookmarkRowData? = runCatching {
+    private fun parseBookmark(line: String, pathStack: ArrayDeque<String>): ChromeBookmarkRawData? = runCatching {
         val attributes = extractAttributes(line)
         val title = extractTitle(line) ?: return null
         val url = attributes["HREF"] ?: return null
@@ -181,7 +186,7 @@ object ChromeBookmarkParser {
         }
         val iconBase64 = normalizeIcon(attributes["ICON"] ?: attributes["ICON_URI"])
 
-        ChromeBookmarkRowData(
+        ChromeBookmarkRawData(
             title = title,
             url = url,
             createTime = createTime,
@@ -210,10 +215,10 @@ object ChromeBookmarkParser {
     /**
      * 根据平铺的行数据构建目录树.
      */
-    private fun buildTree(rows: List<ChromeBookmarkRowData>): ChromeBookmarkStructure {
+    private fun buildTree(rows: List<ChromeBookmarkRawData>): ChromeBookmarkStructure {
         data class Node(
             val name: String,
-            val bookmarks: MutableList<ChromeBookmarkRowData> = mutableListOf(),
+            val bookmarks: MutableList<ChromeBookmarkRawData> = mutableListOf(),
             val children: MutableMap<String, Node> = mutableMapOf(),
         )
 
