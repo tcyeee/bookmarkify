@@ -5,7 +5,7 @@
     <div class="w-full">
       <NuxtPage />
     </div>
-    <CommonAddBookmarkFab />
+    <CommonAddBookmarkFab v-if="showDesktopAddEntry" />
   </div>
 </template>
 
@@ -17,6 +17,7 @@ import { usePreferenceStore } from '@stores/preference.store'
 
 const preferenceStore = usePreferenceStore()
 const backgroundSetting = computed<BacSettingVO | null>(() => preferenceStore.preference?.imgBacShow ?? null)
+const showDesktopAddEntry = computed<boolean>(() => preferenceStore.preference?.showDesktopAddEntry ?? true)
 
 const backgroundUrl = computed(() => {
   const cfg = backgroundSetting.value
