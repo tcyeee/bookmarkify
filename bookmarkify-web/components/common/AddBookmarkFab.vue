@@ -1,12 +1,12 @@
 <template>
   <button
     type="button"
-    class="cy-button fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg transition hover:shadow-xl active:scale-95"
+    class="cy-button fixed bottom-6 right-6 z-50 flex h-20 w-20 items-center justify-center rounded-full bg-primary text-white shadow-lg transition hover:shadow-xl active:scale-95"
     aria-label="添加书签"
     @click="handleClick">
-    <span class="relative flex h-6 w-6 items-center justify-center">
-      <span class="icon--memory-gamepad icon-size-24 icon-default" aria-hidden="true" />
-      <span class="icon--memory-gamepad-fill icon-size-24 icon-active" aria-hidden="true" />
+    <span class="relative flex items-center justify-center">
+      <span class="icon--memory-gamepad icon-size-35 icon-default" aria-hidden="true" />
+      <span class="icon--memory-gamepad-fill icon-size-35 icon-active" aria-hidden="true" />
     </span>
   </button>
 </template>
