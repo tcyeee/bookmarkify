@@ -12,7 +12,9 @@ import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
+import top.tcyeee.bookmarkify.utils.ChromeBookmarkRowData
 import top.tcyeee.bookmarkify.utils.FileUtils
+import top.tcyeee.bookmarkify.utils.WebsiteParser
 import java.io.Serializable
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
@@ -61,6 +63,18 @@ data class BookmarkEntity(
         urlScheme = url.urlScheme,
         urlPath = url.urlPath,
     )
+
+    constructor(chromeRowDate: ChromeBookmarkRowData) : this(
+        id = IdUtil.fastUUID(),
+        title = chromeRowDate.title,
+        urlHost = "",
+        urlScheme = "",
+    ) {
+        val bookmarkUrl: BookmarkUrlWrapper = WebsiteParser.urlWrapper(chromeRowDate.url)
+        urlHost = bookmarkUrl.urlHost
+        urlScheme = bookmarkUrl.urlScheme
+        urlPath = bookmarkUrl.urlPath
+    }
 
     fun initBaseInfo(wrapper: BookmarkWrapper) {
         this.appName = wrapper.name  // TODO 使用AI将title中的信息简化

@@ -3,13 +3,15 @@ package top.tcyeee.bookmarkify.server.impl
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
-import top.tcyeee.bookmarkify.entity.entity.HomeItem
+import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
+import top.tcyeee.bookmarkify.server.IKafkaMessageService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
+import top.tcyeee.bookmarkify.utils.SystemBookmarkStructure
 
 /**
  * 用户桌面排布节点 Service 实现
@@ -21,6 +23,8 @@ import top.tcyeee.bookmarkify.server.IUserPreferenceService
 class UserLayoutNodeServiceImpl(
     private val preferenceService: IUserPreferenceService,
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
+    private val kafkaMessageService: IKafkaMessageService,
+    private val layoutNodeMapper: UserLayoutNodeMapper
 ) : IUserLayoutNodeService, ServiceImpl<UserLayoutNodeMapper, UserLayoutNodeEntity>() {
 
     companion object {
@@ -35,8 +39,17 @@ class UserLayoutNodeServiceImpl(
         val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
         // 查询到用户布局信息
         return this.findByUid(uid)
-            .map { it.vo( sortMap[it.id], bookmarkMap[it.id]) }
+            .map { it.vo(sortMap[it.id], bookmarkMap[it.id]) }
             .let { nodeStructure(it) }
+    }
+
+    override fun batchInsertBookmarkFolder(structures: List<SystemBookmarkStructure>, uid: String) =
+        structures.forEach { insertBookmarkFolder(it, uid) }
+
+    override fun insertBookmarkFolder(structures: SystemBookmarkStructure, uid: String) {
+        val dir: UserLayoutNodeEntity? =
+            if (structures.isRoot) null else structures.initFolder(uid).also { layoutNodeMapper.insert(it) }
+        structures.bookmarks.forEach { kafkaMessageService.bookmarkParseAndNotice(uid, BookmarkEntity(it), dir?.id) }
     }
 
 

@@ -46,7 +46,7 @@ class BookmarksController(
 
     @PostMapping("/upload")
     @Operation(summary = "书签上传")
-    fun upload(@RequestParam file: MultipartFile): List<HomeItemShow>? =
+    fun upload(@RequestParam file: MultipartFile): UserLayoutNodeVO =
         bookmarkService.importBookmarkFile(file, BaseUtils.uid())
 
     /**
