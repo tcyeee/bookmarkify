@@ -48,6 +48,8 @@ enum class ErrorType(var msg: String) {
     E228("批量导入Chrome书签时,清洗数据报错"),
     E229("Kafka消息发送失败"),
     E230("在解析书签的时候,检测到对应网站存在反爬虫设置"),
+    E231("没有被定义的Kafka消息类型"),
+    E232("Kafka消息解析失败"),
 
 
 
