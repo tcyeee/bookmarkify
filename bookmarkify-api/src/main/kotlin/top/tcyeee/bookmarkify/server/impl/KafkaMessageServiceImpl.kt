@@ -50,8 +50,6 @@ class KafkaMessageServiceImpl(
         this.findBookmarkAndNotice(userLinkId, nodeLayoutId, uid)
     }
 
-    override fun bookmarkParseAndNotice(uid: String, rawUrl: String) =
-        this.parseBookmarkAndSave(rawUrl).let { this.bookmarkParseAndNotice(uid, it, null) }
 
     override fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, parentNodeId: String?) {
         // 保存书签信息
