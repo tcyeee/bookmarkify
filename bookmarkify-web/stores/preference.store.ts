@@ -160,6 +160,7 @@ function createDefaultPreference(): UserPreference {
         bookmarkGap: BookmarkGapMode.DEFAULT,
         bookmarkImageSize: BookmarkImageSize.MEDIUM,
         showTitle: true,
+        showDesktopAddEntry: true,
         pageMode: PageTurnMode.VERTICAL_SCROLL,
         imgBacShow: undefined,
     }

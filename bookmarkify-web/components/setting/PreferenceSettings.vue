@@ -91,6 +91,22 @@
               :class="preferenceForm.showTitle ? 'translate-x-5' : 'translate-x-1'" />
           </button>
         </div>
+
+        <div class="flex flex-wrap items-start gap-3 py-4">
+          <div class="flex-1 space-y-1 min-w-[220px]">
+            <div class="text-sm font-semibold">显示桌面增加入口</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">在桌面展示“增加”入口按钮。</p>
+          </div>
+          <button
+            type="button"
+            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+            :class="preferenceForm.showDesktopAddEntry ? 'bg-primary/80' : 'bg-slate-300 dark:bg-slate-700'"
+            @click="toggleBoolean('showDesktopAddEntry')">
+            <span
+              class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition"
+              :class="preferenceForm.showDesktopAddEntry ? 'translate-x-5' : 'translate-x-1'" />
+          </button>
+        </div>
       </div>
     </section>
 
@@ -133,6 +149,7 @@ function createDefaultPreference(): UserPreference {
     bookmarkGap: BookmarkGapMode.DEFAULT,
     bookmarkImageSize: BookmarkImageSize.MEDIUM,
     showTitle: true,
+    showDesktopAddEntry: true,
     pageMode: PageTurnMode.VERTICAL_SCROLL,
     imgBacShow: undefined,
   }
@@ -195,7 +212,7 @@ const preferenceDirty = computed(
   () => JSON.stringify(preferenceForm.value) !== JSON.stringify(preferenceOrigin.value)
 )
 
-function toggleBoolean(key: 'minimalMode' | 'showTitle') {
+function toggleBoolean(key: 'minimalMode' | 'showTitle' | 'showDesktopAddEntry') {
   preferenceForm.value[key] = !preferenceForm.value[key]
 }
 

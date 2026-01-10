@@ -60,6 +60,7 @@ export interface UserPreference {
   bookmarkGap: BookmarkGapMode
   bookmarkImageSize: BookmarkImageSize
   showTitle: boolean
+  showDesktopAddEntry: boolean
   pageMode: PageTurnMode
   imgBacShow?: BacSettingVO | null
 }
