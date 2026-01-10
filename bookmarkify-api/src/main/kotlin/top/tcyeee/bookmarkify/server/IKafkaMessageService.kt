@@ -10,6 +10,14 @@ interface IKafkaMessageService {
     fun bookmarkParse(bookmark: BookmarkEntity)
 
     /**
+     * 解析书签,保存书签到根节点,并通知到用户
+     * @param uid user-id
+     * @param bookmark 书签信息
+     * @param parentNodeId 父节点ID
+     */
+    fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, parentNodeId: String?)
+
+    /**
      * 解析书签,然后保存到数据库,同时通知到用户
      * @param uid user-id
      * @param bookmark bookmark-id
@@ -18,19 +26,5 @@ interface IKafkaMessageService {
      */
     fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, userLinkId: String, nodeLayoutId: String)
 
-    /**
-     * 解析书签,保存书签到根节点,并通知到用户
-     * @param uid user-id
-     * @param rawUrl 用户添加的原始书签,在URL中包含了用户的自定义信息
-     */
-    fun bookmarkParseAndNotice(uid: String, rawUrl: String)
-
-    /**
-     * 解析书签,保存书签到根节点,并通知到用户
-     * @param uid user-id
-     * @param bookmark 书签信息
-     * @param parentNodeId 父节点ID
-     */
-    fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, parentNodeId: String?)
 }
 
