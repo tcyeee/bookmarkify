@@ -281,6 +281,20 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
               showTitle: !pref.showTitle,
             }),
         },
+        {
+          value: 'pref-show-desktop-add-entry-toggle',
+          label: '桌面增加入口',
+          iconRight: pref.showDesktopAddEntry
+            ? 'icon--memory-toggle-switch-on icon-size-30'
+            : 'icon--memory-toggle-switch-off icon-size-30',
+          iconRightClass: pref.showDesktopAddEntry
+            ? 'text-primary'
+            : 'text-slate-400 dark:text-slate-500',
+          run: () =>
+            updatePreference({
+              showDesktopAddEntry: !pref.showDesktopAddEntry,
+            }),
+        },
       ],
     ],
   ]
