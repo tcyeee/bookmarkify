@@ -4,6 +4,9 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 
 interface IKafkaMessageService {
 
+    /** 联通测试 */
+    fun linkTest(message: String)
+
     /**
      * 通过网址解析为书签,同时重新绑定到添加这个网址的用户
      * 为什么要重新绑定？

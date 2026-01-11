@@ -67,6 +67,9 @@ export const useAuthStore = defineStore('auth', {
             // track 返回最新用户 token；用于初次登录或 token 续期
             const user = await track()
             this.account = { ...this.account, ...user }
+            console.log("----------");
+            console.log(user);
+            console.log("----------");
             if (!user.token) return Promise.reject('登陆数据异常')
 
             // 登录后刷新书签与 WebSocket 连接
@@ -90,6 +93,8 @@ export const useAuthStore = defineStore('auth', {
             const preferenceStore = usePreferenceStore()
 
             try {
+                // 如果本地不存在登录信息，那么就不要请求后端了
+                if (this.authStatus === AuthStatusEnum.NONE) return
                 // 服务端登出失败也要继续清理本地态
                 await authLogout()
             } catch (err) {
@@ -108,7 +113,7 @@ export const useAuthStore = defineStore('auth', {
                     localStorage.removeItem('homeItems')
                     localStorage.removeItem('user')
                     localStorage.removeItem('backgroundImageDataUrl')
-                    document.cookie = 'user=;deviceUid=; Max-Age=0; path=/'
+                    document.cookie = 'satoken=;auth=;user=;deviceUid=; Max-Age=0; path=/'
                 }
 
                 navigateTo('/welcome')

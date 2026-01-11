@@ -18,7 +18,8 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     @KafkaListener(
-        topics = ["\${bookmarkify.kafka.default-topic:bookmarkify-events}", "BOOKMARK_PRASE"],
+        /** 参考 [KafkaTopicEnums.BOOKMARKIFY] */
+        topics = ["\${bookmarkify.kafka.default-topic:bookmarkify-events}", "BOOKMARKIFY"],
         groupId = "\${spring.kafka.consumer.group-id:bookmarkify-group}"
     )
 
@@ -30,11 +31,17 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
             throw CommonException(ErrorType.E232)
         }
         when (obj.getStr("action")) {
+            KafkaMethodsEnums.LINKT_TEST.name -> linkTest(obj)
             KafkaMethodsEnums.PARSE_NOTICE_EXISTING.name -> handleExisting(obj)
             KafkaMethodsEnums.PARSE_NOTICE_NEW.name -> handleNew(obj)
             KafkaMethodsEnums.BOOKMARK_PARSE_AND_RESET_USER_ITEM.name -> bookmarkParseAndResetUserItem(obj)
             else -> throw CommonException(ErrorType.E231)
         }
+    }
+
+    private fun linkTest(obj: JSONObject) {
+        val message = obj.getStr("message")
+        log.info("[Kafka]: $message")
     }
 
     private fun handleExisting(obj: JSONObject) {
