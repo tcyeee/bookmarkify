@@ -51,6 +51,8 @@ spring:
       retries: 3      # 发送失败重试次数
     listener:
       missing-topics-fatal: false  # 订阅缺失主题时不让应用启动失败
+    admin:
+      auto-create: true
 
 bookmarkify:
   wechat:

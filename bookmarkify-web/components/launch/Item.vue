@@ -3,10 +3,7 @@
     :class="{ 'is-add': isAddItem(item) }"
     :data-is-add-item="isAddItem(item)"
     @contextmenu="onItemContextMenu($event, item)">
-    <div v-if="isAddItem(item)">
-      <LaunchpadAddOne @success="addBookmark" />
-    </div>
-    <div v-else>
+    <div>
       <LaunchpadCellFolder
         v-if="item.type === HomeItemType.BOOKMARK_DIR"
         :value="toBookmarkDir(item)"

@@ -16,6 +16,12 @@ class KafkaMessageServiceImpl(
     private val kafkaTemplate: KafkaTemplate<String, String>,
 ) : IKafkaMessageService {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    override fun linkTest(message: String) = JSONUtil.createObj()
+        .set("action", KafkaMethodsEnums.LINKT_TEST.name)
+        .set("message", message).toString()
+        .let { this.send(it) }
+
     override fun bookmarkParseAndResetUserItem(uid: String, rawUrl: String) = JSONUtil.createObj()
         .set("action", KafkaMethodsEnums.BOOKMARK_PARSE_AND_RESET_USER_ITEM.name)
         .set("uid", uid).set("rawUrl", rawUrl).toString()
@@ -37,9 +43,8 @@ class KafkaMessageServiceImpl(
             .let { this.send(it) }
 
     private fun send(message: String?) {
-        val type = KafkaTopicEnums.BOOKMARK_PRASE
-        kafkaTemplate.send(type.name, message).whenComplete { res, err ->
-            if (err != null) throw CommonException(ErrorType.E229, "type:${type.name},error:${err.message}")
+        kafkaTemplate.send(KafkaTopicEnums.BOOKMARKIFY.name, message).whenComplete { res, err ->
+            if (err != null) throw CommonException(ErrorType.E229, err.message)
             val metadata = res.recordMetadata
             log.info("[Kafka] send topic=${metadata.topic()} partition=${metadata.partition()} offset=${metadata.offset()}")
         }
