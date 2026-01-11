@@ -10,6 +10,7 @@ import org.jsoup.nodes.Document
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.*
+import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import java.net.URL
 
 /** 网站信息解析器 负责从 URL 获取 Document 并解析出 WebsiteHeaderInfo */
@@ -20,6 +21,9 @@ object WebsiteParser {
         .let { this.parseDocument(it) } // 解析基础信息
         .also { this.fillManifest(it) } // 解析Manifest
         .also { this.initLogo(it) } // 解析网站图片(LOGO/OG)
+
+    fun urlToBookmark(urlRowStr: String): BookmarkEntity=
+         urlWrapper(urlRowStr).let{ BookmarkEntity(it) }
 
     /**
      * 格式化URL字符串

@@ -23,6 +23,7 @@ import top.tcyeee.bookmarkify.entity.dto.UserSetting
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.mapper.UserMapper
+import top.tcyeee.bookmarkify.mapper.UserPreferenceMapper
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
 import top.tcyeee.bookmarkify.utils.MailUtils
@@ -43,7 +44,8 @@ class UserServiceImpl(
     private val projectConfig: ProjectConfig,
     private val smsService: SmsServiceImpl,
     private val mailUtils: MailUtils,
-    private val bookmarkService: BookmarkServiceImpl
+    private val bookmarkService: BookmarkServiceImpl,
+    private val userPreferenceMapper: UserPreferenceMapper
 ) : IUserService, ServiceImpl<UserMapper, UserEntity>() {
 
     /**
@@ -66,20 +68,20 @@ class UserServiceImpl(
      * @param response response
      * @return 用户基础信息+token (注意：这里不包含用户头像和用户设置)
      */
-    override fun track(
-        request: HttpServletRequest, response: HttpServletResponse
-    ): UserSessionInfo = if (StpKit.USER.isLogin && BaseUtils.user() != null) {
-        BaseUtils.user()!!
-    } else {
-        BaseUtils.sessionRegisterDeviceId(request, response, projectConfig)
-            // 找到设备ID
-            .let(this::queryOrRegisterByDeviceId)
-            // 创建默认书签
-            .also { bookmarkService.setDefaultBookmark(it.id) }
-            // 在权限认证系统中登录
-            .also { StpKit.USER.login(it.id, true) }
-            // 存储会话信息
-            .authVO(StpKit.USER.tokenValue).writeToSession()
+    override fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo {
+        if (StpKit.USER.isLogin && BaseUtils.user() != null) return BaseUtils.user()!!
+
+        val userEntity: UserEntity = BaseUtils.sessionRegisterDeviceId(request, response, projectConfig)
+            .let { this.queryOrRegisterByDeviceId(it) }
+
+        // 初始化用户偏好设置
+        userPreferenceMapper.insert(UserPreferenceEntity(uid = userEntity.id))
+        // 初始化用户书签
+        bookmarkService.setDefaultBookmark(userEntity.id)
+        // 初始化用户权限
+        StpKit.USER.login(userEntity.id, true)
+
+        return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
     }
 
     override fun loginOut(response: HttpServletResponse) {
@@ -120,10 +122,8 @@ class UserServiceImpl(
     }
 
     override fun findByNameAndPwd(account: String, password: String): UserEntity? =
-        ktQuery()
-            .eq(UserEntity::password, SecureUtil.md5(password))
-            .and { it.eq(UserEntity::email, account).or().eq(UserEntity::phone, account) }
-            .one()
+        ktQuery().eq(UserEntity::password, SecureUtil.md5(password))
+            .and { it.eq(UserEntity::email, account).or().eq(UserEntity::phone, account) }.one()
 
     override fun verifyEmail(
         request: HttpServletRequest, response: HttpServletResponse, uid: String, params: EmailVerifyParams
@@ -197,12 +197,14 @@ class UserServiceImpl(
     override fun queryUserSetting(uid: String): UserSetting = UserSetting(bacSetting = queryUserBacSetting(uid))
 
     override fun bacSetting(params: BackSettingParams, uid: String): BacSettingVO {
-        val entity = backSettingService.ktQuery()
-            .eq(BackgroundConfigEntity::uid, uid).one()
+        val entity = backSettingService.ktQuery().eq(BackgroundConfigEntity::uid, uid).one()
             // 如果查询到了，则修改其中的参数
             // 如果没有查询到，则创建对象
-            ?.also { it.updateParams(params) }
-            ?: BackgroundConfigEntity(uid = uid, type = params.type, backgroundLinkId = params.backgroundId)
+            ?.also { it.updateParams(params) } ?: BackgroundConfigEntity(
+            uid = uid,
+            type = params.type,
+            backgroundLinkId = params.backgroundId
+        )
         backSettingService.saveOrUpdate(entity)
 
         return backSettingService.queryShowByUid(uid)
@@ -214,12 +216,12 @@ class UserServiceImpl(
     }
 
     override fun addBacColor(params: GradientConfigParams, uid: String): Boolean {
-        val currentCount = bacGradientService.ktQuery()
-            .eq(BackgroundGradientEntity::uid, uid)
-            .eq(BackgroundGradientEntity::isDefault, false)
-            .count()
-        if (currentCount >= projectConfig.maxCustomBackgroundCount)
-            throw CommonException(ErrorType.E102, "自定义渐变最多 ${projectConfig.maxCustomBackgroundCount} 个")
+        val currentCount = bacGradientService.ktQuery().eq(BackgroundGradientEntity::uid, uid)
+            .eq(BackgroundGradientEntity::isDefault, false).count()
+        if (currentCount >= projectConfig.maxCustomBackgroundCount) throw CommonException(
+            ErrorType.E102,
+            "自定义渐变最多 ${projectConfig.maxCustomBackgroundCount} 个"
+        )
 
         val entity = BackgroundGradientEntity(
             uid = uid,
@@ -234,12 +236,13 @@ class UserServiceImpl(
     }
 
     override fun addBacImg(multipartFile: MultipartFile, uid: String): String {
-        val currentCount = bacImageService.ktQuery()
-            .eq(BackgroundImageEntity::uid, uid)
-            .eq(BackgroundImageEntity::isDefault, false)
-            .count()
-        if (currentCount >= projectConfig.maxCustomBackgroundCount)
-            throw CommonException(ErrorType.E102, "自定义图片最多 ${projectConfig.maxCustomBackgroundCount} 个")
+        val currentCount =
+            bacImageService.ktQuery().eq(BackgroundImageEntity::uid, uid).eq(BackgroundImageEntity::isDefault, false)
+                .count()
+        if (currentCount >= projectConfig.maxCustomBackgroundCount) throw CommonException(
+            ErrorType.E102,
+            "自定义图片最多 ${projectConfig.maxCustomBackgroundCount} 个"
+        )
 
         val file = fileService.uploadBackground(uid, multipartFile)
 
@@ -279,6 +282,5 @@ class UserServiceImpl(
         ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::email, mail).update()
 
     override fun adminListAll(params: UserSearchParams): IPage<UserAdminVO> =
-        baseMapper.selectPage(params.toPage(), params.toWrapper())
-            .convert { UserAdminVO(it) }
+        baseMapper.selectPage(params.toPage(), params.toWrapper()).convert { UserAdminVO(it) }
 }
