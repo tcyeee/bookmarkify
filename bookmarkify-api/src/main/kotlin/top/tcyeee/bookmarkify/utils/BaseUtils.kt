@@ -35,8 +35,6 @@ object BaseUtils {
     }
 }
 
-val APP_UID: String = user()?.uid ?: throw NullPointerException()
-
 /* 工具类方法 */
 fun yesterday(): LocalDateTime = LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)
 

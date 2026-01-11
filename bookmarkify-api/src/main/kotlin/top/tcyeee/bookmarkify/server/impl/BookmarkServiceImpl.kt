@@ -46,8 +46,10 @@ class BookmarkServiceImpl(
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
 
     // 找到全部的系统默认书签,存储用户桌面布局和自定义书签
-    override fun setDefaultBookmark(uid: String) =
-        this.findListByHost(projectConfig.defaultBookmarkify).map { bookmark ->
+    override fun setDefaultBookmark(uid: String) = projectConfig.defaultBookmarkify
+        .map { WebsiteParser.urlWrapper(it).urlHost }
+        .let { this.findListByHost(it) }
+        .map { bookmark ->
             UserLayoutNodeEntity(uid = uid).let { node -> Pair(node, BookmarkUserLink(bookmark, node.id, uid)) }
         }.also { pair ->
             layoutNodeMapper.insert(pair.map { it.first })
