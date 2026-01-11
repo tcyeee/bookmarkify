@@ -2,40 +2,46 @@ package top.tcyeee.bookmarkify.config.kafka
 
 import cn.hutool.json.JSONObject
 import cn.hutool.json.JSONUtil
+import jakarta.annotation.PostConstruct
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component
-import top.tcyeee.bookmarkify.config.exception.CommonException
-import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.server.IBookmarkService
 
 @Component
-@ConditionalOnProperty(prefix = "bookmarkify.kafka", name = ["enabled"], havingValue = "true")
 class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    @PostConstruct
+    fun init() {
+        log.info("[Kafka] KafkaMessageListener bean created")
+    }
+
     @KafkaListener(
         /** 参考 [KafkaTopicEnums.BOOKMARKIFY] */
-        topics = ["\${bookmarkify.kafka.default-topic:bookmarkify-events}", "BOOKMARKIFY"],
-        groupId = "\${spring.kafka.consumer.group-id:bookmarkify-group}"
+        topics = ["\${bookmarkify.kafka.default-topic:BOOKMARKIFY}"],
+        /** group-id 固定为 BOOKMARKIFY */
+        groupId = "\${spring.kafka.consumer.group-id:BOOKMARKIFY}"
     )
 
     fun onMessage(record: ConsumerRecord<String, String>) {
-        log.info("[Kafka] received topic=${record.topic()} message=${record.value()}")
+        log.info("[Kafka] received topic=${record.topic()} partition=${record.partition()} message=${record.value()}")
         val obj = runCatching { JSONUtil.parseObj(record.value()) }.getOrElse {
             log.warn("[Kafka] 无法解析消息为JSON: ${it.message}")
             it.printStackTrace()
-            throw CommonException(ErrorType.E232)
+            return
         }
         when (obj.getStr("action")) {
             KafkaMethodsEnums.LINKT_TEST.name -> linkTest(obj)
             KafkaMethodsEnums.PARSE_NOTICE_EXISTING.name -> handleExisting(obj)
             KafkaMethodsEnums.PARSE_NOTICE_NEW.name -> handleNew(obj)
             KafkaMethodsEnums.BOOKMARK_PARSE_AND_RESET_USER_ITEM.name -> bookmarkParseAndResetUserItem(obj)
-            else -> throw CommonException(ErrorType.E231)
+            else -> {
+                log.warn("[Kafka] unknown action: ${obj.getStr("action")}")
+                return
+            }
         }
     }
 

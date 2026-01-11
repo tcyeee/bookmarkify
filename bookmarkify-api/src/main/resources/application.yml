@@ -38,10 +38,10 @@ spring:
     # Kafka 服务地址，多个用逗号分隔
     bootstrap-servers: ${BOOKMARKIFY_KAFKA_BOOTSTRAP_SERVERS}
     consumer:
-      # 消费组 ID 单机时默认为 bookmarkify-group
-      group-id: 'bookmarkify-group'
+      # 消费组 ID 单机时默认为 BOOKMARKIFY
+      group-id: 'BOOKMARKIFY'
       # 偏移重置策略：latest / earliest
-      auto-offset-reset: latest
+      auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
