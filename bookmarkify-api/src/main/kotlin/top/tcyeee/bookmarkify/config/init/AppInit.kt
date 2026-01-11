@@ -46,12 +46,10 @@ class AppInit(
         // 检查默认书签是否被写入到数据库,找到没有被写出的那一部分,然后批量写入到数据库
         val defaultHostList = projectConfig.defaultBookmarkify.map { WebsiteParser.urlWrapper(it).urlHost }
         val hasStoreHostList = bookmarkService.findListByHost(defaultHostList).map { it.urlHost }.toSet()
-        val todoHostlist = defaultHostList - hasStoreHostList
 
-        todoHostlist.map { WebsiteParser.urlToBookmark(it) }
+        (defaultHostList - hasStoreHostList).map { WebsiteParser.urlToBookmark(it) }
             // 批量插入
-            .also { bookmarkMapper.insert(it) }
-            .map { it.id }
+            .also { bookmarkMapper.insert(it) }.map { it.id }
             // 逐一检查
             .forEach { messageService.bookmarkParse(it) }
 
