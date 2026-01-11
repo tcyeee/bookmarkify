@@ -1,8 +1,8 @@
 package top.tcyeee.bookmarkify.config.kafka
 
+import cn.hutool.crypto.digest.DigestUtil
 import cn.hutool.json.JSONObject
 import cn.hutool.json.JSONUtil
-import jakarta.annotation.PostConstruct
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
@@ -14,22 +14,9 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @PostConstruct
-    fun init() {
-        log.info("[Kafka] KafkaMessageListener bean created")
-    }
-
-//    @KafkaListener(
-//        /** 参考 [KafkaTopicEnums.BOOKMARKIFY] */
-//        topics = ["\${bookmarkify.kafka.default-topic:BOOKMARKIFY}"],
-//        /** group-id 固定为 BOOKMARKIFY */
-//        groupId = "\${spring.kafka.consumer.group-id:BOOKMARKIFY}"
-//    )
-
-
     @KafkaListener(topics = ["BOOKMARKIFY"], groupId = "BOOKMARKIFY")
     fun onMessage(record: ConsumerRecord<String, String>) {
-        log.info("[Kafka] received topic=${record.topic()} partition=${record.partition()} message=${record.value()}")
+        log.info("[Kafka] received key=${DigestUtil.md5Hex(record.toString())} message=${record.value()}")
         val obj = runCatching { JSONUtil.parseObj(record.value()) }.getOrElse {
             log.warn("[Kafka] 无法解析消息为JSON: ${it.message}")
             it.printStackTrace()
@@ -37,7 +24,8 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
         }
         when (obj.getStr("action")) {
             KafkaMethodsEnums.LINKT_TEST.name -> linkTest(obj)
-            KafkaMethodsEnums.PARSE_NOTICE_EXISTING.name -> handleExisting(obj)
+            KafkaMethodsEnums.BOOKMARK_PARSE.name -> bookmarkParse(obj)
+            KafkaMethodsEnums.PARSE_NOTICE_EXISTING.name -> parseNoticeExisting(obj)
             KafkaMethodsEnums.PARSE_NOTICE_NEW.name -> handleNew(obj)
             KafkaMethodsEnums.BOOKMARK_PARSE_AND_RESET_USER_ITEM.name -> bookmarkParseAndResetUserItem(obj)
             else -> {
@@ -52,24 +40,29 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
         log.info("[Kafka]: $message")
     }
 
-    private fun handleExisting(obj: JSONObject) {
+    private fun bookmarkParse(obj: JSONObject) {
+        val bookmarkId = obj.getStr("bookmarkId")
+        bookmarkService.kafkaBookmarkParse(bookmarkId)
+    }
+
+    private fun parseNoticeExisting(obj: JSONObject) {
         val uid = obj.getStr("uid")
-        val bookmark = obj.getJSONObject("bookmark").toBean(BookmarkEntity::class.java)
+        val bookmarkId = obj.getStr("bookmarkId")
         val userLinkId = obj.getStr("userLinkId")
         val nodeLayoutId = obj.getStr("nodeLayoutId")
-        bookmarkService.bookmarkParseAndNotice(uid, bookmark, userLinkId, nodeLayoutId)
+        bookmarkService.kafKaBookmarkParseAndNotice(uid, bookmarkId, userLinkId, nodeLayoutId)
     }
 
     private fun handleNew(obj: JSONObject) {
         val uid = obj.getStr("uid")
-        val bookmark = obj.getJSONObject("bookmark").toBean(BookmarkEntity::class.java)
         val parentNodeId = obj.getStr("parentNodeId")
-        bookmarkService.bookmarkParseAndNotice(uid, bookmark, parentNodeId)
+        val bookmarkId = obj.getStr("bookmarkId")
+        bookmarkService.kafKaBookmarkParseAndNotice(uid, bookmarkId, parentNodeId)
     }
 
     private fun bookmarkParseAndResetUserItem(obj: JSONObject) {
         val uid = obj.getStr("uid")
         val rawUrl = obj.getStr("rawUrl")
-        bookmarkService.bookmarkParseAndResetUserItem(uid, rawUrl)
+        bookmarkService.kafkaBookmarkParseAndResetUserItem(uid, rawUrl)
     }
 }

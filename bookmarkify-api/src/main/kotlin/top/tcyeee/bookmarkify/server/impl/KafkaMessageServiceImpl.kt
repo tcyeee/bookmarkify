@@ -8,7 +8,6 @@ import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.kafka.KafkaMethodsEnums
 import top.tcyeee.bookmarkify.config.kafka.KafkaTopicEnums
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
 
 @Service
@@ -27,18 +26,21 @@ class KafkaMessageServiceImpl(
         .set("uid", uid).set("rawUrl", rawUrl).toString()
         .let { this.send(it) }
 
-    override fun bookmarkParse(bookmark: BookmarkEntity) = send(bookmark.json)
-
-    override fun bookmarkParseAndNotice(
-        uid: String, bookmark: BookmarkEntity, userLinkId: String, nodeLayoutId: String
-    ) = JSONUtil.createObj().set("action", KafkaMethodsEnums.PARSE_NOTICE_EXISTING.name).set("uid", uid)
-        .set("bookmark", bookmark).set("userLinkId", userLinkId).set("nodeLayoutId", nodeLayoutId).toString()
+    override fun bookmarkParse(bookmarkId:String) = JSONUtil.createObj()
+        .set("action", KafkaMethodsEnums.BOOKMARK_PARSE.name)
+        .set("bookmarkId", bookmarkId).toString()
         .let { this.send(it) }
 
-    override fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, parentNodeId: String?) =
+    override fun bookmarkParseAndNotice(
+        uid: String, bookmarkId: String, userLinkId: String, nodeLayoutId: String
+    ) = JSONUtil.createObj().set("action", KafkaMethodsEnums.PARSE_NOTICE_EXISTING.name).set("uid", uid)
+        .set("bookmarkId", bookmarkId).set("userLinkId", userLinkId).set("nodeLayoutId", nodeLayoutId).toString()
+        .let { this.send(it) }
+
+    override fun bookmarkParseAndNotice(uid: String, bookmarkId: String, parentNodeId: String?) =
         JSONUtil.createObj().set("action", KafkaMethodsEnums.PARSE_NOTICE_NEW.name)
             .set("uid", uid)
-            .set("bookmark", bookmark)
+            .set("bookmarkId", bookmarkId)
             .set("parentNodeId", parentNodeId).toString()
             .let { this.send(it) }
 
