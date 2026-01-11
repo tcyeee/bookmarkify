@@ -19,13 +19,15 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
         log.info("[Kafka] KafkaMessageListener bean created")
     }
 
-    @KafkaListener(
-        /** 参考 [KafkaTopicEnums.BOOKMARKIFY] */
-        topics = ["\${bookmarkify.kafka.default-topic:BOOKMARKIFY}"],
-        /** group-id 固定为 BOOKMARKIFY */
-        groupId = "\${spring.kafka.consumer.group-id:BOOKMARKIFY}"
-    )
+//    @KafkaListener(
+//        /** 参考 [KafkaTopicEnums.BOOKMARKIFY] */
+//        topics = ["\${bookmarkify.kafka.default-topic:BOOKMARKIFY}"],
+//        /** group-id 固定为 BOOKMARKIFY */
+//        groupId = "\${spring.kafka.consumer.group-id:BOOKMARKIFY}"
+//    )
 
+
+    @KafkaListener(topics = ["BOOKMARKIFY"], groupId = "BOOKMARKIFY")
     fun onMessage(record: ConsumerRecord<String, String>) {
         log.info("[Kafka] received topic=${record.topic()} partition=${record.partition()} message=${record.value()}")
         val obj = runCatching { JSONUtil.parseObj(record.value()) }.getOrElse {

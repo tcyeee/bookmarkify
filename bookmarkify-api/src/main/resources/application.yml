@@ -40,8 +40,10 @@ spring:
     consumer:
       # 消费组 ID 单机时默认为 BOOKMARKIFY
       group-id: 'BOOKMARKIFY'
+      # ⚠️Kafka无法自动创建 __consumer_offsets topic（用于存储consumer offset信息）
       # 偏移重置策略：latest / earliest
       auto-offset-reset: earliest
+      enable-auto-commit: true
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
