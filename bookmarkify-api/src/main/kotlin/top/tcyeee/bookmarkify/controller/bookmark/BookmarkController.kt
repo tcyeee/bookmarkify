@@ -13,7 +13,6 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
-import top.tcyeee.bookmarkify.utils.APP_UID
 import top.tcyeee.bookmarkify.utils.BaseUtils
 
 /**
@@ -42,7 +41,7 @@ class BookmarksController(
 
     @PostMapping("/query")
     @Operation(summary = "我的桌面布局")
-    fun query(): UserLayoutNodeVO = layoutNodeService.layout(APP_UID)
+    fun query(): UserLayoutNodeVO = layoutNodeService.layout(BaseUtils.uid())
 
     @PostMapping("/upload")
     @Operation(summary = "书签上传")
@@ -58,7 +57,7 @@ class BookmarksController(
      */
     @PostMapping("/sort")
     @Operation(summary = "排序")
-    fun sort(@RequestBody params: Map<String, Int>): Boolean = preferenceService.sort(APP_UID, params)
+    fun sort(@RequestBody params: Map<String, Int>): Boolean = preferenceService.sort(BaseUtils.uid(), params)
 
     /**
      * @param params layout元素ID
