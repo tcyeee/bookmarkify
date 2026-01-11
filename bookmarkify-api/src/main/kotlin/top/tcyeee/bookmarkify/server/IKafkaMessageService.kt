@@ -1,7 +1,5 @@
 package top.tcyeee.bookmarkify.server
 
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
-
 interface IKafkaMessageService {
 
     /** 联通测试 */
@@ -16,25 +14,25 @@ interface IKafkaMessageService {
 
     /**
      * 解析书签,然后保存到数据库
-     * @param bookmark bookmark
+     * @param bookmarkId bookmark
      */
-    fun bookmarkParse(bookmark: BookmarkEntity)
+    fun bookmarkParse(bookmarkId: String)
 
     /**
      * 解析书签,保存书签到根节点,并通知到用户
      * @param uid user-id
-     * @param bookmark 书签信息
+     * @param bookmarkId bookmark-id
      * @param parentNodeId 父节点ID
      */
-    fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, parentNodeId: String?)
+    fun bookmarkParseAndNotice(uid: String, bookmarkId: String, parentNodeId: String?)
 
     /**
      * 解析书签,然后保存到数据库,同时通知到用户
      * @param uid user-id
-     * @param bookmark bookmark-id
+     * @param bookmarkId bookmark-id
      * @param userLinkId bookmark-user-link-id
      * @param nodeLayoutId 关联的桌面布局ID
      */
-    fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, userLinkId: String, nodeLayoutId: String)
+    fun bookmarkParseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeLayoutId: String)
 }
 

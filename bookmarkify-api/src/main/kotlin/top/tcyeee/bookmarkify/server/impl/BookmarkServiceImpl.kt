@@ -91,7 +91,11 @@ class BookmarkServiceImpl(
     }
 
     override fun checkAll() =
-        ktQuery().lt(BookmarkEntity::updateTime, yesterday()).list().forEach(kafkaMessageService::bookmarkParse)
+        ktQuery()
+            .lt(BookmarkEntity::updateTime, yesterday())
+            .lt(BookmarkEntity::verifyFlag, false)
+            .list()
+            .forEach { kafkaMessageService.bookmarkParse(it.id) }
 
     override fun addOne(url: String, uid: String): UserLayoutNodeVO {
         // 添加书签信息
@@ -105,7 +109,7 @@ class BookmarkServiceImpl(
 
         // 返回占位信息,同时通知队列去检查书签
         if (bookmark.checkFlag()) return nodeEntity.loadingVO()
-            .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark, userLink.id, nodeEntity.id) }
+            .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark.id, userLink.id, nodeEntity.id) }
 
         // 如果无需更新书签,则直接将旧书签打包为桌面元素返回
         return bookmarkUserLinkMapper.findShowById(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
@@ -118,14 +122,9 @@ class BookmarkServiceImpl(
     private fun findById(bookmarkId: String): BookmarkEntity =
         requireNotNull(ktQuery().eq(BookmarkEntity::id, bookmarkId).one())
 
-    /**
-     * 解析书签,然后保存到数据库,同时通知到用户
-     * @param uid user-id
-     * @param bookmark bookmark-id
-     * @param userLinkId bookmark-user-link-id
-     * @param nodeId 关联的桌面布局ID
-     */
-    override fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, userLinkId: String, nodeId: String) {
+    /** 解析书签,然后保存到数据库,同时通知到用户 */
+    override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
+        val bookmark = baseMapper.selectById(bookmarkId)
         this.parseBookmarkAndSave(bookmark)
         // 找到用户自定义书签
         val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
@@ -135,19 +134,18 @@ class BookmarkServiceImpl(
         UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
     }
 
-    override fun bookmarkParseAndResetUserItem(uid: String, rawUrl: String) =
+    override fun kafkaBookmarkParseAndResetUserItem(uid: String, rawUrl: String) =
         WebsiteParser.urlWrapper(rawUrl)
             .let { BookmarkEntity(it) }
             .also { this.parseBookmarkAndSave(it) }
             .also { bookmarkUserLinkService.resetBookmarkId(uid, it.urlHost, it.id) }.run {}
 
-    /**
-     * 解析书签,保存书签到根节点,并通知到用户
-     * @param uid user-id
-     * @param bookmark 书签信息
-     * @param parentNodeId 父节点ID
-     */
-    override fun bookmarkParseAndNotice(uid: String, bookmark: BookmarkEntity, parentNodeId: String?) {
+    override fun kafkaBookmarkParse(bookmarkId: String) =
+        baseMapper.selectById(bookmarkId).also { parseBookmarkAndSave(it) }.run {}
+
+    /** 解析书签,保存书签到根节点,并通知到用户 */
+    override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, parentNodeId: String?) {
+        val bookmark = baseMapper.selectById(bookmarkId)
         // 保存书签信息
         this.parseBookmarkAndSave(bookmark)
         // 保存布局信息

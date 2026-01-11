@@ -19,8 +19,5 @@ interface IUserLayoutNodeService : IService<UserLayoutNodeEntity> {
      * @param uid uid
      */
     fun layout(uid: String): UserLayoutNodeVO
-
-    // 添加单条书签文件夹(节点),如果为ROOT,则处于根节点
-    fun insertBookmarkFolder(structures: SystemBookmarkStructure, uid: String)
 }
 

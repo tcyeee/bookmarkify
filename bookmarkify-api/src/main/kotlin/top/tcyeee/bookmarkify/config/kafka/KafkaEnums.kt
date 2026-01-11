@@ -11,6 +11,7 @@ enum class KafkaTopicEnums {
 
 enum class KafkaMethodsEnums {
     LINKT_TEST,
+    BOOKMARK_PARSE,
     PARSE_NOTICE_EXISTING,
     PARSE_NOTICE_NEW,
     BOOKMARK_PARSE_AND_RESET_USER_ITEM
