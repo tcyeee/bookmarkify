@@ -45,8 +45,14 @@ class BookmarkServiceImpl(
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
 
-    // 获取配置信息
-    override fun setDefaultBookmark(uid: String) = projectConfig.defaultBookmarkify.forEach { this.addOne(it, uid) }
+    // 找到全部的系统默认书签,存储用户桌面布局和自定义书签
+    override fun setDefaultBookmark(uid: String) =
+        this.findListByHost(projectConfig.defaultBookmarkify).map { bookmark ->
+            UserLayoutNodeEntity(uid = uid).let { node -> Pair(node, BookmarkUserLink(bookmark, node.id, uid)) }
+        }.also { pair ->
+            layoutNodeMapper.insert(pair.map { it.first })
+            bookmarkUserLinkMapper.insert(pair.map { it.second })
+        }.run {}
 
     override fun search(name: String): List<BookmarkEntity> =
         ktQuery().eq(BookmarkEntity::isActivity, true).like(BookmarkEntity::appName, name).or()
@@ -143,6 +149,9 @@ class BookmarkServiceImpl(
     override fun kafkaBookmarkParse(bookmarkId: String) =
         baseMapper.selectById(bookmarkId).also { parseBookmarkAndSave(it) }.run {}
 
+    override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =
+        ktQuery().`in`(BookmarkEntity::urlHost, defaultBookmarkify).list()
+
     /** 解析书签,保存书签到根节点,并通知到用户 */
     override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, parentNodeId: String?) {
         val bookmark = baseMapper.selectById(bookmarkId)
@@ -171,7 +180,7 @@ class BookmarkServiceImpl(
         val oldBookmarkEneity = baseMapper.selectById(bookmark.id)
         if (oldBookmarkEneity != null && oldBookmarkEneity.verifyFlag) return oldBookmarkEneity
 
-        log.warn("[CHECK] 开始解析域名:${bookmark.rawUrl}")
+        log.trace("[CHECK] 开始解析域名:${bookmark.rawUrl}")
         val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
             if (it.message.toString().contains("403")) bookmark.parseStatus = ParseStatusEnum.BLOCKED
             bookmark.parseErrMsg = it.message.toString()

@@ -53,4 +53,5 @@ interface IBookmarkService : IService<BookmarkEntity> {
      */
     fun kafkaBookmarkParseAndResetUserItem(uid: String, rawUrl: String)
     fun kafkaBookmarkParse(bookmarkId: String)
+    fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity>
 }
