@@ -4,7 +4,6 @@ import cn.hutool.core.bean.BeanUtil
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.entity.*
-import top.tcyeee.bookmarkify.entity.enums.FunctionType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir

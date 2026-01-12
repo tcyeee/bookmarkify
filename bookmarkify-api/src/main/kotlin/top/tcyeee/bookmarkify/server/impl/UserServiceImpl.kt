@@ -11,6 +11,7 @@ import jakarta.servlet.http.Cookie
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
@@ -24,11 +25,13 @@ import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.mapper.UserPreferenceMapper
+import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
 import top.tcyeee.bookmarkify.utils.MailUtils
 import top.tcyeee.bookmarkify.utils.RedisUtils
 import top.tcyeee.bookmarkify.utils.StpKit
+
 
 /**
  * @author tcyeee
@@ -44,7 +47,7 @@ class UserServiceImpl(
     private val projectConfig: ProjectConfig,
     private val smsService: SmsServiceImpl,
     private val mailUtils: MailUtils,
-    private val bookmarkService: BookmarkServiceImpl,
+    private val bookmarkService: IBookmarkService,
     private val userPreferenceMapper: UserPreferenceMapper
 ) : IUserService, ServiceImpl<UserMapper, UserEntity>() {
 
@@ -61,19 +64,21 @@ class UserServiceImpl(
         return fileMapper.selectById(this.avatarFileId)?.fullUrlWithSign(300)
     }
 
-
     /**
      * 注册用户信息
      * @param request request
      * @param response response
      * @return 用户基础信息+token (注意：这里不包含用户头像和用户设置)
      */
+    @Transactional
     override fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo {
         if (StpKit.USER.isLogin && BaseUtils.user() != null) return BaseUtils.user()!!
 
         val userEntity: UserEntity = BaseUtils.sessionRegisterDeviceId(request, response, projectConfig)
             .let { this.queryOrRegisterByDeviceId(it) }
 
+        // 初始化用户设置
+        bookmarkService.setDefaultFuction(BaseUtils.uid())
         // 初始化用户偏好设置
         userPreferenceMapper.insert(UserPreferenceEntity(uid = userEntity.id))
         // 初始化用户书签
