@@ -1,7 +1,9 @@
 <template>
   <div class="w-20 flex flex-col items-center" :class="{ 'justify-center': !showTitle }" @click="handleClick">
-    <div class="w-app h-app rounded-xl flex justify-center items-center shadow" :class="iconWrapperClass">
-      <span :class="iconClass" :style="iconSizeStyle" />
+    <div class="w-app h-app flex justify-center items-center">
+      <div class="rounded-xl shadow flex justify-center items-center" :class="iconWrapperClass" :style="logoSizeStyle">
+        <span :class="iconClass" :style="iconSizeStyle" />
+      </div>
     </div>
     <div v-if="showTitle" class="w-18 text-sm mt-[0.3rem] text-white opacity-90 truncate text-center">
       {{ label }}
@@ -15,13 +17,15 @@ import type { BookmarkFunctionVO } from '@typing'
 import { FunctionType } from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
 
-const props = withDefaults(defineProps<{ value: BookmarkFunctionVO; showTitle?: boolean }>(), {
-  showTitle: true,
-})
-
-const { value, showTitle } = toRefs(props)
+const props = defineProps<{ value: BookmarkFunctionVO; toggleDrag?: boolean }>()
+const { value } = toRefs(props)
 const preferenceStore = usePreferenceStore()
-const iconSize = computed(() => preferenceStore.bookmarkCellSizePx)
+const iconAreaSize = computed(() => preferenceStore.bookmarkCellSizePx)
+const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
+const logoSizeStyle = computed(() => ({
+  width: `${iconAreaSize.value}px`,
+  height: `${iconAreaSize.value}px`,
+}))
 
 const label = computed(() => {
   if (!value.value) return '功能'
@@ -43,8 +47,10 @@ const iconClass = computed(() => {
   }
 })
 
+const iconPixelSize = computed(() => Math.round(iconAreaSize.value * 0.5))
 const iconSizeStyle = computed(() => ({
-  fontSize: `${iconSize.value}px`,
+  width: `${iconPixelSize.value}px`,
+  height: `${iconPixelSize.value}px`,
 }))
 
 const iconWrapperClass = computed(() => {
@@ -58,6 +64,7 @@ const iconWrapperClass = computed(() => {
 })
 
 function handleClick() {
+  if (props.toggleDrag) return
   if (!value.value) return
   switch (value.value.type) {
     case FunctionType.SETTING:
