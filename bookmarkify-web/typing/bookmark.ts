@@ -1,4 +1,4 @@
-import type { HomeItemType } from './enum'
+import type { FunctionType, HomeItemType } from './enum'
 
 // 书签节点
 export interface UserLayoutNodeVO {
@@ -8,8 +8,14 @@ export interface UserLayoutNodeVO {
   parentId?: string | null
   name?: string | null
   typeApp?: BookmarkShow
-  typeFuc?: string
+  typeFuc?: BookmarkFunctionVO
   children?: Array<UserLayoutNodeVO>
+}
+
+export interface BookmarkFunctionVO {
+  id: string,
+  layoutNodeId: string,
+  type: FunctionType,
 }
 
 // 书签详情（后端 BookmarkShow）
