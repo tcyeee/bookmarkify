@@ -7,5 +7,9 @@ import top.tcyeee.bookmarkify.mapper.BookmarkFunctionMapper
 import top.tcyeee.bookmarkify.server.IBookmarkFunctionService
 
 @Service
-class BookmarkFunctionServiceImpl :    IBookmarkFunctionService,    ServiceImpl<BookmarkFunctionMapper, BookmarkFunctionEntity>()
+class BookmarkFunctionServiceImpl :    IBookmarkFunctionService,    ServiceImpl<BookmarkFunctionMapper, BookmarkFunctionEntity>() {
+    override fun findByUid(uid: String): List<BookmarkFunctionEntity> {
+        TODO("Not yet implemented")
+    }
+}
 

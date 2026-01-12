@@ -7,10 +7,8 @@ import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
-import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.utils.SystemBookmarkStructure
 import java.time.LocalDateTime
-import kotlin.Long
 
 /**
  * 用户桌面排布,只负责结构,不负责数据
@@ -31,20 +29,27 @@ data class UserLayoutNodeEntity(
     @field:Schema(description = "节点(文件夹)名称") val name: String? = null,
     @field:Schema(description = "添加时间") var createdAt: LocalDateTime = LocalDateTime.now(),
 ) {
-    constructor(uid:String, dir: SystemBookmarkStructure) : this(
-        uid=uid,
-        name=dir.folderName,
+    constructor(uid: String, dir: SystemBookmarkStructure) : this(
+        uid = uid,
+        name = dir.folderName,
         type = NodeTypeEnum.BOOKMARK_DIR
     )
 
     // 当前仅仅只包含Bookamrk的展示
-    fun vo(sort: Int?, bookmark: BookmarkShow?): UserLayoutNodeVO = UserLayoutNodeVO(
+    fun vo(sort: Int?, bookmark: BookmarkShow?, func: BookmarkFunctionEntity?): UserLayoutNodeVO = UserLayoutNodeVO(
         id = this.id,
         sort = sort ?: Int.MAX_VALUE,
-        typeApp = bookmark
+        // 判断当前的桌面Item类型(Boomark / Function)
+        type = if (bookmark != null) NodeTypeEnum.BOOKMARK else NodeTypeEnum.FUNCTION
     ).also {
         BeanUtil.copyProperties(this, it)
-        if (type == NodeTypeEnum.BOOKMARK) it.typeApp?.initLogo()
+        if (type == NodeTypeEnum.BOOKMARK) {
+            it.typeApp = bookmark
+            it.typeApp?.initLogo()
+        }
+        if(type == NodeTypeEnum.FUNCTION) {
+            it.typeFuc = func?.vo()
+        }
     }
 
     fun loadingVO(): UserLayoutNodeVO {
