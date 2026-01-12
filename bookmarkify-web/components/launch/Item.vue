@@ -1,59 +1,28 @@
 <template>
-  <div :class="{ 'is-add': isAddItem(item) }" :data-is-add-item="isAddItem(item)" @contextmenu="onItemContextMenu($event, item)">
+  <div @contextmenu="onItemContextMenu($event, item)">
     <div>
-      <LaunchpadCellFolder v-if="item.type === HomeItemType.BOOKMARK_DIR" :value="toBookmarkDir(item)" :show-title="showTitle" @click="openDir(item)" />
-      <LaunchpadCellBookmark v-else-if="item.type === HomeItemType.BOOKMARK" :value="item.typeApp!" :show-title="showTitle" :toggle-drag="toggleDrag" />
-      <LaunchpadCellBookmarkLoading v-else-if="item.type === HomeItemType.BOOKMARK_LOADING" :show-title="showTitle" />
+      <LaunchpadCellFolder v-if="item.type === HomeItemType.BOOKMARK_DIR" :value="item" :toggle-drag="toggleDrag" />
+      <LaunchpadCellBookmark v-else-if="item.type === HomeItemType.BOOKMARK" :value="item.typeApp!" :toggle-drag="toggleDrag" />
+      <LaunchpadCellBookmarkLoading v-else-if="item.type === HomeItemType.BOOKMARK_LOADING" />
       <LaunchpadCellFunction v-else-if="item.type === HomeItemType.FUNCTION" :value="item.typeFuc!" :toggleDrag="toggleDrag" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { bookmarksDel } from '@api'
-import { HomeItemType, type BookmarkDir, type BookmarkShow, type UserLayoutNodeVO } from '@typing'
-import { usePreferenceStore } from '@stores/preference.store'
+import { HomeItemType, type BookmarkShow, type UserLayoutNodeVO } from '@typing'
 
-type AddItem = { id: string; sort: number; type: 'ADD' }
-type GridItem = UserLayoutNodeVO | AddItem
-
-const ADD_ITEM_ID = '__bookmark_add_placeholder__'
-
-const props = defineProps<{
-  item: GridItem
-  toggleDrag?: boolean
-}>()
-
+const bookmarkStore = useBookmarkStore()
+const props = defineProps<{ item: UserLayoutNodeVO; toggleDrag?: boolean }>()
 const emit = defineEmits<{
   (e: 'open-dir', item: UserLayoutNodeVO): void
   (e: 'show-detail', bookmark: BookmarkShow): void
 }>()
 
-const bookmarkStore = useBookmarkStore()
-const preferenceStore = usePreferenceStore()
-
-const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
-
-function isAddItem(item: GridItem): item is AddItem {
-  return item.id === ADD_ITEM_ID || (item as AddItem).type === 'ADD'
-}
-
-function toBookmarkDir(item: UserLayoutNodeVO): BookmarkDir {
-  return {
-    name: item.name ?? '文件夹',
-    bookmarkList: (item.children ?? []).map((child) => child.typeApp).filter((child): child is BookmarkShow => Boolean(child)),
-  }
-}
-
-function openDir(item: UserLayoutNodeVO) {
-  if (props.toggleDrag) return
-  emit('open-dir', item)
-}
-
 async function delOne(item: UserLayoutNodeVO) {
-  if (props.toggleDrag || isAddItem(item)) return
+  if (props.toggleDrag) return
   try {
     await bookmarksDel([item.id])
     const index = bookmarkStore.layoutNode.findIndex((it) => it.id === item.id)
@@ -66,19 +35,13 @@ async function delOne(item: UserLayoutNodeVO) {
 function getClickMenu(item: UserLayoutNodeVO) {
   if (!item.typeApp) return []
   return [
-    {
-      label: '查看详情',
-      onClick: () => emit('show-detail', item.typeApp!),
-    },
-    {
-      label: '删除书签',
-      onClick: () => delOne(item),
-    },
+    { label: '查看详情', onClick: () => emit('show-detail', item.typeApp!) },
+    { label: '删除书签', onClick: () => delOne(item) },
   ]
 }
 
-function onItemContextMenu(e: MouseEvent, item: GridItem) {
-  if (props.toggleDrag || isAddItem(item) || !('typeApp' in item) || !item.typeApp) return
+function onItemContextMenu(e: MouseEvent, item: UserLayoutNodeVO) {
+  if (props.toggleDrag || !('typeApp' in item) || !item.typeApp) return
   ContextMenu.showContextMenu({ items: getClickMenu(item), x: e.x, y: e.y })
 }
 </script>
