@@ -63,3 +63,5 @@ export enum PageTurnMode {
   VERTICAL_SCROLL = 'VERTICAL_SCROLL',
   HORIZONTAL_PAGE = 'HORIZONTAL_PAGE',
 }
+
+export enum FunctionType { SETTING = 'SETTING' }
