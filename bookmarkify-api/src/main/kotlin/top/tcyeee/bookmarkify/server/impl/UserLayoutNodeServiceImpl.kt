@@ -33,7 +33,7 @@ class UserLayoutNodeServiceImpl(
     @Transactional
     override fun layout(uid: String): UserLayoutNodeVO {
         // 查询用户的自定义标签
-        val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId }
+        val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
         // 查询用户的绑定功能
         val bookmarkFunctionMap = bookmarkFunctionService.findByUid(uid).associateBy { it.layoutNodeId }
         // 查询到用户的排序信息
