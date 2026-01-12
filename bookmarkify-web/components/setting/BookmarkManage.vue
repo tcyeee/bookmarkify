@@ -62,6 +62,26 @@
             </tbody>
           </table>
         </div>
+
+        <div v-if="bookmarks.length" class="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-400">
+          <div>
+            共 {{ total }} 条，当前第 {{ currentPage }} / {{ totalPages }} 页
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" class="cy-btn cy-btn-ghost cy-btn-xs" :disabled="currentPage <= 1 || bookmarksLoading" @click="handlePageChange(currentPage - 1)">
+              上一页
+            </button>
+            <span>{{ currentPage }} / {{ totalPages }}</span>
+            <button type="button" class="cy-btn cy-btn-ghost cy-btn-xs" :disabled="currentPage >= totalPages || bookmarksLoading" @click="handlePageChange(currentPage + 1)">
+              下一页
+            </button>
+            <select v-model.number="pageSize" class="cy-input cy-input-sm w-24" :disabled="bookmarksLoading" @change="handlePageSizeChange">
+              <option :value="10">每页 10 条</option>
+              <option :value="20">每页 20 条</option>
+              <option :value="50">每页 50 条</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div v-if="bookmarkError" class="mx-4 mb-4 rounded-md bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200 px-4 py-3 text-sm">
@@ -84,6 +104,15 @@ const bookmarksLoading = ref(false)
 const bookmarkError = ref('')
 const bookmarks = ref<BookmarkShow[]>([])
 const keyword = ref('')
+const currentPage = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+
+const totalPages = computed(() => {
+  if (!total.value || !pageSize.value) return 1
+  const pages = Math.ceil(total.value / pageSize.value)
+  return pages > 0 ? pages : 1
+})
 
 async function handleFileChange(event: Event) {
   const target = event.target as HTMLInputElement
@@ -152,10 +181,16 @@ async function fetchBookmarks() {
   bookmarksLoading.value = true
   bookmarkError.value = ''
   try {
-    const payload = keyword.value.trim() ? { name: keyword.value.trim() } : {}
+    const payload = {
+      ...(keyword.value.trim() ? { name: keyword.value.trim() } : {}),
+      currentPage: currentPage.value,
+      pageSize: pageSize.value,
+    }
     const res = await bookmarksList(payload)
-    console.log(res)
     bookmarks.value = res?.records ?? []
+    total.value = res?.total ?? 0
+    if (typeof res?.current === 'number') currentPage.value = res.current
+    if (typeof res?.size === 'number') pageSize.value = res.size
   } catch (error: any) {
     bookmarkError.value = error?.msg || error?.message || '获取书签失败，请稍后重试。'
   } finally {
@@ -164,11 +199,25 @@ async function fetchBookmarks() {
 }
 
 function handleSearchBookmarks() {
+  currentPage.value = 1
   fetchBookmarks()
 }
 
 function handleResetSearch() {
   keyword.value = ''
+  currentPage.value = 1
+  fetchBookmarks()
+}
+
+function handlePageChange(page: number) {
+  if (page < 1 || page > totalPages.value) return
+  if (page === currentPage.value) return
+  currentPage.value = page
+  fetchBookmarks()
+}
+
+function handlePageSizeChange() {
+  currentPage.value = 1
   fetchBookmarks()
 }
 
