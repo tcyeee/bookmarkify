@@ -2,14 +2,15 @@ package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
+import top.tcyeee.bookmarkify.server.IBookmarkFunctionService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
-import top.tcyeee.bookmarkify.utils.BaseUtils
 
 /**
  * 用户桌面排布节点 Service 实现
@@ -21,6 +22,7 @@ import top.tcyeee.bookmarkify.utils.BaseUtils
 class UserLayoutNodeServiceImpl(
     private val preferenceService: IUserPreferenceService,
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
+    private val bookmarkFunctionService: IBookmarkFunctionService,
 ) : IUserLayoutNodeService, ServiceImpl<UserLayoutNodeMapper, UserLayoutNodeEntity>() {
 
     companion object {
@@ -28,14 +30,19 @@ class UserLayoutNodeServiceImpl(
         private const val ROOT_NAME = "ROOT"
     }
 
+    @Transactional
     override fun layout(uid: String): UserLayoutNodeVO {
+        // 查询用户的自定义标签
+        val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId }
+        // 查询用户的绑定功能
+        val bookmarkFunctionMap = bookmarkFunctionService.findByUid(uid).associateBy { it.layoutNodeId }
         // 查询到用户的排序信息
         val sortMap = preferenceService.queryByUid(uid).sortMap
-        // 查询布局信息中关联的书签
-        val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
         // 查询到用户布局信息
         return this.findByUid(uid)
-            .map { it.vo(sortMap[it.id], bookmarkMap[it.id]) }
+            // 格式化为标准桌面标准输出,TODO 有可能出现不带有排序的信息
+            .map { it.vo(sortMap[it.id], bookmarkMap[it.id], bookmarkFunctionMap[it.id]) }
+            // 重新组织架构
             .let { nodeStructure(it) }
     }
 

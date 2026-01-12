@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Max
+import top.tcyeee.bookmarkify.entity.BookmarkFunctionVO
 import java.time.LocalDateTime
 
 /**
@@ -27,6 +28,12 @@ data class BookmarkFunctionEntity(
         uid = uid,
         type = FunctionType.SETTING,
         layoutNodeId = node.id,
+    )
+
+    fun vo(): BookmarkFunctionVO = BookmarkFunctionVO(
+        id = this.id,
+        layoutNodeId = this.layoutNodeId,
+        type = this.type,
     )
 }
 
