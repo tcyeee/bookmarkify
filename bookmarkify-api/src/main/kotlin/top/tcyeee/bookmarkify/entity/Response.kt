@@ -20,8 +20,6 @@ data class BookmarkShow(
     @field:Schema(description = "基础url") var urlBase: String? = null,
     @field:Schema(description = "小图标") var iconBase64: String? = null,
     @field:Schema(description = "网站活性") var isActivity: Boolean? = null,
-    @field:Schema(description = "书签创建时间(Unix秒)") var createTime: Long? = null,
-    @field:Schema(description = "目录层级(从根到目标)") var paths: List<String>? = null,
     @JsonIgnore @field:Schema(description = "用户ID") var uid: String? = null,
     @JsonIgnore @field:Schema(description = "大图尺寸") var hdSize: Int = 0,
     @JsonIgnore @field:Schema(description = "Host(用于拿不到name的情况下最后显示Title)") var urlHost: String? = null,
@@ -30,6 +28,15 @@ data class BookmarkShow(
     @field:Schema(description = "大图标OSS地址,带权限") var iconHdUrl: String? = null,
 ) {
     val isHd: Boolean get() = hdSize > 50
+
+    constructor(userlink: BookmarkUserLink, bookmark: BookmarkEntity?) : this() {
+        bookmark?.let { BeanUtil.copyProperties(it, this) }
+        BeanUtil.copyProperties(userlink, this)
+        bookmarkUserLinkId = userlink.id
+        urlBase = bookmark?.let { "${it.urlScheme}://${it.urlHost}${it.urlPath}" }
+        hdSize = bookmark?.maximalLogoSize ?: 0
+        iconHdUrl = null
+    }
 
     /** 设置大图LOGO还有备用Title */
     fun initLogo(): BookmarkShow {

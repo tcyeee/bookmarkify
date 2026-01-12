@@ -35,7 +35,7 @@ interface IBookmarkService : IService<BookmarkEntity> {
     fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO
 
     /** 查看我的全部书签 */
-    fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow>
+    fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): IPage<BookmarkShow>
 
     /** 导入 Chrome 书签 */
     fun importBookmarkFile(file: MultipartFile, uid: String): UserLayoutNodeVO

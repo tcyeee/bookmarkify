@@ -9,6 +9,7 @@ import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.entity.*
+import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.mapper.*
 import top.tcyeee.bookmarkify.server.IBookmarkService
@@ -70,8 +71,12 @@ class BookmarkServiceImpl(
         return bookmarkUserLinkMapper.findShowById(userLink.id).initLogo().let { UserLayoutNodeVO(nodeEntity, it) }
     }
 
-    override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): List<BookmarkShow> =
-        bookmarkUserLinkMapper.allBookmarkByUid(uid).onEach { it.initLogo() }
+    override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): IPage<BookmarkShow> {
+        val result = bookmarkUserLinkMapper.selectPage(params.toPage(), params.toWrapper())
+        val bookmarkIds: List<String> = result.records.mapNotNull { it.bookmarkId }
+        val bookmarkEntityMap = baseMapper.selectByIds(bookmarkIds).associateBy { it.id }
+        return result.convert { BookmarkShow(it, bookmarkEntityMap[it.bookmarkId]).initLogo() }
+    }
 
     /**
      * 数据读取完成以后,立即返回占位信息

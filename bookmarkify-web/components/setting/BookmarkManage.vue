@@ -154,6 +154,7 @@ async function fetchBookmarks() {
   try {
     const payload = keyword.value.trim() ? { name: keyword.value.trim() } : {}
     const res = await bookmarksList(payload)
+    console.log(res)
     bookmarks.value = res?.records ?? []
   } catch (error: any) {
     bookmarkError.value = error?.msg || error?.message || '获取书签失败，请稍后重试。'
