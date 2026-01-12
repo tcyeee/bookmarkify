@@ -45,6 +45,9 @@ class BookmarkServiceImpl(
             bookmarkUserLinkMapper.insert(pair.map { it.second })
         }.run {}
 
+    override fun findByHost(host: String): BookmarkEntity? =
+        ktQuery().eq(BookmarkEntity::urlHost, host).one()
+
     @Transactional
     override fun setDefaultFuction(uid: String) =
         UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.FUNCTION)
@@ -140,11 +143,13 @@ class BookmarkServiceImpl(
         UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
     }
 
-    override fun kafkaBookmarkParseAndResetUserItem(uid: String, rawUrl: String) =
-        WebsiteParser.urlWrapper(rawUrl)
-            .let { BookmarkEntity(it) }
-            .also { this.parseBookmarkAndSave(it) }
-            .also { bookmarkUserLinkService.resetBookmarkId(uid, it.urlHost, it.id) }.run {}
+    override fun kafkaBookmarkParseAndResetUserItem(uid: String, rawUrl: String) {
+        // 先通过Host看一下数据库有没有有元书签，如果有的话，那么那么直接使用元书签,没有则解析出元书签,同时存储
+        val urlWrapper = WebsiteParser.urlWrapper(rawUrl)
+        val entity = this.findByHost(urlWrapper.urlHost) ?: BookmarkEntity(urlWrapper).also { save(it) }
+        // 将用户自定义书签和原书签关联
+        bookmarkUserLinkService.resetBookmarkId(uid, entity.urlHost, entity.id)
+    }
 
     override fun kafkaBookmarkParse(bookmarkId: String) =
         baseMapper.selectById(bookmarkId).also { parseBookmarkAndSave(it) }.run {}
