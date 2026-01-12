@@ -6,10 +6,11 @@
 </template>
 
 <script lang="ts" setup>
-const props = withDefaults(defineProps<{ showTitle?: boolean }>(), {
-  showTitle: true,
-})
-const { showTitle } = toRefs(props)
+import { computed } from 'vue'
+import { usePreferenceStore } from '@stores/preference.store'
+
+const preferenceStore = usePreferenceStore()
+const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
 </script>
 
 <style scoped>
