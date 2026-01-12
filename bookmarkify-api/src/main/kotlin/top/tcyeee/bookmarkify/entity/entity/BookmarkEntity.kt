@@ -98,10 +98,11 @@ data class BookmarkUserLink(
     @TableId val id: String = IdUtil.fastUUID(),
     @field:Max(40) @field:Schema(description = "用户ID") var uid: String,
     @field:Max(40) @field:Schema(description = "书签ID") val bookmarkId: String?,  // 书签ID可能为null,在用户批量添加的时候,只会添加用户自定义书签,而不会关联到源书签
+    @field:Max(40) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
+
     @field:Max(200) @field:Schema(description = "书签标题(用户写的)") val title: String? = null,
     @field:Max(1000) @field:Schema(description = "书签备注(用户写的)") val description: String? = null,
     @field:Max(1000) @field:Schema(description = "书签完整URL(带参数)") val urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
-    @field:Max(200) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
 
     @JsonIgnore @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "是否删除") val deleted: Boolean = false,

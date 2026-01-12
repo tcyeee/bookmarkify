@@ -3,19 +3,14 @@ package top.tcyeee.bookmarkify.server.impl
 import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
-import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
-import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
-import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
+import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
-import top.tcyeee.bookmarkify.mapper.BookmarkMapper
-import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
-import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
-import top.tcyeee.bookmarkify.mapper.WebsiteLogoMapper
+import top.tcyeee.bookmarkify.mapper.*
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
@@ -36,6 +31,7 @@ class BookmarkServiceImpl(
     private val layoutNodeMapper: UserLayoutNodeMapper,
     private val websiteLogoMapper: WebsiteLogoMapper,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
+    private val bookmarkFunctionMapper: BookmarkFunctionMapper,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
 
     // 找到全部的系统默认书签,存储用户桌面布局和自定义书签
@@ -48,6 +44,14 @@ class BookmarkServiceImpl(
             layoutNodeMapper.insert(pair.map { it.first })
             bookmarkUserLinkMapper.insert(pair.map { it.second })
         }.run {}
+
+    @Transactional
+    override fun setDefaultFuction(uid: String) =
+        UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.FUNCTION)
+            .also { layoutNodeMapper.insert(it) }
+            .let { BookmarkFunctionEntity(it, uid) }
+            .also { bookmarkFunctionMapper.insert(it) }
+            .run {}
 
     override fun search(name: String): List<BookmarkEntity> =
         ktQuery().eq(BookmarkEntity::isActivity, true).like(BookmarkEntity::appName, name).or()
