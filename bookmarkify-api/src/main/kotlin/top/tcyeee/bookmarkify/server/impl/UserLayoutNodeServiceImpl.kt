@@ -40,7 +40,7 @@ class UserLayoutNodeServiceImpl(
         val sortMap = preferenceService.queryByUid(uid).sortMap
         // 查询到用户布局信息
         return this.findByUid(uid)
-            // 格式化为标准桌面标准输出,TODO 有可能出现不带有排序的信息
+            // 格式化为标准桌面标准输出
             .map { it.vo(sortMap[it.id], bookmarkMap[it.id], bookmarkFunctionMap[it.id]) }
             // 重新组织架构
             .let { nodeStructure(it) }
