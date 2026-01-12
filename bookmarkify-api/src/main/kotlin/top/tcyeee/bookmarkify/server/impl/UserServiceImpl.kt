@@ -78,7 +78,7 @@ class UserServiceImpl(
             .let { this.queryOrRegisterByDeviceId(it) }
 
         // 初始化用户设置
-        bookmarkService.setDefaultFuction(BaseUtils.uid())
+        bookmarkService.setDefaultFuction(userEntity.id)
         // 初始化用户偏好设置
         userPreferenceMapper.insert(UserPreferenceEntity(uid = userEntity.id))
         // 初始化用户书签
