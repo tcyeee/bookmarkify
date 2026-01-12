@@ -2,10 +2,8 @@ package top.tcyeee.bookmarkify.entity
 
 import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.IdUtil
-import com.baomidou.mybatisplus.annotation.TableId
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
-import jakarta.validation.constraints.Max
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
@@ -28,7 +26,7 @@ data class BookmarkShow(
     @JsonIgnore @field:Schema(description = "大图尺寸") var hdSize: Int = 0,
     @JsonIgnore @field:Schema(description = "Host(用于拿不到name的情况下最后显示Title)") var urlHost: String? = null,
     @JsonIgnore @field:Schema(description = "在有manifest的情况下,替换title") var appName: String? = null,
-    @JsonIgnore @field:Schema(description = "用户桌面排布ID") var layoutNodeId: String,
+    @JsonIgnore @field:Schema(description = "用户桌面排布ID") var layoutNodeId: String? = null,
     @field:Schema(description = "大图标OSS地址,带权限") var iconHdUrl: String? = null,
 ) {
     val isHd: Boolean get() = hdSize > 50
