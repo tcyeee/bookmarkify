@@ -1,22 +1,10 @@
 <template>
-  <div
-    :class="{ 'is-add': isAddItem(item) }"
-    :data-is-add-item="isAddItem(item)"
-    @contextmenu="onItemContextMenu($event, item)">
+  <div :class="{ 'is-add': isAddItem(item) }" :data-is-add-item="isAddItem(item)" @contextmenu="onItemContextMenu($event, item)">
     <div>
-      <LaunchpadCellFolder
-        v-if="item.type === HomeItemType.BOOKMARK_DIR"
-        :value="toBookmarkDir(item)"
-        :show-title="showTitle"
-        @click="openDir(item)" />
-      <LaunchpadCellBookmark
-        v-else-if="item.type === HomeItemType.BOOKMARK"
-        :value="item.typeApp!"
-        :show-title="showTitle"
-        @click="openPage(item.typeApp!)" />
-      <LaunchpadCellBookmarkLoading
-        v-else-if="item.type === HomeItemType.BOOKMARK_LOADING"
-        :show-title="showTitle" />
+      <LaunchpadCellFolder v-if="item.type === HomeItemType.BOOKMARK_DIR" :value="toBookmarkDir(item)" :show-title="showTitle" @click="openDir(item)" />
+      <LaunchpadCellBookmark v-else-if="item.type === HomeItemType.BOOKMARK" :value="item.typeApp!" :show-title="showTitle" @click="openPage(item.typeApp!)" />
+      <LaunchpadCellBookmarkLoading v-else-if="item.type === HomeItemType.BOOKMARK_LOADING" :show-title="showTitle" />
+      <LaunchpadCellFunction v-else-if="item.type === HomeItemType.FUNCTION" label="设置" :show-title="showTitle" @click="openFunction" />
     </div>
   </div>
 </template>
@@ -48,7 +36,7 @@ const preferenceStore = usePreferenceStore()
 
 const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
 const bookmarkOpenMode = computed<BookmarkOpenMode>(
-  () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB,
+  () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB
 )
 
 function isAddItem(item: GridItem): item is AddItem {
@@ -66,9 +54,7 @@ function addBookmark(item: UserLayoutNodeVO) {
 function toBookmarkDir(item: UserLayoutNodeVO): BookmarkDir {
   return {
     name: item.name ?? '文件夹',
-    bookmarkList: (item.children ?? [])
-      .map((child) => child.typeApp)
-      .filter((child): child is BookmarkShow => Boolean(child)),
+    bookmarkList: (item.children ?? []).map((child) => child.typeApp).filter((child): child is BookmarkShow => Boolean(child)),
   }
 }
 
@@ -81,6 +67,11 @@ function openPage(bookmark: BookmarkShow) {
   if (props.toggleDrag) return
   const target = bookmarkOpenMode.value === BookmarkOpenMode.NEW_TAB ? '_blank' : '_self'
   window.open(bookmark.urlFull, target)
+}
+
+function openFunction() {
+  if (props.toggleDrag) return
+  navigateTo('/setting')
 }
 
 async function delOne(item: UserLayoutNodeVO) {
