@@ -7,7 +7,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
+import top.tcyeee.bookmarkify.config.exception.CommonException
+import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.server.IBookmarkService
 
 @Component
@@ -22,16 +23,18 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
             it.printStackTrace()
             return
         }
-        when (obj.getStr("action")) {
-            KafkaMethodsEnums.LINKT_TEST.name -> linkTest(obj)
-            KafkaMethodsEnums.BOOKMARK_PARSE.name -> bookmarkParse(obj)
-            KafkaMethodsEnums.PARSE_NOTICE_EXISTING.name -> parseNoticeExisting(obj)
-            KafkaMethodsEnums.PARSE_NOTICE_NEW.name -> handleNew(obj)
-            KafkaMethodsEnums.BOOKMARK_PARSE_AND_RESET_USER_ITEM.name -> bookmarkParseAndResetUserItem(obj)
-            else -> {
-                log.warn("[Kafka] unknown action: ${obj.getStr("action")}")
-                return
+        runCatching {
+            when (obj.getStr("action")) {
+                KafkaMethodsEnums.LINKT_TEST.name -> linkTest(obj)
+                KafkaMethodsEnums.BOOKMARK_PARSE.name -> bookmarkParse(obj)
+                KafkaMethodsEnums.PARSE_NOTICE_EXISTING.name -> parseNoticeExisting(obj)
+                KafkaMethodsEnums.PARSE_NOTICE_NEW.name -> handleNew(obj)
+                KafkaMethodsEnums.BOOKMARK_PARSE_AND_RESET_USER_ITEM.name -> bookmarkParseAndResetUserItem(obj)
+                else -> throw CommonException(ErrorType.E231)
             }
+        }.getOrElse {
+            log.warn("[Kafka] err: ${obj.getStr("action")}")
+            return
         }
     }
 

@@ -5,12 +5,11 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
-import top.tcyeee.bookmarkify.config.exception.CommonException
-import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
+import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
@@ -21,12 +20,7 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
-import top.tcyeee.bookmarkify.utils.ChromeBookmarkParser
-import top.tcyeee.bookmarkify.utils.OssUtils
-import top.tcyeee.bookmarkify.utils.SocketUtils
-import top.tcyeee.bookmarkify.utils.SystemBookmarkStructure
-import top.tcyeee.bookmarkify.utils.WebsiteParser
-import top.tcyeee.bookmarkify.utils.yesterday
+import top.tcyeee.bookmarkify.utils.*
 import java.time.LocalDateTime
 
 /**
@@ -38,7 +32,6 @@ class BookmarkServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
     private val projectConfig: ProjectConfig,
     private val kafkaMessageService: IKafkaMessageService,
-    private val nodeMapper: UserLayoutNodeMapper,
     private val layoutNodeService: IUserLayoutNodeService,
     private val layoutNodeMapper: UserLayoutNodeMapper,
     private val websiteLogoMapper: WebsiteLogoMapper,
@@ -62,7 +55,7 @@ class BookmarkServiceImpl(
             .like(BookmarkEntity::urlHost, name).last("limit 5").list()
 
     override fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO {
-        val nodeEntity = UserLayoutNodeEntity(uid = uid).also { nodeMapper.insert(it) }
+        val nodeEntity = UserLayoutNodeEntity(uid = uid).also { layoutNodeMapper.insert(it) }
 
         val userLink = this.findById(bookmarkId).let { BookmarkUserLink(it, nodeEntity.id, uid) }
             .also { bookmarkUserLinkMapper.insert(it) }
@@ -80,9 +73,9 @@ class BookmarkServiceImpl(
     override fun importBookmarkFile(file: MultipartFile, uid: String): UserLayoutNodeVO {
         // 1. 解析上传文件，获取扁平化后的书签结构
         val structures: List<SystemBookmarkStructure> = ChromeBookmarkParser.trim(file)
-        // 2.保存所有的文件夹,同时保存ID
-        structures.map { item -> UserLayoutNodeEntity(uid = uid, name = item.folderName).also { item.nodeId = it.id } }
-            .also { nodeMapper.insert(it) }
+        // 2.保存p所有的文件夹,同时保存ID
+        structures.map { item -> UserLayoutNodeEntity(uid, item).also { item.nodeId = it.id } }
+            .also { layoutNodeMapper.insert(it) }
         // 3.初始化全部的用户布局item和自定义标签,同时保存
         // 因为这里用户的自定义书签是已知的,但是不确定源书签不会在数据库中存在,所以先存储用户的自定义书签,关联书签ID设置为LOADING,
         // 然后对每个源书签单独检查,每检查完一个源书签,就根据源书签host,去找到用户书签的host,将书签ID补上.
@@ -111,7 +104,8 @@ class BookmarkServiceImpl(
         val bookmark = this.getByHost(bookmarkUrl.urlHost) ?: BookmarkEntity(bookmarkUrl).also { save(it) }
 
         // 添加用户布局信息
-        val nodeEntity = UserLayoutNodeEntity(uid = uid).also { nodeMapper.insert(it) }
+        val nodeEntity = UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING)
+            .also { layoutNodeMapper.insert(it) }
         // 添加用户关联
         val userLink = BookmarkUserLink(url, uid, nodeEntity.id, bookmark).also { bookmarkUserLinkMapper.insert(it) }
 
@@ -189,7 +183,7 @@ class BookmarkServiceImpl(
             bookmark.isActivity = false
             baseMapper.insertOrUpdate(bookmark)
             it.printStackTrace()
-            throw CommonException(ErrorType.E230)
+            return bookmark
         }
             // 填充bookmark基础信息 以及 bookmark-ico-base64信息
             .also { bookmark.initBaseInfo(it) }
