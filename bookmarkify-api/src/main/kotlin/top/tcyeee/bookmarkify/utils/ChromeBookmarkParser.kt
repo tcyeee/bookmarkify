@@ -22,9 +22,10 @@ data class ChromeBookmarkRawData(
     val createTime: LocalDateTime?,
     val iconBase64: String?,
     val paths: String,
-){
+) {
     fun pair(uid: String): Pair<UserLayoutNodeEntity, BookmarkUserLink> =
-        UserLayoutNodeEntity(uid = uid).let { Pair(it, BookmarkUserLink(uid, it.id, this)) }
+        UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING)
+            .let { Pair(it, BookmarkUserLink(uid, it.id, this)) }
 }
 
 data class ChromeBookmarkStructure(

@@ -22,8 +22,8 @@ object WebsiteParser {
         .also { this.fillManifest(it) } // 解析Manifest
         .also { this.initLogo(it) } // 解析网站图片(LOGO/OG)
 
-    fun urlToBookmark(urlRowStr: String): BookmarkEntity=
-         urlWrapper(urlRowStr).let{ BookmarkEntity(it) }
+    fun urlToBookmark(urlRowStr: String): BookmarkEntity =
+        urlWrapper(urlRowStr).let { BookmarkEntity(it) }
 
     /**
      * 格式化URL字符串
@@ -57,10 +57,7 @@ object WebsiteParser {
      */
     private fun getDocument(urlWrapper: BookmarkUrlWrapper): Document = runCatching {
         Jsoup.connect(urlWrapper.urlFull).timeout(10000).ignoreHttpErrors(false).get()
-    }.getOrElse { err ->
-        err.printStackTrace()
-        throw CommonException(ErrorType.E304, err.message ?: err.toString())
-    }
+    }.getOrElse { throw CommonException(ErrorType.E304, it.message ?: it.toString()) }
 
     /**
      * 获网站图片

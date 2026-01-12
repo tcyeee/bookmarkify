@@ -56,6 +56,7 @@ data class BookmarkEntity(
     // JSON格式化后的数据
     val json: String? get() = JSONUtil.toJsonStr(this)
 
+    // 通过URL初始化
     constructor(url: BookmarkUrlWrapper) : this(
         id = IdUtil.fastUUID(),
         urlHost = url.urlHost,

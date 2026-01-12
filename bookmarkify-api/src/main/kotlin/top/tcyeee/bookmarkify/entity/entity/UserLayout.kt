@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
+import top.tcyeee.bookmarkify.utils.SystemBookmarkStructure
 import java.time.LocalDateTime
 import kotlin.Long
 
@@ -30,6 +31,12 @@ data class UserLayoutNodeEntity(
     @field:Schema(description = "节点(文件夹)名称") val name: String? = null,
     @field:Schema(description = "添加时间") var createdAt: LocalDateTime = LocalDateTime.now(),
 ) {
+    constructor(uid:String, dir: SystemBookmarkStructure) : this(
+        uid=uid,
+        name=dir.folderName,
+        type = NodeTypeEnum.BOOKMARK_DIR
+    )
+
     // 当前仅仅只包含Bookamrk的展示
     fun vo(sort: Int?, bookmark: BookmarkShow?): UserLayoutNodeVO = UserLayoutNodeVO(
         id = this.id,
@@ -37,7 +44,7 @@ data class UserLayoutNodeEntity(
         typeApp = bookmark
     ).also {
         BeanUtil.copyProperties(this, it)
-        if (type == NodeTypeEnum.BOOKMARK) it.typeApp!!.initLogo() // 初始化其中的LOGO
+        if (type == NodeTypeEnum.BOOKMARK) it.typeApp?.initLogo()
     }
 
     fun loadingVO(): UserLayoutNodeVO {
