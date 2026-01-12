@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.controller.bookmark
 
 import cn.dev33.satoken.annotation.SaIgnore
+import com.baomidou.mybatisplus.core.metadata.IPage
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
@@ -36,7 +37,7 @@ class BookmarksController(
 
     @Operation(summary = "查看我的全部书签")
     @PostMapping("/list")
-    fun list(@RequestBody params: AllOfMyBookmarkParams): List<BookmarkShow> =
+    fun list(@RequestBody params: AllOfMyBookmarkParams): IPage<BookmarkShow> =
         bookmarkService.allOfMyBookmark(BaseUtils.uid(), params)
 
     @PostMapping("/query")

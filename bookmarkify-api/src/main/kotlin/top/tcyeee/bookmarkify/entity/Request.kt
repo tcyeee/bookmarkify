@@ -29,7 +29,6 @@ data class GradientConfigParams(
     @field:Schema(description = "渐变方向角度，默认135") var direction: Int = 135,
 )
 
-data class AllOfMyBookmarkParams(var name: String? = null) : PageBean()
 data class CaptchaSmsParams(val phone: String, val captcha: String)
 data class SmsVerifyParams(val phone: String, val smsCode: String)
 data class EmailVerifyParams(val email: String, val code: String)
@@ -54,6 +53,20 @@ data class BookmarkSearchParams(var name: String?, var status: ParseStatusEnum?)
         return query
     }
 }
+
+data class AllOfMyBookmarkParams(var name: String? = null) : PageBean(){
+    fun toWrapper(): Wrapper<BookmarkUserLink> {
+        val query = KtQueryWrapper(BookmarkUserLink::class.java)
+        if (!name.isNullOrBlank()) {
+            query.and {
+                it.like(BookmarkUserLink::title, name)
+                    .or().like(BookmarkUserLink::description, name)
+            }
+        }
+        return query
+    }
+}
+
 
 data class UserSearchParams(
     var name: String? = null,
