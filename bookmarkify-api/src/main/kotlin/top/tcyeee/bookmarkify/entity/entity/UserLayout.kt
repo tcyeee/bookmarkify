@@ -23,7 +23,7 @@ import java.time.LocalDateTime
 data class UserLayoutNodeEntity(
     @TableId @field:Schema(description = "节点ID") val id: String = IdUtil.fastUUID(),
     @field:Schema(description = "父节点ID") val parentId: String? = null,
-    @field:Schema(description = "节点类型") val type: NodeTypeEnum = NodeTypeEnum.BOOKMARK,
+    @field:Schema(description = "节点类型") var type: NodeTypeEnum = NodeTypeEnum.BOOKMARK,
 
     @field:Schema(description = "用户ID") val uid: String,
     @field:Schema(description = "节点(文件夹)名称") val name: String? = null,
@@ -39,15 +39,18 @@ data class UserLayoutNodeEntity(
     fun vo(sort: Int?, bookmark: BookmarkShow?, func: BookmarkFunctionEntity?): UserLayoutNodeVO = UserLayoutNodeVO(
         id = this.id,
         sort = sort ?: Int.MAX_VALUE,
-        // 判断当前的桌面Item类型(Boomark / Function)
-        type = if (bookmark != null) NodeTypeEnum.BOOKMARK else NodeTypeEnum.FUNCTION
+        // 判断当前的桌面Item类型(Boomark / Dir)
+        type = this.type
     ).also {
+        if (bookmark != null) type = NodeTypeEnum.BOOKMARK
+        if (func != null) type = NodeTypeEnum.FUNCTION
+
         BeanUtil.copyProperties(this, it)
         if (type == NodeTypeEnum.BOOKMARK) {
             it.typeApp = bookmark
             it.typeApp?.initLogo()
         }
-        if(type == NodeTypeEnum.FUNCTION) {
+        if (type == NodeTypeEnum.FUNCTION) {
             it.typeFuc = func?.vo()
         }
     }
