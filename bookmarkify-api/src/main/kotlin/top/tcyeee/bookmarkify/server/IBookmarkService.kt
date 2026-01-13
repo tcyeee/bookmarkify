@@ -51,10 +51,15 @@ interface IBookmarkService : IService<BookmarkEntity> {
 
     /**
      * 通过网址解析为书签,同时重新绑定到添加这个网址的用户
+     * 1.解析书签,更新书签状态(之前是LOADING)
+     * 2.根据host重新绑定用户自定义书签
+     * 3.修改用户布局元素状态(之前是LOADING)
+     *
      * 为什么要重新绑定？
      * 答: 用户添加网址的时候是批量添加的,只能提前批量返回用户自定义的书签,用户自定义的书签具体有没有存在源书签还不知道,所以查询完毕知道以后,再重新关联回去
      */
-    fun kafkaBookmarkParseAndResetUserItem(uid: String, rawUrl: String)
+    fun kafkaBookmarkParseAndResetUserItem(uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String)
+
     fun kafkaBookmarkParse(bookmarkId: String)
 
     fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity>

@@ -30,6 +30,7 @@ data class BookmarkEntity(
     /* URL相关 */
     @TableId var id: String,
     @field:Max(200) @field:Schema(description = "书签根域名") var urlHost: String,        // sfz.uzuzuz.com.cn
+    @Deprecated("元书签内,主要是存储logo,还有网站的SEO信息,不同路径下的元书签,这些信息都是一样的,所以路径字段没有任何意义")
     @field:Schema(description = "路径URL(不带参数)") var urlPath: String? = null,         // /test/info
     @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
@@ -73,10 +74,9 @@ data class BookmarkEntity(
         val bookmarkUrl: BookmarkUrlWrapper = WebsiteParser.urlWrapper(chromeRowDate.url)
         urlHost = bookmarkUrl.urlHost
         urlScheme = bookmarkUrl.urlScheme
-        urlPath = bookmarkUrl.urlPath
     }
 
-    fun initBaseInfo(wrapper: BookmarkWrapper) {
+    fun successInit(wrapper: BookmarkWrapper) {
         this.appName = wrapper.name  // TODO 使用AI将title中的信息简化
         this.isActivity = true
         this.title = wrapper.title

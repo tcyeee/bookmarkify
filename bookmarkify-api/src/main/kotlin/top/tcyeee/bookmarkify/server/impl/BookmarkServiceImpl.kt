@@ -36,26 +36,21 @@ class BookmarkServiceImpl(
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
 
     // 找到全部的系统默认书签,存储用户桌面布局和自定义书签
-    override fun setDefaultBookmark(uid: String) = projectConfig.defaultBookmarkify
-        .map { WebsiteParser.urlWrapper(it).urlHost }
-        .let { this.findListByHost(it) }
-        .map { bookmark ->
-            UserLayoutNodeEntity(uid = uid).let { node -> Pair(node, BookmarkUserLink(bookmark, node.id, uid)) }
-        }.also { pair ->
-            layoutNodeMapper.insert(pair.map { it.first })
-            bookmarkUserLinkMapper.insert(pair.map { it.second })
-        }.run {}
+    override fun setDefaultBookmark(uid: String) =
+        projectConfig.defaultBookmarkify.map { WebsiteParser.urlWrapper(it).urlHost }.let { this.findListByHost(it) }
+            .map { bookmark ->
+                UserLayoutNodeEntity(uid = uid).let { node -> Pair(node, BookmarkUserLink(bookmark, node.id, uid)) }
+            }.also { pair ->
+                layoutNodeMapper.insert(pair.map { it.first })
+                bookmarkUserLinkMapper.insert(pair.map { it.second })
+            }.run {}
 
-    override fun findByHost(host: String): BookmarkEntity? =
-        ktQuery().eq(BookmarkEntity::urlHost, host).one()
+    override fun findByHost(host: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, host).one()
 
     @Transactional
     override fun setDefaultFuction(uid: String) =
-        UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.FUNCTION)
-            .also { layoutNodeMapper.insert(it) }
-            .let { BookmarkFunctionEntity(it, uid) }
-            .also { bookmarkFunctionMapper.insert(it) }
-            .run {}
+        UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.FUNCTION).also { layoutNodeMapper.insert(it) }
+            .let { BookmarkFunctionEntity(it, uid) }.also { bookmarkFunctionMapper.insert(it) }.run {}
 
     override fun search(name: String): List<BookmarkEntity> =
         ktQuery().eq(BookmarkEntity::isActivity, true).like(BookmarkEntity::appName, name).or()
@@ -85,29 +80,27 @@ class BookmarkServiceImpl(
     override fun importBookmarkFile(file: MultipartFile, uid: String): UserLayoutNodeVO {
         // 1. 解析上传文件，获取扁平化后的书签结构
         val structures: List<SystemBookmarkStructure> = ChromeBookmarkParser.trim(file)
-        // 2.保存p所有的文件夹,同时保存ID
+        // 2.保存所有的文件夹,同时保存ID
         structures.map { item -> UserLayoutNodeEntity(uid, item).also { item.nodeId = it.id } }
             .also { layoutNodeMapper.insert(it) }
         // 3.初始化全部的用户布局item和自定义标签,同时保存
         // 因为这里用户的自定义书签是已知的,但是不确定源书签不会在数据库中存在,所以先存储用户的自定义书签,关联书签ID设置为LOADING,
         // 然后对每个源书签单独检查,每检查完一个源书签,就根据源书签host,去找到用户书签的host,将书签ID补上.
-        structures.flatMap { node -> node.bookmarks.map { it.pair(uid) } }
+        val pair = structures.flatMap { node -> node.bookmarks.map { it.pair(uid) } }
             .also { data -> layoutNodeMapper.insert(data.map { it.first }) }
             .also { data -> bookmarkUserLinkMapper.insert(data.map { it.second }) }
 
         // 4.数据清洗,只保留raw-url, 解析为源书签,解析以后,重新绑定用户自定义书签
-        structures.flatMap { it.bookmarks }.map { it.url }
-            .forEach { url -> kafkaMessageService.bookmarkParseAndResetUserItem(uid, url) }
+        pair.forEach {
+            kafkaMessageService.bookmarkParseAndResetUserItem(uid, it.second.urlFull, it.second.id, it.first.id)
+        }
 
         // 重新获取书签数据
         return layoutNodeService.layout(uid)
     }
 
     override fun checkAll() =
-        ktQuery()
-            .lt(BookmarkEntity::updateTime, yesterday())
-            .lt(BookmarkEntity::verifyFlag, false)
-            .list()
+        ktQuery().lt(BookmarkEntity::updateTime, yesterday()).lt(BookmarkEntity::verifyFlag, false).list()
             .forEach { kafkaMessageService.bookmarkParse(it.id) }
 
     override fun addOne(url: String, uid: String): UserLayoutNodeVO {
@@ -116,8 +109,8 @@ class BookmarkServiceImpl(
         val bookmark = this.getByHost(bookmarkUrl.urlHost) ?: BookmarkEntity(bookmarkUrl).also { save(it) }
 
         // 添加用户布局信息
-        val nodeEntity = UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING)
-            .also { layoutNodeMapper.insert(it) }
+        val nodeEntity =
+            UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING).also { layoutNodeMapper.insert(it) }
         // 添加用户关联
         val userLink = BookmarkUserLink(url, uid, nodeEntity.id, bookmark).also { bookmarkUserLinkMapper.insert(it) }
 
@@ -148,12 +141,35 @@ class BookmarkServiceImpl(
         UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
     }
 
-    override fun kafkaBookmarkParseAndResetUserItem(uid: String, rawUrl: String) {
+    /**
+     * 通过网址解析为书签,同时重新绑定到添加这个网址的用户
+     * 1.解析书签,更新书签状态(之前是LOADING)
+     * 2.根据host重新绑定用户自定义书签
+     * 3.修改用户布局元素状态(之前是LOADING)
+     *
+     * 为什么要重新绑定？
+     * 答: 用户添加网址的时候是批量添加的,只能提前批量返回用户自定义的书签,用户自定义的书签具体有没有存在源书签还不知道,所以查询完毕知道以后,再重新关联回去
+     */
+    override fun kafkaBookmarkParseAndResetUserItem(
+        uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String
+    ) {
         // 先通过Host看一下数据库有没有有元书签，如果有的话，那么那么直接使用元书签,没有则解析出元书签,同时存储
         val urlWrapper = WebsiteParser.urlWrapper(rawUrl)
         val entity = this.findByHost(urlWrapper.urlHost) ?: BookmarkEntity(urlWrapper).also { save(it) }
+
+        // 解析书签
+        this.parseBookmarkAndSave(entity)
         // 将用户自定义书签和原书签关联
-        bookmarkUserLinkService.resetBookmarkId(uid, entity.urlHost, entity.id)
+        bookmarkUserLinkService.resetBookmarkId(uid, userLinkId, entity.id)
+        // 修改用户节点状态
+        val node = UserLayoutNodeEntity(
+            id = layoutNodeId,
+            uid = uid,
+            type = NodeTypeEnum.BOOKMARK
+        ).also { layoutNodeMapper.insertOrUpdate(it) }
+        // 通知到用户
+        val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
+        UserLayoutNodeVO(node, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
     }
 
     override fun kafkaBookmarkParse(bookmarkId: String) =
@@ -200,7 +216,7 @@ class BookmarkServiceImpl(
             return bookmark
         }
             // 填充bookmark基础信息 以及 bookmark-ico-base64信息
-            .also { bookmark.initBaseInfo(it) }
+            .also { bookmark.successInit(it) }
             // 更新书签
             .also { baseMapper.insertOrUpdate(bookmark) }
 
