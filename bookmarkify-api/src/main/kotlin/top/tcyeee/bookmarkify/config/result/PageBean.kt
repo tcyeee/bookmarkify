@@ -1,6 +1,5 @@
 package top.tcyeee.bookmarkify.config.result
 
-import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page
 import io.swagger.v3.oas.annotations.media.Schema
 import java.io.Serializable
@@ -18,10 +17,4 @@ open class PageBean : Serializable {
     var pageSize = 10
 
     fun <T> toPage(): Page<T> = Page(currentPage.toLong(), pageSize.toLong())
-
-    fun <T, R> IPage<T>.mapPage(mapper: (T) -> R): IPage<R> {
-        val page = Page<R>(current, size, total)
-        page.records = records.map(mapper)
-        return page
-    }
 }

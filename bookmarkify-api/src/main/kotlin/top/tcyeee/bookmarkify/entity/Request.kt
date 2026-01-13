@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
+import top.tcyeee.bookmarkify.utils.BaseUtils
 
 data class UserPreferenceUpdateParams(
     @field:Schema(description = "主页背景配置ID") var backgroundConfigId: String? = null,
@@ -54,9 +55,13 @@ data class BookmarkSearchParams(var name: String?, var status: ParseStatusEnum?)
     }
 }
 
-data class AllOfMyBookmarkParams(var name: String? = null) : PageBean(){
+data class AllOfMyBookmarkParams(
+    var uid: String = BaseUtils.uid(),
+    var name: String? = null
+) : PageBean(){
     fun toWrapper(): Wrapper<BookmarkUserLink> {
         val query = KtQueryWrapper(BookmarkUserLink::class.java)
+        query.eq(BookmarkUserLink::uid, uid)
         if (!name.isNullOrBlank()) {
             query.and {
                 it.like(BookmarkUserLink::title, name)
