@@ -2,9 +2,9 @@
   <div @contextmenu="onItemContextMenu($event, item)">
     <div>
       <LaunchpadCellFolder v-if="item.type === HomeItemType.BOOKMARK_DIR" :value="item" :toggle-drag="toggleDrag" />
-      <LaunchpadCellBookmark v-else-if="item.type === HomeItemType.BOOKMARK" :value="item.typeApp!" :toggle-drag="toggleDrag" />
-      <LaunchpadCellBookmarkLoading v-else-if="item.type === HomeItemType.BOOKMARK_LOADING" />
-      <LaunchpadCellFunction v-else-if="item.type === HomeItemType.FUNCTION" :value="item.typeFuc!" :toggleDrag="toggleDrag" />
+      <LaunchpadCellBookmark v-if="item.type === HomeItemType.BOOKMARK" :value="item.typeApp!" :toggle-drag="toggleDrag" />
+      <LaunchpadCellBookmarkLoading v-if="item.type === HomeItemType.BOOKMARK_LOADING" />
+      <LaunchpadCellFunction v-if="item.type === HomeItemType.FUNCTION" :value="item.typeFuc!" :toggleDrag="toggleDrag" />
     </div>
   </div>
 </template>
