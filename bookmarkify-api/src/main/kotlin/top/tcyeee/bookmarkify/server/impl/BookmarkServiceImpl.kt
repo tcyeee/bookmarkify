@@ -162,11 +162,8 @@ class BookmarkServiceImpl(
         // 将用户自定义书签和原书签关联
         bookmarkUserLinkService.resetBookmarkId(uid, userLinkId, entity.id)
         // 修改用户节点状态
-        val node = UserLayoutNodeEntity(
-            id = layoutNodeId,
-            uid = uid,
-            type = NodeTypeEnum.BOOKMARK
-        ).also { layoutNodeMapper.insertOrUpdate(it) }
+        val node = UserLayoutNodeEntity(id = layoutNodeId, uid = uid, type = NodeTypeEnum.BOOKMARK)
+            .also { layoutNodeMapper.insertOrUpdate(it) }
         // 通知到用户
         val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
         UserLayoutNodeVO(node, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
@@ -211,6 +208,7 @@ class BookmarkServiceImpl(
             if (it.message.toString().contains("403")) bookmark.parseStatus = ParseStatusEnum.BLOCKED
             bookmark.parseErrMsg = it.message.toString()
             bookmark.isActivity = false
+            bookmark.parseStatus = ParseStatusEnum.CLOSED
             baseMapper.insertOrUpdate(bookmark)
             it.printStackTrace()
             return bookmark
