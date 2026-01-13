@@ -66,6 +66,8 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
     private fun bookmarkParseAndResetUserItem(obj: JSONObject) {
         val uid = obj.getStr("uid")
         val rawUrl = obj.getStr("rawUrl")
-        bookmarkService.kafkaBookmarkParseAndResetUserItem(uid, rawUrl)
+        val layoutNodeId = obj.getStr("layoutNodeId")
+        val userLinkId = obj.getStr("userLinkId")
+        bookmarkService.kafkaBookmarkParseAndResetUserItem(uid, rawUrl, layoutNodeId, userLinkId)
     }
 }
