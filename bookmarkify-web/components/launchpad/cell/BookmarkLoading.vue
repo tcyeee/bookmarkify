@@ -1,7 +1,5 @@
 <template>
-  <div class="loading-cell h-20 w-20 rounded-2xl flex justify-center items-center">
-    <span class="icon--memory-rotate-clockwise icon-size-35 text-gray-400 icon-spin" />
-  </div>
+  <div class="loading-cell h-20 w-20 rounded-2xl skeleton-shimmer" />
   <div v-if="showTitle" class="text-gray-300 w-18 text-sm mt-[0.3rem] truncate text-center">loading...</div>
 </template>
 
@@ -14,30 +12,34 @@ const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle 
 </script>
 
 <style scoped>
-.icon-spin {
-  animation: rotate 1.2s linear infinite;
-}
-
 .loading-cell {
-  background: #f8fafc;
-  animation: bgPulse 2.2s ease-in-out infinite;
+  background: #e5e7eb;
+  position: relative;
+  overflow: hidden;
 }
 
-@keyframes rotate {
-  to {
-    transform: rotate(360deg);
-  }
+.skeleton-shimmer::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    135deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.7) 50%,
+    transparent 70%
+  );
+  animation: shimmer 1.5s linear infinite;
 }
 
-@keyframes bgPulse {
+@keyframes shimmer {
   0% {
-    background-color: #f8fafc;
-  }
-  50% {
-    background-color: #e5e7eb;
+    transform: translate(-50%, -50%);
   }
   100% {
-    background-color: #f8fafc;
+    transform: translate(50%, 50%);
   }
 }
 </style>
