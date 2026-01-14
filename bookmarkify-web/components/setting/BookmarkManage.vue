@@ -95,6 +95,8 @@
 import { bookmarksList, bookmarksUpload } from '@api'
 import type { BookmarkShow } from '@typing'
 
+const bookmarkStore = useBookmarkStore()
+
 const fileInputRef = ref<HTMLInputElement>()
 const selectedFile = ref<File | null>(null)
 const importing = ref(false)
@@ -164,6 +166,7 @@ async function handleImport() {
     statusMessage.value = '导入完成!'
     statusType.value = 'success'
     await fetchBookmarks()
+    bookmarkStore.update()
   } catch (error: any) {
     console.error(error)
     statusMessage.value = error?.msg || error?.message || '导入失败，请稍后重试。'
