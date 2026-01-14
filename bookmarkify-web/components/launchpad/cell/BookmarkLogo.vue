@@ -9,10 +9,17 @@
     <!-- 内层 Logo：默认白底，必要时覆盖主色与淡白蒙版 -->
     <div class="bg-white flex justify-center items-center" :style="[logoSizeStyle, logoStyle]">
       <!-- 优先使用高清图 -->
-      <img v-if="props.value.iconHdUrl && !hdError" :src="props.value.iconHdUrl" alt="" @error="onHdError" />
+      <img
+        v-if="props.value.iconHdUrl && !hdError"
+        :key="`hd-${props.value.iconHdUrl}`"
+        :src="props.value.iconHdUrl"
+        alt=""
+        @error="onHdError"
+      />
       <!-- base64 图：可按尺寸放大 -->
       <img
         v-else-if="!iconError"
+        :key="`base64-${props.value.iconBase64?.slice(0, 20) || ''}`"
         :style="base64Style"
         :src="base64Src"
         alt=""
@@ -79,6 +86,7 @@ function onIconError() {
   iconError.value = true
 }
 
+// 监听 iconBase64 变化
 watch(
   () => props.value.iconBase64,
   async (base64) => {
@@ -99,6 +107,24 @@ watch(
     }
   },
   { immediate: true },
+)
+
+// 监听 iconHdUrl 变化，重置错误状态以便重新加载
+watch(
+  () => props.value.iconHdUrl,
+  () => {
+    hdError.value = false
+  },
+)
+
+// 监听整个 value 对象变化，重置所有错误状态
+watch(
+  () => props.value,
+  () => {
+    hdError.value = false
+    iconError.value = false
+  },
+  { deep: true },
 )
 
 // 加载 base64，得到主色与放大标记

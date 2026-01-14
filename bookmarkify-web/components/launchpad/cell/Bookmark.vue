@@ -5,7 +5,7 @@
     <!-- 正常书签状态 -->
     <BookmarkLogo v-else :value="props.value" :size="iconSize" />
     <div v-if="showTitle" class="w-18 text-sm mt-[0.3rem] truncate text-center" :class="props.value ? 'text-white opacity-90' : 'text-gray-300'">
-      {{ props.value ? (props.value.title || props.value.urlBase) : 'loading...' }}
+      {{ props.value ? (props.value.title || props.value.urlBase) : props.tempTitle ?? 'loading...' }}
     </div>
   </div>
 </template>
@@ -16,7 +16,7 @@ import { BookmarkOpenMode, type BookmarkShow } from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
 import BookmarkLogo from './BookmarkLogo.vue'
 
-const props = defineProps<{ value?: BookmarkShow | null; toggleDrag?: boolean }>()
+const props = defineProps<{ value?: BookmarkShow | null; tempTitle?: string; toggleDrag?: boolean }>()
 const { toggleDrag } = toRefs(props)
 
 const preferenceStore = usePreferenceStore()

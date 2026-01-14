@@ -55,9 +55,8 @@ data class UserLayoutNodeEntity(
         }
     }
 
-    fun loadingVO(): UserLayoutNodeVO {
-        return UserLayoutNodeVO("")
-    }
+    fun loadingVO(host: String): UserLayoutNodeVO =
+        UserLayoutNodeVO(id = this.id, type = NodeTypeEnum.BOOKMARK_LOADING, name = host)
 }
 
 /* 节点类型 */
