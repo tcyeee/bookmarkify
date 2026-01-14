@@ -1,7 +1,7 @@
 <template>
   <div @contextmenu="onItemContextMenu($event, item)">
     <LaunchpadCellFolder v-if="item.type === HomeItemType.BOOKMARK_DIR" :value="item" :toggle-drag="toggleDrag" />
-    <LaunchpadCellBookmark v-if="item.type === HomeItemType.BOOKMARK || item.type === HomeItemType.BOOKMARK_LOADING" :value="item.typeApp" :temp-title="item.name" :toggle-drag="toggleDrag" />
+    <LaunchpadCellBookmark v-if="item.type === HomeItemType.BOOKMARK || item.type === HomeItemType.BOOKMARK_LOADING" :value="item.typeApp" :temp-title="item.name ?? undefined" :toggle-drag="toggleDrag" />
     <LaunchpadCellFunction v-if="item.type === HomeItemType.FUNCTION" :value="item.typeFuc!" :toggleDrag="toggleDrag" />
   </div>
 </template>
