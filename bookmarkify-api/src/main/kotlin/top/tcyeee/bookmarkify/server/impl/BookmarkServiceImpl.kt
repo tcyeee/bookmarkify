@@ -11,13 +11,11 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.entity.*
-import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.mapper.*
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
-import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.utils.*
 import java.time.LocalDateTime
 
@@ -30,7 +28,6 @@ class BookmarkServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
     private val projectConfig: ProjectConfig,
     private val kafkaMessageService: IKafkaMessageService,
-    private val layoutNodeService: IUserLayoutNodeService,
     private val layoutNodeMapper: UserLayoutNodeMapper,
     private val websiteLogoMapper: WebsiteLogoMapper,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
@@ -114,7 +111,7 @@ class BookmarkServiceImpl(
         val userLink = BookmarkUserLink(url, uid, nodeEntity.id, bookmark).also { bookmarkUserLinkMapper.insert(it) }
 
         // 返回占位信息,同时通知队列去检查书签
-        if (bookmark.checkFlag()) return nodeEntity.loadingVO()
+        if (bookmark.checkFlag()) return nodeEntity.loadingVO(bookmark.urlHost)
             .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark.id, userLink.id, nodeEntity.id) }
 
         // 如果无需更新书签,则直接将旧书签打包为桌面元素返回

@@ -65,7 +65,7 @@ export const useWebSocketStore = defineStore('socket', {
       // 接收消息处理
       this.socket.onmessage = (event) => {
         const message = JSON.parse(event.data) as SocketMessage
-        console.log('[WebSocket] 收到消息:', message)
+        console.log(`[WebSocket] 收到消息:${message.type}`)
         if (message.type === SocketTypes.HOME_ITEM_UPDATE) {
           const bookmarkStore = useBookmarkStore()
           bookmarkStore.updateOneBookmarkCell(message.data)

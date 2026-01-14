@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { HomeItemType, type BookmarkShow, type UserLayoutNodeVO } from '@typing'
+import { HomeItemType, type UserLayoutNodeVO } from '@typing'
 import { bookmarksShowAll } from '@api'
 
 export const useBookmarkStore = defineStore('homeItems', {
