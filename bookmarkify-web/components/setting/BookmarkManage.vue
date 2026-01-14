@@ -160,8 +160,8 @@ async function handleImport() {
   statusType.value = 'default'
 
   try {
-    const imported = await bookmarksUpload(selectedFile.value)
-    statusMessage.value = `导入完成！本次处理 ${imported?.length ?? 0} 条书签。`
+    await bookmarksUpload(selectedFile.value)
+    statusMessage.value = '导入完成!'
     statusType.value = 'success'
     await fetchBookmarks()
   } catch (error: any) {

@@ -23,9 +23,10 @@ class KafkaMessageServiceImpl(
 
     override fun bookmarkParseAndResetUserItem(uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String) = JSONUtil.createObj()
         .set("action", KafkaMethodsEnums.BOOKMARK_PARSE_AND_RESET_USER_ITEM.name)
-        .set("uid", uid).set("rawUrl", rawUrl)
-        .set("userLinkId", uid).set("userLinkId", rawUrl)
-        .set("layoutNodeId", uid).set("layoutNodeId", rawUrl)
+        .set("uid", uid)
+        .set("rawUrl", rawUrl)
+        .set("userLinkId", userLinkId)
+        .set("layoutNodeId", layoutNodeId)
         .toString()
         .let { this.send(it) }
 
