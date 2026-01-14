@@ -54,7 +54,11 @@ export const useBookmarkStore = defineStore('homeItems', {
           if (currentNode.id === item.id) {
             // 找到匹配的节点，更新它（保留原有的 children 结构）
             console.log(`[DEBUG]更新桌面节点:${item.id}`, item);
-            nodes[i] = { ...item, children: currentNode.children ?? item.children ?? [] }
+            // 使用 Vue 响应式的方式更新：先创建新数组，再替换整个数组
+            // 这样可以确保 Vue 检测到变化
+            const updatedNode = { ...item, children: currentNode.children ?? item.children ?? [] }
+            // 使用 splice 确保响应式更新
+            nodes.splice(i, 1, updatedNode)
             return true
           }
           // 递归查找子节点
@@ -69,6 +73,8 @@ export const useBookmarkStore = defineStore('homeItems', {
 
       if (this.layoutNode && this.layoutNode.length > 0) {
         findAndUpdate(this.layoutNode)
+        // 强制触发响应式更新：创建一个新数组引用
+        this.layoutNode = [...this.layoutNode]
       }
     },
   },
