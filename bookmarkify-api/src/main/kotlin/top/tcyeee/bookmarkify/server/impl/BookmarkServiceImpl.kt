@@ -6,6 +6,8 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
+import top.tcyeee.bookmarkify.config.exception.CommonException
+import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.entity.*
@@ -77,7 +79,7 @@ class BookmarkServiceImpl(
      * 数据读取完成以后,立即返回占位信息
      * 等待书签解析完成以后,通过WebSocket逐个向前端返回解析完成后的数据
      */
-    override fun importBookmarkFile(file: MultipartFile, uid: String): UserLayoutNodeVO {
+    override fun importBookmarkFile(file: MultipartFile, uid: String) {
         // 1. 解析上传文件，获取扁平化后的书签结构
         val structures: List<SystemBookmarkStructure> = ChromeBookmarkParser.trim(file)
         // 2.保存所有的文件夹,同时保存ID
@@ -86,7 +88,7 @@ class BookmarkServiceImpl(
         // 3.初始化全部的用户布局item和自定义标签,同时保存
         // 因为这里用户的自定义书签是已知的,但是不确定源书签不会在数据库中存在,所以先存储用户的自定义书签,关联书签ID设置为LOADING,
         // 然后对每个源书签单独检查,每检查完一个源书签,就根据源书签host,去找到用户书签的host,将书签ID补上.
-        val pair = structures.flatMap { node -> node.bookmarks.map { it.pair(uid) } }
+        val pair = structures.flatMap { node -> node.bookmarks.map { it.pair(uid, node.nodeId) } }
             .also { data -> layoutNodeMapper.insert(data.map { it.first }) }
             .also { data -> bookmarkUserLinkMapper.insert(data.map { it.second }) }
 
@@ -94,9 +96,6 @@ class BookmarkServiceImpl(
         pair.forEach {
             kafkaMessageService.bookmarkParseAndResetUserItem(uid, it.second.urlFull, it.second.id, it.first.id)
         }
-
-        // 重新获取书签数据
-        return layoutNodeService.layout(uid)
     }
 
     override fun checkAll() =
@@ -157,16 +156,20 @@ class BookmarkServiceImpl(
         val urlWrapper = WebsiteParser.urlWrapper(rawUrl)
         val entity = this.findByHost(urlWrapper.urlHost) ?: BookmarkEntity(urlWrapper).also { save(it) }
 
-        // 解析书签
-        this.parseBookmarkAndSave(entity)
+        // 如果是新增加的,则去解析书签
+        if (entity.parseStatus == ParseStatusEnum.LOADING) this.parseBookmarkAndSave(entity)
         // 将用户自定义书签和原书签关联
         bookmarkUserLinkService.resetBookmarkId(uid, userLinkId, entity.id)
-        // 修改用户节点状态
-        val node = UserLayoutNodeEntity(id = layoutNodeId, uid = uid, type = NodeTypeEnum.BOOKMARK)
-            .also { layoutNodeMapper.insertOrUpdate(it) }
+        // 修改用桌面布局户节点的状态(从LOADING修改为其他)
+        val layoutNode: UserLayoutNodeEntity = layoutNodeMapper.selectById(layoutNodeId)
+            ?.apply { type = NodeTypeEnum.BOOKMARK }
+            ?.also { layoutNodeMapper.updateById(it) }
+            ?: throw CommonException(ErrorType.E999)
+
         // 通知到用户
-        val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
-        UserLayoutNodeVO(node, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
+        bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
+            .let { UserLayoutNodeVO(layoutNode, it) }
+            .also { SocketUtils.homeItemUpdate(uid, it) }
     }
 
     override fun kafkaBookmarkParse(bookmarkId: String) =

@@ -63,6 +63,7 @@ data class BookmarkEntity(
         urlHost = url.urlHost,
         urlScheme = url.urlScheme,
         urlPath = url.urlPath,
+        parseStatus = ParseStatusEnum.LOADING,
     )
 
     constructor(chromeRowDate: ChromeBookmarkRawData) : this(

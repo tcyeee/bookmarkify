@@ -23,8 +23,8 @@ data class ChromeBookmarkRawData(
     val iconBase64: String?,
     val paths: String,
 ) {
-    fun pair(uid: String): Pair<UserLayoutNodeEntity, BookmarkUserLink> =
-        UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING)
+    fun pair(uid: String, parentNodeId: String?): Pair<UserLayoutNodeEntity, BookmarkUserLink> =
+        UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING, parentId = parentNodeId)
             .let { Pair(it, BookmarkUserLink(uid, it.id, this)) }
 }
 
@@ -39,11 +39,7 @@ data class SystemBookmarkStructure(
     val bookmarks: List<ChromeBookmarkRawData>,
 
     @JsonIgnore var nodeId: String? = null, // nodeID,仅用临时记录
-) {
-    val isRoot: Boolean get() = folderName == "ROOT"
-
-    fun initFolder(uid: String) = UserLayoutNodeEntity(type = NodeTypeEnum.BOOKMARK_DIR, uid = uid, name = folderName)
-}
+)
 
 /**
  * Chrome 书签解析工具
@@ -95,7 +91,7 @@ object ChromeBookmarkParser {
             // 将当前节点落地为一个扁平文件夹，名称沿用原目录名
             // 为防止数据丢失，即便是 ROOT 也保留其书签（若存在）
             if (node.bookmarks.isNotEmpty() || node.folderName != "ROOT") {
-                result.add(
+                if (node.bookmarks.isNotEmpty()) result.add(
                     SystemBookmarkStructure(
                         folderName = node.folderName,
                         bookmarks = node.bookmarks,

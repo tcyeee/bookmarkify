@@ -19,7 +19,7 @@ export const bookmarksLinkOne = (bookmarkId: string) => http.get('/bookmark/link
 export const bookmarksSort = (params: Record<string, number>) => http.post('/bookmark/sort', params) as Promise<boolean>
 export const bookmarksDel = (params: Array<string>) => http.post('/bookmark/delete', params) as Promise<boolean>
 export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post('/bookmark/update', params) as Promise<t.BookmarkShow>
-export const bookmarksUpload = (file: File) => http.upload('/bookmark/upload', file) as Promise<Array<t.BookmarkShow>>
+export const bookmarksUpload = (file: File) => http.upload('/bookmark/upload', file) as Promise<boolean>
 export const bookmarksList = (params?: t.BookmarkListParams) =>
   http.post('/bookmark/list', params ?? {}) as Promise<t.BookmarkPage<t.BookmarkShow>>
 
