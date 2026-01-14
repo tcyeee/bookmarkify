@@ -5,19 +5,7 @@
     <div class="w-full flex justify-center">
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
-        <Vuuri
-          :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}`"
-          class="demo-grid"
-          :style="vuuriStyle"
-          :model-value="pageData"
-          item-key="id"
-          :options="vuuriOptions"
-          :drag-enabled="true"
-          :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`"
-          :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`"
-          @input="onGridInput"
-          @drag-start="onDragStart"
-          @drag-release-end="onDragReleaseEnd">
+        <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}-${dataVersion}`" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @drag-start="onDragStart" @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
             <LaunchItem :key="`${item.id}-${item.type}`" :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" />
           </template>
@@ -49,6 +37,16 @@ const COLUMN_WIDTH = computed(() => CELL_SIZE.value + CELL_GAP.value)
 const Vuuri = import.meta.client
   ? defineAsyncComponent(() => import('vuuri'))
   : defineComponent({ name: 'VuuriPlaceholder', setup: () => () => null })
+
+const dataVersion = ref(0)
+watch(
+  () => bookmarkStore.layoutNode,
+  () => {
+    // 当 layoutNode 变化时，增加版本号以强制 Vuuri 重新渲染
+    dataVersion.value++
+  },
+  { deep: true }
+)
 
 const dragState = reactive<{ dragging: boolean; justDropped: boolean; pendingOrder: string[] | null }>({
   dragging: false,
