@@ -67,9 +67,6 @@ export const useAuthStore = defineStore('auth', {
             // track 返回最新用户 token；用于初次登录或 token 续期
             const user = await track()
             this.account = { ...this.account, ...user }
-            console.log("----------");
-            console.log(user);
-            console.log("----------");
             if (!user.token) return Promise.reject('登陆数据异常')
 
             // 登录后刷新书签与 WebSocket 连接

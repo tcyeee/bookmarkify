@@ -19,7 +19,7 @@
           @drag-start="onDragStart"
           @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
-            <LaunchItem :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" />
+            <LaunchItem :key="`${item.id}-${item.type}`" :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" />
           </template>
         </Vuuri>
       </ClientOnly>
