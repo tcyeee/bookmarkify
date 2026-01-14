@@ -45,37 +45,37 @@ export const useBookmarkStore = defineStore('homeItems', {
       // 仅仅只更新书签类型
       if (item.type !== HomeItemType.BOOKMARK || item.typeApp == null) return
 
-      // 通过item.id, 在(layoutNode)中找到对应的布局节点,并更新
-      const findAndUpdate = (nodes: Array<UserLayoutNodeVO>): boolean => {
-        for (let i = 0; i < nodes.length; i++) {
-          const currentNode = nodes[i]
-          if (!currentNode) continue
+      if (!this.layoutNode || this.layoutNode.length === 0) return
 
+      // 递归更新节点，创建全新的对象引用以确保 Vue 响应式系统能够检测到变化
+      const updateNodeRecursive = (nodes: Array<UserLayoutNodeVO>): Array<UserLayoutNodeVO> => {
+        return nodes.map((currentNode) => {
           if (currentNode.id === item.id) {
-            // 找到匹配的节点，更新它（保留原有的 children 结构）
-            console.log(`[DEBUG]更新桌面节点:${item.id}`, item);
-            // 使用 Vue 响应式的方式更新：先创建新数组，再替换整个数组
-            // 这样可以确保 Vue 检测到变化
-            const updatedNode = { ...item, children: currentNode.children ?? item.children ?? [] }
-            // 使用 splice 确保响应式更新
-            nodes.splice(i, 1, updatedNode)
-            return true
-          }
-          // 递归查找子节点
-          if (currentNode.children && currentNode.children.length > 0) {
-            if (findAndUpdate(currentNode.children)) {
-              return true
+            // 找到匹配的节点，创建全新的对象引用（包括 typeApp 等嵌套对象）
+            console.log(`[DEBUG]更新桌面节点:${item.id}`, item)
+            return {
+              ...item,
+              // 确保 typeApp 也是新引用（如果存在）
+              typeApp: item.typeApp ? { ...item.typeApp } : item.typeApp,
+              // 保留原有的 children 结构，如果存在则递归更新
+              children: currentNode.children && currentNode.children.length > 0
+                ? updateNodeRecursive(currentNode.children)
+                : item.children ?? []
             }
           }
-        }
-        return false
+          // 递归处理子节点
+          if (currentNode.children && currentNode.children.length > 0) {
+            return {
+              ...currentNode,
+              children: updateNodeRecursive(currentNode.children)
+            }
+          }
+          return currentNode
+        })
       }
 
-      if (this.layoutNode && this.layoutNode.length > 0) {
-        findAndUpdate(this.layoutNode)
-        // 强制触发响应式更新：创建一个新数组引用
-        this.layoutNode = [...this.layoutNode]
-      }
+      // 创建全新的数组引用，确保 Vue 响应式系统能够检测到变化
+      this.layoutNode = updateNodeRecursive(this.layoutNode)
     },
   },
   persist: { storage: piniaPluginPersistedstate.localStorage() },
