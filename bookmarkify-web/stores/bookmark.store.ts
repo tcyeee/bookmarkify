@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { HomeItemType, type UserLayoutNodeVO } from '@typing'
+import { HomeItemType, type BookmarkShow, type UserLayoutNodeVO } from '@typing'
 import { bookmarksShowAll } from '@api'
 
 export const useBookmarkStore = defineStore('homeItems', {
@@ -42,20 +42,34 @@ export const useBookmarkStore = defineStore('homeItems', {
 
     // 局部更新某一个桌面布局Item（通常由 WebSocket 推送触发），包含子节点
     updateOneBookmarkCell(item: UserLayoutNodeVO) {
-      const replace = (list?: Array<UserLayoutNodeVO>): boolean => {
-        if (!list) return false
-        const index = list.findIndex((it) => it.id === item.id)
-        if (index >= 0) {
-          const mergedChildren = item.children ?? list[index]?.children ?? []
-          list.splice(index, 1, {
-            ...item,
-            children: mergedChildren,
-          })
-          return true
+      // 仅仅只更新书签类型
+      if (item.type !== HomeItemType.BOOKMARK || item.typeApp == null) return
+
+      // 通过item.id, 在(layoutNode)中找到对应的布局节点,并更新
+      const findAndUpdate = (nodes: Array<UserLayoutNodeVO>): boolean => {
+        for (let i = 0; i < nodes.length; i++) {
+          const currentNode = nodes[i]
+          if (!currentNode) continue
+
+          if (currentNode.id === item.id) {
+            // 找到匹配的节点，更新它（保留原有的 children 结构）
+            console.log(`[DEBUG]更新桌面节点:${item.id}`, item);
+            nodes[i] = { ...item, children: currentNode.children ?? item.children ?? [] }
+            return true
+          }
+          // 递归查找子节点
+          if (currentNode.children && currentNode.children.length > 0) {
+            if (findAndUpdate(currentNode.children)) {
+              return true
+            }
+          }
         }
-        return list.some((child) => replace(child.children))
+        return false
       }
-      replace(this.layoutNode)
+
+      if (this.layoutNode && this.layoutNode.length > 0) {
+        findAndUpdate(this.layoutNode)
+      }
     },
   },
   persist: { storage: piniaPluginPersistedstate.localStorage() },
