@@ -1,5 +1,5 @@
 FROM openjdk:21
 WORKDIR /app
-COPY bookmarkify-api.jar bookmarkify-api.jar
+COPY ./build/libs/bookmarkify-api.jar bookmarkify-api.jar
 ENTRYPOINT ["java", "-jar", "bookmarkify-api.jar"]
 EXPOSE 7001
