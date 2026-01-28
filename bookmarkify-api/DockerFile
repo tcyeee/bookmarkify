@@ -1,5 +1,5 @@
 FROM openjdk:21
 WORKDIR /app
-COPY app.jar app.jar
-ENTRYPOINT ["java", "-jar", "app.jar"]
+COPY bookmarkify-api.jar bookmarkify-api.jar
+ENTRYPOINT ["java", "-jar", "bookmarkify-api.jar"]
 EXPOSE 7001
