@@ -36,7 +36,7 @@ spring:
       enabled: true             # 可选：开启上传支持
   kafka:
     # Kafka 服务地址，多个用逗号分隔
-    bootstrap-servers: ${BOOKMARKIFY_KAFKA_BOOTSTRAP_SERVERS}
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS}
     consumer:
       # 消费组 ID 单机时默认为 BOOKMARKIFY
       group-id: 'BOOKMARKIFY'
