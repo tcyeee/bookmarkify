@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://${BOOKMARKIFY_POSTGRES_HOST}:5432/postgres?currentSchema=bookmarkify&stringtype=unspecified
+    url: jdbc:postgresql://${BOOKMARKIFY_POSTGRES_HOST}:5432/app?currentSchema=bookmarkify&stringtype=unspecified
     username: ${BOOKMARKIFY_POSTGRES_USERNAME}
     password: ${BOOKMARKIFY_POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver

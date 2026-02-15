@@ -1,5 +1,13 @@
 {
-  "cSpell.words": ["baomidou", "muuri", "mybatisplus", "recalc"],
+  "cSpell.words": [
+    "ALIYUN",
+    "baomidou",
+    "CORPID",
+    "CORPSECRET",
+    "muuri",
+    "mybatisplus",
+    "recalc"
+  ],
   "java.configuration.updateBuildConfiguration": "interactive",
   "java.compile.nullAnalysis.mode": "automatic"
 }
