@@ -136,7 +136,7 @@ import UiScrollReveal from '../components/stunning/ScrollReveal.vue'
 import ShimmerText from '../components/stunning/ShimmerText.vue'
 import { useAuthStore } from '@stores/auth.store'
 
-definePageMeta({ layout: 'explore' })
+definePageMeta({ middleware: 'auth', layout: 'explore' })
 
 const authStore = useAuthStore()
 const startLoading = ref(false)
