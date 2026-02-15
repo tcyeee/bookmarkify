@@ -10,6 +10,8 @@ spring:
       host: ${BOOKMARKIFY_REDIS_HOST}
       port: ${BOOKMARKIFY_REDIS_PORT}
       password: ${BOOKMARKIFY_REDIS_PASSWORD}
+  kafka:
+    bootstrap-servers: ${BOOKMARKIFY_KAFKA_BOOTSTRAP_SERVERS}
 
 bookmarkify:
   config:
