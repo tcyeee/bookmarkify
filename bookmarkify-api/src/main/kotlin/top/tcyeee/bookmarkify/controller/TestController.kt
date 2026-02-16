@@ -24,7 +24,10 @@ class TestController(
     @SaIgnore
     @GetMapping("/link")
     fun linkTest(type: Int): Boolean {
-        if (type == 1) bookmarkService.checkAll()
+        if (type == 1) {
+            bookmarkService.checkAll()
+            return true
+        }
         return true
     }
 }
