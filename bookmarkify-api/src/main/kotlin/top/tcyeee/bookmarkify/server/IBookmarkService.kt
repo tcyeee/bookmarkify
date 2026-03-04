@@ -26,7 +26,7 @@ interface IBookmarkService : IService<BookmarkEntity> {
     fun setDefaultBookmark(uid: String)
 
     /** 为新用户设置默认功能 */
-    fun setDefaultFuction(uid: String)
+    fun setDefaultFunction(uid: String)
 
     /** 搜索书签 */
     fun search(name: String): List<BookmarkEntity>

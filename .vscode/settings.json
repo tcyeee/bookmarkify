@@ -4,9 +4,11 @@
     "baomidou",
     "CORPID",
     "CORPSECRET",
+    "hutool",
     "muuri",
     "mybatisplus",
-    "recalc"
+    "recalc",
+    "springframework"
   ],
   "java.configuration.updateBuildConfiguration": "interactive",
   "java.compile.nullAnalysis.mode": "automatic"

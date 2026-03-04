@@ -78,7 +78,7 @@ class UserServiceImpl(
             .let { this.queryOrRegisterByDeviceId(it) }
 
         // 初始化用户设置
-        bookmarkService.setDefaultFuction(userEntity.id)
+        bookmarkService.setDefaultFunction(userEntity.id)
         // 初始化用户偏好设置
         userPreferenceMapper.insert(UserPreferenceEntity(uid = userEntity.id))
         // 初始化用户书签
@@ -98,7 +98,7 @@ class UserServiceImpl(
 
     override fun sendSms(uid: String, params: CaptchaSmsParams): Boolean {
         val cache = RedisUtils.get<String>(RedisType.CAPTCHA_CODE, uid) ?: throw CommonException(ErrorType.E105)
-        if (cache != params.captcha.trim()) throw CommonException(ErrorType.E302)
+        if (cache != params.captcha.lowercase().trim()) throw CommonException(ErrorType.E302)
         smsService.sendVerificationCode(params.phone)
         return true
     }
@@ -181,9 +181,9 @@ class UserServiceImpl(
     }
 
     override fun captchaImage(uid: String): ResultWrapper {
-        val lineCaptcha = CaptchaUtil.createLineCaptcha(200, 100)
+        val lineCaptcha = CaptchaUtil.createLineCaptcha(200, 100, 4, 100)
         val code = lineCaptcha.code
-        RedisUtils.set(RedisType.CAPTCHA_CODE, uid, code)
+        RedisUtils.set(RedisType.CAPTCHA_CODE, uid, code.lowercase())
         return ResultWrapper.ok(lineCaptcha.imageBase64)
     }
 
@@ -206,9 +206,7 @@ class UserServiceImpl(
             // 如果查询到了，则修改其中的参数
             // 如果没有查询到，则创建对象
             ?.also { it.updateParams(params) } ?: BackgroundConfigEntity(
-            uid = uid,
-            type = params.type,
-            backgroundLinkId = params.backgroundId
+            uid = uid, type = params.type, backgroundLinkId = params.backgroundId
         )
         backSettingService.saveOrUpdate(entity)
 
@@ -224,8 +222,7 @@ class UserServiceImpl(
         val currentCount = bacGradientService.ktQuery().eq(BackgroundGradientEntity::uid, uid)
             .eq(BackgroundGradientEntity::isDefault, false).count()
         if (currentCount >= projectConfig.maxCustomBackgroundCount) throw CommonException(
-            ErrorType.E102,
-            "自定义渐变最多 ${projectConfig.maxCustomBackgroundCount} 个"
+            ErrorType.E102, "自定义渐变最多 ${projectConfig.maxCustomBackgroundCount} 个"
         )
 
         val entity = BackgroundGradientEntity(
@@ -245,8 +242,7 @@ class UserServiceImpl(
             bacImageService.ktQuery().eq(BackgroundImageEntity::uid, uid).eq(BackgroundImageEntity::isDefault, false)
                 .count()
         if (currentCount >= projectConfig.maxCustomBackgroundCount) throw CommonException(
-            ErrorType.E102,
-            "自定义图片最多 ${projectConfig.maxCustomBackgroundCount} 个"
+            ErrorType.E102, "自定义图片最多 ${projectConfig.maxCustomBackgroundCount} 个"
         )
 
         val file = fileService.uploadBackground(uid, multipartFile)

@@ -47,7 +47,7 @@ class BookmarkServiceImpl(
     override fun findByHost(host: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, host).one()
 
     @Transactional
-    override fun setDefaultFuction(uid: String) =
+    override fun setDefaultFunction(uid: String) =
         UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.FUNCTION).also { layoutNodeMapper.insert(it) }
             .let { BookmarkFunctionEntity(it, uid) }.also { bookmarkFunctionMapper.insert(it) }.run {}
 
