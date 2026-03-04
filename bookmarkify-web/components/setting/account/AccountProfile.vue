@@ -105,19 +105,6 @@
     <div v-else class="text-center">
       <LoginDialog />
     </div>
-
-    <!-- 退出登录 -->
-    <div
-      class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
-      <div class="flex items-center gap-3 text-slate-800 dark:text-slate-200">
-        <span class="icon--memory-arrow-down-right-box icon-size-22 text-slate-500 dark:text-slate-400"></span>
-        <div>
-          <div class="font-semibold">退出登录</div>
-          <div class="text-sm text-slate-500 dark:text-slate-400">仅退出当前设备登录，不影响账号数据。</div>
-        </div>
-      </div>
-      <AccountLogout />
-    </div>
   </div>
 </template>
 
@@ -189,7 +176,7 @@ watch(
     form.phone = val?.phone || ''
     form.email = val?.email || ''
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 async function saveProfile() {
@@ -232,7 +219,9 @@ function handleEmailBindSuccess(email: string) {
 <style scoped>
 :global(.fade-scale-enter-active),
 :global(.fade-scale-leave-active) {
-  transition: opacity 180ms ease, transform 180ms ease;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
 }
 
 :global(.fade-scale-enter-from),

@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.utils
 
+import cn.hutool.core.util.RandomUtil
 import cn.hutool.http.HttpUtil
 import cn.hutool.json.JSONUtil
 import org.springframework.beans.factory.annotation.Value

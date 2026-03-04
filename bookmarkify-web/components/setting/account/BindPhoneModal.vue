@@ -41,11 +41,11 @@
               <input
                 v-model="form.captchaCode"
                 type="text"
-                maxlength="5"
-                minlength="5"
+                maxlength="4"
+                minlength="4"
                 class="flex-1"
                 required
-                placeholder="请输入图形验证码(5位)"
+                placeholder="请输入图形验证码(4位)"
                 @input="onCaptchaInput" />
             </label>
             <!-- 验证码图片 -->
@@ -176,7 +176,7 @@ const captchaError = ref('')
 const smsError = ref('')
 const buttonText = computed(() => (props.phone ? '更换手机号' : '绑定手机号'))
 const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(form.phone.trim()))
-const isHumanValid = computed(() => form.captchaCode.trim().length === 5)
+const isHumanValid = computed(() => form.captchaCode.trim().length === 4)
 const isSmsValid = computed(() => /^\d{4}$/.test(form.smsCode.trim()))
 const canSendSms = computed(() => isPhoneValid.value && isHumanValid.value && !sending.value)
 const maskedPhone = computed(() => {
@@ -189,7 +189,7 @@ watch(
   () => props.phone,
   (val) => {
     form.phone = val || ''
-  }
+  },
 )
 
 const phoneTouched = ref(false)
