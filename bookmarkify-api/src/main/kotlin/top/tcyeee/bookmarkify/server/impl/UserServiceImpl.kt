@@ -141,6 +141,15 @@ class UserServiceImpl(
         return user.authVO(StpKit.USER.tokenValue).writeToSession()
     }
 
+    override fun changePassword(uid: String, params: ChangePasswordParams): Boolean {
+        val oldPassword = String(Base64.getDecoder().decode(params.oldPassword))
+        val newPassword = String(Base64.getDecoder().decode(params.newPassword))
+        val updated = ktUpdate().eq(UserEntity::id, uid).eq(UserEntity::password, oldPassword)
+            .set(UserEntity::password, newPassword).update()
+        if (!updated) throw CommonException(ErrorType.E110)
+        return true
+    }
+
     override fun findByNameAndPwd(account: String, password: String): UserEntity? =
         ktQuery().eq(UserEntity::password, SecureUtil.md5(password))
             .and { it.eq(UserEntity::email, account).or().eq(UserEntity::phone, account) }.one()
