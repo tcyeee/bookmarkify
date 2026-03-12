@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.config.throttle.Throttle
+import top.tcyeee.bookmarkify.entity.AccountLoginParams
 import top.tcyeee.bookmarkify.entity.CaptchaSmsParams
 import top.tcyeee.bookmarkify.entity.EmailVerifyParams
 import top.tcyeee.bookmarkify.entity.SendEmailParams
@@ -36,6 +37,12 @@ class LoginController(private val userService: UserServiceImpl) {
     @Operation(summary = "创建用户标记")
     fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo =
         userService.track(request, response)
+
+    @SaIgnore
+    @Throttle
+    @PostMapping("/login")
+    @Operation(summary = "账号密码登录，账号和密码均为Base64编码，密码为MD5加密后的字符串")
+    fun login(@RequestBody params: AccountLoginParams): UserSessionInfo = userService.loginByAccount(params)
 
     @Throttle
     @GetMapping("/logout")

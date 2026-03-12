@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import cn.hutool.captcha.CaptchaUtil
+import java.util.Base64
 import cn.hutool.core.util.RandomUtil
 import cn.hutool.core.util.StrUtil
 import cn.hutool.crypto.SecureUtil
@@ -18,6 +19,7 @@ import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
+import top.tcyeee.bookmarkify.entity.AccountLoginParams
 import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
@@ -124,6 +126,19 @@ class UserServiceImpl(
             it.phone = params.phone.trim()
             it.verified = true
         })
+    }
+
+    override fun loginByAccount(params: AccountLoginParams): UserSessionInfo {
+        val account = String(Base64.getDecoder().decode(params.account))
+        val password = String(Base64.getDecoder().decode(params.password))
+        val user = ktQuery().eq(UserEntity::password, password)
+            .and { it.eq(UserEntity::email, account).or().eq(UserEntity::phone, account) }.one()
+            ?: throw CommonException(ErrorType.E110)
+        if (user.disabled) throw CommonException(ErrorType.E110)
+        StpKit.USER.logout()
+        StpKit.USER.session.clear()
+        StpKit.USER.login(user.id, true)
+        return user.authVO(StpKit.USER.tokenValue).writeToSession()
     }
 
     override fun findByNameAndPwd(account: String, password: String): UserEntity? =

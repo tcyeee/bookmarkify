@@ -38,6 +38,7 @@ data class UserDelParams(val password: String)
 data class UserInfoUpdateParams(var nickName: String, var phone: String?)
 data class BookmarkUpdatePrams(var linkId: String, var title: String, var description: String)
 data class AdminLoginParams(val account: String, val password: String)
+data class AccountLoginParams(val account: String, val password: String)
 
 data class BookmarkSearchParams(var name: String?, var status: ParseStatusEnum?) : PageBean() {
     fun toWrapper(): Wrapper<BookmarkEntity> {

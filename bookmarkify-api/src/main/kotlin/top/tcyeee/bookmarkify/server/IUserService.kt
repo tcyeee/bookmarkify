@@ -12,6 +12,7 @@ import top.tcyeee.bookmarkify.entity.CaptchaSmsParams
 import top.tcyeee.bookmarkify.entity.EmailVerifyParams
 import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.entity.SmsVerifyParams
+import top.tcyeee.bookmarkify.entity.AccountLoginParams
 import top.tcyeee.bookmarkify.entity.UserAdminVO
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
@@ -180,6 +181,8 @@ interface IUserService : IService<UserEntity> {
     ): UserSessionInfo
 
     fun findByNameAndPwd(account: String, password: String): UserEntity?
+
+    fun loginByAccount(params: AccountLoginParams): UserSessionInfo
 
     fun adminListAll(params: UserSearchParams): IPage<UserAdminVO>
 }
