@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
+import top.tcyeee.bookmarkify.entity.ChangePasswordParams
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.UserInfoUpdateParams
@@ -40,6 +41,11 @@ class UserController(private val userService: IUserService) {
     @PostMapping("changeMail")
     @Operation(summary = "修改手机号-发送邮箱")
     fun changeMail(params: String) = userService.changeMail(params)
+
+    @PostMapping("changePassword")
+    @Operation(summary = "修改密码，旧密码和新密码均为Base64编码的MD5字符串")
+    fun changePassword(@RequestBody params: ChangePasswordParams): Boolean =
+        userService.changePassword(BaseUtils.uid(), params)
 
     @PostMapping("del")
     @Operation(summary = "账户注销")
