@@ -2,9 +2,12 @@ import { CurrentEnvironment } from '@typing'
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { nanoid } from 'nanoid'
+import { md5 } from 'js-md5'
+
+export { md5 }
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(...inputs))
 }
 
 export function randomId() {

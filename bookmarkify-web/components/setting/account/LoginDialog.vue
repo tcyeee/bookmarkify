@@ -61,6 +61,32 @@
         {{ selectedMethod === 'email' ? '✓' : '' }}
       </span>
     </button>
+    <button
+      type="button"
+      class="flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-all duration-200"
+      :class="[
+        selectedMethod === 'password'
+          ? 'border-primary bg-primary/5 text-primary dark:border-primary/70 dark:bg-primary/10'
+          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-500 dark:hover:bg-slate-800',
+      ]"
+      @click="selectedMethod = 'password'">
+      <div class="flex items-center gap-3">
+        <span class="icon--memory-lock icon-size-22 text-slate-500 dark:text-slate-300"></span>
+        <div>
+          <div class="text-sm font-semibold">账号密码登录</div>
+          <div class="text-xs text-slate-500 dark:text-slate-400">使用手机号或邮箱配合密码登录</div>
+        </div>
+      </div>
+      <span
+        class="inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]"
+        :class="
+          selectedMethod === 'password'
+            ? 'border-primary bg-primary text-white'
+            : 'border-slate-300 text-slate-400 dark:border-slate-600 dark:text-slate-500'
+        ">
+        {{ selectedMethod === 'password' ? '✓' : '' }}
+      </span>
+    </button>
   </div>
 
   <div class="flex justify-center gap-3 w-full">
@@ -113,6 +139,7 @@
   <!-- 复用绑定组件作为登录流程 -->
   <BindPhoneModal ref="phoneModalRef" :phone="form.phone" :disabled="saving" hideTrigger @success="handlePhoneSuccess" />
   <BindEmailModal ref="emailModalRef" :email="form.email" :disabled="saving" hideTrigger @success="handleEmailSuccess" />
+  <LoginPasswordModal ref="passwordModalRef" :disabled="saving" hideTrigger @success="handlePasswordSuccess" />
 </template>
 
 <script lang="ts" setup>
@@ -121,12 +148,14 @@ import type { UserInfo, LoginMethod } from '@typing'
 import { useAuthStore } from '@stores/auth.store'
 import BindPhoneModal from './BindPhoneModal.vue'
 import BindEmailModal from './BindEmailModal.vue'
+import LoginPasswordModal from './LoginPasswordModal.vue'
 
 const authStore = useAuthStore()
 const selectedMethod = ref<LoginMethod['key']>('phone')
 const account = computed<UserInfo | undefined>(() => authStore.account)
 const phoneModalRef = ref<InstanceType<typeof BindPhoneModal>>()
 const emailModalRef = ref<InstanceType<typeof BindEmailModal>>()
+const passwordModalRef = ref<InstanceType<typeof LoginPasswordModal>>()
 
 const form = reactive({
   nickName: '',
@@ -141,6 +170,8 @@ async function startLogin() {
     await nextTick()
     if (selectedMethod.value === 'phone') {
       phoneModalRef.value?.openDialog()
+    } else if (selectedMethod.value === 'password') {
+      passwordModalRef.value?.openDialog()
     } else {
       emailModalRef.value?.openDialog()
     }
@@ -161,6 +192,11 @@ function handleEmailSuccess(email: string) {
   ElNotification.success({ message: '邮箱登录成功（模拟）' })
 }
 
+function handlePasswordSuccess(account: string) {
+  selectedMethod.value = 'password'
+  ElNotification.success({ message: `账号 ${account} 登录成功` })
+}
+
 watch(
   account,
   (val) => {
@@ -168,7 +204,7 @@ watch(
     form.phone = val?.phone || ''
     form.email = val?.email || ''
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 function showThirdPartyNotReady(provider: string) {
