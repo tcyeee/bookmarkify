@@ -46,7 +46,7 @@ export interface UserInfoUpdate {
 }
 
 export interface LoginMethod {
-  key: 'phone' | 'email' | 'guest'
+  key: 'phone' | 'email' | 'password' | 'guest'
   label: string
   icon: string
   description: string

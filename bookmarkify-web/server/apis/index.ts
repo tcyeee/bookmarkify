@@ -10,6 +10,8 @@ export const captchaVerifySms = (params: t.SmsVerifyParams) => http.post('/auth/
 export const captchaSendEmail = (params: t.CaptchaEmailParams) => http.post('/auth/captcha/email', params) as Promise<boolean>
 export const captchaVerifyEmail = (params: t.EmailVerifyParams) =>
   http.post('/auth/captcha/verifyEmail', params) as Promise<t.UserInfo>
+export const authLoginByAccount = (params: t.LoginParams) =>
+  http.post('/auth/login', params) as Promise<t.UserInfo>
 
 /* =========[ /bookmark ]========= */
 export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<t.UserLayoutNodeVO>

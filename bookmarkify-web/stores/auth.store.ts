@@ -2,10 +2,12 @@ import { defineStore } from 'pinia'
 import {
     AuthStatusEnum,
     type EmailVerifyParams,
+    type LoginParams,
     type SmsVerifyParams,
     type UserInfo,
 } from '@typing'
-import { authLogout, captchaVerifyEmail, captchaVerifySms, queryUserInfo, track } from '@api'
+import { authLoginByAccount, authLogout, captchaVerifyEmail, captchaVerifySms, queryUserInfo, track } from '@api'
+import { md5 } from '@utils'
 import { usePreferenceStore } from './preference.store'
 
 export const useAuthStore = defineStore('auth', {
@@ -27,6 +29,19 @@ export const useAuthStore = defineStore('auth', {
             try {
                 // 邮箱验证码登录/注册，成功后合并到当前账号信息
                 const result = await captchaVerifyEmail(params)
+                this.account = { ...this.account, ...result }
+                return result
+            } catch (err: any) {
+                return Promise.reject(err)
+            }
+        },
+
+        async loginWithPassword(params: LoginParams): Promise<UserInfo> {
+            try {
+                const result = await authLoginByAccount({
+                    account: btoa(params.account),
+                    password: btoa(md5(params.password)),
+                })
                 this.account = { ...this.account, ...result }
                 return result
             } catch (err: any) {

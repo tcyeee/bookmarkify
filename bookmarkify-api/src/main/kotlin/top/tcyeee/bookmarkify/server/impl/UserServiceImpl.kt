@@ -136,7 +136,6 @@ class UserServiceImpl(
             ?: throw CommonException(ErrorType.E110)
         if (user.disabled) throw CommonException(ErrorType.E110)
         StpKit.USER.logout()
-        StpKit.USER.session.clear()
         StpKit.USER.login(user.id, true)
         return user.authVO(StpKit.USER.tokenValue).writeToSession()
     }
