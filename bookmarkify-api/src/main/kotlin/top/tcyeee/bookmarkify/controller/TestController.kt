@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkService
 
 
@@ -18,14 +19,19 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 @Tag(name = "测试相关")
 @RequestMapping("/test")
 class TestController(
-    private val bookmarkService: IBookmarkService
+    private val bookmarkService: IBookmarkService,
+    private val iapiService: IApiService
 ) {
 
     @SaIgnore
     @GetMapping("/link")
-    fun linkTest(type: Int): Boolean {
+    fun linkTest(type: Int,param: String): Boolean {
         if (type == 1) {
             bookmarkService.checkAll()
+            return true
+        }
+        if (type == 2) {
+            iapiService.queryWebsiteInfo(param)
             return true
         }
         return true

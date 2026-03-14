@@ -11,6 +11,23 @@
           <div class="halo halo-3" />
         </div>
 
+        <!-- 右上角登录/注册入口 -->
+        <div class="relative z-10 w-full flex justify-end px-6 pt-5">
+          <div class="flex items-center gap-2">
+            <button
+              @click="showLoginDialog = true"
+              class="px-4 py-1.5 text-sm font-medium text-white/80 hover:text-white border border-white/20 rounded-full backdrop-blur transition-all duration-200 hover:bg-white/10 hover:border-white/40">
+              登录
+            </button>
+            <button
+              @click="startUse"
+              :disabled="startLoading"
+              class="px-4 py-1.5 text-sm font-medium text-slate-900 bg-white/90 hover:bg-white rounded-full backdrop-blur transition-all duration-200 hover:scale-[1.03] disabled:opacity-60 disabled:cursor-wait">
+              注册
+            </button>
+          </div>
+        </div>
+
         <!-- 漂浮书签 -->
         <FloatingBookmarks />
 
@@ -116,6 +133,16 @@
       </section>
     </div>
 
+    <!-- 登录弹窗 -->
+    <el-dialog
+      v-model="showLoginDialog"
+      width="420px"
+      :show-close="true"
+      :close-on-click-modal="true"
+      class="rounded-2xl">
+      <LoginDialog />
+    </el-dialog>
+
     <!-- 回到顶部 -->
     <Transition name="fade-up">
       <div
@@ -134,12 +161,14 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import FloatingBookmarks from '../components/welcome/FloatingBookmarks.vue'
 import UiScrollReveal from '../components/stunning/ScrollReveal.vue'
 import ShimmerText from '../components/stunning/ShimmerText.vue'
+import LoginDialog from '../components/setting/account/LoginDialog.vue'
 import { useAuthStore } from '@stores/auth.store'
 
 definePageMeta({ middleware: 'auth', layout: 'explore' })
 
 const authStore = useAuthStore()
 const startLoading = ref(false)
+const showLoginDialog = ref(false)
 
 async function startUse() {
   if (startLoading.value) return
