@@ -136,10 +136,17 @@
     <!-- 登录弹窗 -->
     <el-dialog
       v-model="showLoginDialog"
-      width="420px"
-      :show-close="true"
+      width="440px"
+      :show-close="false"
       :close-on-click-modal="true"
-      class="rounded-2xl">
+      class="welcome-login-dialog">
+      <template #header="{ close }">
+        <button
+          @click="close"
+          class="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-white/40 hover:bg-white/10 hover:text-white/80 transition-all duration-200">
+          <span class="icon--memory-close icon-size-18"></span>
+        </button>
+      </template>
       <LoginDialog />
     </el-dialog>
 
@@ -256,6 +263,28 @@ const backToTop = () => {
 .fade-up-leave-from {
   opacity: 1;
   transform: translateY(0) scale(1);
+}
+
+/* 登录弹窗深色玻璃态覆盖 */
+:deep(.welcome-login-dialog) {
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(11, 18, 32, 0.88);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 25px 60px -12px rgba(0, 0, 0, 0.7),
+    0 0 80px -20px rgba(99, 102, 241, 0.2);
+}
+:deep(.welcome-login-dialog .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+:deep(.welcome-login-dialog .el-dialog__body) {
+  padding: 28px 28px 32px;
+  color: inherit;
 }
 
 @keyframes haloDrift {
