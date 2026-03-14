@@ -200,3 +200,14 @@ data class BookmarkFunctionVO(
     @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
     @field:Schema(description = "功能类型") val type: FunctionType,
 )
+
+data class WebsiteInfoVO(
+    @field:Schema(description = "网站标题") val title: String? = null,
+    @field:Schema(description = "网站描述") val description: String? = null,
+    @field:Schema(description = "网站名称") val siteName: String? = null,
+    @field:Schema(description = "规范URL") val canonicalUrl: String? = null,
+    @field:Schema(description = "缩略图URL") val thumbnailUrl: String? = null,
+    @field:Schema(description = "图标URL") val iconUrl: String? = null,
+    @field:Schema(description = "作者") val author: String? = null,
+    @field:Schema(description = "媒体类型") val medium: String? = null,
+)
