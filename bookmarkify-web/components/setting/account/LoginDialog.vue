@@ -1,137 +1,69 @@
 <template>
-  <div
-    class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-    <span class="icon--memory-alert icon-size-26"></span>
-  </div>
-  <div class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">未完成登录</div>
-  <div class="text-slate-500 dark:text-slate-300 mb-4 text-sm">
-    请任选一种登录方式完成登录，以便保障账号安全并支持跨设备同步。
+  <!-- 品牌头部 -->
+  <div class="flex flex-col items-center pb-7 pt-1">
+    <div
+      class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 via-indigo-500 to-fuchsia-500 shadow-lg shadow-indigo-500/30">
+      <span class="icon--memory-bookmark icon-size-24 text-white"></span>
+    </div>
+    <h2 class="text-xl font-semibold text-white">欢迎登录 Bookmarkify</h2>
+    <p class="mt-1.5 text-sm text-white/45">选择登录方式，保障账号安全与跨设备同步</p>
   </div>
 
-  <div class="grid grid-cols-1 gap-3">
+  <!-- 登录方式 Tab -->
+  <div class="mb-5 flex gap-1 rounded-xl bg-white/5 p-1">
     <button
+      v-for="m in methods"
+      :key="m.key"
       type="button"
-      class="flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-all duration-200"
+      @click="selectedMethod = m.key"
       :class="[
-        selectedMethod === 'phone'
-          ? 'border-primary bg-primary/5 text-primary dark:border-primary/70 dark:bg-primary/10'
-          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-500 dark:hover:bg-slate-800',
-      ]"
-      @click="selectedMethod = 'phone'">
-      <div class="flex items-center gap-3">
-        <span class="icon--memory-speaker icon-size-22 text-slate-500 dark:text-slate-300"></span>
-        <div>
-          <div class="text-sm font-semibold">手机号登录</div>
-          <div class="text-xs text-slate-500 dark:text-slate-400">通过短信验证码快速登录</div>
-        </div>
-      </div>
-      <span
-        class="inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]"
-        :class="
-          selectedMethod === 'phone'
-            ? 'border-primary bg-primary text-white'
-            : 'border-slate-300 text-slate-400 dark:border-slate-600 dark:text-slate-500'
-        ">
-        {{ selectedMethod === 'phone' ? '✓' : '' }}
-      </span>
-    </button>
-    <button
-      type="button"
-      class="flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-all duration-200"
-      :class="[
-        selectedMethod === 'email'
-          ? 'border-primary bg-primary/5 text-primary dark:border-primary/70 dark:bg-primary/10'
-          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-500 dark:hover:bg-slate-800',
-      ]"
-      @click="selectedMethod = 'email'">
-      <div class="flex items-center gap-3">
-        <span class="icon--memory-email icon-size-22 text-slate-500 dark:text-slate-300"></span>
-        <div>
-          <div class="text-sm font-semibold">邮箱登录</div>
-          <div class="text-xs text-slate-500 dark:text-slate-400">适合常用邮箱用户</div>
-        </div>
-      </div>
-      <span
-        class="inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]"
-        :class="
-          selectedMethod === 'email'
-            ? 'border-primary bg-primary text-white'
-            : 'border-slate-300 text-slate-400 dark:border-slate-600 dark:text-slate-500'
-        ">
-        {{ selectedMethod === 'email' ? '✓' : '' }}
-      </span>
-    </button>
-    <button
-      type="button"
-      class="flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-all duration-200"
-      :class="[
-        selectedMethod === 'password'
-          ? 'border-primary bg-primary/5 text-primary dark:border-primary/70 dark:bg-primary/10'
-          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-500 dark:hover:bg-slate-800',
-      ]"
-      @click="selectedMethod = 'password'">
-      <div class="flex items-center gap-3">
-        <span class="icon--memory-lock icon-size-22 text-slate-500 dark:text-slate-300"></span>
-        <div>
-          <div class="text-sm font-semibold">账号密码登录</div>
-          <div class="text-xs text-slate-500 dark:text-slate-400">使用手机号或邮箱配合密码登录</div>
-        </div>
-      </div>
-      <span
-        class="inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px]"
-        :class="
-          selectedMethod === 'password'
-            ? 'border-primary bg-primary text-white'
-            : 'border-slate-300 text-slate-400 dark:border-slate-600 dark:text-slate-500'
-        ">
-        {{ selectedMethod === 'password' ? '✓' : '' }}
-      </span>
+        'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all duration-200',
+        selectedMethod === m.key
+          ? 'bg-white/12 text-white shadow-sm ring-1 ring-white/10'
+          : 'text-white/40 hover:text-white/65',
+      ]">
+      <span :class="[m.icon, 'icon-size-16']"></span>
+      {{ m.label }}
     </button>
   </div>
 
-  <div class="flex justify-center gap-3 w-full">
-    <button class="cy-btn cy-btn-wide cy-btn-lg mt-5 cy-btn-primary" @click="startLogin" :disabled="saving">开始登录</button>
+  <!-- 当前方式说明 -->
+  <div class="mb-5 flex items-start gap-3 rounded-xl border border-white/6 bg-white/4 px-4 py-3">
+    <span :class="[currentMethod.icon, 'icon-size-20 mt-0.5 shrink-0 text-indigo-300']"></span>
+    <p class="text-sm leading-relaxed text-white/55">{{ currentMethod.desc }}</p>
   </div>
+
+  <!-- 登录按钮 -->
+  <button
+    type="button"
+    @click="startLogin"
+    :disabled="saving"
+    class="relative w-full overflow-hidden rounded-xl py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.01] hover:shadow-indigo-500/40 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60">
+    <span class="absolute inset-0 bg-gradient-to-r from-sky-500 via-indigo-500 to-fuchsia-500"></span>
+    <span class="absolute inset-0 bg-gradient-to-r from-sky-400 via-indigo-400 to-fuchsia-400 opacity-0 transition-opacity duration-200 hover:opacity-100"></span>
+    <span class="relative flex items-center justify-center gap-2">
+      <span v-if="saving" class="icon--memory-rotate-clockwise icon-size-16 animate-spin"></span>
+      {{ saving ? '处理中...' : '开始登录' }}
+    </span>
+  </button>
 
   <!-- 第三方登录 -->
-  <div class="mt-6 space-y-3">
-    <div class="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
-      <span class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></span>
+  <div class="mt-7">
+    <div class="flex items-center gap-3 text-xs text-white/20">
+      <span class="h-px flex-1 bg-white/8"></span>
       <span>第三方登录</span>
-      <span class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></span>
+      <span class="h-px flex-1 bg-white/8"></span>
     </div>
-    <div class="flex justify-center gap-4 text-xl">
+    <div class="mt-4 flex justify-center gap-3">
       <button
+        v-for="s in socials"
+        :key="s.label"
         type="button"
-        class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:hover:border-primary/70"
-        aria-label="微信登录"
-        title="微信登录"
-        @click="showThirdPartyNotReady('微信')">
-        <span class="icon--icon-wechat icon-size-22 text-slate-500 dark:text-slate-300"></span>
-      </button>
-      <button
-        type="button"
-        class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:hover:border-primary/70"
-        aria-label="Github 登录"
-        title="Github 登录"
-        @click="showThirdPartyNotReady('Github')">
-        <span class="icon--icon-github icon-size-22 text-slate-500 dark:text-slate-300"></span>
-      </button>
-      <button
-        type="button"
-        class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:hover:border-primary/70"
-        aria-label="谷歌登录"
-        title="谷歌登录"
-        @click="showThirdPartyNotReady('谷歌')">
-        <span class="icon--icon-google icon-size-20 text-slate-500 dark:text-slate-300"></span>
-      </button>
-      <button
-        type="button"
-        class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm transition hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:hover:border-primary/70"
-        aria-label="抖音登录"
-        title="抖音登录"
-        @click="showThirdPartyNotReady('抖音')">
-        <span class="icon--icon-tiktok icon-size-21 text-slate-500 dark:text-slate-300"></span>
+        :aria-label="s.label"
+        :title="s.label"
+        @click="showThirdPartyNotReady(s.label)"
+        class="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/40 shadow-sm transition-all duration-200 hover:border-indigo-400/50 hover:bg-white/10 hover:text-white/80 hover:scale-105">
+        <span :class="[s.icon, 'icon-size-20']"></span>
       </button>
     </div>
   </div>
@@ -163,6 +95,36 @@ const form = reactive({
   email: '',
 })
 const saving = ref(false)
+
+const methods = [
+  {
+    key: 'phone' as LoginMethod['key'],
+    label: '手机号',
+    icon: 'icon--memory-speaker',
+    desc: '通过短信验证码快速验证身份，安全便捷，无需记忆密码。',
+  },
+  {
+    key: 'email' as LoginMethod['key'],
+    label: '邮箱',
+    icon: 'icon--memory-email',
+    desc: '使用邮箱接收验证码完成登录，适合常用邮箱的用户。',
+  },
+  {
+    key: 'password' as LoginMethod['key'],
+    label: '密码',
+    icon: 'icon--memory-lock',
+    desc: '使用手机号或邮箱配合已设置的密码直接登录。',
+  },
+]
+
+const socials = [
+  { label: '微信', icon: 'icon--icon-wechat' },
+  { label: 'Github', icon: 'icon--icon-github' },
+  { label: '谷歌', icon: 'icon--icon-google' },
+  { label: '抖音', icon: 'icon--icon-tiktok' },
+]
+
+const currentMethod = computed(() => methods.find((m) => m.key === selectedMethod.value) ?? methods[0])
 
 async function startLogin() {
   saving.value = true
