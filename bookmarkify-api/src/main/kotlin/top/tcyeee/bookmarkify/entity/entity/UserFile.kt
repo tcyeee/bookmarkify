@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.entity.entity
 
 import cn.hutool.core.util.IdUtil
+import com.baomidou.mybatisplus.annotation.TableField
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
@@ -29,7 +30,7 @@ data class UserFile(
     @field:Schema(description = "文件当前名称") val currentName: String,   // eg: 019b86fd-74af-7058-829f-3f580c54c1e8
     @field:Schema(description = "文件后缀") val suffix: String,        // eg: png
 ) : Serializable {
-    val fullPath: String = "${type.folder}/$currentName.$suffix"
+    @field:TableField(exist = false) val fullPath: String = "${type.folder}/$currentName.$suffix"
 
     /**
      * 初始化默认背景图像
@@ -51,6 +52,5 @@ data class UserFile(
     )
 
     fun fullUrlWithSign(size: Int): String = OssUtils.resizeAndSignImg(fullPath, size, size)
-    fun fullUrlWithSign(): String = OssUtils.signWithResize(fullPath)
 }
 
