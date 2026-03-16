@@ -39,7 +39,6 @@ class LoginController(private val userService: UserServiceImpl) {
         userService.track(request, response)
 
     @SaIgnore
-    @Throttle
     @PostMapping("/login")
     @Operation(summary = "账号密码登录，账号和密码均为Base64编码，密码为MD5加密后的字符串")
     fun login(@RequestBody params: AccountLoginParams): UserSessionInfo = userService.loginByAccount(params)
