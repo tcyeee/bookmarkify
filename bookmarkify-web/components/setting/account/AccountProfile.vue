@@ -108,6 +108,7 @@ import { updateUserInfo } from '@api'
 import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useAuthStore } from '@stores/auth.store'
+import { usePreferenceStore } from '@stores/preference.store'
 import { AuthStatusEnum } from '@typing'
 import AccountDelete from './AccountDelete.vue'
 import BindPhoneModal from './BindPhoneModal.vue'
@@ -116,9 +117,10 @@ import AccountLogout from './AccountLogout.vue'
 import ActionInput from '../../common/ActionInput.vue'
 
 const authStore = useAuthStore()
+const preferenceStore = usePreferenceStore()
 const accountStatus = computed<AuthStatusEnum | undefined>(() => authStore.authStatus)
 const account = computed<UserInfo | undefined>(() => authStore.account)
-const avatarUrl: Ref<string | undefined> = computed(() => authStore.account?.avatar?.currentName)
+const avatarUrl = computed(() => preferenceStore.avatar?.currentName)
 const maskedUid = computed(() => {
   const uid = account.value?.uid
   if (!uid) return '——'

@@ -1,7 +1,9 @@
 package top.tcyeee.bookmarkify.utils
 
 import cn.hutool.core.io.FileUtil
+import cn.hutool.core.util.IdUtil
 import com.aliyun.oss.OSS
+import org.springframework.web.multipart.MultipartFile
 import com.aliyun.oss.OSSClientBuilder
 import com.aliyun.oss.model.GeneratePresignedUrlRequest
 import jakarta.annotation.PostConstruct
@@ -264,6 +266,27 @@ class OssUtils {
             }
             val target = maxmalSize.coerceAtMost(size)
             return signWithResize(objectName, target, target, expirationMillis)
+        }
+
+        /**
+         * 上传用户文件（头像/背景图）到OSS，包含类型和大小校验
+         *
+         * @param file 上传的文件
+         * @param fileType 文件类型（含大小限制和目标路径）
+         * @return Pair(currentName: UUID文件名, ext: 后缀)，用于构建 UserFile
+         */
+        fun uploadUserFile(file: MultipartFile, fileType: FileType): Pair<String, String> {
+            file.contentType?.startsWith(fileType.type)
+                ?.let { if (!it) throw CommonException(ErrorType.E103) }
+            if (file.size > fileType.limit) throw CommonException(ErrorType.E104)
+
+            val ext = FileUtil.extName(file.originalFilename ?: throw CommonException(ErrorType.E227))
+                .replace(Regex("[^a-zA-Z0-9]"), "").lowercase()
+                .also { if (it.isEmpty() || it.length > 10) throw CommonException(ErrorType.E226) }
+
+            val uuid = IdUtil.fastUUID()
+            upload(file.inputStream, "${fileType.folder}/$uuid.$ext")
+            return Pair(uuid, ext)
         }
 
         fun defaultImgBacById(linkId: String): String = buildString {
