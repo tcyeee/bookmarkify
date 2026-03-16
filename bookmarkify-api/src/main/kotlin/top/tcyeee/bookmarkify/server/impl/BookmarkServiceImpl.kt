@@ -189,7 +189,17 @@ class BookmarkServiceImpl(
         log.trace("[CHECK] 开始解析域名(第三方API):${bookmark.rawUrl}")
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
-                vo.entity(bookmark).also { baseMapper.insertOrUpdate(it) }
+                val icons = vo.toManifestIcons()
+                // 填充基础信息 + iconBase64，保存一次
+                vo.entity(bookmark).also {
+                    it.iconBase64 = FileUtils.icoBase64(icons, it.rawUrl)
+                    baseMapper.insertOrUpdate(it)
+                }
+                // 保存网站 LOGO/OG 图片到 OSS 和数据库
+                OssUtils.restoreWebsiteLogoAndOg(icons, bookmark.id)
+                    ?.also { websiteLogoMapper.insertOrUpdate(it) }
+                    ?.also { bookmark.setMaximalLogoSize(it.width) }
+                bookmark
             },
             onFailure = { e ->
                 bookmark.also {
@@ -201,8 +211,6 @@ class BookmarkServiceImpl(
                 }
             }
         )
-
-        // TODO 将获取到的LOGO保存下来
     }
 
     override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =

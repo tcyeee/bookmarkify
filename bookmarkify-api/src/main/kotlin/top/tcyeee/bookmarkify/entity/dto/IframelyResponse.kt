@@ -23,6 +23,23 @@ data class IframelyResponse(
         parseStatus = ParseStatusEnum.SUCCESS
         updateTime = LocalDateTime.now()
     }
+
+    /**
+     * 将 iframely links 转为 ManifestIcon 列表，供 icoBase64 和 restoreWebsiteLogoAndOg 复用：
+     * - thumbnail → sizes="og"（宽屏 OG 分享图）
+     * - logo / icon  → sizes="{width}x{height}"
+     */
+    fun toManifestIcons(): List<ManifestIcon> = buildList {
+        links?.thumbnail?.forEach { add(ManifestIcon(src = it.href, sizes = "og", type = it.type)) }
+        links?.logo?.forEach { link ->
+            val sizes = link.media?.width?.let { w -> "${w}x${link.media.height ?: w}" }
+            add(ManifestIcon(src = link.href, sizes = sizes, type = link.type))
+        }
+        links?.icon?.forEach { link ->
+            val sizes = link.media?.width?.let { w -> "${w}x${link.media.height ?: w}" }
+            add(ManifestIcon(src = link.href, sizes = sizes, type = link.type))
+        }
+    }
 }
 
 data class IframelyMeta(
