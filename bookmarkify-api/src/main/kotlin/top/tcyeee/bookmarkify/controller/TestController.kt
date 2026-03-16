@@ -25,9 +25,10 @@ class TestController(
 
     @SaIgnore
     @GetMapping("/link")
-    fun linkTest(type: Int,param: String): Boolean {
+    fun linkTest(type: Int, param: String): Boolean {
         if (type == 1) {
-            bookmarkService.checkAll()
+            val bookmark = bookmarkService.getById(param)
+            bookmarkService.parseBookmarkByApi(bookmark)
             return true
         }
         if (type == 2) {
