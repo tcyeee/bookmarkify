@@ -71,6 +71,8 @@ bookmarkify:
       domain-name: ${BOOKMARKIFY_ALIYUN_OSS_DOMAIN} # 自定义域名 https://i.tcyeee.top
   iframely:
     api-key: ${BOOKMARKIFY_IFRAMELY_API_KEY}
+  deepseek:
+    api-key: ${BOOKMARKIFY_DEEPSEEK_API_KEY}
   admin:
     login:
       account: tcyeee@outlook.com
