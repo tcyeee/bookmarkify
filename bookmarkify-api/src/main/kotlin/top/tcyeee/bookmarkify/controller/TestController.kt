@@ -34,6 +34,10 @@ class TestController(
             iapiService.queryWebsiteInfo(param)
             return true
         }
+        if (type == 3) {
+            iapiService.queryWebsiteInfo(param)
+            return true
+        }
         return true
     }
 }

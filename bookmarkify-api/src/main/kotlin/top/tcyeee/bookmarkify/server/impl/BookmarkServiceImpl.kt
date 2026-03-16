@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server.impl
 
+import cn.hutool.core.date.LocalDateTimeUtil
 import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
@@ -13,11 +14,13 @@ import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.mapper.*
+import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
 import top.tcyeee.bookmarkify.utils.*
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 
 /**
  * @author tcyeee
@@ -28,6 +31,7 @@ class BookmarkServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
     private val projectConfig: ProjectConfig,
     private val kafkaMessageService: IKafkaMessageService,
+    private val apiService: IApiService,
     private val layoutNodeMapper: UserLayoutNodeMapper,
     private val websiteLogoMapper: WebsiteLogoMapper,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
@@ -96,7 +100,9 @@ class BookmarkServiceImpl(
     }
 
     override fun checkAll() =
-        ktQuery().lt(BookmarkEntity::updateTime, yesterday()).lt(BookmarkEntity::verifyFlag, false).list()
+        ktQuery()
+            .lt(BookmarkEntity::updateTime,  LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
+            .lt(BookmarkEntity::verifyFlag, false).list()
             .forEach { kafkaMessageService.bookmarkParse(it.id) }
 
     override fun addOne(url: String, uid: String): UserLayoutNodeVO {
@@ -169,8 +175,41 @@ class BookmarkServiceImpl(
             .also { SocketUtils.homeItemUpdate(uid, it) }
     }
 
-    override fun kafkaBookmarkParse(bookmarkId: String) =
-        baseMapper.selectById(bookmarkId).also { parseBookmarkAndSave(it) }.run {}
+    override fun kafkaBookmarkParse(bookmarkId: String) {
+        val bookmark = baseMapper.selectById(bookmarkId)
+        if (projectConfig.useThirdPartyParser) parseBookmarkByApi(bookmark)
+        else parseBookmarkAndSave(bookmark)
+    }
+
+    /** 通过 iframely 第三方 API 解析书签基础信息并保存到数据库 */
+    private fun parseBookmarkByApi(bookmark: BookmarkEntity): BookmarkEntity {
+        val existing = baseMapper.selectById(bookmark.id)
+        if (existing != null && existing.verifyFlag) return existing
+
+        log.trace("[CHECK] 开始解析域名(第三方API):${bookmark.rawUrl}")
+        return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
+            onSuccess = { vo ->
+                bookmark.also {
+                    it.appName = vo.siteName
+                    it.title = vo.title
+                    it.description = vo.description
+                    it.isActivity = true
+                    it.parseStatus = ParseStatusEnum.SUCCESS
+                    it.updateTime = LocalDateTime.now()
+                    baseMapper.insertOrUpdate(it)
+                }
+            },
+            onFailure = { e ->
+                bookmark.also {
+                    it.isActivity = false
+                    it.parseStatus = ParseStatusEnum.CLOSED
+                    it.parseErrMsg = e.message
+                    it.updateTime = LocalDateTime.now()
+                    baseMapper.insertOrUpdate(it)
+                }
+            }
+        )
+    }
 
     override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =
         ktQuery().`in`(BookmarkEntity::urlHost, defaultBookmarkify).list()
@@ -200,8 +239,8 @@ class BookmarkServiceImpl(
      */
     private fun parseBookmarkAndSave(bookmark: BookmarkEntity): BookmarkEntity {
         // 如果书签依旧解析了,则不需要继续解析
-        val oldBookmarkEneity = baseMapper.selectById(bookmark.id)
-        if (oldBookmarkEneity != null && oldBookmarkEneity.verifyFlag) return oldBookmarkEneity
+        val oldBookmarkEntity = baseMapper.selectById(bookmark.id)
+        if (oldBookmarkEntity != null && oldBookmarkEntity.verifyFlag) return oldBookmarkEntity
 
         log.trace("[CHECK] 开始解析域名:${bookmark.rawUrl}")
         val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {

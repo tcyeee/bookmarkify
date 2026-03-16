@@ -147,7 +147,7 @@
           <span class="icon--memory-close icon-size-18"></span>
         </button>
       </template>
-      <LoginDialog />
+      <WelcomeLoginDialog @success="onLoginSuccess" @skip="startUse" />
     </el-dialog>
 
     <!-- 回到顶部 -->
@@ -168,7 +168,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import FloatingBookmarks from '../components/welcome/FloatingBookmarks.vue'
 import UiScrollReveal from '../components/stunning/ScrollReveal.vue'
 import ShimmerText from '../components/stunning/ShimmerText.vue'
-import LoginDialog from '../components/setting/account/LoginDialog.vue'
+import WelcomeLoginDialog from '../components/welcome/login/WelcomeLoginDialog.vue'
 import { useAuthStore } from '@stores/auth.store'
 
 definePageMeta({ middleware: 'auth', layout: 'explore' })
@@ -186,6 +186,11 @@ async function startUse() {
   } finally {
     startLoading.value = false
   }
+}
+
+async function onLoginSuccess() {
+  showLoginDialog.value = false
+  await navigateTo('/')
 }
 
 const featureSection = ref<HTMLElement | null>(null)

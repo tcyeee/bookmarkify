@@ -77,6 +77,7 @@ bookmarkify:
       password: admin
   config:
     enable-sms: false  # 设置为true时候正常发送短信, false 则不发送短信,验证码默认0000
+    use-third-party-parser: true  # 书签解析模式: true=iframely第三方API, false=本地解析
     uid-cookie-name: 'deviceUid'    # 匿名用户 cookie 名称
     uid-cookie-path: "/"            # 匿名用户 cookie 路径
     uid-cookie-max-age: 315360000   # 10 年（秒）
