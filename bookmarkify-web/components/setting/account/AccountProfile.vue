@@ -118,7 +118,12 @@ import ActionInput from '../../common/ActionInput.vue'
 const authStore = useAuthStore()
 const preferenceStore = usePreferenceStore()
 const account = computed<UserInfo | undefined>(() => authStore.account)
-const avatarUrl = computed(() => preferenceStore.avatar?.currentName)
+const avatarUrl = computed(() => {
+  const avatar = preferenceStore.avatar as any
+  if (!avatar) return undefined
+  if (typeof avatar === 'string') return avatar
+  return avatar.currentName || avatar.url || avatar.avatarUrl || avatar.fullName || undefined
+})
 const maskedUid = computed(() => {
   const uid = account.value?.uid
   if (!uid) return '——'

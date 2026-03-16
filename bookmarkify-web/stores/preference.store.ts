@@ -73,7 +73,7 @@ export const usePreferenceStore = defineStore('preference', {
         return
       }
       const raw: any = user
-      const avatarFromUser = raw.avatarFile ?? raw.avatarUrl ?? null
+      const avatarFromUser = raw.avatarFile ?? raw.avatarUrl ?? raw.avatar ?? null
       this.avatar = avatarFromUser ?? undefined
     },
 
