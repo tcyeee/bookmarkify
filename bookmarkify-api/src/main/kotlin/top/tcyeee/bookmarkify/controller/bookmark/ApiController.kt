@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.config.throttle.Throttle
-import top.tcyeee.bookmarkify.entity.WebsiteInfoVO
+import top.tcyeee.bookmarkify.entity.dto.IframelyResponse
 import top.tcyeee.bookmarkify.server.IApiService
 
 @RestController
@@ -18,5 +18,5 @@ class ApiController(private val apiService: IApiService) {
     @Throttle
     @GetMapping("/website-info")
     @Operation(summary = "查询网站基础信息，传入域名或完整URL")
-    fun websiteInfo(@RequestParam domain: String): WebsiteInfoVO = apiService.queryWebsiteInfo(domain)
+    fun websiteInfo(@RequestParam domain: String): IframelyResponse = apiService.queryWebsiteInfo(domain)
 }

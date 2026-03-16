@@ -189,15 +189,7 @@ class BookmarkServiceImpl(
         log.trace("[CHECK] 开始解析域名(第三方API):${bookmark.rawUrl}")
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
-                bookmark.also {
-                    it.appName = vo.siteName
-                    it.title = vo.title
-                    it.description = vo.description
-                    it.isActivity = true
-                    it.parseStatus = ParseStatusEnum.SUCCESS
-                    it.updateTime = LocalDateTime.now()
-                    baseMapper.insertOrUpdate(it)
-                }
+                vo.entity(bookmark).also { baseMapper.insertOrUpdate(it) }
             },
             onFailure = { e ->
                 bookmark.also {
@@ -209,6 +201,8 @@ class BookmarkServiceImpl(
                 }
             }
         )
+
+        // TODO 将获取到的LOGO保存下来
     }
 
     override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =
