@@ -11,23 +11,6 @@
           <div class="halo halo-3" />
         </div>
 
-        <!-- 右上角登录/注册入口 -->
-        <div class="relative z-10 w-full flex justify-end px-6 pt-5">
-          <div class="flex items-center gap-2">
-            <button
-              @click="showLoginDialog = true"
-              class="px-4 py-1.5 text-sm font-medium text-white/80 hover:text-white border border-white/20 rounded-full backdrop-blur transition-all duration-200 hover:bg-white/10 hover:border-white/40">
-              登录
-            </button>
-            <button
-              @click="startUse"
-              :disabled="startLoading"
-              class="px-4 py-1.5 text-sm font-medium text-slate-900 bg-white/90 hover:bg-white rounded-full backdrop-blur transition-all duration-200 hover:scale-[1.03] disabled:opacity-60 disabled:cursor-wait">
-              注册
-            </button>
-          </div>
-        </div>
-
         <!-- 漂浮书签 -->
         <FloatingBookmarks />
 
@@ -39,7 +22,7 @@
 
           <!-- 开始使用按钮 -->
           <div
-            @click="startUse"
+            @click="showLoginDialog = true"
             :class="[
               'group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15 cursor-pointer select-none',
               startLoading ? 'opacity-75 cursor-wait pointer-events-none' : '',
@@ -217,7 +200,8 @@ const backToTop = () => {
 
 <style scoped>
 .welcome-hero {
-  background: radial-gradient(circle at 20% 20%, rgba(94, 234, 212, 0.15), transparent 40%),
+  background:
+    radial-gradient(circle at 20% 20%, rgba(94, 234, 212, 0.15), transparent 40%),
     radial-gradient(circle at 80% 30%, rgba(129, 140, 248, 0.18), transparent 45%),
     radial-gradient(circle at 50% 80%, rgba(236, 72, 153, 0.12), transparent 50%), #0b1220;
 }
@@ -257,7 +241,9 @@ const backToTop = () => {
 
 .fade-up-enter-active,
 .fade-up-leave-active {
-  transition: opacity 220ms ease, transform 220ms ease;
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
 }
 .fade-up-enter-from,
 .fade-up-leave-to {
