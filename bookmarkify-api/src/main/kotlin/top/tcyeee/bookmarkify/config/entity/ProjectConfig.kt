@@ -23,4 +23,5 @@ class ProjectConfig(
     var defaultBackgroundImage: List<String>, // 默认背景图片
     var defaultBackgroundGradient: List<DefaultBackgroundGradientConfig> = emptyList(), // 默认渐变背景
     var maxCustomBackgroundCount: Int = 5,     // 自定义背景（图片/渐变）最大数量
+    var useThirdPartyParser: Boolean = false,  // 书签解析模式: true=第三方API(iframely), false=本地解析
 )

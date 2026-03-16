@@ -1,15 +1,12 @@
 package top.tcyeee.bookmarkify.utils
 
 import cn.dev33.satoken.session.SaSession
-import cn.hutool.core.date.LocalDateTimeUtil
 import cn.hutool.core.util.IdUtil
 import jakarta.servlet.http.Cookie
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
-import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
 
 /**
  * 系统基础方法
@@ -33,9 +30,6 @@ object BaseUtils {
         return deviceId
     }
 }
-
-/* 工具类方法 */
-fun yesterday(): LocalDateTime = LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS)
 
 // 获取当前的系统环境
 fun currentEnvironment(): CurrentEnvironment {
