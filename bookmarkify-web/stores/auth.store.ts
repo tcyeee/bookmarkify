@@ -76,6 +76,19 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    async postLoginSetup() {
+      if (!this.account?.token) return
+
+      // 建立实时通道
+      const webSocketStore = useWebSocketStore()
+      webSocketStore.connect(this.account.token)
+
+      // 并行拉取：用户基础信息、偏好设置、书签
+      const preferenceStore = usePreferenceStore()
+      const bookmarkStore = useBookmarkStore()
+      await Promise.all([this.refreshUserInfo(), preferenceStore.fetchPreference(), bookmarkStore.update()])
+    },
+
     async loginOrRegister(): Promise<UserInfo> {
       console.log('DEBUG: 登录或者注册，刷新最新用户信息')
       // track 返回最新用户 token；用于初次登录或 token 续期
@@ -83,17 +96,7 @@ export const useAuthStore = defineStore('auth', {
       this.account = { ...this.account, ...user }
       if (!user.token) return Promise.reject('登陆数据异常')
 
-      // 登录后刷新书签与 WebSocket 连接
-      const bookmarkStore = useBookmarkStore()
-      bookmarkStore.update()
-
-      const webSocketStore = useWebSocketStore()
-      webSocketStore.connect(user.token)
-
-      const preferenceStore = usePreferenceStore()
-      preferenceStore.refreshAvatar()
-      preferenceStore.fetchPreference()
-
+      await this.postLoginSetup()
       return Promise.resolve(this.account as UserInfo)
     },
 
