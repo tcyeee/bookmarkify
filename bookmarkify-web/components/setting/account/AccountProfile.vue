@@ -1,7 +1,6 @@
 <template>
   <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
-    <!-- 已验证账号 -->
-    <div v-if="isAuthed" class="space-y-6">
+    <div class="space-y-6">
       <div
         class="rounded-2xl bg-linear-to-br from-slate-200 via-slate-300 to-gray-200 text-slate-800 p-6 sm:p-8 flex flex-col gap-6 sm:flex-row sm:items-center dark:from-slate-800 dark:via-slate-900 dark:to-slate-900 dark:text-slate-100">
         <div class="shrink-0">
@@ -100,11 +99,6 @@
         </div>
       </div>
     </div>
-
-    <!-- 临时/未验证账号 -->
-    <div v-else class="text-center">
-      <LoginDialog />
-    </div>
   </div>
 </template>
 
@@ -119,14 +113,12 @@ import AccountDelete from './AccountDelete.vue'
 import BindPhoneModal from './BindPhoneModal.vue'
 import BindEmailModal from './BindEmailModal.vue'
 import AccountLogout from './AccountLogout.vue'
-import LoginDialog from './LoginDialog.vue'
 import ActionInput from '../../common/ActionInput.vue'
 
 const authStore = useAuthStore()
 const accountStatus = computed<AuthStatusEnum | undefined>(() => authStore.authStatus)
 const account = computed<UserInfo | undefined>(() => authStore.account)
 const avatarUrl: Ref<string | undefined> = computed(() => authStore.account?.avatar?.currentName)
-const isAuthed = computed(() => accountStatus.value === AuthStatusEnum.AUTHED)
 const maskedUid = computed(() => {
   const uid = account.value?.uid
   if (!uid) return '——'

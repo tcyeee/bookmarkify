@@ -18,9 +18,7 @@
       @click="selectedMethod = m.key"
       :class="[
         'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all duration-200',
-        selectedMethod === m.key
-          ? 'bg-white/12 text-white shadow-sm ring-1 ring-white/10'
-          : 'text-white/40 hover:text-white/65',
+        selectedMethod === m.key ? 'bg-white/12 text-white shadow-sm ring-1 ring-white/10' : 'text-white/40 hover:text-white/65',
       ]">
       <span :class="[m.icon, 'icon-size-16']"></span>
       {{ m.label }}
@@ -32,8 +30,16 @@
   <EmailLoginPanel v-else-if="selectedMethod === 'email'" :key="'email'" @success="onSuccess" />
   <PasswordLoginPanel v-else-if="selectedMethod === 'password'" :key="'password'" @success="onSuccess" />
 
+  <!-- 跳过登录 -->
+  <button
+    type="button"
+    class="mt-5 w-full py-1 text-center text-sm text-white/25 transition-colors duration-200 hover:text-white/55"
+    @click="$emit('skip')">
+    跳过登录，以访客身份继续使用 →
+  </button>
+
   <!-- 分割线 + 第三方登录 -->
-  <div class="mt-6">
+  <!-- <div class="mt-6">
     <div class="flex items-center gap-3 text-xs text-white/20">
       <span class="h-px flex-1 bg-white/8"></span>
       <span>第三方登录</span>
@@ -51,15 +57,7 @@
         <span :class="[s.icon, 'icon-size-20']"></span>
       </button>
     </div>
-  </div>
-
-  <!-- 跳过登录 -->
-  <button
-    type="button"
-    class="mt-5 w-full py-1 text-center text-sm text-white/25 transition-colors duration-200 hover:text-white/55"
-    @click="$emit('skip')">
-    跳过登录，以访客身份继续使用 →
-  </button>
+  </div> -->
 </template>
 
 <script lang="ts" setup>
@@ -72,12 +70,13 @@ const emit = defineEmits<{
   (e: 'skip'): void
 }>()
 
-const selectedMethod = ref<'phone' | 'email' | 'password'>('phone')
+const selectedMethod = ref<'phone' | 'email' | 'password'>('password')
 
 const methods = [
-  { key: 'phone' as const, label: '手机号', icon: 'icon--memory-speaker' },
-  { key: 'email' as const, label: '邮箱', icon: 'icon--memory-email' },
+  // 暂时停用手机号登录
+  // { key: 'phone' as const, label: '手机号', icon: 'icon--memory-speaker' },
   { key: 'password' as const, label: '密码', icon: 'icon--memory-lock' },
+  { key: 'email' as const, label: '邮箱', icon: 'icon--memory-email' },
 ]
 
 const socials = [
