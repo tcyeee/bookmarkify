@@ -67,7 +67,9 @@ export const usePreferenceStore = defineStore('preference', {
       }
     },
 
-    setAvatarFromUser(user: any) {
+    refreshAvatar() {
+      const authStore = useAuthStore()
+      const user = authStore.account
       if (!user) {
         this.avatar = undefined
         return

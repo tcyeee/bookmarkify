@@ -59,11 +59,11 @@ export const useAuthStore = defineStore('auth', {
         // 重新拉取用户信息，失败后处理过期态并自动重新登录
         const result = await queryUserInfo()
 
-        // 设置用户头像
-        const preferenceStore = usePreferenceStore()
-        preferenceStore.setAvatarFromUser(result)
-
         this.account = { ...this.account, ...result }
+
+        // 同步用户头像
+        const preferenceStore = usePreferenceStore()
+        preferenceStore.refreshAvatar()
         return result
       } catch (err: any) {
         if (err.code == 202) {
@@ -91,7 +91,7 @@ export const useAuthStore = defineStore('auth', {
       webSocketStore.connect(user.token)
 
       const preferenceStore = usePreferenceStore()
-      preferenceStore.setAvatarFromUser(user)
+      preferenceStore.refreshAvatar()
       preferenceStore.fetchPreference()
 
       return Promise.resolve(this.account as UserInfo)
