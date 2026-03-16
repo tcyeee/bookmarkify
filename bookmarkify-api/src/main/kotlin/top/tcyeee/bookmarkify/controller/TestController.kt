@@ -27,8 +27,8 @@ class TestController(
     @GetMapping("/link")
     fun linkTest(type: Int, param: String): Boolean {
         if (type == 1) {
-            val bookmark = bookmarkService.getById(param)
-            bookmarkService.parseBookmarkByApi(bookmark)
+            bookmarkService.ktQuery().list()
+                .forEach { bookmarkService.parseBookmarkByApi(it) }
             return true
         }
         if (type == 2) {
