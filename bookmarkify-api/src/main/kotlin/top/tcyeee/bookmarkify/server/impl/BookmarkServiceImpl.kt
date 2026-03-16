@@ -11,6 +11,7 @@ import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
+import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.mapper.*
@@ -62,10 +63,8 @@ class BookmarkServiceImpl(
 
     override fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO {
         val nodeEntity = UserLayoutNodeEntity(uid = uid).also { layoutNodeMapper.insert(it) }
-
         val userLink = this.findById(bookmarkId).let { BookmarkUserLink(it, nodeEntity.id, uid) }
             .also { bookmarkUserLinkMapper.insert(it) }
-
         return bookmarkUserLinkMapper.findShowById(userLink.id).initLogo().let { UserLayoutNodeVO(nodeEntity, it) }
     }
 
@@ -83,17 +82,14 @@ class BookmarkServiceImpl(
     override fun importBookmarkFile(file: MultipartFile, uid: String) {
         // 1. 解析上传文件，获取扁平化后的书签结构
         val structures: List<SystemBookmarkStructure> = ChromeBookmarkParser.trim(file)
-        // 2.保存所有的文件夹,同时保存ID
+        // 2. 保存所有的文件夹,同时保存 nodeId
         structures.map { item -> UserLayoutNodeEntity(uid, item).also { item.nodeId = it.id } }
             .also { layoutNodeMapper.insert(it) }
-        // 3.初始化全部的用户布局item和自定义标签,同时保存
-        // 因为这里用户的自定义书签是已知的,但是不确定源书签不会在数据库中存在,所以先存储用户的自定义书签,关联书签ID设置为LOADING,
-        // 然后对每个源书签单独检查,每检查完一个源书签,就根据源书签host,去找到用户书签的host,将书签ID补上.
+        // 3. 批量保存布局节点和用户自定义书签（bookmarkId 暂置 LOADING，后续逐个绑定）
         val pair = structures.flatMap { node -> node.bookmarks.map { it.pair(uid, node.nodeId) } }
             .also { data -> layoutNodeMapper.insert(data.map { it.first }) }
             .also { data -> bookmarkUserLinkMapper.insert(data.map { it.second }) }
-
-        // 4.数据清洗,只保留raw-url, 解析为源书签,解析以后,重新绑定用户自定义书签
+        // 4. 异步解析每个 URL，解析完成后重新绑定用户自定义书签
         pair.forEach {
             kafkaMessageService.bookmarkParseAndResetUserItem(uid, it.second.urlFull, it.second.id, it.first.id)
         }
@@ -101,53 +97,46 @@ class BookmarkServiceImpl(
 
     override fun checkAll() =
         ktQuery()
-            .lt(BookmarkEntity::updateTime,  LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
+            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
             .lt(BookmarkEntity::verifyFlag, false).list()
             .forEach { kafkaMessageService.bookmarkParse(it.id) }
 
     override fun addOne(url: String, uid: String): UserLayoutNodeVO {
-        // 添加书签信息
         val bookmarkUrl: BookmarkUrlWrapper = WebsiteParser.urlWrapper(url)
         val bookmark = this.getByHost(bookmarkUrl.urlHost) ?: BookmarkEntity(bookmarkUrl).also { save(it) }
-
-        // 添加用户布局信息
         val nodeEntity =
             UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING).also { layoutNodeMapper.insert(it) }
-        // 添加用户关联
         val userLink = BookmarkUserLink(url, uid, nodeEntity.id, bookmark).also { bookmarkUserLinkMapper.insert(it) }
-
-        // 返回占位信息,同时通知队列去检查书签
         if (bookmark.checkFlag()) return nodeEntity.loadingVO(bookmark.urlHost)
             .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark.id, userLink.id, nodeEntity.id) }
-
-        // 如果无需更新书签,则直接将旧书签打包为桌面元素返回
         return bookmarkUserLinkMapper.findShowById(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
     }
 
     override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> =
         baseMapper.selectPage(params.toPage(), params.toWrapper()).convert { BookmarkAdminVO(it) }
 
-    private fun getByHost(urlHost: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, urlHost).one()
-    private fun findById(bookmarkId: String): BookmarkEntity =
-        requireNotNull(ktQuery().eq(BookmarkEntity::id, bookmarkId).one())
+    override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =
+        ktQuery().`in`(BookmarkEntity::urlHost, defaultBookmarkify).list()
 
-    /** 解析书签,然后保存到数据库,同时通知到用户 */
+    // ────── Kafka 消费入口 ──────
+
+    override fun kafkaBookmarkParse(bookmarkId: String) {
+        parseBookmark(baseMapper.selectById(bookmarkId))
+    }
+
+    /** 解析书签，然后保存到数据库，同时通知到用户 */
     override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
-        val bookmark = baseMapper.selectById(bookmarkId)
-        this.parseBookmarkAndSave(bookmark)
-        // 找到用户自定义书签
+        parseBookmark(baseMapper.selectById(bookmarkId))
         val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
-        // 找到用户的单条布局信息
         val layoutEntity = layoutNodeMapper.selectById(nodeId)
-        // 通知到前端
         UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
     }
 
     /**
-     * 通过网址解析为书签,同时重新绑定到添加这个网址的用户
-     * 1.解析书签,更新书签状态(之前是LOADING)
-     * 2.根据host重新绑定用户自定义书签
-     * 3.修改用户布局元素状态(之前是LOADING)
+     * 通过网址解析为书签，同时重新绑定到添加这个网址的用户
+     * 1. 解析书签，更新书签状态（之前是 LOADING）
+     * 2. 根据 host 重新绑定用户自定义书签
+     * 3. 修改用户布局元素状态（之前是 LOADING）
      *
      * 为什么要重新绑定？
      * 答: 用户添加网址的时候是批量添加的,只能提前批量返回用户自定义的书签,用户自定义的书签具体有没有存在源书签还不知道,所以查询完毕知道以后,再重新关联回去
@@ -155,121 +144,113 @@ class BookmarkServiceImpl(
     override fun kafkaBookmarkParseAndResetUserItem(
         uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String
     ) {
-        // 先通过Host看一下数据库有没有有元书签，如果有的话，那么那么直接使用元书签,没有则解析出元书签,同时存储
         val urlWrapper = WebsiteParser.urlWrapper(rawUrl)
         val entity = this.findByHost(urlWrapper.urlHost) ?: BookmarkEntity(urlWrapper).also { save(it) }
-
-        // 如果是新增加的,则去解析书签
-        if (entity.parseStatus == ParseStatusEnum.LOADING) this.parseBookmarkAndSave(entity)
-        // 将用户自定义书签和原书签关联
+        if (entity.parseStatus == ParseStatusEnum.LOADING) parseBookmark(entity)
         bookmarkUserLinkService.resetBookmarkId(uid, userLinkId, entity.id)
-        // 修改用桌面布局户节点的状态(从LOADING修改为其他)
         val layoutNode: UserLayoutNodeEntity = layoutNodeMapper.selectById(layoutNodeId)
             ?.apply { type = NodeTypeEnum.BOOKMARK }
             ?.also { layoutNodeMapper.updateById(it) }
             ?: throw CommonException(ErrorType.E999)
-
-        // 通知到用户
         bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
             .let { UserLayoutNodeVO(layoutNode, it) }
             .also { SocketUtils.homeItemUpdate(uid, it) }
     }
 
-    override fun kafkaBookmarkParse(bookmarkId: String) {
-        val bookmark = baseMapper.selectById(bookmarkId)
-        if (projectConfig.useThirdPartyParser) parseBookmarkByApi(bookmark)
-        else parseBookmarkAndSave(bookmark)
+    /** 解析书签，保存书签到根节点，并通知到用户 */
+    override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, parentNodeId: String?) {
+        val bookmark = parseBookmark(baseMapper.selectById(bookmarkId))
+        val layoutEntity = UserLayoutNodeEntity(uid = uid, parentId = parentNodeId).also { layoutNodeMapper.insert(it) }
+        val userLinkEntity = BookmarkUserLink(bookmark, layoutEntity.id, uid).also { bookmarkUserLinkMapper.insert(it) }
+        val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkEntity.id).initLogo()
+        UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
     }
 
-    /** 通过 iframely 第三方 API 解析书签基础信息并保存到数据库 */
+    // ────── 公开接口（明确指定解析方式时调用）──────
+
+    /** 通过 iframely 第三方 API 解析书签，若书签已通过手动认证则直接返回 */
     override fun parseBookmarkByApi(bookmark: BookmarkEntity): BookmarkEntity {
         val existing = baseMapper.selectById(bookmark.id)
         if (existing != null && existing.verifyFlag) return existing
+        return parseByApi(bookmark)
+    }
 
+    // ────── 私有解析层 ──────
+
+    /**
+     * 统一解析调度：检查 verifyFlag 后根据配置选择解析方式
+     */
+    private fun parseBookmark(bookmark: BookmarkEntity): BookmarkEntity {
+        val existing = baseMapper.selectById(bookmark.id)
+        if (existing != null && existing.verifyFlag) return existing
+        return if (projectConfig.useThirdPartyParser) parseByApi(bookmark) else parseLocally(bookmark)
+    }
+
+    /**
+     * 本地解析（Jsoup）：抓取网页元信息 + favicon base64 + LOGO/OG 存 OSS
+     */
+    private fun parseLocally(bookmark: BookmarkEntity): BookmarkEntity {
+        log.trace("[CHECK] 开始解析域名(本地):${bookmark.rawUrl}")
+        val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
+            bookmark.apply {
+                parseStatus = if (it.message?.contains("403") == true) ParseStatusEnum.BLOCKED else ParseStatusEnum.CLOSED
+                isActivity = false
+                parseErrMsg = it.message
+                baseMapper.insertOrUpdate(this)
+                it.printStackTrace()
+            }
+            return bookmark
+        }
+        bookmark.successInit(wrapper)
+        baseMapper.insertOrUpdate(bookmark)
+        saveLogoToOss(wrapper.distinctIcons ?: emptyList(), bookmark)
+        return bookmark
+    }
+
+    /**
+     * 第三方 API 解析（iframely）：通过 API 获取元信息 + favicon base64 + LOGO/OG 存 OSS
+     */
+    private fun parseByApi(bookmark: BookmarkEntity): BookmarkEntity {
         log.trace("[CHECK] 开始解析域名(第三方API):${bookmark.rawUrl}")
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
                 val icons = vo.toManifestIcons()
-                // 填充基础信息 + iconBase64，保存一次
                 vo.entity(bookmark).also {
                     it.iconBase64 = FileUtils.icoBase64(icons, it.rawUrl)
                     baseMapper.insertOrUpdate(it)
                 }
-                // 保存网站 LOGO/OG 图片到 OSS 和数据库
-                OssUtils.restoreWebsiteLogoAndOg(icons, bookmark.id)
-                    ?.also { websiteLogoMapper.insertOrUpdate(it) }
-                    ?.also { bookmark.setMaximalLogoSize(it.width) }
+                saveLogoToOss(icons, bookmark)
                 bookmark
             },
             onFailure = { e ->
-                bookmark.also {
-                    it.isActivity = false
-                    it.parseStatus = ParseStatusEnum.CLOSED
-                    it.parseErrMsg = e.message
-                    it.updateTime = LocalDateTime.now()
-                    baseMapper.insertOrUpdate(it)
+                bookmark.apply {
+                    isActivity = false
+                    parseStatus = ParseStatusEnum.CLOSED
+                    parseErrMsg = e.message
+                    updateTime = LocalDateTime.now()
+                    baseMapper.insertOrUpdate(this)
                 }
             }
         )
     }
 
-    override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =
-        ktQuery().`in`(BookmarkEntity::urlHost, defaultBookmarkify).list()
-
-    /** 解析书签,保存书签到根节点,并通知到用户 */
-    override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, parentNodeId: String?) {
-        val bookmark = baseMapper.selectById(bookmarkId)
-        // 保存书签信息
-        this.parseBookmarkAndSave(bookmark)
-        // 保存布局信息
-        val layoutEntity = UserLayoutNodeEntity(uid = uid, parentId = parentNodeId).also { layoutNodeMapper.insert(it) }
-        // 保存用户自定义书签信息
-        val userLinkEntity = BookmarkUserLink(bookmark, layoutEntity.id, uid).also { bookmarkUserLinkMapper.insert(it) }
-        // 找到用户自定义书签
-        val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkEntity.id).initLogo()
-        // 通知到前端
-        UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
-    }
-
     /**
-     * 1.解析书签
-     * 2.保存到数据库
-     *
-     * 这里的书签大概率是临时生成的,数据库可能会有一模一样且不需要进行任何处理的完整书签
-     * 所以先进判断，如果数据库有，并且verifyFlag为True,那么就不再进行解析了
-     * verifyFlag: 手动认证开关, 这个字段如果为真, 该不会再进行任何变动.
+     * 将网站 LOGO/OG 图片存入 OSS，并更新书签的最大 LOGO 尺寸
      */
-    private fun parseBookmarkAndSave(bookmark: BookmarkEntity): BookmarkEntity {
-        // 如果书签依旧解析了,则不需要继续解析
-        val oldBookmarkEntity = baseMapper.selectById(bookmark.id)
-        if (oldBookmarkEntity != null && oldBookmarkEntity.verifyFlag) return oldBookmarkEntity
-
-        log.trace("[CHECK] 开始解析域名:${bookmark.rawUrl}")
-        val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
-            if (it.message.toString().contains("403")) bookmark.parseStatus = ParseStatusEnum.BLOCKED
-            bookmark.parseErrMsg = it.message.toString()
-            bookmark.isActivity = false
-            bookmark.parseStatus = ParseStatusEnum.CLOSED
-            baseMapper.insertOrUpdate(bookmark)
-            it.printStackTrace()
-            return bookmark
-        }
-            // 填充bookmark基础信息 以及 bookmark-ico-base64信息
-            .also { bookmark.successInit(it) }
-            // 更新书签
-            .also { baseMapper.insertOrUpdate(bookmark) }
-
-        // 保存网站LOGO/OG图片到OSS和数据库
-        if (wrapper.distinctIcons.isNullOrEmpty()) return bookmark
-        OssUtils.restoreWebsiteLogoAndOg(wrapper.distinctIcons, bookmark.id)
-            // 更新/保存LOGO到数据库
+    private fun saveLogoToOss(icons: List<ManifestIcon>, bookmark: BookmarkEntity) {
+        if (icons.isEmpty()) return
+        OssUtils.restoreWebsiteLogoAndOg(icons, bookmark.id)
             ?.also { websiteLogoMapper.insertOrUpdate(it) }
-            // 更新/保存最大图标信息
             ?.also { bookmark.setMaximalLogoSize(it.width) }
-        return bookmark
     }
 
-    // 在BookmarkEntity设置LOGO最大尺寸
+    // ────── 私有工具 ──────
+
+    private fun getByHost(urlHost: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, urlHost).one()
+
+    private fun findById(bookmarkId: String): BookmarkEntity =
+        requireNotNull(ktQuery().eq(BookmarkEntity::id, bookmarkId).one())
+
     private fun BookmarkEntity.setMaximalLogoSize(maximal: Int) {
         this.maximalLogoSize = maximal
         this.isActivity = true
