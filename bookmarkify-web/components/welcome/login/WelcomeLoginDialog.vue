@@ -64,12 +64,14 @@
 import PhoneLoginPanel from './PhoneLoginPanel.vue'
 import EmailLoginPanel from './EmailLoginPanel.vue'
 import PasswordLoginPanel from './PasswordLoginPanel.vue'
+import { useAuthStore } from '@stores/auth.store'
 
 const emit = defineEmits<{
   (e: 'success'): void
   (e: 'skip'): void
 }>()
 
+const authStore = useAuthStore()
 const selectedMethod = ref<'phone' | 'email' | 'password'>('password')
 
 const methods = [
@@ -86,7 +88,8 @@ const socials = [
   { label: '抖音', icon: 'icon--icon-tiktok' },
 ]
 
-function onSuccess() {
+async function onSuccess() {
+  await authStore.postLoginSetup()
   emit('success')
 }
 
