@@ -7,17 +7,21 @@
       <ClientOnly>
         <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}`" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @drag-start="onDragStart" @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
-            <LaunchItem :key="`${item.id}-${item.type}`" :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" />
+            <LaunchItem :key="`${item.id}-${item.type}`" :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" @show-detail="onShowDetail" />
           </template>
         </Vuuri>
       </ClientOnly>
     </div>
   </div>
+
+  <el-dialog v-model="detailVisible" title="书签详情" width="480px" :close-on-click-modal="true">
+    <LaunchpadDetail :data="detailBookmark" />
+  </el-dialog>
 </template>
 
 <script lang="ts" setup>
 import { bookmarksSort } from '@api'
-import { type UserLayoutNodeVO } from '@typing'
+import { type BookmarkShow, type UserLayoutNodeVO } from '@typing'
 import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 definePageMeta({ middleware: 'auth', layout: 'launch' })
 
@@ -37,6 +41,14 @@ const COLUMN_WIDTH = computed(() => CELL_SIZE.value + CELL_GAP.value)
 const Vuuri = import.meta.client
   ? defineAsyncComponent(() => import('vuuri'))
   : defineComponent({ name: 'VuuriPlaceholder', setup: () => () => null })
+
+const detailVisible = ref(false)
+const detailBookmark = ref<BookmarkShow | null>(null)
+
+function onShowDetail(bookmark: BookmarkShow) {
+  detailBookmark.value = bookmark
+  detailVisible.value = true
+}
 
 const dragState = reactive<{ dragging: boolean; justDropped: boolean; pendingOrder: string[] | null }>({
   dragging: false,
