@@ -22,7 +22,7 @@
 
           <!-- 开始使用按钮 -->
           <div
-            @click="showLoginDialog = true"
+            @click="isLoggedIn ? navigateTo('/') : (showLoginDialog = true)"
             :class="[
               'group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15 cursor-pointer select-none',
               startLoading ? 'opacity-75 cursor-wait pointer-events-none' : '',
@@ -34,6 +34,11 @@
               <template v-if="startLoading">
                 <span class="icon--memory-rotate-clockwise icon-size-24 animate-spin"></span>
                 <span>&emsp;处理中...</span>
+              </template>
+              <template v-else-if="isLoggedIn">
+                <span>🚀 回到控制台</span>
+                <span
+                  class="icon--memory-arrow-right icon-size-30 w-4 h-4 ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5"></span>
               </template>
               <template v-else>
                 <span>✨ 开始使用</span>
@@ -147,16 +152,18 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import FloatingBookmarks from '../components/welcome/FloatingBookmarks.vue'
 import UiScrollReveal from '../components/stunning/ScrollReveal.vue'
 import ShimmerText from '../components/stunning/ShimmerText.vue'
 import WelcomeLoginDialog from '../components/welcome/login/WelcomeLoginDialog.vue'
 import { useAuthStore } from '@stores/auth.store'
+import { AuthStatusEnum } from '@typing'
 
 definePageMeta({ middleware: 'auth', layout: 'explore' })
 
 const authStore = useAuthStore()
+const isLoggedIn = computed(() => authStore.authStatus === AuthStatusEnum.AUTHED)
 const startLoading = ref(false)
 const showLoginDialog = ref(false)
 
