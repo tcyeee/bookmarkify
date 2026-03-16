@@ -182,7 +182,7 @@ class BookmarkServiceImpl(
     }
 
     /** 通过 iframely 第三方 API 解析书签基础信息并保存到数据库 */
-    private fun parseBookmarkByApi(bookmark: BookmarkEntity): BookmarkEntity {
+    override fun parseBookmarkByApi(bookmark: BookmarkEntity): BookmarkEntity {
         val existing = baseMapper.selectById(bookmark.id)
         if (existing != null && existing.verifyFlag) return existing
 

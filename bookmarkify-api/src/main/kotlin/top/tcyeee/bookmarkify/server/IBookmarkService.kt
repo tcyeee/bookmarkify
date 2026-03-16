@@ -60,8 +60,15 @@ interface IBookmarkService : IService<BookmarkEntity> {
      */
     fun kafkaBookmarkParseAndResetUserItem(uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String)
 
+    /** 根据书签ID解析书签：依据配置决定使用第三方 API 还是内置解析器 */
     fun kafkaBookmarkParse(bookmarkId: String)
 
+    /** 通过 iframely 第三方 API 解析书签元信息并持久化；若书签已通过验证则直接返回已有记录 */
+    fun parseBookmarkByApi(bookmark: BookmarkEntity): BookmarkEntity
+
+    /** 批量按 host 域名查询书签列表，用于为新用户初始化默认书签 */
     fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity>
+
+    /** 按 host 域名精确匹配单条书签，不存在时返回 null */
     fun findByHost(host: String): BookmarkEntity?
 }
