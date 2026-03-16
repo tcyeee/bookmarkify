@@ -202,6 +202,7 @@ class BookmarkServiceImpl(
             return bookmark
         }
         bookmark.successInit(wrapper)
+        inferAndSetAppName(bookmark)
         baseMapper.insertOrUpdate(bookmark)
         saveLogoToOss(wrapper.distinctIcons ?: emptyList(), bookmark)
         return bookmark
@@ -215,8 +216,10 @@ class BookmarkServiceImpl(
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
                 val icons = vo.toManifestIcons()
+                // 填充基础信息 + iconBase64 + DeepSeek 简称推断，保存一次
                 vo.entity(bookmark).also {
                     it.iconBase64 = FileUtils.icoBase64(icons, it.rawUrl)
+                    inferAndSetAppName(it)
                     baseMapper.insertOrUpdate(it)
                 }
                 saveLogoToOss(icons, bookmark)
@@ -245,6 +248,13 @@ class BookmarkServiceImpl(
     }
 
     // ────── 私有工具 ──────
+
+    /** 通过 DeepSeek 推断书签简称，有结果则覆盖 appName，失败静默忽略 */
+    private fun inferAndSetAppName(bookmark: BookmarkEntity) {
+        val title = bookmark.title ?: return
+        apiService.inferAppName(title)?.takeIf { it.isNotBlank() }
+            ?.also { bookmark.appName = it }
+    }
 
     private fun getByHost(urlHost: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, urlHost).one()
 
