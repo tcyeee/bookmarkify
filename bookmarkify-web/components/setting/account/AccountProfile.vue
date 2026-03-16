@@ -109,7 +109,6 @@ import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useAuthStore } from '@stores/auth.store'
 import { usePreferenceStore } from '@stores/preference.store'
-import { AuthStatusEnum } from '@typing'
 import AccountDelete from './AccountDelete.vue'
 import BindPhoneModal from './BindPhoneModal.vue'
 import BindEmailModal from './BindEmailModal.vue'
@@ -118,7 +117,6 @@ import ActionInput from '../../common/ActionInput.vue'
 
 const authStore = useAuthStore()
 const preferenceStore = usePreferenceStore()
-const accountStatus = computed<AuthStatusEnum | undefined>(() => authStore.authStatus)
 const account = computed<UserInfo | undefined>(() => authStore.account)
 const avatarUrl = computed(() => preferenceStore.avatar?.currentName)
 const maskedUid = computed(() => {
