@@ -17,6 +17,8 @@
   <el-dialog v-model="detailVisible" title="书签详情" width="480px" :close-on-click-modal="true">
     <LaunchpadDetail :data="detailBookmark" />
   </el-dialog>
+
+  <LaunchpadSettingsModal />
 </template>
 
 <script lang="ts" setup>
