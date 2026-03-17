@@ -13,6 +13,11 @@ spring:
   kafka:
     bootstrap-servers: ${BOOKMARKIFY_KAFKA_BOOTSTRAP_SERVERS}
 
+#logging:
+#  level:
+#    org.springframework.kafka: DEBUG
+#    org.apache.kafka.clients.consumer: DEBUG
+
 bookmarkify:
   kafka:
     topic: BOOKMARKIFY_DEV

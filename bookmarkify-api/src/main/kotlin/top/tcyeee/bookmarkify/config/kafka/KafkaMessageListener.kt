@@ -17,7 +17,7 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
 
     @KafkaListener(topics = ["\${bookmarkify.kafka.topic}"], groupId = "\${bookmarkify.kafka.topic}")
     fun onMessage(record: ConsumerRecord<String, String>) {
-        log.info("[Kafka] received key=${DigestUtil.md5Hex(record.toString())} message=${record.value()}")
+        log.info("[Kafka] 收到消息: key=${DigestUtil.md5Hex(record.toString())} message=${record.value()}")
         val obj = runCatching { JSONUtil.parseObj(record.value()) }.getOrElse {
             log.warn("[Kafka] 无法解析消息为JSON: ${it.message}")
             it.printStackTrace()
