@@ -15,7 +15,7 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @KafkaListener(topics = ["BOOKMARKIFY"], groupId = "BOOKMARKIFY")
+    @KafkaListener(topics = ["\${bookmarkify.kafka.topic}"], groupId = "\${bookmarkify.kafka.topic}")
     fun onMessage(record: ConsumerRecord<String, String>) {
         log.info("[Kafka] received key=${DigestUtil.md5Hex(record.toString())} message=${record.value()}")
         val obj = runCatching { JSONUtil.parseObj(record.value()) }.getOrElse {

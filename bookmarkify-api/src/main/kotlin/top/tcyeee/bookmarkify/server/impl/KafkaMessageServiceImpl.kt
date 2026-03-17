@@ -2,17 +2,18 @@ package top.tcyeee.bookmarkify.server.impl
 
 import cn.hutool.json.JSONUtil
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.kafka.KafkaMethodsEnums
-import top.tcyeee.bookmarkify.config.kafka.KafkaTopicEnums
 import top.tcyeee.bookmarkify.server.IKafkaMessageService
 
 @Service
 class KafkaMessageServiceImpl(
     private val kafkaTemplate: KafkaTemplate<String, String>,
+    @Value("\${bookmarkify.kafka.topic}") private val topic: String,
 ) : IKafkaMessageService {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -49,7 +50,7 @@ class KafkaMessageServiceImpl(
             .let { this.send(it) }
 
     private fun send(message: String?) {
-        kafkaTemplate.send(KafkaTopicEnums.BOOKMARKIFY.name, message).whenComplete { res, err ->
+        kafkaTemplate.send(topic, message).whenComplete { res, err ->
             if (err != null) throw CommonException(ErrorType.E229, err.message)
             val metadata = res.recordMetadata
             log.info("[Kafka] send topic=${metadata.topic()} partition=${metadata.partition()} offset=${metadata.offset()}")
