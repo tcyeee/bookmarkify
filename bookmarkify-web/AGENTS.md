@@ -22,6 +22,7 @@ This document defines the specialized agent roles for working on the Bookmarkify
 - Props typed with `defineProps<{...}>()`, emits with `defineEmits<{...}>()`
 - Use `cn()` utility from `@utils` for conditional class composition
 - DaisyUI components always use `cy-` prefix: `cy-btn`, `cy-modal`, `cy-input`, `cy-chat`
+- **Prefer DaisyUI components** (https://daisyui.com) for all UI elements — use `cy-btn`, `cy-badge`, `cy-alert`, `cy-tooltip`, etc. before reaching for raw Tailwind or custom CSS
 - Dark mode: respect `.dark` class and `data-theme` attribute
 - UI text must be in Chinese (Simplified) — the app targets Chinese users
 - Use Element Plus `ElMessage` for toast notifications

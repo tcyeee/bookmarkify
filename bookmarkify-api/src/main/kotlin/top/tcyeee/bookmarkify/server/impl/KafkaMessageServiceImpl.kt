@@ -13,7 +13,7 @@ import top.tcyeee.bookmarkify.server.IKafkaMessageService
 @Service
 class KafkaMessageServiceImpl(
     private val kafkaTemplate: KafkaTemplate<String, String>,
-    @Value("\${bookmarkify.kafka.topic}") private val topic: String,
+    @param:Value("\${bookmarkify.kafka.topic}") private val topic: String,
 ) : IKafkaMessageService {
     private val log = LoggerFactory.getLogger(javaClass)
 
