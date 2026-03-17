@@ -29,8 +29,9 @@ class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<Bookma
         this.saveBatch(source)
     }
 
-    override fun deleteOne(id: String): Boolean =
-        ktUpdate().eq(BookmarkUserLink::id, id).set(BookmarkUserLink::deleted, true).update()
+    override fun deleteOneByNodeId(layoutNodeId: String) {
+        ktUpdate().eq(BookmarkUserLink::layoutNodeId, layoutNodeId).remove()
+    }
 
     override fun resetBookmarkId(uid: String, userLinkId: String, bookmarkId: String): Boolean =
         ktUpdate()

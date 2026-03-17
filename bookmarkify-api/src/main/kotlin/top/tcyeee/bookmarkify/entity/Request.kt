@@ -60,10 +60,11 @@ data class BookmarkSearchParams(var name: String?, var status: ParseStatusEnum?)
 data class AllOfMyBookmarkParams(
     var uid: String = BaseUtils.uid(),
     var name: String? = null
-) : PageBean(){
+) : PageBean() {
     fun toWrapper(): Wrapper<BookmarkUserLink> {
         val query = KtQueryWrapper(BookmarkUserLink::class.java)
         query.eq(BookmarkUserLink::uid, uid)
+            .eq(BookmarkUserLink::deleted, false)
         if (!name.isNullOrBlank()) {
             query.and {
                 it.like(BookmarkUserLink::title, name)

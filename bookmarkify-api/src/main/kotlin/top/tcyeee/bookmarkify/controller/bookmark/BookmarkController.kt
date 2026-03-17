@@ -7,7 +7,10 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.throttle.Throttle
-import top.tcyeee.bookmarkify.entity.*
+import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
+import top.tcyeee.bookmarkify.entity.BookmarkShow
+import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
+import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
@@ -66,8 +69,10 @@ class BookmarksController(
     @PostMapping("/delete")
     @Operation(summary = "删除用户的自定义书签以及桌面元素")
     fun delete(@RequestBody params: List<String>) = params.forEach {
+        // 删除node
         layoutNodeMapper.deleteById(it)
-        bookmarkUserLinkService.deleteOne(it)
+        // 删除个人书签
+        bookmarkUserLinkService.deleteOneByNodeId(it)
     }
 
     @Throttle

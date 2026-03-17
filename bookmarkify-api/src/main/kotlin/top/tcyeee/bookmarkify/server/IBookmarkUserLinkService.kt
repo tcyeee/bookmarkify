@@ -11,7 +11,7 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 interface IBookmarkUserLinkService : IService<BookmarkUserLink> {
     fun updateOne(params: BookmarkUpdatePrams): Boolean
     fun copy(sourceUid: String, targetUid: String)
-    fun deleteOne(id: String): Boolean
+    fun deleteOneByNodeId(layoutNodeId: String)
     /** 通过查询Host,将用户自定义书签和元书签关联上 */
     fun resetBookmarkId(uid: String, userLinkId: String, bookmarkId: String): Boolean
 }
