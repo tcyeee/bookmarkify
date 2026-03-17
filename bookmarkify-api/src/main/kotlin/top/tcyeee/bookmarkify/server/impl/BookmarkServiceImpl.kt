@@ -71,7 +71,7 @@ class BookmarkServiceImpl(
     override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): IPage<BookmarkShow> {
         val result = bookmarkUserLinkMapper.selectPage(params.toPage(), params.toWrapper())
         val bookmarkIds: List<String> = result.records.mapNotNull { it.bookmarkId }
-        val bookmarkEntityMap = baseMapper.selectByIds(bookmarkIds).associateBy { it.id }
+        val bookmarkEntityMap = if (bookmarkIds.isEmpty()) emptyMap() else baseMapper.selectByIds(bookmarkIds).associateBy { it.id }
         return result.convert { BookmarkShow(it, bookmarkEntityMap[it.bookmarkId]).initLogo() }
     }
 
@@ -109,6 +109,8 @@ class BookmarkServiceImpl(
         val userLink = BookmarkUserLink(url, uid, nodeEntity.id, bookmark).also { bookmarkUserLinkMapper.insert(it) }
         if (bookmark.checkFlag()) return nodeEntity.loadingVO(bookmark.urlHost)
             .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark.id, userLink.id, nodeEntity.id) }
+        nodeEntity.type = NodeTypeEnum.BOOKMARK
+        layoutNodeMapper.updateById(nodeEntity)
         return bookmarkUserLinkMapper.findShowById(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
     }
 
@@ -128,7 +130,10 @@ class BookmarkServiceImpl(
     override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
         parseBookmark(baseMapper.selectById(bookmarkId))
         val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
-        val layoutEntity = layoutNodeMapper.selectById(nodeId)
+        val layoutEntity = layoutNodeMapper.selectById(nodeId).also {
+            it.type = NodeTypeEnum.BOOKMARK
+            layoutNodeMapper.updateById(it)
+        }
         UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
     }
 

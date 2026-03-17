@@ -82,7 +82,7 @@ class BookmarksController(
 
     @Throttle
     @GetMapping("/addOne")
-    @Operation(summary = "添加书签")
+    @Operation(summary = "通过URL添加书签")
     fun addOne(@RequestParam url: String):UserLayoutNodeVO = bookmarkService.addOne(url, BaseUtils.uid())
 
     @GetMapping("/linkOne")
