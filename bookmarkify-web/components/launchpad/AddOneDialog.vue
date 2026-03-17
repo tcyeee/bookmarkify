@@ -20,7 +20,9 @@
       </div>
 
       <div class="mt-6 space-y-3">
-        <label class="cy-input flex items-center gap-3 w-full shadow-sm focus-within:ring-2 focus-within:ring-indigo-100" :class="data.urlIsTrue ? 'cy-input-success' : ''">
+        <label
+          class="cy-input flex items-center gap-3 w-full shadow-sm focus-within:ring-2 focus-within:ring-indigo-100"
+          :class="data.urlIsTrue ? 'cy-input-success' : ''">
           <span class="icon--earth icon-size-24 text-gray-500" />
           <input
             ref="inputRef"
@@ -67,7 +69,7 @@
                 :key="item.id"
                 class="flex items-center gap-3 p-2 hover:bg-gray-100/80 cursor-pointer rounded-lg transition-colors border border-transparent"
                 @click="selectBookmark(item)">
-                <img v-if="item.iconBase64" :src="`data:image/png;base64,${item.iconBase64}`" class="w-8 h-8 rounded-full object-cover shadow-sm" />
+                <img v-if="item.iconBase64" :src="`${item.iconBase64}`" class="w-8 h-8 object-cover" />
                 <div v-else class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shadow-sm">
                   <span class="icon--earth text-gray-400" />
                 </div>
@@ -171,9 +173,7 @@ const data = reactive<{
   status: false,
 })
 
-const showEmptyState = computed(
-  () => data.input && !isSearching.value && searchResults.value.length === 0 && data.urlIsTrue
-)
+const showEmptyState = computed(() => data.input && !isSearching.value && searchResults.value.length === 0 && data.urlIsTrue)
 
 function addOne() {
   if (!data.input) return
@@ -238,9 +238,8 @@ function isUrl(url: string): boolean {
       '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' +
       '(\\?[;&a-z\\d%_.~+=-]*)?' +
       '(\\#[-a-z\\d_]*)?$',
-    'i'
+    'i',
   )
   return pattern.test(url)
 }
 </script>
-
