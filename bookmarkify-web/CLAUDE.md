@@ -170,6 +170,7 @@ Response format: `Result<T> { code, msg, data, ok }` — code 0 = success, 1xx =
 
 ### Styling
 - DaisyUI components use `cy-` prefix: `cy-btn`, `cy-modal`, `cy-input`
+- **Prefer DaisyUI components** for all UI elements (https://daisyui.com) — use `cy-btn`, `cy-badge`, `cy-alert`, `cy-tooltip`, etc. before reaching for raw Tailwind or custom CSS
 - Tailwind utilities used directly in templates
 - Dark mode via `.dark` class on `<body>` + `data-theme="dark"`
 - Custom `cn()` utility for conditional classes: `twMerge(clsx(...))`

@@ -71,7 +71,8 @@ class BookmarkServiceImpl(
     override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): IPage<BookmarkShow> {
         val result = bookmarkUserLinkMapper.selectPage(params.toPage(), params.toWrapper())
         val bookmarkIds: List<String> = result.records.mapNotNull { it.bookmarkId }
-        val bookmarkEntityMap = if (bookmarkIds.isEmpty()) emptyMap() else baseMapper.selectByIds(bookmarkIds).associateBy { it.id }
+        val bookmarkEntityMap =
+            if (bookmarkIds.isEmpty()) emptyMap() else baseMapper.selectByIds(bookmarkIds).associateBy { it.id }
         return result.convert { BookmarkShow(it, bookmarkEntityMap[it.bookmarkId]).initLogo() }
     }
 
@@ -102,13 +103,31 @@ class BookmarkServiceImpl(
             .forEach { kafkaMessageService.bookmarkParse(it.id) }
 
     override fun addOne(url: String, uid: String): UserLayoutNodeVO {
+        // 1. 标准化 URL，解析出 host、完整地址等结构化信息
         val bookmarkUrl: BookmarkUrlWrapper = WebsiteParser.urlWrapper(url)
+
+        // 2. 按 urlHost 查找系统中是否已存在该书签记录；
+        //    不存在则创建新的占位书签并持久化。
+        //    多个用户共享同一条 bookmark 记录（一对多），避免重复抓取同一网站。
         val bookmark = this.getByHost(bookmarkUrl.urlHost) ?: BookmarkEntity(bookmarkUrl).also { save(it) }
+
+        // 3. 为当前用户创建桌面布局节点，初始类型为 BOOKMARK_LOADING，
+        //    在书签解析完成前前端展示 loading 占位状态。
         val nodeEntity =
             UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING).also { layoutNodeMapper.insert(it) }
+
+        // 4. 创建用户与书签的关联记录（bookmark_user_link），
+        //    保存该用户自定义的完整 URL、标题、描述等个性化数据。
         val userLink = BookmarkUserLink(url, uid, nodeEntity.id, bookmark).also { bookmarkUserLinkMapper.insert(it) }
+
+        // 5. 检查书签是否需要重新解析（首次添加 / 上次解析距今超过 1 天）：
+        //    ↳ 需要解析 → 立即返回 loading 占位 VO，同时向 Kafka 发送异步解析任务。
+        //                  解析完成后由 kafKaBookmarkParseAndNotice 通过 WebSocket 将最终结果推送到客户端。
         if (bookmark.checkFlag()) return nodeEntity.loadingVO(bookmark.urlHost)
             .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark.id, userLink.id, nodeEntity.id) }
+
+        // 6. 书签在有效期内（1 天内已解析），无需重新抓取。
+        //    将节点类型由 BOOKMARK_LOADING 更新为 BOOKMARK 并持久化，然后直接返回完整数据。
         nodeEntity.type = NodeTypeEnum.BOOKMARK
         layoutNodeMapper.updateById(nodeEntity)
         return bookmarkUserLinkMapper.findShowById(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
@@ -198,7 +217,8 @@ class BookmarkServiceImpl(
         log.trace("[CHECK] 开始解析域名(本地):${bookmark.rawUrl}")
         val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
             bookmark.apply {
-                parseStatus = if (it.message?.contains("403") == true) ParseStatusEnum.BLOCKED else ParseStatusEnum.CLOSED
+                parseStatus =
+                    if (it.message?.contains("403") == true) ParseStatusEnum.BLOCKED else ParseStatusEnum.CLOSED
                 isActivity = false
                 parseErrMsg = it.message
                 baseMapper.insertOrUpdate(this)
