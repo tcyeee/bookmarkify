@@ -38,8 +38,8 @@ spring:
     # Kafka 服务地址，多个用逗号分隔
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS}
     consumer:
-      # 消费组 ID 单机时默认为 BOOKMARKIFY
-      group-id: 'BOOKMARKIFY'
+      # 消费组 ID，由各环境 profile 决定
+      group-id: ${bookmarkify.kafka.topic}
       # ⚠️Kafka无法自动创建 __consumer_offsets topic（用于存储consumer offset信息）
       # 偏移重置策略：latest / earliest
       auto-offset-reset: earliest
@@ -57,6 +57,8 @@ spring:
       auto-create: true
 
 bookmarkify:
+  kafka:
+    topic: BOOKMARKIFY
   wechat:
     # 微信企业邮箱-企业ID
     corpid: ${BOOKMARKIFY_WECHAT_WORK_CORPID}
