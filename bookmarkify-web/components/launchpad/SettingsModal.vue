@@ -35,10 +35,20 @@
       </div>
     </Transition>
 
+    <!-- 添加书签按钮 -->
+    <button
+      v-if="showAddEntry"
+      class="cy-btn cy-btn-circle cy-btn-ghost fab-btn bg-black/20 text-white backdrop-blur-sm hover:bg-black/35"
+      :class="{ 'is-active': isAddOpen }"
+      title="添加书签"
+      @click="openAddDialog">
+      <Icon icon="memory:plus" class="size-[22px]" />
+    </button>
+
     <!-- 触发按钮 -->
     <button
-      class="cy-btn cy-btn-circle cy-btn-ghost bg-black/20 text-white backdrop-blur-sm hover:bg-black/35 transition-all"
-      :class="isOpen ? 'rotate-30' : ''"
+      class="cy-btn cy-btn-circle cy-btn-ghost fab-btn bg-black/20 text-white backdrop-blur-sm hover:bg-black/35"
+      :class="{ 'is-active': isOpen }"
       title="设置"
       @click="toggle">
       <Icon icon="memory:toolbox" class="size-[22px]" />
@@ -57,9 +67,21 @@ import AccountProfile from '~/components/setting/account/AccountProfile.vue'
 import SettingBookmarkManage from '~/components/setting/BookmarkManage.vue'
 import BackgroundSettings from '~/components/setting/BackgroundSettings.vue'
 import PreferenceSettings from '~/components/setting/PreferenceSettings.vue'
+import { usePreferenceStore } from '@stores/preference.store'
+import { useSysStore } from '@stores/sys.store'
+
+const preferenceStore = usePreferenceStore()
+const sysStore = useSysStore()
 
 const isOpen = ref(false)
 const activeTab = ref(0)
+
+const showAddEntry = computed(() => preferenceStore.preference?.showDesktopAddEntry ?? true)
+const isAddOpen = computed(() => sysStore.addBookmarkDialogVisible)
+
+function openAddDialog() {
+  sysStore.addBookmarkDialogVisible = true
+}
 
 const tabs = [
   { value: 0, label: '个人资料', icon: 'memory:account-box' },
@@ -124,6 +146,29 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .fade-panel-leave-to {
   opacity: 0;
   transform: translateY(5px);
+}
+
+/* 左下角浮动按钮统一动效 */
+.fab-btn {
+  transition:
+    transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 150ms ease;
+}
+.fab-btn:hover {
+  transform: scale(1.15);
+}
+.fab-btn:active {
+  transform: scale(0.9);
+  transition-duration: 80ms;
+}
+.fab-btn.is-active {
+  transform: rotate(45deg);
+}
+.fab-btn.is-active:hover {
+  transform: rotate(45deg) scale(1.15);
+}
+.fab-btn.is-active:active {
+  transform: rotate(45deg) scale(0.9);
 }
 
 /* 背景遮罩淡入 */
