@@ -163,7 +163,7 @@ class BookmarkServiceImpl(
 
     /** 解析书签，然后保存到数据库，同时通知到用户 */
     override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
-        log.debug("[kafKaBookmarkParseAndNotice-4] 开始: uid=$uid, bookmarkId=$bookmarkId, userLinkId=$userLinkId, nodeId=$nodeId")
+        log.debug("[kafKaBookmarkParseAndNotice-4] 开始书签解析: uid=$uid, bookmarkId=$bookmarkId, userLinkId=$userLinkId, nodeId=$nodeId")
         parseBookmark(baseMapper.selectById(bookmarkId))
         log.debug("[kafKaBookmarkParseAndNotice-4] 书签解析完成, 开始构建展示数据: userLinkId=$userLinkId")
         val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()

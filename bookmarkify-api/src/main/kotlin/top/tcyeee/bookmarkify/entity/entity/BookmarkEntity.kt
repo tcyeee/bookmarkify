@@ -75,8 +75,9 @@ data class BookmarkEntity(
     }
 
     fun successInit(wrapper: BookmarkWrapper) {
-        this.appName = wrapper.name  // TODO 使用AI将title中的信息简化
+        this.appName = wrapper.name
         this.isActivity = true
+        this.parseErrMsg = null
         this.title = wrapper.title
         this.description = wrapper.description
         this.parseStatus = if (wrapper.antiCrawlerDetected) ParseStatusEnum.BLOCKED else ParseStatusEnum.SUCCESS
