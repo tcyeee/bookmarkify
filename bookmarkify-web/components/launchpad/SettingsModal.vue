@@ -1,6 +1,28 @@
 <template>
-  <div class="fixed bottom-6 left-6 z-40 flex flex-col items-start gap-2">
-    <!-- 设置面板：从左下角展开 -->
+  <div class="fixed bottom-6 left-6 z-40 flex flex-row items-end gap-3">
+    <!-- 左侧按钮列 -->
+    <div class="flex flex-col items-center gap-2">
+      <!-- 添加书签按钮 -->
+      <button
+        v-if="showAddEntry"
+        class="cy-btn cy-btn-circle cy-btn-ghost fab-btn bg-black/20 text-white backdrop-blur-sm hover:bg-black/35"
+        :class="{ 'is-active': isAddOpen }"
+        title="添加书签"
+        @click="openAddDialog">
+        <Icon icon="memory:plus" class="size-[22px]" />
+      </button>
+
+      <!-- 触发按钮 -->
+      <button
+        class="cy-btn cy-btn-circle cy-btn-ghost fab-btn bg-black/20 text-white backdrop-blur-sm hover:bg-black/35"
+        :class="{ 'is-active': isOpen }"
+        title="设置"
+        @click="toggle">
+        <Icon icon="memory:toolbox" class="size-[22px]" />
+      </button>
+    </div>
+
+    <!-- 设置面板：在按钮右侧展开，底部与设置按钮对齐 -->
     <Transition name="settings-expand">
       <div
         v-if="isOpen"
@@ -27,32 +49,13 @@
         </aside>
 
         <!-- 右侧内容 -->
-        <main class="flex-1 overflow-y-auto p-5">
+        <main class="flex-1 overflow-y-auto p-5 no-scrollbar">
           <Transition name="fade-panel" mode="out-in">
             <component :is="currentComponent" :key="activeTab" />
           </Transition>
         </main>
       </div>
     </Transition>
-
-    <!-- 添加书签按钮 -->
-    <button
-      v-if="showAddEntry"
-      class="cy-btn cy-btn-circle cy-btn-ghost fab-btn bg-black/20 text-white backdrop-blur-sm hover:bg-black/35"
-      :class="{ 'is-active': isAddOpen }"
-      title="添加书签"
-      @click="openAddDialog">
-      <Icon icon="memory:plus" class="size-[22px]" />
-    </button>
-
-    <!-- 触发按钮 -->
-    <button
-      class="cy-btn cy-btn-circle cy-btn-ghost fab-btn bg-black/20 text-white backdrop-blur-sm hover:bg-black/35"
-      :class="{ 'is-active': isOpen }"
-      title="设置"
-      @click="toggle">
-      <Icon icon="memory:toolbox" class="size-[22px]" />
-    </button>
   </div>
 
   <!-- 点击外部关闭的透明遮罩 -->
@@ -169,6 +172,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 }
 .fab-btn.is-active:active {
   transform: rotate(45deg) scale(0.9);
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* 背景遮罩淡入 */
