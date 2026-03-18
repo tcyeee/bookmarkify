@@ -5,7 +5,7 @@
     <div class="w-full flex justify-center">
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
-        <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}`" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @drag-start="onDragStart" @drag-release-end="onDragReleaseEnd">
+        <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}`" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @drag-start="onDragStart" @drag-end="onDragEnd" @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
             <LaunchItem :key="`${item.id}-${item.type}`" :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" @show-detail="onShowDetail" />
           </template>
@@ -17,12 +17,11 @@
   <el-dialog v-model="detailVisible" title="书签详情" width="480px" :close-on-click-modal="true">
     <LaunchpadDetail :data="detailBookmark" />
   </el-dialog>
-
 </template>
 
 <script lang="ts" setup>
 import { bookmarksSort } from '@api'
-import { type BookmarkShow, type UserLayoutNodeVO } from '@typing'
+import { HomeItemType, type BookmarkShow, type UserLayoutNodeVO } from '@typing'
 import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 definePageMeta({ middleware: 'auth', layout: 'launch' })
 
@@ -62,19 +61,149 @@ let resizeObserver: ResizeObserver | null = null
 
 /** 控制 Vuuri 容器宽度，使列在左右留白时仍居中 */
 const vuuriStyle = computed(() => ({
-  // 真实宽度 = 每列外宽相加 - 尾部多余 gap；与列数计算保持一致
   width: `${Math.max(1, columnCount.value) * COLUMN_WIDTH.value}px`,
 }))
 
-/** Vuuri 布局与动画配置 */
+// ── 合并/创建文件夹 状态 ──────────────────────────────────────────────────────
+const mergeTargetId = ref<string | null>(null)
+let mergeTargetEl: HTMLElement | null = null  // .muuri-item 容器
+let mergeIconEl: HTMLElement | null = null    // BookmarkLogo 根 div（overflow-hidden）
+const mergeReady = ref(false)                 // 悬停满 300ms，可触发合并
+let mergeTimer: ReturnType<typeof setTimeout> | null = null
+let currentDraggedId = ''
+
+function clearMergeState() {
+  if (mergeTimer) {
+    clearTimeout(mergeTimer)
+    mergeTimer = null
+  }
+  mergeIconEl?.classList.remove('merge-glow')
+  mergeIconEl = null
+  mergeTargetEl = null
+  mergeTargetId.value = null
+  mergeReady.value = false
+}
+
+type OverlapResult = { targetId: string; targetEl: HTMLElement; index: number; grid: any }
+
+/**
+ * 合并意图检测：当拖动图标的中心点落在目标图标的中心 50% 区域内时触发。
+ * 相当于把目标图标等分成 4 份，只有落在中间 2 份时才算"精准放置"。
+ * 仅检测 BOOKMARK 类型目标（不允许拖到文件夹/功能按钮上）。
+ */
+function findMergeTarget(item: any): OverlapResult | null {
+  const grid = item.getGrid?.()
+  if (!grid) return null
+  const dragEl = item.getElement?.() as HTMLElement | undefined
+  if (!dragEl) return null
+  const dr = dragEl.getBoundingClientRect()
+  // 以拖动图标的中心点作为判断基准
+  const cx = dr.left + dr.width / 2
+  const cy = dr.top + dr.height / 2
+
+  const items: any[] = grid.getItems()
+  for (let i = 0; i < items.length; i++) {
+    const targetItem = items[i]
+    if (targetItem === item || !targetItem.isActive?.()) continue
+    const el = targetItem.getElement?.() as HTMLElement | undefined
+    if (!el) continue
+    const r = el.getBoundingClientRect()
+    // 目标图标中心区域：水平/垂直各取内侧 50%（25%~75%）
+    const zx1 = r.left + r.width * 0.25
+    const zx2 = r.left + r.width * 0.75
+    const zy1 = r.top + r.height * 0.25
+    const zy2 = r.top + r.height * 0.75
+    if (cx < zx1 || cx > zx2 || cy < zy1 || cy > zy2) continue
+
+    const targetId = el.dataset.itemKey
+    if (!targetId) continue
+    const targetNode = bookmarkStore.layoutNode?.find((n) => n.id === targetId)
+    if (targetNode?.type !== HomeItemType.BOOKMARK) continue
+    return { targetId, targetEl: el, index: i, grid }
+  }
+  return null
+}
+
+/**
+ * 正常排序：面积重叠 >= 50% 时告知 Muuri 应移动到哪个位置。
+ * 仅在没有合并意图时调用。
+ */
+function computeNormalSort(item: any): OverlapResult | null {
+  const grid = item.getGrid?.()
+  if (!grid) return null
+  const dragEl = item.getElement?.() as HTMLElement | undefined
+  if (!dragEl) return null
+  const dr = dragEl.getBoundingClientRect()
+
+  let bestScore = 0
+  let bestIndex = -1
+  let bestItem: any = null
+
+  ;(grid.getItems() as any[]).forEach((targetItem: any, index: number) => {
+    if (targetItem === item || !targetItem.isActive?.()) return
+    const el = targetItem.getElement?.() as HTMLElement | undefined
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const ox = Math.min(dr.right, r.right) - Math.max(dr.left, r.left)
+    const oy = Math.min(dr.bottom, r.bottom) - Math.max(dr.top, r.top)
+    if (ox <= 0 || oy <= 0) return
+    const maxArea = Math.min(dr.width, r.width) * Math.min(dr.height, r.height)
+    const score = maxArea > 0 ? ((ox * oy) / maxArea) * 100 : 0
+    if (score > bestScore) {
+      bestScore = score
+      bestIndex = index
+      bestItem = targetItem
+    }
+  })
+
+  if (bestScore < 50 || bestIndex === -1 || !bestItem) return null
+  return { targetId: '', targetEl: bestItem.getElement(), index: bestIndex, grid }
+}
+
+/** Vuuri 布局与拖拽配置，dragSortPredicate 兼管合并意图检测 */
 const vuuriOptions = {
   layout: { fillGaps: true, rounding: false },
   layoutDuration: 250,
   showDuration: 150,
   hideDuration: 150,
   dragReleaseDuration: 0,
-  // 需要轻微移动才开始拖拽，避免单击被当作拖拽而吃掉 click
   dragStartPredicate: { distance: 8, delay: 0 },
+  dragSortPredicate: (item: any) => {
+    currentDraggedId = (item.getElement?.() as HTMLElement | undefined)?.dataset?.itemKey ?? ''
+
+    // 仅 BOOKMARK 类型可触发合并
+    const draggedNode = bookmarkStore.layoutNode?.find((n) => n.id === currentDraggedId)
+    const canMerge = draggedNode?.type === HomeItemType.BOOKMARK
+
+    // ① 优先检测合并意图（中心点命中目标内圈）
+    const mergeTarget = canMerge ? findMergeTarget(item) : null
+
+    if (mergeTarget) {
+      // 目标发生变化：重新开始 300ms 计时
+      if (mergeTarget.targetId !== mergeTargetId.value) {
+        clearMergeState()
+        mergeTargetId.value = mergeTarget.targetId
+        mergeTargetEl = mergeTarget.targetEl
+        mergeTimer = setTimeout(() => {
+          mergeReady.value = true
+          const iconEl = mergeTargetEl?.querySelector('div.overflow-hidden') as HTMLElement | null
+          if (iconEl) {
+            iconEl.classList.add('merge-glow')
+            mergeIconEl = iconEl
+          }
+        }, 300)
+      }
+      // 只要中心在内圈，立即抑制排序（无论 300ms 是否到）
+      return null
+    }
+
+    // ② 中心不在任何目标内圈：清除合并状态，走正常排序
+    if (mergeTargetId.value !== null) clearMergeState()
+
+    const sortResult = computeNormalSort(item)
+    if (sortResult) return { grid: sortResult.grid, index: sortResult.index, action: 'move' }
+    return null
+  },
 }
 
 /** 根据可用宽度重新计算列数，确保容器宽度与列数对齐 */
@@ -97,27 +226,44 @@ onMounted(() => {
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   window.removeEventListener('resize', recalcColumns)
+  clearMergeState()
 })
 
-/** Vuuri 拖拽开始与结束，用于避免点击冲突 */
-function onDragStart() {
+/** 拖拽开始 */
+function onDragStart(item: any) {
   dragState.dragging = true
   dragState.justDropped = false
   dragState.pendingOrder = null
+  currentDraggedId = (item?.getElement?.() as HTMLElement | undefined)?.dataset?.itemKey ?? ''
 }
 
+/** 拖拽结束（含 ESC 取消的情况），确保合并状态被清理 */
+function onDragEnd() {
+  clearMergeState()
+}
+
+/** 释放动画完成后：判断是创建文件夹还是正常排序 */
 function onDragReleaseEnd() {
   dragState.dragging = false
   dragState.justDropped = true
-  if (dragState.pendingOrder) {
-    const params: Record<string, number> = {}
-    bookmarkStore.layoutNode?.forEach((item, index) => {
-      params[item.id] = index
-    })
-    bookmarksSort(params)
-    dragState.pendingOrder = null
+
+  if (mergeReady.value && mergeTargetId.value && currentDraggedId) {
+    const draggedId = currentDraggedId
+    const targetId = mergeTargetId.value
+    clearMergeState()
+    mockCreateFolder(draggedId, targetId)
+  } else {
+    clearMergeState()
+    if (dragState.pendingOrder) {
+      const params: Record<string, number> = {}
+      bookmarkStore.layoutNode?.forEach((node, index) => {
+        params[node.id] = index
+      })
+      bookmarksSort(params)
+      dragState.pendingOrder = null
+    }
   }
-  // 下一帧重置，避免释放瞬间触发点击
+
   requestAnimationFrame(() => {
     dragState.justDropped = false
   })
@@ -127,6 +273,32 @@ function onDragReleaseEnd() {
 function onGridInput(list: UserLayoutNodeVO[]) {
   bookmarkStore.layoutNode = list
   if (dragState.dragging) dragState.pendingOrder = list.map((it, index) => `${it.id},${index + 1}`)
+}
+
+// ── Mock: 创建文件夹（后续替换为真实 API）────────────────────────────────────
+function mockCreateFolder(draggedId: string, targetId: string) {
+  console.log(`[MOCK] 创建文件夹: ${draggedId} + ${targetId}`)
+
+  const nodes = bookmarkStore.layoutNode ?? []
+  const draggedNode = nodes.find((n) => n.id === draggedId)
+  const targetNode = nodes.find((n) => n.id === targetId)
+  if (!draggedNode || !targetNode) return
+
+  const folderNode: UserLayoutNodeVO = {
+    id: `folder-mock-${Date.now()}`,
+    sort: targetNode.sort,
+    type: HomeItemType.BOOKMARK_DIR,
+    name: '新建文件夹',
+    children: [targetNode, draggedNode],
+    parentId: null,
+  }
+
+  // 用文件夹节点替换目标节点，移除被拖动节点
+  bookmarkStore.layoutNode = nodes
+    .map((n) => (n.id === targetId ? folderNode : n))
+    .filter((n) => n.id !== draggedId)
+
+  ElNotification.success({ message: '已创建文件夹' })
 }
 </script>
 
@@ -147,5 +319,29 @@ function onGridInput(list: UserLayoutNodeVO[]) {
   justify-content: center;
   align-items: center;
   box-sizing: border-box;
+}
+
+/* 合并目标：图标白色外边框 + 缓慢闪烁 */
+.merge-glow {
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.95),
+    0 0 16px rgba(255, 255, 255, 0.4) !important;
+  animation: merge-blink 700ms ease-in-out infinite !important;
+  transition: none !important;
+}
+
+@keyframes merge-blink {
+  0%, 100% {
+    opacity: 1;
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.95),
+      0 0 16px rgba(255, 255, 255, 0.4);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.3),
+      0 0 6px rgba(255, 255, 255, 0.15);
+  }
 }
 </style>
