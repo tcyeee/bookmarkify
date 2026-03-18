@@ -18,7 +18,6 @@
     <LaunchpadDetail :data="detailBookmark" />
   </el-dialog>
 
-  <LaunchpadSettingsModal />
 </template>
 
 <script lang="ts" setup>
