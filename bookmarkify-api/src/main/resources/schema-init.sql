@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS sys_user (
 CREATE TABLE IF NOT EXISTS bookmark (
     id                  VARCHAR(40)     PRIMARY KEY,
     url_host            VARCHAR(200)    NOT NULL,
-    url_path            VARCHAR(1000),
     url_scheme          VARCHAR(10)     NOT NULL,
     app_name            VARCHAR(100),
     title               VARCHAR(200),

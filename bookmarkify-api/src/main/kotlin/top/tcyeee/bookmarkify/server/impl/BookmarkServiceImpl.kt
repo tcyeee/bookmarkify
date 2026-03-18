@@ -103,31 +103,47 @@ class BookmarkServiceImpl(
             .forEach { kafkaMessageService.bookmarkParse(it.id) }
 
     override fun addOne(url: String, uid: String): UserLayoutNodeVO {
+        log.debug("[addOne] uid=$uid 开始添加书签, rawUrl=$url")
+
         // 1. 标准化 URL，解析出 host、完整地址等结构化信息
         val bookmarkUrl: BookmarkUrlWrapper = WebsiteParser.urlWrapper(url)
+        log.debug("[addOne] Step1 URL 标准化完成: urlHost=${bookmarkUrl.urlHost}, urlFull=${bookmarkUrl.urlFull}")
 
         // 2. 按 urlHost 查找系统中是否已存在该书签记录；
         //    不存在则创建新的占位书签并持久化。
         //    多个用户共享同一条 bookmark 记录（一对多），避免重复抓取同一网站。
-        val bookmark = this.getByHost(bookmarkUrl.urlHost) ?: BookmarkEntity(bookmarkUrl).also { save(it) }
+        val existingBookmark = this.getByHost(bookmarkUrl.urlHost)
+        val bookmark = existingBookmark ?: BookmarkEntity(bookmarkUrl).also {
+            save(it)
+            log.debug("[addOne] Step2 书签不存在，已创建新书签记录: bookmarkId=${it.id}, urlHost=${bookmarkUrl.urlHost}")
+        }
+        if (existingBookmark != null) {
+            log.debug("[addOne] Step2 命中已有书签记录: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}, parseStatus=${bookmark.parseStatus}")
+        }
 
         // 3. 为当前用户创建桌面布局节点，初始类型为 BOOKMARK_LOADING，
         //    在书签解析完成前前端展示 loading 占位状态。
         val nodeEntity =
             UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING).also { layoutNodeMapper.insert(it) }
+        log.debug("[addOne] Step3 已创建布局节点(LOADING): nodeId=${nodeEntity.id}, uid=$uid")
 
         // 4. 创建用户与书签的关联记录（bookmark_user_link），
         //    保存该用户自定义的完整 URL、标题、描述等个性化数据。
         val userLink = BookmarkUserLink(url, uid, nodeEntity.id, bookmark).also { bookmarkUserLinkMapper.insert(it) }
+        log.debug("[addOne] Step4 已创建用户关联记录: userLinkId=${userLink.id}, bookmarkId=${bookmark.id}")
 
         // 5. 检查书签是否需要重新解析（首次添加 / 上次解析距今超过 1 天）：
         //    ↳ 需要解析 → 立即返回 loading 占位 VO，同时向 Kafka 发送异步解析任务。
         //                  解析完成后由 kafKaBookmarkParseAndNotice 通过 WebSocket 将最终结果推送到客户端。
-        if (bookmark.checkFlag()) return nodeEntity.loadingVO(bookmark.urlHost)
-            .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark.id, userLink.id, nodeEntity.id) }
+        if (bookmark.checkFlag()) {
+            log.debug("[addOne] Step5 书签需要解析，返回 LOADING 占位，已发送 Kafka 异步任务: bookmarkId=${bookmark.id}, userLinkId=${userLink.id}, nodeId=${nodeEntity.id}")
+            return nodeEntity.loadingVO(bookmark.urlHost)
+                .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark.id, userLink.id, nodeEntity.id) }
+        }
 
         // 6. 书签在有效期内（1 天内已解析），无需重新抓取。
         //    将节点类型由 BOOKMARK_LOADING 更新为 BOOKMARK 并持久化，然后直接返回完整数据。
+        log.debug("[addOne] Step6 书签在有效期内，无需重新解析，直接返回完整数据: bookmarkId=${bookmark.id}, nodeId=${nodeEntity.id}")
         nodeEntity.type = NodeTypeEnum.BOOKMARK
         layoutNodeMapper.updateById(nodeEntity)
         return bookmarkUserLinkMapper.findShowById(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
