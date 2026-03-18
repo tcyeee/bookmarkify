@@ -60,13 +60,12 @@ const previewStyle = computed(() => {
 
 <style scoped>
 .background-preview-container {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 1rem;
+  width: 100%;
+  margin-bottom: 0.5rem;
 }
 
 .background-preview {
-  width: 40vw;
+  width: 100%;
   aspect-ratio: 16 / 9;
   border-radius: 12px;
   overflow: hidden;

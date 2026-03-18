@@ -38,7 +38,7 @@
     <!-- 触发按钮 -->
     <button
       class="cy-btn cy-btn-circle cy-btn-ghost bg-black/20 text-white backdrop-blur-sm hover:bg-black/35 transition-all"
-      :class="isOpen ? 'rotate-[30deg]' : ''"
+      :class="isOpen ? 'rotate-30' : ''"
       title="设置"
       @click="toggle">
       <Icon icon="memory:toolbox" class="size-[22px]" />
@@ -96,11 +96,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 <style scoped>
 /* 从左下角展开：以 bottom-left 为原点缩放 */
 .settings-expand-enter-active {
-  transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1), opacity 200ms ease;
+  transition:
+    transform 280ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 200ms ease;
   transform-origin: bottom left;
 }
 .settings-expand-leave-active {
-  transition: transform 200ms cubic-bezier(0.4, 0, 1, 1), opacity 160ms ease;
+  transition:
+    transform 200ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 160ms ease;
   transform-origin: bottom left;
 }
 .settings-expand-enter-from,
@@ -112,7 +116,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 /* 面板内容切换 */
 .fade-panel-enter-active,
 .fade-panel-leave-active {
-  transition: opacity 120ms ease, transform 120ms ease;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
 }
 .fade-panel-enter-from,
 .fade-panel-leave-to {
