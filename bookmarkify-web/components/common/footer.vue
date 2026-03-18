@@ -2,7 +2,7 @@
   <footer class="w-full bg-black text-gray-200">
     <div class="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
       <div class="flex items-center gap-2 font-medium">
-        <div class="icon--memory-device icon-size-19 text-gray-300 hover:text-white"></div>
+        <Icon icon="memory:device" class="size-[19px] text-gray-300 hover:text-white" />
 
         <span>Bookmarkify</span>
         <span class="text-gray-400">· 探索互联网更多可能</span>
@@ -25,7 +25,7 @@
         target="_blank"
         rel="noreferrer"
         class="flex items-center gap-1 text-gray-400 transition-colors hover:text-white">
-        <span class="icon--memory-chat-processing icon-size-19 text-current"></span>
+        <Icon icon="memory:chat-processing" class="size-[19px] text-current" />
         <span>问题反馈</span>
       </a>
     </div>

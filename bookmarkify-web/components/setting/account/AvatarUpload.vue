@@ -11,7 +11,7 @@
         class="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-500 group-hover:opacity-100"
         @click.stop.prevent="triggerSelect"
         :disabled="uploading">
-        <span class="icon--memory-upload icon-size-32"></span>
+        <Icon icon="memory:upload" class="size-8" />
       </button>
       <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleFileChange" />
     </div>

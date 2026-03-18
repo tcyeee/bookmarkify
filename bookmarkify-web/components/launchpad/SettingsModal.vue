@@ -19,7 +19,7 @@
                     : 'text-base-content/55 hover:bg-base-200/60 hover:text-base-content'
                 "
                 @click="activeTab = tab.value">
-                <span :class="['shrink-0', tab.icon]" />
+                <Icon :icon="tab.icon" class="shrink-0 size-[22px]" />
                 {{ tab.label }}
               </button>
             </li>
@@ -41,7 +41,7 @@
       :class="isOpen ? 'rotate-[30deg]' : ''"
       title="设置"
       @click="toggle">
-      <span class="icon--memory-settings icon-size-22" />
+      <Icon icon="memory:toolbox" class="size-[22px]" />
     </button>
   </div>
 
@@ -62,10 +62,10 @@ const isOpen = ref(false)
 const activeTab = ref(0)
 
 const tabs = [
-  { value: 0, label: '个人资料', icon: 'icon--memory-account-box icon-size-22' },
-  { value: 1, label: '书签管理', icon: 'icon--memory-application-code icon-size-22' },
-  { value: 2, label: '主页背景', icon: 'icon--memory-cloud icon-size-22' },
-  { value: 3, label: '偏好设置', icon: 'icon--memory-toggle-switch-off icon-size-22' },
+  { value: 0, label: '个人资料', icon: 'memory:account-box' },
+  { value: 1, label: '书签管理', icon: 'memory:application-code' },
+  { value: 2, label: '主页背景', icon: 'memory:cloud' },
+  { value: 3, label: '偏好设置', icon: 'memory:toggle-switch-off' },
 ]
 
 const settingComponents = [AccountProfile, SettingBookmarkManage, BackgroundSettings, PreferenceSettings] as const

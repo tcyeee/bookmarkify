@@ -16,7 +16,7 @@
 
         <div class="mt-4 space-y-3 w-full">
           <label class="cy-input cy-validator w-full">
-            <span class="icon--memory-arrow-right-circle icon-size-20 text-gray-500" />
+            <Icon icon="memory:arrow-right-circle" class="size-5 text-gray-500" />
             <input
               v-model="form.account"
               type="text"
@@ -26,7 +26,7 @@
               autocomplete="username" />
           </label>
           <label class="cy-input cy-validator w-full">
-            <span class="icon--memory-lock icon-size-20 text-gray-500" />
+            <Icon icon="memory:lock" class="size-5 text-gray-500" />
             <input
               v-model="form.password"
               :type="showPassword ? 'text' : 'password'"
@@ -36,7 +36,8 @@
               autocomplete="current-password"
               @keydown.enter="submit" />
             <button type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" @click="showPassword = !showPassword">
-              <span :class="showPassword ? 'icon--memory-eye-off' : 'icon--memory-eye'" class="icon-size-18" />
+              <span v-if="showPassword" class="icon--memory-eye-off icon-size-18" />
+              <Icon v-else icon="memory:eye" class="size-[18px]" />
             </button>
           </label>
           <div v-if="errorMsg" class="text-sm text-red-500">{{ errorMsg }}</div>

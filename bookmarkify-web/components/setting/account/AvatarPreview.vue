@@ -10,7 +10,7 @@
       <div
         v-else-if="showIconFallback"
         class="flex h-full w-full items-center justify-center rounded-full bg-slate-200 text-slate-700 text-2xl font-semibold select-none">
-        <span class="icon--memory-account text-gray-300 icon-size-60"></span>
+        <Icon icon="memory:account" class="size-[60px] text-gray-300" />
       </div>
       <div
         v-else

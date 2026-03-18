@@ -32,18 +32,16 @@
               :shimmerWidth="100"
               class="inline-flex dark:text-black/50! items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 text-lg">
               <template v-if="startLoading">
-                <span class="icon--memory-rotate-clockwise icon-size-24 animate-spin"></span>
+                <Icon icon="memory:rotate-clockwise" class="size-6 animate-spin" />
                 <span>&emsp;处理中...</span>
               </template>
               <template v-else-if="isLoggedIn">
                 <span>🚀 回到控制台</span>
-                <span
-                  class="icon--memory-arrow-right icon-size-30 w-4 h-4 ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5"></span>
+                <Icon icon="memory:arrow-right" class="ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
               </template>
               <template v-else>
                 <span>✨ 开始使用</span>
-                <span
-                  class="icon--memory-arrow-right icon-size-30 w-4 h-4 ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5"></span>
+                <Icon icon="memory:arrow-right" class="ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
               </template>
             </ShimmerText>
           </div>
@@ -53,7 +51,7 @@
         <div
           @click="handleScroll"
           class="relative z-10 animate-bounce flex flex-col items-center gap-5 cursor-pointer select-none">
-          <span class="icon--memory-arrow-down-bold icon-size-40 text-white/80"></span>
+          <Icon icon="memory:arrow-down-bold" class="size-10 text-white/80" />
         </div>
       </div>
 
@@ -81,7 +79,7 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-250 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <span class="icon--memory-floppy-disk icon-size-40 text-current"></span>
+                <Icon icon="memory:floppy-disk" class="size-10 text-current" />
 
                 <h1 class="font-medium text-2xl">一键收藏任意页面</h1>
 
@@ -92,7 +90,7 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-500 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <span class="icon--memory-search icon-size-40 text-current"></span>
+                <Icon icon="memory:search" class="size-10 text-current" />
 
                 <h1 class="font-medium text-2xl">智能分类与搜索</h1>
                 <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">
@@ -102,14 +100,14 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-750 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <span class="icon--memory-checkbox-marked icon-size-40 text-current"></span>
+                <Icon icon="memory:checkbox-marked" class="size-10 text-current" />
                 <h1 class="font-medium text-2xl">书签活性检测</h1>
                 <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">自动检测书签是否有效，及时更新书签状态。</p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-1000 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <span class="icon--memory-cloud icon-size-40 text-current"></span>
+                <Icon icon="memory:cloud" class="size-10 text-current" />
                 <h1 class="font-medium text-2xl">分享与发现</h1>
                 <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">
                   公开或私密分享收藏夹，浏览社区精选书签，一键加入自己的库。
@@ -132,7 +130,7 @@
         <button
           @click="close"
           class="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-white/40 hover:bg-white/10 hover:text-white/80 transition-all duration-200">
-          <span class="icon--memory-close icon-size-18"></span>
+          <Icon icon="memory:close" class="size-[18px]" />
         </button>
       </template>
       <WelcomeLoginDialog @success="onLoginSuccess" @skip="startUse" />
@@ -145,7 +143,7 @@
         class="fixed bottom-28 right-6 z-50 rounded-full hover:scale-110 transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 cursor-pointer select-none"
         aria-label="回到顶部"
         @click="backToTop">
-        <span class="icon--memory-arrow-up-circle icon-size-40 text-gray-400"></span>
+        <Icon icon="memory:arrow-up-circle" class="size-10 text-gray-400" />
       </div>
     </Transition>
   </div>
