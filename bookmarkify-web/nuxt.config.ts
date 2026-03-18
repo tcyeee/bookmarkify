@@ -57,7 +57,7 @@ export default defineNuxtConfig({
     '@utils': resolve(__dirname, 'server/utils'),
   },
   modules: ['@pinia/nuxt', '@element-plus/nuxt', 'pinia-plugin-persistedstate/nuxt'],
-  plugins: ['~/plugins/keyListener.ts', '~/plugins/contextMenu.ts', '~/plugins/auth.ts'],
+  plugins: ['~/plugins/iconify.ts', '~/plugins/keyListener.ts', '~/plugins/contextMenu.ts', '~/plugins/auth.ts'],
   vite: {
     plugins: [tailwindcss()],
   },
