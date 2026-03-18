@@ -163,13 +163,18 @@ class BookmarkServiceImpl(
 
     /** 解析书签，然后保存到数据库，同时通知到用户 */
     override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
+        log.debug("[kafKaBookmarkParseAndNotice-4] 开始: uid=$uid, bookmarkId=$bookmarkId, userLinkId=$userLinkId, nodeId=$nodeId")
         parseBookmark(baseMapper.selectById(bookmarkId))
+        log.debug("[kafKaBookmarkParseAndNotice-4] 书签解析完成, 开始构建展示数据: userLinkId=$userLinkId")
         val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
+        log.debug("[kafKaBookmarkParseAndNotice-4] 已查询 bookmarkShow, title=${bookmarkShow.title}, 开始更新布局节点类型: nodeId=$nodeId")
         val layoutEntity = layoutNodeMapper.selectById(nodeId).also {
             it.type = NodeTypeEnum.BOOKMARK
             layoutNodeMapper.updateById(it)
         }
+        log.debug("[kafKaBookmarkParseAndNotice-4] 布局节点已更新为 BOOKMARK, 准备推送 WebSocket: uid=$uid, nodeId=$nodeId")
         UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
+        log.debug("[kafKaBookmarkParseAndNotice-4] WebSocket 推送完成: uid=$uid, nodeId=$nodeId")
     }
 
     /**
@@ -199,11 +204,17 @@ class BookmarkServiceImpl(
 
     /** 解析书签，保存书签到根节点，并通知到用户 */
     override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, parentNodeId: String?) {
+        log.debug("[kafKaBookmarkParseAndNotice-3] 开始: uid=$uid, bookmarkId=$bookmarkId, parentNodeId=$parentNodeId")
         val bookmark = parseBookmark(baseMapper.selectById(bookmarkId))
+        log.debug("[kafKaBookmarkParseAndNotice-3] 书签解析完成: bookmarkId=${bookmark.id}, parseStatus=${bookmark.parseStatus}, appName=${bookmark.appName}")
         val layoutEntity = UserLayoutNodeEntity(uid = uid, parentId = parentNodeId).also { layoutNodeMapper.insert(it) }
+        log.debug("[kafKaBookmarkParseAndNotice-3] 已创建布局节点: nodeId=${layoutEntity.id}, parentNodeId=$parentNodeId")
         val userLinkEntity = BookmarkUserLink(bookmark, layoutEntity.id, uid).also { bookmarkUserLinkMapper.insert(it) }
+        log.debug("[kafKaBookmarkParseAndNotice-3] 已创建用户关联记录: userLinkId=${userLinkEntity.id}")
         val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkEntity.id).initLogo()
+        log.debug("[kafKaBookmarkParseAndNotice-3] 已查询 bookmarkShow, 准备推送 WebSocket: uid=$uid, nodeId=${layoutEntity.id}")
         UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
+        log.debug("[kafKaBookmarkParseAndNotice-3] WebSocket 推送完成: uid=$uid, nodeId=${layoutEntity.id}")
     }
 
     // ────── 公开接口（明确指定解析方式时调用）──────
@@ -221,8 +232,14 @@ class BookmarkServiceImpl(
      * 统一解析调度：检查 verifyFlag 后根据配置选择解析方式
      */
     private fun parseBookmark(bookmark: BookmarkEntity): BookmarkEntity {
+        log.debug("[parseBookmark] 开始调度解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
         val existing = baseMapper.selectById(bookmark.id)
-        if (existing != null && existing.verifyFlag) return existing
+        if (existing != null && existing.verifyFlag) {
+            log.debug("[parseBookmark] 书签已手动认证(verifyFlag=true), 跳过解析直接返回: bookmarkId=${bookmark.id}")
+            return existing
+        }
+        val mode = if (projectConfig.useThirdPartyParser) "第三方API" else "本地Jsoup"
+        log.debug("[parseBookmark] 选择解析模式: $mode, bookmarkId=${bookmark.id}")
         return if (projectConfig.useThirdPartyParser) parseByApi(bookmark) else parseLocally(bookmark)
     }
 
@@ -230,11 +247,12 @@ class BookmarkServiceImpl(
      * 本地解析（Jsoup）：抓取网页元信息 + favicon base64 + LOGO/OG 存 OSS
      */
     private fun parseLocally(bookmark: BookmarkEntity): BookmarkEntity {
-        log.trace("[CHECK] 开始解析域名(本地):${bookmark.rawUrl}")
+        log.debug("[parseLocally] 开始本地解析(Jsoup): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")
         val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
+            val status = if (it.message?.contains("403") == true) ParseStatusEnum.BLOCKED else ParseStatusEnum.CLOSED
+            log.debug("[parseLocally] 页面抓取失败: bookmarkId=${bookmark.id}, status=$status, err=${it.message}")
             bookmark.apply {
-                parseStatus =
-                    if (it.message?.contains("403") == true) ParseStatusEnum.BLOCKED else ParseStatusEnum.CLOSED
+                parseStatus = status
                 isActivity = false
                 parseErrMsg = it.message
                 baseMapper.insertOrUpdate(this)
@@ -242,10 +260,13 @@ class BookmarkServiceImpl(
             }
             return bookmark
         }
+        log.debug("[parseLocally] 页面抓取成功, 开始填充元信息: bookmarkId=${bookmark.id}, title=${wrapper.title}")
         bookmark.successInit(wrapper)
         inferAndSetAppName(bookmark)
         baseMapper.insertOrUpdate(bookmark)
+        log.debug("[parseLocally] 元信息已保存, 开始存储 LOGO 到 OSS: bookmarkId=${bookmark.id}, iconCount=${wrapper.distinctIcons?.size ?: 0}")
         saveLogoToOss(wrapper.distinctIcons ?: emptyList(), bookmark)
+        log.debug("[parseLocally] 本地解析全部完成: bookmarkId=${bookmark.id}, parseStatus=${bookmark.parseStatus}, appName=${bookmark.appName}")
         return bookmark
     }
 
@@ -253,20 +274,25 @@ class BookmarkServiceImpl(
      * 第三方 API 解析（iframely）：通过 API 获取元信息 + favicon base64 + LOGO/OG 存 OSS
      */
     private fun parseByApi(bookmark: BookmarkEntity): BookmarkEntity {
-        log.trace("[CHECK] 开始解析域名(第三方API):${bookmark.rawUrl}")
+        log.debug("[parseByApi] 开始第三方API解析(iframely): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
                 val icons = vo.toManifestIcons()
+                log.debug("[parseByApi] API 返回成功: bookmarkId=${bookmark.id}, title=${vo.meta?.title}, iconCount=${icons.size}")
                 // 填充基础信息 + iconBase64 + DeepSeek 简称推断，保存一次
                 vo.entity(bookmark).also {
                     it.iconBase64 = FileUtils.icoBase64(icons, it.rawUrl)
                     inferAndSetAppName(it)
                     baseMapper.insertOrUpdate(it)
+                    log.debug("[parseByApi] 元信息已保存: bookmarkId=${it.id}, appName=${it.appName}, parseStatus=${it.parseStatus}")
                 }
+                log.debug("[parseByApi] 开始存储 LOGO 到 OSS: bookmarkId=${bookmark.id}, iconCount=${icons.size}")
                 saveLogoToOss(icons, bookmark)
+                log.debug("[parseByApi] 第三方API解析全部完成: bookmarkId=${bookmark.id}")
                 bookmark
             },
             onFailure = { e ->
+                log.debug("[parseByApi] API 调用失败: bookmarkId=${bookmark.id}, err=${e.message}")
                 bookmark.apply {
                     isActivity = false
                     parseStatus = ParseStatusEnum.CLOSED
@@ -282,9 +308,16 @@ class BookmarkServiceImpl(
      * 将网站 LOGO/OG 图片存入 OSS，并更新书签的最大 LOGO 尺寸
      */
     private fun saveLogoToOss(icons: List<ManifestIcon>, bookmark: BookmarkEntity) {
-        if (icons.isEmpty()) return
+        if (icons.isEmpty()) {
+            log.debug("[saveLogoToOss] icon 列表为空，跳过 OSS 上传: bookmarkId=${bookmark.id}")
+            return
+        }
+        log.debug("[saveLogoToOss] 开始上传 LOGO/OG 到 OSS: bookmarkId=${bookmark.id}, iconCount=${icons.size}")
         OssUtils.restoreWebsiteLogoAndOg(icons, bookmark.id)
-            ?.also { websiteLogoMapper.insertOrUpdate(it) }
+            ?.also {
+                websiteLogoMapper.insertOrUpdate(it)
+                log.debug("[saveLogoToOss] OSS 上传完成，已更新 website_logo: bookmarkId=${bookmark.id}, width=${it.width}")
+            }
             ?.also { bookmark.setMaximalLogoSize(it.width) }
     }
 
@@ -292,9 +325,16 @@ class BookmarkServiceImpl(
 
     /** 通过 DeepSeek 推断书签简称，有结果则覆盖 appName，失败静默忽略 */
     private fun inferAndSetAppName(bookmark: BookmarkEntity) {
-        val title = bookmark.title ?: return
+        val title = bookmark.title ?: run {
+            log.debug("[inferAndSetAppName] title 为空，跳过 appName 推断: bookmarkId=${bookmark.id}")
+            return
+        }
+        log.debug("[inferAndSetAppName] 调用 DeepSeek 推断 appName: bookmarkId=${bookmark.id}, title=$title")
         apiService.inferAppName(title)?.takeIf { it.isNotBlank() }
-            ?.also { bookmark.appName = it }
+            ?.also {
+                bookmark.appName = it
+                log.debug("[inferAndSetAppName] appName 推断成功: bookmarkId=${bookmark.id}, appName=$it")
+            } ?: log.debug("[inferAndSetAppName] appName 推断结果为空，保持原值: bookmarkId=${bookmark.id}")
     }
 
     private fun getByHost(urlHost: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, urlHost).one()
