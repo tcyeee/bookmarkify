@@ -7,7 +7,6 @@ import top.tcyeee.bookmarkify.entity.entity.UserFile
 import top.tcyeee.bookmarkify.entity.enums.FileType as OssFileType
 import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.server.IFileService
-import top.tcyeee.bookmarkify.utils.FileType
 import top.tcyeee.bookmarkify.utils.OssUtils
 
 /**
@@ -21,13 +20,13 @@ class FileServiceImpl : IFileService, ServiceImpl<FileMapper, UserFile>() {
 
     override fun updateAvatar(uid: String, file: MultipartFile): UserFile {
         val (currentName, ext) = OssUtils.uploadUserFile(file, OssFileType.AVATAR)
-        return UserFile(uid = uid, originName = file.originalFilename!!, type = FileType.AVATAR,
+        return UserFile(uid = uid, originName = file.originalFilename!!, type = OssFileType.AVATAR,
             currentName = currentName, size = file.size, suffix = ext).also { save(it) }
     }
 
     override fun uploadBackground(uid: String, file: MultipartFile): UserFile {
         val (currentName, ext) = OssUtils.uploadUserFile(file, OssFileType.BACKGROUND)
-        return UserFile(uid = uid, originName = file.originalFilename!!, type = FileType.BACKGROUND,
+        return UserFile(uid = uid, originName = file.originalFilename!!, type = OssFileType.BACKGROUND,
             currentName = currentName, size = file.size, suffix = ext).also { save(it) }
     }
 }

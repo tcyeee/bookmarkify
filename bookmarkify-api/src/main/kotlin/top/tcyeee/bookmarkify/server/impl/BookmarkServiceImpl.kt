@@ -281,7 +281,7 @@ class BookmarkServiceImpl(
                 log.debug("[parseByApi] API 返回成功: bookmarkId=${bookmark.id}, title=${vo.meta?.title}, iconCount=${icons.size}")
                 // 填充基础信息 + iconBase64 + DeepSeek 简称推断，保存一次
                 vo.entity(bookmark).also {
-                    it.iconBase64 = FileUtils.icoBase64(icons, it.rawUrl)
+                    it.iconBase64 = ChromeBookmarkParser.icoBase64(icons, it.rawUrl)
                     inferAndSetAppName(it)
                     baseMapper.insertOrUpdate(it)
                     log.debug("[parseByApi] 元信息已保存: bookmarkId=${it.id}, appName=${it.appName}, parseStatus=${it.parseStatus}")
