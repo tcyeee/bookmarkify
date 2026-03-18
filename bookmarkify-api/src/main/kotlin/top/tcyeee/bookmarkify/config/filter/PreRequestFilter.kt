@@ -56,7 +56,7 @@ class PreRequestFilter(private val objectMapper: ObjectMapper) : Filter {
             return
         }
 
-        log.info("⛱ send $method request to $uri")
+        log.info("⛱ $method request to $uri")
         filterChain.doFilter(request, response)
     }
 
