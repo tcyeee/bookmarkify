@@ -6,8 +6,8 @@ import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.UserFileVO
+import top.tcyeee.bookmarkify.entity.enums.FileType
 import top.tcyeee.bookmarkify.utils.CurrentEnvironment
-import top.tcyeee.bookmarkify.utils.FileType
 import top.tcyeee.bookmarkify.utils.OssUtils
 import top.tcyeee.bookmarkify.utils.currentEnvironment
 import java.io.Serializable

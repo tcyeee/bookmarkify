@@ -11,8 +11,8 @@ import jakarta.validation.constraints.Max
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
+import top.tcyeee.bookmarkify.utils.ChromeBookmarkParser
 import top.tcyeee.bookmarkify.utils.ChromeBookmarkRawData
-import top.tcyeee.bookmarkify.utils.FileUtils
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 import java.io.Serializable
 import java.time.LocalDateTime
@@ -82,7 +82,7 @@ data class BookmarkEntity(
         this.description = wrapper.description
         this.parseStatus = if (wrapper.antiCrawlerDetected) ParseStatusEnum.BLOCKED else ParseStatusEnum.SUCCESS
         this.updateTime = LocalDateTime.now()
-        this.iconBase64 = FileUtils.icoBase64(wrapper.distinctIcons, this.rawUrl)
+        this.iconBase64 = ChromeBookmarkParser.icoBase64(wrapper.distinctIcons, this.rawUrl)
     }
 
     // 是否需要检查标签,这里为true,说明这个书签需要被检查了
