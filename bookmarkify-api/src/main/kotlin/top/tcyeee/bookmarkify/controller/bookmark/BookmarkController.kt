@@ -10,6 +10,8 @@ import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
+import top.tcyeee.bookmarkify.entity.CreateDirParams
+import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
@@ -62,6 +64,16 @@ class BookmarksController(
     @PostMapping("/sort")
     @Operation(summary = "排序")
     fun sort(@RequestBody params: Map<String, Int>): Boolean = preferenceService.sort(BaseUtils.uid(), params)
+
+    @PostMapping("/createDir")
+    @Operation(summary = "创建文件夹")
+    fun createDir(@RequestBody params: CreateDirParams): UserLayoutNodeVO =
+        layoutNodeService.createDir(params, BaseUtils.uid())
+
+    @PostMapping("/renameDir")
+    @Operation(summary = "修改文件夹名称")
+    fun renameDir(@RequestBody params: RenameDirParams): Boolean =
+        layoutNodeService.renameDir(params, BaseUtils.uid())
 
     /**
      * @param params layout元素ID

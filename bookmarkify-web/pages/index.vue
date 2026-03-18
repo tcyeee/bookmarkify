@@ -237,31 +237,34 @@ function onDragStart(item: any) {
   currentDraggedId = (item?.getElement?.() as HTMLElement | undefined)?.dataset?.itemKey ?? ''
 }
 
-/** 拖拽结束（含 ESC 取消的情况），确保合并状态被清理 */
+/**
+ * dragEnd 先于 dragReleaseEnd 触发，在此处理合并逻辑。
+ * 若是合并操作，清除 pendingOrder 避免 onDragReleaseEnd 再走排序。
+ */
 function onDragEnd() {
-  clearMergeState()
-}
-
-/** 释放动画完成后：判断是创建文件夹还是正常排序 */
-function onDragReleaseEnd() {
-  dragState.dragging = false
-  dragState.justDropped = true
-
   if (mergeReady.value && mergeTargetId.value && currentDraggedId) {
     const draggedId = currentDraggedId
     const targetId = mergeTargetId.value
     clearMergeState()
+    dragState.pendingOrder = null
     mockCreateFolder(draggedId, targetId)
   } else {
     clearMergeState()
-    if (dragState.pendingOrder) {
-      const params: Record<string, number> = {}
-      bookmarkStore.layoutNode?.forEach((node, index) => {
-        params[node.id] = index
-      })
-      bookmarksSort(params)
-      dragState.pendingOrder = null
-    }
+  }
+}
+
+/** 释放动画完成后：处理排序和拖拽状态重置（合并逻辑已在 onDragEnd 处理） */
+function onDragReleaseEnd() {
+  dragState.dragging = false
+  dragState.justDropped = true
+
+  if (dragState.pendingOrder) {
+    const params: Record<string, number> = {}
+    bookmarkStore.layoutNode?.forEach((node, index) => {
+      params[node.id] = index
+    })
+    bookmarksSort(params)
+    dragState.pendingOrder = null
   }
 
   requestAnimationFrame(() => {

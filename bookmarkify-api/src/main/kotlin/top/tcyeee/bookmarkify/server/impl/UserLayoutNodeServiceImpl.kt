@@ -1,9 +1,10 @@
 package top.tcyeee.bookmarkify.server.impl
 
-import ch.qos.logback.core.Layout
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import top.tcyeee.bookmarkify.entity.CreateDirParams
+import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
@@ -12,6 +13,7 @@ import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
 import top.tcyeee.bookmarkify.server.IBookmarkFunctionService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
+import top.tcyeee.bookmarkify.utils.SocketUtils
 
 /**
  * 用户桌面排布节点 Service 实现
@@ -46,6 +48,38 @@ class UserLayoutNodeServiceImpl(
             // 重新组织架构
             .let { nodeStructure(it) }
     }
+
+    @Transactional
+    override fun createDir(params: CreateDirParams, uid: String): UserLayoutNodeVO {
+        // 创建 BOOKMARK_DIR 节点
+        val dirNode = UserLayoutNodeEntity(uid = uid, name = params.name, type = NodeTypeEnum.BOOKMARK_DIR)
+        save(dirNode)
+
+        // 将两个书签节点的父节点更新为新目录
+        ktUpdate()
+            .`in`(UserLayoutNodeEntity::id, params.nodeIds)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .set(UserLayoutNodeEntity::parentId, dirNode.id)
+            .update()
+
+        // 构建含子节点的目录 VO 并推送 WebSocket 通知
+        val sortMap = preferenceService.queryByUid(uid).sortMap
+        val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
+        val childVOs = listByIds(params.nodeIds).map { it.vo(sortMap[it.id], bookmarkMap[it.id], null) }
+        val dirVO = dirNode.vo(sortMap[dirNode.id], null, null)
+        dirVO.children.addAll(childVOs)
+
+        SocketUtils.homeItemUpdate(uid, dirVO)
+        return dirVO
+    }
+
+    override fun renameDir(params: RenameDirParams, uid: String): Boolean =
+        ktUpdate()
+            .eq(UserLayoutNodeEntity::id, params.nodeId)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .eq(UserLayoutNodeEntity::type, NodeTypeEnum.BOOKMARK_DIR)
+            .set(UserLayoutNodeEntity::name, params.name)
+            .update()
 
     private fun findByUid(uid: String): List<UserLayoutNodeEntity> =
         ktQuery().eq(UserLayoutNodeEntity::uid, uid).list() ?: emptyList()

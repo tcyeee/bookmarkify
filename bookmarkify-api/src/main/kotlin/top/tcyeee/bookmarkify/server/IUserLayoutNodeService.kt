@@ -1,6 +1,8 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
+import top.tcyeee.bookmarkify.entity.CreateDirParams
+import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
@@ -20,5 +22,19 @@ interface IUserLayoutNodeService : IService<UserLayoutNodeEntity> {
      * @param uid uid
      */
     fun layout(uid: String): UserLayoutNodeVO
+
+    /**
+     * 将两个书签节点合并为一个文件夹
+     * @param params 文件夹名称和要放入的两个书签节点ID
+     * @param uid 用户ID
+     */
+    fun createDir(params: CreateDirParams, uid: String): UserLayoutNodeVO
+
+    /**
+     * 修改文件夹名称
+     * @param params 文件夹节点ID和新名称
+     * @param uid 用户ID
+     */
+    fun renameDir(params: RenameDirParams, uid: String): Boolean
 }
 
