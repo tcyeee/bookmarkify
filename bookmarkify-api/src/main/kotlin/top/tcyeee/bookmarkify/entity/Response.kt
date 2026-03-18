@@ -33,7 +33,7 @@ data class BookmarkShow(
         bookmark?.let { BeanUtil.copyProperties(it, this) }
         BeanUtil.copyProperties(userlink, this)
         bookmarkUserLinkId = userlink.id
-        urlBase = bookmark?.let { "${it.urlScheme}://${it.urlHost}${it.urlPath}" }
+        urlBase = bookmark?.let { "${it.urlScheme}://${it.urlHost}" }
         hdSize = bookmark?.maximalLogoSize ?: 0
         iconHdUrl = null
     }

@@ -30,8 +30,6 @@ data class BookmarkEntity(
     /* URL相关 */
     @TableId var id: String,
     @field:Max(200) @field:Schema(description = "书签根域名") var urlHost: String,        // sfz.uzuzuz.com.cn
-    @Deprecated("元书签内,主要是存储logo,还有网站的SEO信息,不同路径下的元书签,这些信息都是一样的,所以路径字段没有任何意义")
-    @field:Schema(description = "路径URL(不带参数)") var urlPath: String? = null,         // /test/info
     @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
     /* 基础信息 */
@@ -62,7 +60,6 @@ data class BookmarkEntity(
         id = IdUtil.fastUUID(),
         urlHost = url.urlHost,
         urlScheme = url.urlScheme,
-        urlPath = url.urlPath,
         parseStatus = ParseStatusEnum.LOADING,
     )
 
