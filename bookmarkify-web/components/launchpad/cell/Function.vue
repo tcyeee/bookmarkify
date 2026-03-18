@@ -2,7 +2,7 @@
   <div class="w-20 flex flex-col items-center" :class="{ 'justify-center': !showTitle }" @click="handleClick">
     <div class="w-app h-app flex justify-center items-center">
       <div class="rounded-xl shadow flex justify-center items-center" :class="iconWrapperClass" :style="logoSizeStyle">
-        <span :class="iconClass" :style="iconSizeStyle" />
+        <Icon :icon="iconClass" :style="iconSizeStyle" class="text-white" />
       </div>
     </div>
     <div v-if="showTitle" class="w-18 text-sm mt-[0.3rem] text-white opacity-90 truncate text-center">
@@ -38,12 +38,12 @@ const label = computed(() => {
 })
 
 const iconClass = computed(() => {
-  if (!value.value) return 'icon--memory-dot-hexagon-fill text-white'
+  if (!value.value) return 'memory:dot-hexagon-fill'
   switch (value.value.type) {
     case FunctionType.SETTING:
-      return 'icon--memory-dot-hexagon-fill text-white'
+      return 'memory:dot-hexagon-fill'
     default:
-      return 'icon--memory-dot-hexagon-fill text-white'
+      return 'memory:dot-hexagon-fill'
   }
 })
 

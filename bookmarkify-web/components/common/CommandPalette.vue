@@ -3,8 +3,9 @@
     <template #header>
       <div class="px-4 pt-4 pb-3">
         <div class="relative">
-          <span
-            class="icon--memory-search icon-size-25 pointer-events-none absolute inset-y-3 left-3 text-slate-400 dark:text-slate-500"></span>
+          <Icon
+            icon="memory:search"
+            class="size-[25px] pointer-events-none absolute inset-y-3 left-3 text-slate-400 dark:text-slate-500" />
           <Command.Input
             class="w-full rounded-lg border border-slate-200 bg-white/80 px-11 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-900/60"
             v-model:value="search"
@@ -24,12 +25,11 @@
             class="group mx-1 cursor-pointer rounded-md outline-none transition hover:bg-slate-50 aria-selected:bg-primary/10 focus:bg-primary/10 dark:hover:bg-slate-800 dark:aria-selected:bg-primary/20 dark:focus:bg-primary/20">
             <div class="flex items-center justify-between px-3 py-2.5 text-sm">
               <div class="flex items-center gap-3 text-slate-800 dark:text-slate-100">
-                <span
+                <div
                   v-if="item.iconLeft"
-                  :class="[
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400 ring-1 ring-slate-200 transition group-hover:text-primary group-aria-selected:text-primary dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-700',
-                    item.iconLeft,
-                  ]" />
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400 ring-1 ring-slate-200 transition group-hover:text-primary group-aria-selected:text-primary dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-700">
+                  <Icon :icon="item.iconLeft" class="size-4" />
+                </div>
                 <div class="flex flex-col">
                   <span
                     class="font-medium group-aria-selected:text-primary group-hover:text-primary dark:group-aria-selected:text-primary dark:group-hover:text-primary">
@@ -59,12 +59,13 @@
                     {{ badge.label }}
                   </button>
                 </div>
-                <span
+                <Icon
                   v-else-if="item.iconRight || item.submenu"
+                  :icon="item.iconRight || 'memory:chevron-right'"
                   :class="[
                     item.iconRightClass ??
                       'text-slate-300 group-hover:text-slate-400 group-aria-selected:text-slate-400 dark:text-slate-600 dark:group-hover:text-slate-400',
-                    item.iconRight || 'icon--memory-chevron-right icon-size-16',
+                    item.iconRightSize === 30 ? 'size-[30px]' : 'size-4',
                   ]" />
               </div>
             </div>
@@ -98,6 +99,7 @@ type PaletteItem = {
   label: string
   iconLeft?: string
   iconRight?: string
+  iconRightSize?: number
   iconRightClass?: string
   submenu?: boolean
   hint?: string
@@ -204,7 +206,7 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
       [
         {
           value: 'back-root',
-          iconLeft: 'icon--memory-arrow-left-box icon-size-16',
+          iconLeft: 'memory:arrow-left-box',
           label: '返回',
           run: () => {
             backToRoot()
@@ -256,9 +258,8 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         {
           value: 'pref-minimal-toggle',
           label:  '极简模式',
-          iconRight: pref.minimalMode
-            ? 'icon--memory-toggle-switch-off icon-size-30'
-            : 'icon--memory-toggle-switch-on icon-size-30',
+          iconRight: pref.minimalMode ? 'memory:toggle-switch-off' : 'memory:toggle-switch-on',
+          iconRightSize: 30,
           iconRightClass: pref.minimalMode
             ? 'text-slate-400 dark:text-slate-500'
             : 'text-primary',
@@ -270,9 +271,8 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         {
           value: 'pref-show-title-toggle',
           label:  '标题显示',
-          iconRight: pref.showTitle
-            ? 'icon--memory-toggle-switch-on icon-size-30'
-            : 'icon--memory-toggle-switch-off icon-size-30',
+          iconRight: pref.showTitle ? 'memory:toggle-switch-on' : 'memory:toggle-switch-off',
+          iconRightSize: 30,
           iconRightClass: pref.showTitle
             ? 'text-primary'
             : 'text-slate-400 dark:text-slate-500',
@@ -284,9 +284,8 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         {
           value: 'pref-show-desktop-add-entry-toggle',
           label: '桌面增加入口',
-          iconRight: pref.showDesktopAddEntry
-            ? 'icon--memory-toggle-switch-on icon-size-30'
-            : 'icon--memory-toggle-switch-off icon-size-30',
+          iconRight: pref.showDesktopAddEntry ? 'memory:toggle-switch-on' : 'memory:toggle-switch-off',
+          iconRightSize: 30,
           iconRightClass: pref.showDesktopAddEntry
             ? 'text-primary'
             : 'text-slate-400 dark:text-slate-500',

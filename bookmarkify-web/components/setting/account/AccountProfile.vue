@@ -41,7 +41,7 @@
         <div
           class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
           <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
-            <span class="icon--memory-email icon-size-20 text-slate-500 dark:text-slate-400"></span>
+            <Icon icon="memory:email" class="size-5 text-slate-500 dark:text-slate-400" />
             <div>
               <div class="font-medium">邮箱</div>
               <div class="text-sm text-slate-500 dark:text-slate-400">{{ maskedEmail || '未绑定邮箱' }}</div>
@@ -55,7 +55,7 @@
         <div
           class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
           <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
-            <span class="icon--memory-speaker icon-size-20 text-slate-500 dark:text-slate-400"></span>
+            <Icon icon="memory:speaker" class="size-5 text-slate-500 dark:text-slate-400" />
             <div>
               <div class="font-medium">手机号</div>
               <div class="text-sm text-slate-500 dark:text-slate-400">{{ maskedPhone || '未绑定手机号' }}</div>
@@ -75,7 +75,7 @@
         <div
           class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
           <div class="flex items-center gap-3 text-slate-800 dark:text-slate-200">
-            <span class="icon--memory-arrow-down-right-box icon-size-22 text-slate-500 dark:text-slate-400"></span>
+            <Icon icon="memory:arrow-down-right-box" class="size-[22px] text-slate-500 dark:text-slate-400" />
             <div>
               <div class="font-semibold">退出登录</div>
               <div class="text-sm text-slate-500 dark:text-slate-400">仅退出当前设备登录，不影响账号数据。</div>
@@ -89,7 +89,7 @@
           v-show="false"
           class="rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-rose-500/60 dark:bg-rose-500/10">
           <div class="flex items-center gap-3 text-rose-800 dark:text-rose-100">
-            <span class="icon--memory-arrow-down-right-box icon-size-22 text-rose-500 dark:text-rose-300"></span>
+            <Icon icon="memory:arrow-down-right-box" class="size-[22px] text-rose-500 dark:text-rose-300" />
             <div>
               <div class="font-semibold">注销账户</div>
               <div class="text-sm text-rose-600 dark:text-rose-200">注销后账号及数据将被销毁且不可恢复，请谨慎操作。</div>

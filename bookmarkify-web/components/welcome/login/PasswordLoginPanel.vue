@@ -19,7 +19,8 @@
         type="button"
         class="absolute right-3 top-1/2 -translate-y-1/2 text-white/35 hover:text-white/70 transition-colors"
         @click="showPassword = !showPassword">
-        <span :class="showPassword ? 'icon--memory-eye-off' : 'icon--memory-eye'" class="icon-size-18" />
+        <span v-if="showPassword" class="icon--memory-eye-off icon-size-18" />
+        <Icon v-else icon="memory:eye" class="size-[18px]" />
       </button>
     </div>
 
@@ -31,7 +32,7 @@
       :style="BTN_STYLE"
       :disabled="!canSubmit || loading"
       @click="submit">
-      <span v-if="loading" class="icon--memory-rotate-clockwise icon-size-16 animate-spin"></span>
+      <Icon v-if="loading" icon="memory:rotate-clockwise" class="size-4 animate-spin" />
       {{ loading ? '登录中...' : '登录' }}
     </button>
   </div>

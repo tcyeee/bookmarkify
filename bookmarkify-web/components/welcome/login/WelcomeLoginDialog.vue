@@ -3,7 +3,7 @@
   <div class="flex flex-col items-center pb-6 pt-1">
     <div
       class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 via-indigo-500 to-fuchsia-500 shadow-lg shadow-indigo-500/30">
-      <span class="icon--memory-bookmark icon-size-24 text-white"></span>
+      <Icon icon="memory:bookmark" class="size-6 text-white" />
     </div>
     <h2 class="text-xl font-semibold text-white">欢迎登录 Bookmarkify</h2>
     <p class="mt-1.5 text-sm text-white/45">登录后可保障数据安全并支持跨设备同步</p>
@@ -20,7 +20,7 @@
         'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition-all duration-200',
         selectedMethod === m.key ? 'bg-white/12 text-white shadow-sm ring-1 ring-white/10' : 'text-white/40 hover:text-white/65',
       ]">
-      <span :class="[m.icon, 'icon-size-16']"></span>
+      <Icon :icon="m.icon" class="size-4" />
       {{ m.label }}
     </button>
   </div>
@@ -77,8 +77,8 @@ const selectedMethod = ref<'phone' | 'email' | 'password'>('password')
 const methods = [
   // 暂时停用手机号登录
   // { key: 'phone' as const, label: '手机号', icon: 'icon--memory-speaker' },
-  { key: 'password' as const, label: '密码', icon: 'icon--memory-lock' },
-  { key: 'email' as const, label: '邮箱', icon: 'icon--memory-email' },
+  { key: 'password' as const, label: '密码', icon: 'memory:lock' },
+  { key: 'email' as const, label: '邮箱', icon: 'memory:email' },
 ]
 
 const socials = [

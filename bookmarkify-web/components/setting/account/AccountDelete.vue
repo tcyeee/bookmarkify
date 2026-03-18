@@ -6,7 +6,7 @@
   <dialog id="userDelDialog" class="cy-modal">
     <div class="cy-modal-box">
       <div class="flex items-end gap-2">
-        <span class="icon--memory-alert-box-fill icon-size-28 text-red-500"></span>
+        <Icon icon="memory:alert-box-fill" class="size-7 text-red-500" />
         <h3 class="text-lg font-bold text-red-500">警告: 账户注销后将无法找回!</h3>
       </div>
       <p class="mt-5 setting-subtitle">注销前需要验证密码:</p>

@@ -7,7 +7,7 @@
       </div>
       <label class="cy-btn cy-btn-accent flex items-center gap-2 cursor-pointer" :class="{ 'opacity-70 pointer-events-none': importing }">
         <input ref="fileInputRef" type="file" accept=".html,.htm" class="hidden" :disabled="importing" @change="handleFileChange" />
-        <span class="icon--memory-upload icon-size-20"></span>
+        <Icon icon="memory:upload" class="size-5" />
         <span>{{ importing ? '导入中…' : '导入书签' }}</span>
       </label>
     </div>
@@ -25,7 +25,7 @@
 
       <div class="p-4">
         <div v-if="bookmarksLoading" class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-          <span class="icon--memory-rotate-clockwise icon-size-18 animate-spin" />
+          <Icon icon="memory:rotate-clockwise" class="size-[18px] animate-spin" />
           <span>正在加载书签...</span>
         </div>
         <div v-else-if="!bookmarks.length" class="rounded-md border border-dashed border-slate-200 dark:border-slate-800 px-4 py-6 text-sm text-slate-600 dark:text-slate-300">

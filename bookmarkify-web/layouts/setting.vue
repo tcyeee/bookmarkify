@@ -36,7 +36,7 @@
                     class="relative z-10 flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-200 ease-out hover:text-gray-800 hover:dark:text-slate-100"
                     :class="sysStore.settingTabIndex === tab.value ? 'cy-menu-active text-gray-900 dark:text-slate-100' : ''"
                     :aria-current="sysStore.settingTabIndex === tab.value ? 'page' : undefined">
-                    <span :class="['shrink-0', tab.icon]"></span>
+                    <Icon :icon="tab.icon" class="shrink-0 size-[22px]" />
                     <span class="leading-6">{{ tab.label }}</span>
                   </a>
                 </li>
@@ -68,11 +68,11 @@ const containerStyle: CSSProperties = {
   maxWidth: 'clamp(960px, 80vw, 1280px)',
 }
 const tabs = [
-  { value: 0, label: '个人资料', icon: 'icon--memory-account-box icon-size-22' },
-  { value: 1, label: '书签管理', icon: 'icon--memory-application-code icon-size-22' },
-  { value: 2, label: '主页背景', icon: 'icon--memory-cloud icon-size-22' },
-  { value: 3, label: '偏好设置', icon: 'icon--memory-toggle-switch-off icon-size-22' },
-  // { value: 4, label: '快捷键', icon: 'icon--memory-terminal icon-size-22' },
+  { value: 0, label: '个人资料', icon: 'memory:account-box' },
+  { value: 1, label: '书签管理', icon: 'memory:application-code' },
+  { value: 2, label: '主页背景', icon: 'memory:cloud' },
+  { value: 3, label: '偏好设置', icon: 'memory:toggle-switch-off' },
+  // { value: 4, label: '快捷键', icon: 'memory:terminal' },
 ]
 const indicatorStyle = ref<CSSProperties>({
   transform: 'translate3d(0, 0, 0)',

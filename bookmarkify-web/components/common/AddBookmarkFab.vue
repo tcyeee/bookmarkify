@@ -5,8 +5,8 @@
     aria-label="添加书签"
     @click="handleClick">
     <span class="relative flex items-center justify-center">
-      <span class="icon--memory-gamepad icon-size-35 icon-default" aria-hidden="true" />
-      <span class="icon--memory-gamepad-fill icon-size-35 icon-active" aria-hidden="true" />
+      <Icon icon="memory:gamepad" class="size-[35px] icon-default" aria-hidden="true" />
+      <Icon icon="memory:gamepad-fill" class="size-[35px] icon-active" aria-hidden="true" />
     </span>
   </button>
 </template>

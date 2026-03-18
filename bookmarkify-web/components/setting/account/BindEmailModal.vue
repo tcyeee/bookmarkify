@@ -20,7 +20,7 @@
         <template v-if="step === 1">
           <div class="mt-4 w-full">
             <label class="cy-input cy-validator w-full">
-              <span class="icon--memory-arrow-right-circle icon-size-20 text-gray-500" />
+              <Icon icon="memory:arrow-right-circle" class="size-5 text-gray-500" />
               <input
                 v-model="form.email"
                 type="email"
@@ -68,7 +68,7 @@
                   type="button"
                   class="relative z-20 flex items-center justify-center text-gray-400 select-none cursor-pointer"
                   @click="deleteLastEmailCodeDigit">
-                  <span class="icon--memory-arrow-left-box icon-size-40" />
+                  <Icon icon="memory:arrow-left-box" class="size-10" />
                 </button>
               </div>
               <div v-if="emailCodeError" class="mt-2 text-sm text-red-500 text-center">
