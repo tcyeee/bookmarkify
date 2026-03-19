@@ -72,6 +72,8 @@ interface CreateDirParams {
   nodeIds: [string, string]
   /** 文件夹名称 */
   name: string
+  /** 文件夹在桌面上的排序值，数值越小越靠前 */
+  sort: number
 }
 ```
 
@@ -90,6 +92,7 @@ const res = await fetch('/bookmark/createDir', {
   body: JSON.stringify({
     nodeIds: ['node-uuid-1', 'node-uuid-2'],
     name: '常用工具',
+    sort: 0,
   }),
 })
 const { data } = await res.json() // data: UserLayoutNodeVO

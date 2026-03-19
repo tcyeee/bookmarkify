@@ -5,7 +5,7 @@
     <div class="w-full flex justify-center">
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
-        <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}`" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @drag-start="onDragStart" @drag-end="onDragEnd" @drag-release-end="onDragReleaseEnd">
+        <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}-${gridKey}`" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @drag-start="onDragStart" @drag-end="onDragEnd" @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
             <LaunchItem :key="`${item.id}-${item.type}`" :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" @show-detail="onShowDetail" />
           </template>
@@ -20,7 +20,7 @@
 </template>
 
 <script lang="ts" setup>
-import { bookmarksSort } from '@api'
+import { bookmarksSort, bookmarksCreateDir } from '@api'
 import { HomeItemType, type BookmarkShow, type UserLayoutNodeVO } from '@typing'
 import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 definePageMeta({ middleware: 'auth', layout: 'launch' })
@@ -49,6 +49,8 @@ function onShowDetail(bookmark: BookmarkShow) {
   detailBookmark.value = bookmark
   detailVisible.value = true
 }
+
+const gridKey = ref(0)
 
 const dragState = reactive<{ dragging: boolean; justDropped: boolean; pendingOrder: string[] | null }>({
   dragging: false,
@@ -126,7 +128,9 @@ function findMergeTarget(item: any): OverlapResult | null {
 
 /**
  * 正常排序：面积重叠 >= 50% 时告知 Muuri 应移动到哪个位置。
- * 仅在没有合并意图时调用。
+ * 关键约束：若拖动图标的中心点落在任意其他图标的范围内，则抑制排序。
+ * 这样可以确保"目标图标"在整个合并过程中不会被挤压移位，
+ * 使得文件夹最终出现在目标图标的实际位置上。
  */
 function computeNormalSort(item: any): OverlapResult | null {
   const grid = item.getGrid?.()
@@ -134,6 +138,8 @@ function computeNormalSort(item: any): OverlapResult | null {
   const dragEl = item.getElement?.() as HTMLElement | undefined
   if (!dragEl) return null
   const dr = dragEl.getBoundingClientRect()
+  const cx = dr.left + dr.width / 2
+  const cy = dr.top + dr.height / 2
 
   let bestScore = 0
   let bestIndex = -1
@@ -144,6 +150,7 @@ function computeNormalSort(item: any): OverlapResult | null {
     const el = targetItem.getElement?.() as HTMLElement | undefined
     if (!el) return
     const r = el.getBoundingClientRect()
+
     const ox = Math.min(dr.right, r.right) - Math.max(dr.left, r.left)
     const oy = Math.min(dr.bottom, r.bottom) - Math.max(dr.top, r.top)
     if (ox <= 0 || oy <= 0) return
@@ -247,7 +254,7 @@ function onDragEnd() {
     const targetId = mergeTargetId.value
     clearMergeState()
     dragState.pendingOrder = null
-    mockCreateFolder(draggedId, targetId)
+    createFolder(draggedId, targetId)
   } else {
     clearMergeState()
   }
@@ -278,30 +285,28 @@ function onGridInput(list: UserLayoutNodeVO[]) {
   if (dragState.dragging) dragState.pendingOrder = list.map((it, index) => `${it.id},${index + 1}`)
 }
 
-// ── Mock: 创建文件夹（后续替换为真实 API）────────────────────────────────────
-function mockCreateFolder(draggedId: string, targetId: string) {
-  console.log(`[MOCK] 创建文件夹: ${draggedId} + ${targetId}`)
-
+// ── 创建文件夹 ────────────────────────────────────────────────────────────────
+async function createFolder(draggedId: string, targetId: string) {
   const nodes = bookmarkStore.layoutNode ?? []
   const draggedNode = nodes.find((n) => n.id === draggedId)
   const targetNode = nodes.find((n) => n.id === targetId)
   if (!draggedNode || !targetNode) return
 
-  const folderNode: UserLayoutNodeVO = {
-    id: `folder-mock-${Date.now()}`,
-    sort: targetNode.sort,
-    type: HomeItemType.BOOKMARK_DIR,
-    name: '新建文件夹',
-    children: [targetNode, draggedNode],
-    parentId: null,
+  const sort = nodes.findIndex((n) => n.id === draggedId)
+
+  try {
+    const folderNode = await bookmarksCreateDir([draggedId, targetId], '新建文件夹', sort)
+
+    // 用返回的文件夹节点替换被拖动节点，移除目标节点
+    bookmarkStore.layoutNode = (bookmarkStore.layoutNode ?? [])
+      .map((n) => (n.id === draggedId ? folderNode : n))
+      .filter((n) => n.id !== targetId)
+
+    gridKey.value++
+    ElNotification.success({ message: '已创建文件夹' })
+  } catch {
+    // 错误已由 http 层统一提示
   }
-
-  // 用文件夹节点替换目标节点，移除被拖动节点
-  bookmarkStore.layoutNode = nodes
-    .map((n) => (n.id === targetId ? folderNode : n))
-    .filter((n) => n.id !== draggedId)
-
-  ElNotification.success({ message: '已创建文件夹' })
 }
 </script>
 

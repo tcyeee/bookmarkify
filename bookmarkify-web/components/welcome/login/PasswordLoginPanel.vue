@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-3">
+  <form class="space-y-3" @submit.prevent="submit">
     <input
       v-model="form.account"
       type="text"
@@ -13,8 +13,7 @@
         :type="showPassword ? 'text' : 'password'"
         :class="INPUT_CLS + ' w-full pr-11'"
         placeholder="密码"
-        autocomplete="current-password"
-        @keydown.enter="submit" />
+        autocomplete="current-password" />
       <button
         type="button"
         class="absolute right-3 top-1/2 -translate-y-1/2 text-white/35 hover:text-white/70 transition-colors"
@@ -27,15 +26,14 @@
     <p v-if="errorMsg" class="text-sm text-red-400">{{ errorMsg }}</p>
 
     <button
-      type="button"
+      type="submit"
       :class="BTN_CLS"
       :style="BTN_STYLE"
-      :disabled="!canSubmit || loading"
-      @click="submit">
+      :disabled="!canSubmit || loading">
       <Icon v-if="loading" icon="memory:rotate-clockwise" class="size-4 animate-spin" />
       {{ loading ? '登录中...' : '登录' }}
     </button>
-  </div>
+  </form>
 </template>
 
 <script lang="ts" setup>
