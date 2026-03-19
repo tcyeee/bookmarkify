@@ -26,6 +26,8 @@ export const bookmarksList = (params?: t.BookmarkListParams) =>
   http.post('/bookmark/list', params ?? {}) as Promise<t.BookmarkPage<t.BookmarkShow>>
 export const bookmarksCreateDir = (nodeIds: [string, string], name: string, sort: number) =>
   http.post('/bookmark/createDir', { nodeIds, name, sort }) as Promise<t.UserLayoutNodeVO>
+export const bookmarksRenameDir = (nodeId: string, name: string) =>
+  http.post('/bookmark/renameDir', { nodeId, name }) as Promise<boolean>
 
 /* =========[ /user ]========= */
 export const updateUserInfo = (param: t.UserInfoUpdate) => http.post('/user/updateInfo', param) as Promise<boolean>
