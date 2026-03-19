@@ -28,6 +28,8 @@ export const bookmarksCreateDir = (nodeIds: [string, string], name: string, sort
   http.post('/bookmark/createDir', { nodeIds, name, sort }) as Promise<t.UserLayoutNodeVO>
 export const bookmarksRenameDir = (nodeId: string, name: string) =>
   http.post('/bookmark/renameDir', { nodeId, name }) as Promise<boolean>
+export const bookmarksMoveNode = (nodeId: string, dirNodeId: string | null) =>
+  http.post('/bookmark/moveNode', { nodeId, dirNodeId }) as Promise<t.UserLayoutNodeVO>
 
 /* =========[ /user ]========= */
 export const updateUserInfo = (param: t.UserInfoUpdate) => http.post('/user/updateInfo', param) as Promise<boolean>
