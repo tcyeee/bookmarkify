@@ -22,7 +22,7 @@
 </template>
 
 <script lang="ts" setup>
-import { bookmarksSort, bookmarksCreateDir } from '@api'
+import { bookmarksSort, bookmarksCreateDir, bookmarksMoveNode } from '@api'
 import { HomeItemType, type BookmarkShow, type UserLayoutNodeVO } from '@typing'
 import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 definePageMeta({ middleware: 'auth', layout: 'launch' })
@@ -76,11 +76,12 @@ const vuuriStyle = computed(() => ({
   width: `${Math.max(1, columnCount.value) * COLUMN_WIDTH.value}px`,
 }))
 
-// ── 合并/创建文件夹 状态 ──────────────────────────────────────────────────────
+// ── 合并/创建文件夹/移入文件夹 状态 ──────────────────────────────────────────
 const mergeTargetId = ref<string | null>(null)
-let mergeTargetEl: HTMLElement | null = null  // .muuri-item 容器
-let mergeIconEl: HTMLElement | null = null    // BookmarkLogo 根 div（overflow-hidden）
-const mergeReady = ref(false)                 // 悬停满 300ms，可触发合并
+let mergeTargetType: HomeItemType | null = null  // 目标节点类型
+let mergeTargetEl: HTMLElement | null = null     // .muuri-item 容器
+let mergeIconEl: HTMLElement | null = null       // 图标根 div（overflow-hidden）
+const mergeReady = ref(false)                    // 悬停满 300ms，可触发操作
 let mergeTimer: ReturnType<typeof setTimeout> | null = null
 let currentDraggedId = ''
 
@@ -93,15 +94,17 @@ function clearMergeState() {
   mergeIconEl = null
   mergeTargetEl = null
   mergeTargetId.value = null
+  mergeTargetType = null
   mergeReady.value = false
 }
 
 type OverlapResult = { targetId: string; targetEl: HTMLElement; index: number; grid: any }
 
 /**
- * 合并意图检测：当拖动图标的中心点落在目标图标的中心 50% 区域内时触发。
- * 相当于把目标图标等分成 4 份，只有落在中间 2 份时才算"精准放置"。
- * 仅检测 BOOKMARK 类型目标（不允许拖到文件夹/功能按钮上）。
+ * 合并/移入意图检测：当拖动图标的中心点落在目标图标的中心 50% 区域内时触发。
+ * 触发区域为目标图标中心 70%（15%~85%）。
+ * - 目标为 BOOKMARK   → 两者合并创建新文件夹
+ * - 目标为 BOOKMARK_DIR → 将拖动书签移入该文件夹
  */
 function findMergeTarget(item: any): OverlapResult | null {
   const grid = item.getGrid?.()
@@ -109,7 +112,6 @@ function findMergeTarget(item: any): OverlapResult | null {
   const dragEl = item.getElement?.() as HTMLElement | undefined
   if (!dragEl) return null
   const dr = dragEl.getBoundingClientRect()
-  // 以拖动图标的中心点作为判断基准
   const cx = dr.left + dr.width / 2
   const cy = dr.top + dr.height / 2
 
@@ -120,17 +122,16 @@ function findMergeTarget(item: any): OverlapResult | null {
     const el = targetItem.getElement?.() as HTMLElement | undefined
     if (!el) continue
     const r = el.getBoundingClientRect()
-    // 目标图标中心区域：水平/垂直各取内侧 50%（25%~75%）
-    const zx1 = r.left + r.width * 0.25
-    const zx2 = r.left + r.width * 0.75
-    const zy1 = r.top + r.height * 0.25
-    const zy2 = r.top + r.height * 0.75
+    const zx1 = r.left + r.width * 0.15
+    const zx2 = r.left + r.width * 0.85
+    const zy1 = r.top + r.height * 0.15
+    const zy2 = r.top + r.height * 0.85
     if (cx < zx1 || cx > zx2 || cy < zy1 || cy > zy2) continue
 
     const targetId = el.dataset.itemKey
     if (!targetId) continue
     const targetNode = bookmarkStore.layoutNode?.find((n) => n.id === targetId)
-    if (targetNode?.type !== HomeItemType.BOOKMARK) continue
+    if (targetNode?.type !== HomeItemType.BOOKMARK && targetNode?.type !== HomeItemType.BOOKMARK_DIR) continue
     return { targetId, targetEl: el, index: i, grid }
   }
   return null
@@ -201,9 +202,12 @@ const vuuriOptions = {
         clearMergeState()
         mergeTargetId.value = mergeTarget.targetId
         mergeTargetEl = mergeTarget.targetEl
+        mergeTargetType = bookmarkStore.layoutNode?.find((n) => n.id === mergeTarget.targetId)?.type ?? null
         mergeTimer = setTimeout(() => {
           mergeReady.value = true
-          const iconEl = mergeTargetEl?.querySelector('div.overflow-hidden') as HTMLElement | null
+          // 书签用 div.overflow-hidden，文件夹用 div.folder-icon
+          const iconEl = (mergeTargetEl?.querySelector('div.folder-icon') ??
+            mergeTargetEl?.querySelector('div.overflow-hidden')) as HTMLElement | null
           if (iconEl) {
             iconEl.classList.add('merge-glow')
             mergeIconEl = iconEl
@@ -262,9 +266,14 @@ function onDragEnd() {
   if (mergeReady.value && mergeTargetId.value && currentDraggedId) {
     const draggedId = currentDraggedId
     const targetId = mergeTargetId.value
+    const targetType = mergeTargetType
     clearMergeState()
     dragState.pendingOrder = null
-    createFolder(draggedId, targetId)
+    if (targetType === HomeItemType.BOOKMARK_DIR) {
+      moveToFolder(draggedId, targetId)
+    } else {
+      createFolder(draggedId, targetId)
+    }
   } else {
     clearMergeState()
   }
@@ -293,6 +302,21 @@ function onDragReleaseEnd() {
 function onGridInput(list: UserLayoutNodeVO[]) {
   bookmarkStore.layoutNode = list
   if (dragState.dragging) dragState.pendingOrder = list.map((it, index) => `${it.id},${index + 1}`)
+}
+
+// ── 移入文件夹 ────────────────────────────────────────────────────────────────
+async function moveToFolder(draggedId: string, dirNodeId: string) {
+  try {
+    const updatedDir = await bookmarksMoveNode(draggedId, dirNodeId)
+    // 从根列表移除被拖动节点，用返回的最新文件夹替换目标文件夹
+    bookmarkStore.layoutNode = (bookmarkStore.layoutNode ?? [])
+      .filter((n) => n.id !== draggedId)
+      .map((n) => (n.id === dirNodeId ? updatedDir : n))
+    gridKey.value++
+    ElNotification.success({ message: '已移入文件夹' })
+  } catch {
+    // 错误已由 http 层统一提示
+  }
 }
 
 // ── 创建文件夹 ────────────────────────────────────────────────────────────────

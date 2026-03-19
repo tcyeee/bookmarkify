@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col items-center" :class="{ 'justify-center': !showTitle }" @click="onClick">
     <div
-      class="rounded-xl bg-white/20 flex flex-wrap content-center justify-center shadow overflow-hidden"
+      class="rounded-xl bg-white/20 flex flex-wrap content-center justify-center shadow overflow-hidden folder-icon"
       :style="folderSizeStyle">
       <template v-if="previewChildren.length > 0">
         <div

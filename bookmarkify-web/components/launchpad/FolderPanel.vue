@@ -32,8 +32,15 @@
             <div
               v-for="child in children"
               :key="child.id"
-              class="flex flex-col items-center cursor-pointer"
+              class="group relative flex flex-col items-center cursor-pointer"
               @click="openBookmark(child)">
+              <!-- 移出按钮（hover 显示） -->
+              <button
+                class="absolute -top-1.5 -right-1.5 z-10 size-5 rounded-full bg-black/50 text-white/80 text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                title="移出到桌面"
+                @click.stop="moveOut(child)">
+                ↩
+              </button>
               <BookmarkLogo v-if="child.typeApp" :value="child.typeApp" :size="iconSize" />
               <div
                 v-else
@@ -54,7 +61,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { BookmarkOpenMode, HomeItemType, type UserLayoutNodeVO } from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
-import { bookmarksRenameDir } from '@api'
+import { bookmarksRenameDir, bookmarksMoveNode } from '@api'
 import BookmarkLogo from './cell/BookmarkLogo.vue'
 
 const props = defineProps<{ visible: boolean; folder: UserLayoutNodeVO | null }>()
@@ -98,6 +105,23 @@ async function submitRename() {
     // 同步更新本地 store
     const node = bookmarkStore.layoutNode?.find((n) => n.id === props.folder!.id)
     if (node) node.name = name
+  } catch {
+    // 错误已由 http 层统一提示
+  }
+}
+
+// ── 移出到桌面 ────────────────────────────────────────────────────────────────
+async function moveOut(child: UserLayoutNodeVO) {
+  if (!props.folder) return
+  try {
+    const updatedDir = await bookmarksMoveNode(child.id, null)
+    // 把节点追加回根列表
+    const rootNode = { ...child, parentId: null }
+    bookmarkStore.layoutNode = [...(bookmarkStore.layoutNode ?? []), rootNode]
+    // 用 API 返回值刷新文件夹 children
+    const dirNode = bookmarkStore.layoutNode.find((n) => n.id === updatedDir.id)
+    if (dirNode) dirNode.children = updatedDir.children
+    ElNotification.success({ message: '已移出到桌面' })
   } catch {
     // 错误已由 http 层统一提示
   }
