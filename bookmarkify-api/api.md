@@ -100,35 +100,42 @@ const { data } = await res.json() // data: UserLayoutNodeVO
 
 ---
 
-### 将书签拖入文件夹
+### 移动书签节点
 
-用于拖拽交互：将一个书签节点移入指定文件夹，更新其 `parentId`。
+用于拖拽交互，支持两个方向：
+
+- **移入文件夹**：将书签拖到某个 `BOOKMARK_DIR` 节点上，`dirNodeId` 传目标文件夹 ID
+- **移出到根目录**：将书签从文件夹拖回桌面根层级，`dirNodeId` 传 `null`
 
 - **Method:** `POST`
-- **Path:** `/bookmark/moveIntoDir`
+- **Path:** `/bookmark/moveNode`
 - **Auth:** 需要登录
 
 **Request Body**
 
 ```ts
-interface MoveIntoDirParams {
-  /** 要移入的书签节点 ID */
+interface MoveNodeParams {
+  /** 要移动的书签节点 ID */
   nodeId: string
-  /** 目标文件夹节点 ID（type 必须为 BOOKMARK_DIR） */
-  dirNodeId: string
+  /** 目标文件夹节点 ID；传 null 表示移出到根目录 */
+  dirNodeId: string | null
 }
 ```
 
 **Response** `ApiResponse<UserLayoutNodeVO>`
 
-返回目标文件夹节点，`type` 为 `'BOOKMARK_DIR'`，`children` 包含移入后该文件夹内的全部书签节点（含完整书签数据）。
+始终返回**受影响的文件夹节点**（`type: 'BOOKMARK_DIR'`），`children` 为操作完成后该文件夹的完整子节点列表。
 
-同时会通过 WebSocket 推送 `HOME_ITEM_UPDATE` 事件，payload 与响应体中的 `data` 相同，供其他已连接的客户端同步更新。
+| 操作 | 返回内容 | WebSocket 推送 |
+|---|---|---|
+| 移入文件夹 | 目标文件夹（含新增节点） | 推送目标文件夹 |
+| 移出到根目录 | 源文件夹（已移除该节点） | 推送源文件夹 |
+| 文件夹间移动 | 目标文件夹（含新增节点） | 分别推送源文件夹和目标文件夹 |
 
-**Example**
+**Example — 移入文件夹**
 
 ```ts
-const res = await fetch('/bookmark/moveIntoDir', {
+const res = await fetch('/bookmark/moveNode', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -136,7 +143,21 @@ const res = await fetch('/bookmark/moveIntoDir', {
     dirNodeId: 'dir-node-uuid',
   }),
 })
-const { data } = await res.json() // data: UserLayoutNodeVO (文件夹，含更新后的 children)
+const { data } = await res.json() // data: UserLayoutNodeVO（目标文件夹，含更新后的 children）
+```
+
+**Example — 移出到根目录**
+
+```ts
+const res = await fetch('/bookmark/moveNode', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    nodeId: 'bookmark-node-uuid',
+    dirNodeId: null,
+  }),
+})
+const { data } = await res.json() // data: UserLayoutNodeVO（源文件夹，children 中已不含该节点）
 ```
 
 ---
