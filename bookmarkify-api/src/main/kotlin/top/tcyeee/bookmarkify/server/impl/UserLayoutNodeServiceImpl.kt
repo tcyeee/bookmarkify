@@ -79,7 +79,7 @@ class UserLayoutNodeServiceImpl(
 
     @Transactional
     override fun moveNode(params: MoveNodeParams, uid: String): UserLayoutNodeVO {
-        // 记录原父节点，用于移出时推送旧文件夹的更新
+        // 记录原父节点，用于移出时处理旧文件夹
         val oldParentId = ktQuery()
             .eq(UserLayoutNodeEntity::id, params.nodeId)
             .eq(UserLayoutNodeEntity::uid, uid)
@@ -91,6 +91,31 @@ class UserLayoutNodeServiceImpl(
             .eq(UserLayoutNodeEntity::uid, uid)
             .set(UserLayoutNodeEntity::parentId, params.dirNodeId)
             .update()
+
+        // 节点离开了某个文件夹，检查该文件夹剩余子节点数
+        if (oldParentId != null && oldParentId != params.dirNodeId) {
+            val remaining = ktQuery()
+                .eq(UserLayoutNodeEntity::parentId, oldParentId)
+                .eq(UserLayoutNodeEntity::uid, uid)
+                .list()
+
+            if (remaining.size == 1) {
+                // 文件夹仅剩一个节点：将其移到根目录，继承文件夹的 sort，然后删除文件夹
+                val lastChild = remaining.first()
+                val folderSort = preferenceService.queryByUid(uid).sortMap[oldParentId]
+                ktUpdate()
+                    .eq(UserLayoutNodeEntity::id, lastChild.id)
+                    .eq(UserLayoutNodeEntity::uid, uid)
+                    .set(UserLayoutNodeEntity::parentId, null)
+                    .update()
+                if (folderSort != null) {
+                    preferenceService.sort(uid, mapOf(lastChild.id to folderSort))
+                }
+                removeById(oldParentId)
+                // 结构变化较大，推送完整布局
+                return layout(uid).also { SocketUtils.homeItemUpdate(uid, it) }
+            }
+        }
 
         val sortMap = preferenceService.queryByUid(uid).sortMap
         val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
@@ -105,13 +130,12 @@ class UserLayoutNodeServiceImpl(
             return dir.vo(sortMap[dir.id], null, null).also { it.children.addAll(children) }
         }
 
-        // 移出文件夹：推送旧文件夹（子节点已减少）
+        // 旧文件夹剩余 ≥ 2 个节点时，推送其更新
         if (oldParentId != null && oldParentId != params.dirNodeId) {
             SocketUtils.homeItemUpdate(uid, buildDirVO(oldParentId))
         }
 
-        // 移入文件夹：推送目标文件夹（子节点已增加）并返回
-        // 移到根目录：返回旧文件夹（已在上方推送）
+        // 移入文件夹：推送目标文件夹并返回；移到根目录：返回旧文件夹（已推送）
         return if (params.dirNodeId != null) {
             buildDirVO(params.dirNodeId).also { SocketUtils.homeItemUpdate(uid, it) }
         } else {

@@ -113,14 +113,26 @@ async function submitRename() {
 // ── 移出到桌面 ────────────────────────────────────────────────────────────────
 async function moveOut(child: UserLayoutNodeVO) {
   if (!props.folder) return
+  const folderId = props.folder.id
   try {
-    const updatedDir = await bookmarksMoveNode(child.id, null)
-    // 把节点追加回根列表
-    const rootNode = { ...child, parentId: null }
-    bookmarkStore.layoutNode = [...(bookmarkStore.layoutNode ?? []), rootNode]
-    // 用 API 返回值刷新文件夹 children
-    const dirNode = bookmarkStore.layoutNode.find((n) => n.id === updatedDir.id)
-    if (dirNode) dirNode.children = updatedDir.children
+    const result = await bookmarksMoveNode(child.id, null)
+    const movedNode = { ...child, parentId: null }
+
+    if (result.type === HomeItemType.BOOKMARK_DIR) {
+      // 文件夹仍存在：追加移出的节点，刷新文件夹 children
+      bookmarkStore.layoutNode = [...(bookmarkStore.layoutNode ?? []), movedNode]
+      const dirNode = bookmarkStore.layoutNode.find((n) => n.id === result.id)
+      if (dirNode) dirNode.children = result.children
+    } else {
+      // 文件夹已被自动解散：result 是剩余的最后一个书签（已移到根目录）
+      // 移除文件夹节点，将两个书签都加入根列表
+      bookmarkStore.layoutNode = [
+        ...(bookmarkStore.layoutNode ?? []).filter((n) => n.id !== folderId),
+        movedNode,
+        { ...result, parentId: null },
+      ]
+      emit('close')
+    }
     ElNotification.success({ message: '已移出到桌面' })
   } catch {
     // 错误已由 http 层统一提示
