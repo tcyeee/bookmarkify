@@ -1,6 +1,6 @@
 <template>
   <div @contextmenu="onItemContextMenu($event, item)">
-    <LaunchpadCellFolder v-if="item.type === HomeItemType.BOOKMARK_DIR" :value="item" :toggle-drag="toggleDrag" />
+    <LaunchpadCellFolder v-if="item.type === HomeItemType.BOOKMARK_DIR" :value="item" :toggle-drag="toggleDrag" @open-dir="emit('open-dir', item)" />
     <LaunchpadCellBookmark v-if="item.type === HomeItemType.BOOKMARK || item.type === HomeItemType.BOOKMARK_LOADING" :value="item.typeApp" :temp-title="item.name ?? undefined" :toggle-drag="toggleDrag" :node-id="item.id" />
     <LaunchpadCellFunction v-if="item.type === HomeItemType.FUNCTION" :value="item.typeFuc!" :toggleDrag="toggleDrag" />
   </div>
@@ -17,6 +17,7 @@ const emit = defineEmits<{
   (e: 'open-dir', item: UserLayoutNodeVO): void
   (e: 'show-detail', bookmark: BookmarkShow): void
 }>()
+
 
 async function delOne(item: UserLayoutNodeVO) {
   if (props.toggleDrag) return

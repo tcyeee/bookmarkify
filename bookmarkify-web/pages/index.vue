@@ -7,7 +7,7 @@
       <ClientOnly>
         <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}-${gridKey}`" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @drag-start="onDragStart" @drag-end="onDragEnd" @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
-            <LaunchItem :key="`${item.id}-${item.type}`" :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" @show-detail="onShowDetail" />
+            <LaunchItem :key="`${item.id}-${item.type}`" :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" @show-detail="onShowDetail" @open-dir="onOpenDir" />
           </template>
         </Vuuri>
       </ClientOnly>
@@ -17,6 +17,8 @@
   <el-dialog v-model="detailVisible" title="书签详情" width="480px" :close-on-click-modal="true">
     <LaunchpadDetail :data="detailBookmark" />
   </el-dialog>
+
+  <LaunchpadFolderPanel :visible="folderPanelVisible" :folder="folderPanelItem" @close="folderPanelVisible = false" />
 </template>
 
 <script lang="ts" setup>
@@ -48,6 +50,14 @@ const detailBookmark = ref<BookmarkShow | null>(null)
 function onShowDetail(bookmark: BookmarkShow) {
   detailBookmark.value = bookmark
   detailVisible.value = true
+}
+
+const folderPanelVisible = ref(false)
+const folderPanelItem = ref<UserLayoutNodeVO | null>(null)
+
+function onOpenDir(item: UserLayoutNodeVO) {
+  folderPanelItem.value = item
+  folderPanelVisible.value = true
 }
 
 const gridKey = ref(0)
