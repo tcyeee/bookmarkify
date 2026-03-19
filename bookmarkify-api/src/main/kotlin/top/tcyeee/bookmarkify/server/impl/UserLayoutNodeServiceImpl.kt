@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.entity.CreateDirParams
-import top.tcyeee.bookmarkify.entity.MoveIntoDirParams
+import top.tcyeee.bookmarkify.entity.MoveNodeParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
@@ -78,28 +78,45 @@ class UserLayoutNodeServiceImpl(
     }
 
     @Transactional
-    override fun moveIntoDir(params: MoveIntoDirParams, uid: String): UserLayoutNodeVO {
-        // 将书签节点的父节点更新为目标文件夹，同时校验节点归属
+    override fun moveNode(params: MoveNodeParams, uid: String): UserLayoutNodeVO {
+        // 记录原父节点，用于移出时推送旧文件夹的更新
+        val oldParentId = ktQuery()
+            .eq(UserLayoutNodeEntity::id, params.nodeId)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .one()?.parentId
+
+        // 更新 parentId（null 表示移到根目录）
         ktUpdate()
             .eq(UserLayoutNodeEntity::id, params.nodeId)
             .eq(UserLayoutNodeEntity::uid, uid)
             .set(UserLayoutNodeEntity::parentId, params.dirNodeId)
             .update()
 
-        // 查询更新后文件夹内的全部子节点，构建并推送 VO
-        val dirNode = getById(params.dirNodeId)
         val sortMap = preferenceService.queryByUid(uid).sortMap
         val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
-        val childVOs = ktQuery()
-            .eq(UserLayoutNodeEntity::parentId, params.dirNodeId)
-            .eq(UserLayoutNodeEntity::uid, uid)
-            .list()
-            .map { it.vo(sortMap[it.id], bookmarkMap[it.id], null) }
-        val dirVO = dirNode.vo(sortMap[dirNode.id], null, null)
-        dirVO.children.addAll(childVOs)
 
-        SocketUtils.homeItemUpdate(uid, dirVO)
-        return dirVO
+        fun buildDirVO(dirId: String): UserLayoutNodeVO {
+            val dir = getById(dirId)
+            val children = ktQuery()
+                .eq(UserLayoutNodeEntity::parentId, dirId)
+                .eq(UserLayoutNodeEntity::uid, uid)
+                .list()
+                .map { it.vo(sortMap[it.id], bookmarkMap[it.id], null) }
+            return dir.vo(sortMap[dir.id], null, null).also { it.children.addAll(children) }
+        }
+
+        // 移出文件夹：推送旧文件夹（子节点已减少）
+        if (oldParentId != null && oldParentId != params.dirNodeId) {
+            SocketUtils.homeItemUpdate(uid, buildDirVO(oldParentId))
+        }
+
+        // 移入文件夹：推送目标文件夹（子节点已增加）并返回
+        // 移到根目录：返回旧文件夹（已在上方推送）
+        return if (params.dirNodeId != null) {
+            buildDirVO(params.dirNodeId).also { SocketUtils.homeItemUpdate(uid, it) }
+        } else {
+            buildDirVO(oldParentId!!)
+        }
     }
 
     override fun renameDir(params: RenameDirParams, uid: String): Boolean =

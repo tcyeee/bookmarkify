@@ -68,9 +68,9 @@ data class RenameDirParams(
     @field:Schema(description = "新名称") val name: String,
 )
 
-data class MoveIntoDirParams(
-    @field:Schema(description = "要移入的书签节点ID") val nodeId: String,
-    @field:Schema(description = "目标文件夹节点ID") val dirNodeId: String,
+data class MoveNodeParams(
+    @field:Schema(description = "要移动的书签节点ID") val nodeId: String,
+    @field:Schema(description = "目标文件夹节点ID，为 null 时表示移出到根目录") val dirNodeId: String?,
 )
 
 data class AllOfMyBookmarkParams(
