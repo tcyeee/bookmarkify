@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.entity.CreateDirParams
+import top.tcyeee.bookmarkify.entity.MoveIntoDirParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
@@ -36,5 +37,12 @@ interface IUserLayoutNodeService : IService<UserLayoutNodeEntity> {
      * @param uid 用户ID
      */
     fun renameDir(params: RenameDirParams, uid: String): Boolean
+
+    /**
+     * 将一个书签节点拖入到文件夹中
+     * @param params 书签节点ID和目标文件夹节点ID
+     * @param uid 用户ID
+     */
+    fun moveIntoDir(params: MoveIntoDirParams, uid: String): UserLayoutNodeVO
 }
 
