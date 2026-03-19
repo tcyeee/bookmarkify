@@ -38,6 +38,8 @@ data class UserLayoutNodeEntity(
     // 当前仅仅只包含Bookamrk的展示
     fun vo(sort: Int?, bookmark: BookmarkShow?, func: BookmarkFunctionEntity?): UserLayoutNodeVO = UserLayoutNodeVO(
         id = this.id,
+        parentId = this.parentId,
+        name = this.name,
         sort = sort ?: Int.MAX_VALUE,
         // 判断当前的桌面Item类型(Boomark / Dir)
         type = this.type

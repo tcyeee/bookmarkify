@@ -55,6 +55,9 @@ class UserLayoutNodeServiceImpl(
         val dirNode = UserLayoutNodeEntity(uid = uid, name = params.name, type = NodeTypeEnum.BOOKMARK_DIR)
         save(dirNode)
 
+        // 持久化排序值
+        preferenceService.sort(uid, mapOf(dirNode.id to params.sort))
+
         // 将两个书签节点的父节点更新为新目录
         ktUpdate()
             .`in`(UserLayoutNodeEntity::id, params.nodeIds)
