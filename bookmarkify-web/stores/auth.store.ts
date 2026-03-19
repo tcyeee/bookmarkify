@@ -61,17 +61,19 @@ export const useAuthStore = defineStore('auth', {
 
         this.account = { ...this.account, ...result }
 
-        // 同步用户头像
-        const preferenceStore = usePreferenceStore()
-        preferenceStore.refreshAvatar()
+        // 同步用户头像（仅客户端，服务端无 Pinia 活跃上下文）
+        if (import.meta.client) {
+          const preferenceStore = usePreferenceStore()
+          preferenceStore.refreshAvatar()
+        }
         return result
       } catch (err: any) {
         if (err.code == 202) {
           await this.logout()
-          ElMessage.error('用户信息已过期,已重新登录,请刷新页面')
+          if (import.meta.client) ElMessage.error('用户信息已过期,已重新登录,请刷新页面')
           return await this.loginOrRegister()
         }
-        ElMessage.error(err.message || '刷新用户信息失败')
+        if (import.meta.client) ElMessage.error(err.message || '刷新用户信息失败')
         throw err
       }
     },

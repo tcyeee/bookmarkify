@@ -54,7 +54,7 @@ export default class http {
         return resultCheck(data as Result<object>, request)
       } catch (error) {
         // @ts-ignore
-        if (error instanceof TypeError) ElMessage.error(`Oops,网络错误,请重试`)
+        if (error instanceof TypeError && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
         return Promise.reject(error)
       }
     })
@@ -100,12 +100,12 @@ async function resultCheck(result: Result<object>, request: Request): Promise<an
 
   // 如果result.code是“1”开头，则需要提示
   if (result.code.toString().startsWith('1')) {
-    ElMessage.error(`Oops, ${result.msg}`)
+    if (import.meta.client) ElMessage.error(`Oops, ${result.msg}`)
     return Promise.reject(result)
   }
-  // 如果result.code是“3”开头,则不提示,直接返回
+  // 如果result.code是”3”开头,则不提示,直接返回
   if (result.code.toString().startsWith('3')) return Promise.reject(result)
 
-  ElMessage.error(`Oops,网络错误,请重试`)
+  if (import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
   return Promise.reject(result)
 }

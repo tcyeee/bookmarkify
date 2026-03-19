@@ -62,7 +62,7 @@ export const usePreferenceStore = defineStore('preference', {
         this.handleBackgroundCache(this.preference?.imgBacShow)
         return this.preference
       } catch (err: any) {
-        ElMessage.error(err?.message || '获取偏好设置失败')
+        if (import.meta.client) ElMessage.error(err?.message || '获取偏好设置失败')
         throw err
       }
     },
@@ -92,7 +92,7 @@ export const usePreferenceStore = defineStore('preference', {
         if (ok) this.preference = { ...preference }
         return ok
       } catch (err: any) {
-        ElMessage.error(err?.message || '保存偏好设置失败')
+        if (import.meta.client) ElMessage.error(err?.message || '保存偏好设置失败')
         throw err
       }
     },
