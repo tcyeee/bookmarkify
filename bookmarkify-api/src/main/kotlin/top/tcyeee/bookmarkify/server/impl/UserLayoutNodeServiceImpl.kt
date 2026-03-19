@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.entity.CreateDirParams
+import top.tcyeee.bookmarkify.entity.MoveIntoDirParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
@@ -69,6 +70,31 @@ class UserLayoutNodeServiceImpl(
         val sortMap = preferenceService.queryByUid(uid).sortMap
         val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
         val childVOs = listByIds(params.nodeIds).map { it.vo(sortMap[it.id], bookmarkMap[it.id], null) }
+        val dirVO = dirNode.vo(sortMap[dirNode.id], null, null)
+        dirVO.children.addAll(childVOs)
+
+        SocketUtils.homeItemUpdate(uid, dirVO)
+        return dirVO
+    }
+
+    @Transactional
+    override fun moveIntoDir(params: MoveIntoDirParams, uid: String): UserLayoutNodeVO {
+        // 将书签节点的父节点更新为目标文件夹，同时校验节点归属
+        ktUpdate()
+            .eq(UserLayoutNodeEntity::id, params.nodeId)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .set(UserLayoutNodeEntity::parentId, params.dirNodeId)
+            .update()
+
+        // 查询更新后文件夹内的全部子节点，构建并推送 VO
+        val dirNode = getById(params.dirNodeId)
+        val sortMap = preferenceService.queryByUid(uid).sortMap
+        val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
+        val childVOs = ktQuery()
+            .eq(UserLayoutNodeEntity::parentId, params.dirNodeId)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .list()
+            .map { it.vo(sortMap[it.id], bookmarkMap[it.id], null) }
         val dirVO = dirNode.vo(sortMap[dirNode.id], null, null)
         dirVO.children.addAll(childVOs)
 

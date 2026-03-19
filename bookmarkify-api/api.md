@@ -100,6 +100,47 @@ const { data } = await res.json() // data: UserLayoutNodeVO
 
 ---
 
+### 将书签拖入文件夹
+
+用于拖拽交互：将一个书签节点移入指定文件夹，更新其 `parentId`。
+
+- **Method:** `POST`
+- **Path:** `/bookmark/moveIntoDir`
+- **Auth:** 需要登录
+
+**Request Body**
+
+```ts
+interface MoveIntoDirParams {
+  /** 要移入的书签节点 ID */
+  nodeId: string
+  /** 目标文件夹节点 ID（type 必须为 BOOKMARK_DIR） */
+  dirNodeId: string
+}
+```
+
+**Response** `ApiResponse<UserLayoutNodeVO>`
+
+返回目标文件夹节点，`type` 为 `'BOOKMARK_DIR'`，`children` 包含移入后该文件夹内的全部书签节点（含完整书签数据）。
+
+同时会通过 WebSocket 推送 `HOME_ITEM_UPDATE` 事件，payload 与响应体中的 `data` 相同，供其他已连接的客户端同步更新。
+
+**Example**
+
+```ts
+const res = await fetch('/bookmark/moveIntoDir', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    nodeId: 'bookmark-node-uuid',
+    dirNodeId: 'dir-node-uuid',
+  }),
+})
+const { data } = await res.json() // data: UserLayoutNodeVO (文件夹，含更新后的 children)
+```
+
+---
+
 ### 修改文件夹名称
 
 - **Method:** `POST`

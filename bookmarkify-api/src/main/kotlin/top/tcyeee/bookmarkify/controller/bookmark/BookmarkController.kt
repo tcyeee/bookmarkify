@@ -11,6 +11,7 @@ import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
 import top.tcyeee.bookmarkify.entity.CreateDirParams
+import top.tcyeee.bookmarkify.entity.MoveIntoDirParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
@@ -74,6 +75,11 @@ class BookmarksController(
     @Operation(summary = "修改文件夹名称")
     fun renameDir(@RequestBody params: RenameDirParams): Boolean =
         layoutNodeService.renameDir(params, BaseUtils.uid())
+
+    @PostMapping("/moveIntoDir")
+    @Operation(summary = "将书签拖入文件夹")
+    fun moveIntoDir(@RequestBody params: MoveIntoDirParams): UserLayoutNodeVO =
+        layoutNodeService.moveIntoDir(params, BaseUtils.uid())
 
     /**
      * @param params layout元素ID
