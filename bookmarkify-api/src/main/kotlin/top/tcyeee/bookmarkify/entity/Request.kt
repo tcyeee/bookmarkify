@@ -60,6 +60,7 @@ data class BookmarkSearchParams(var name: String?, var status: ParseStatusEnum?)
 data class CreateDirParams(
     @field:Schema(description = "要放入文件夹的书签节点ID列表(恰好两个)") val nodeIds: List<String>,
     @field:Schema(description = "文件夹名称") val name: String,
+    @field:Schema(description = "文件夹排序值") val sort: Int,
 )
 
 data class RenameDirParams(
