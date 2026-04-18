@@ -131,7 +131,7 @@ pub async fn scrape(url: &str, client: &reqwest::Client) -> Result<ScrapeResult,
     let parsed = reqwest::Url::parse(url).map_err(|_| ScrapeError::InvalidUrl)?;
 
     let response = client
-        .get(url)
+        .get(parsed.clone())
         .header(
             "User-Agent",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \

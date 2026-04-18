@@ -55,7 +55,7 @@ async fn main() {
         .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
-    println!("scraper-service listening on {addr}");
+    tracing::info!("scraper-service listening on {addr}");
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
