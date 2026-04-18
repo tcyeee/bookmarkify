@@ -136,5 +136,11 @@ async fn scrape_handler(
             Json(ErrorResponse { error: "fetch failed".to_string(), detail: Some(msg) }),
         )
             .into_response(),
+
+        Err(scraper::ScrapeError::HeadlessFailed(msg)) => (
+            StatusCode::BAD_GATEWAY,
+            Json(ErrorResponse { error: "headless failed".to_string(), detail: Some(msg) }),
+        )
+            .into_response(),
     }
 }
