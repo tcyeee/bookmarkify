@@ -1,22 +1,27 @@
 // crates/scraper-demo/src/main.rs
+use once_cell::sync::Lazy;
+use regex::Regex;
 use spider::features::chrome_common::{RequestInterceptConfiguration, WaitForDelay};
 use spider::website::Website;
 use std::time::Duration;
+
+static TITLE_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)<title[^>]*>([^<]+)</title>").unwrap()
+});
 
 fn extract_meta(html: &str, property: &str) -> Option<String> {
     let pattern = format!(
         r#"(?:property|name)=["\']{}["\'][^>]*content=["\']([^"\']+)["\']|content=["\']([^"\']+)["\'][^>]*(?:property|name)=["\']{}["\']"#,
         property, property
     );
-    let re = regex::Regex::new(&pattern).ok()?;
+    let re = Regex::new(&pattern).ok()?;
     re.captures(html)
         .and_then(|c| c.get(1).or(c.get(2)))
         .map(|m| m.as_str().to_string())
 }
 
 fn extract_title(html: &str) -> Option<String> {
-    let re = regex::Regex::new(r"<title[^>]*>([^<]+)</title>").ok()?;
-    re.captures(html)
+    TITLE_RE.captures(html)
         .and_then(|c| c.get(1))
         .map(|m| m.as_str().trim().to_string())
 }
