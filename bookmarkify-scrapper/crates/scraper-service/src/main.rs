@@ -93,8 +93,11 @@ async fn main() {
 
     let protected = Router::new()
         .route("/scrape", post(scrape_handler))
-        .layer(GovernorLayer { config: governor_config })
-        .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
+        .layer(
+            tower::ServiceBuilder::new()
+                .layer(middleware::from_fn_with_state(state.clone(), auth_middleware))
+                .layer(GovernorLayer { config: governor_config }),
+        );
 
     let app = Router::new()
         .route("/health", get(health_handler))
