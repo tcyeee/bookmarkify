@@ -20,6 +20,13 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("scraper_service=info".parse().unwrap()),
+        )
+        .init();
+
     let api_key = env::var("API_KEY").expect("API_KEY must be set");
     let timeout_secs: u64 = env::var("REQUEST_TIMEOUT_SECS")
         .ok()
