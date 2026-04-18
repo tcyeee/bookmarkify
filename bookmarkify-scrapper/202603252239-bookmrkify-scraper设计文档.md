@@ -58,12 +58,12 @@
 
 **结论（2026-04-18）：** 花瓣元数据绕过成功（title/description/og:image 均正确）；知乎 stealth 策略不稳定，有时返回验证页或空页面；spider-rs `screenshot_bytes` 未生效，截图功能待 M2 专项解决。截图与知乎问题不阻塞 M1，M1 正常推进。详见 [docs/m0-results.md](docs/m0-results.md)。
 
-### M1 — 模块 A 基础（3–4 天）
+### M1 — 模块 A 基础（3–4 天）✅
 
-- [ ] axum 框架搭建，健康检查接口
-- [ ] API Key 认证中间件
-- [ ] `POST /scrape` 接口：接收 URL，返回元数据 JSON
-- [ ] Layer 1 解析：OG tags、Twitter Card、JSON-LD、`<title>`
+- [x] axum 框架搭建，健康检查接口
+- [x] API Key 认证中间件
+- [x] `POST /scrape` 接口：接收 URL，返回元数据 JSON
+- [x] Layer 1 解析：OG tags、Twitter Card、JSON-LD、`<title>`
 
 ### M2 — Layer 2 基础（3–4 天）
 
@@ -149,5 +149,5 @@ Authorization: Bearer <api-key>
 
 ## 当前状态
 
-- **阶段**：M1（模块 A 基础）
-- **下一步**：搭建 axum 服务框架，实现健康检查、API Key 认证与 `POST /scrape` 接口（Layer 1 轻量解析）
+- **阶段**：M2（Layer 2 基础）
+- **下一步**：封装 spider-rs 为 async 函数，修复截图功能（screenshot_bytes 未返回问题），集成至 scraper-service
