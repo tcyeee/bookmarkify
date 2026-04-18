@@ -10,8 +10,9 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use cache::ScrapeCache;
 use serde::{Deserialize, Serialize};
-use std::{env, time::Duration};
+use std::{env, sync::Arc, time::Duration};
 use tower_http::trace::TraceLayer;
 
 #[derive(Clone)]
@@ -19,6 +20,7 @@ struct AppState {
     client: reqwest::Client,
     api_key: String,
     headless_timeout_secs: u64,
+    cache: Arc<ScrapeCache>,
 }
 
 #[tokio::main]
@@ -39,6 +41,11 @@ async fn main() {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(30);
+    let cache_ttl_secs: u64 = env::var("CACHE_TTL_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3600);
+    let cache = Arc::new(ScrapeCache::new(cache_ttl_secs));
     let port: u16 = env::var("PORT")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -49,7 +56,7 @@ async fn main() {
         .build()
         .expect("failed to build reqwest client");
 
-    let state = AppState { client, api_key, headless_timeout_secs };
+    let state = AppState { client, api_key, headless_timeout_secs, cache };
 
     let protected = Router::new()
         .route("/scrape", post(scrape_handler))
@@ -104,6 +111,8 @@ struct ScrapeResponse {
     image: Option<String>,
     favicon: Option<String>,
     source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cached: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -117,6 +126,19 @@ async fn scrape_handler(
     State(state): State<AppState>,
     Json(body): Json<ScrapeRequest>,
 ) -> Response {
+    // cache lookup
+    if let Some(cached) = state.cache.get(&body.url).await {
+        return Json(ScrapeResponse {
+            title: cached.title.clone(),
+            description: cached.description.clone(),
+            image: cached.image.clone(),
+            favicon: cached.favicon.clone(),
+            source: cached.source.clone(),
+            cached: Some(true),
+        })
+        .into_response();
+    }
+
     let result = if body.headless.unwrap_or(false) {
         headless::scrape_headless(&body.url, state.headless_timeout_secs).await
     } else {
@@ -124,14 +146,19 @@ async fn scrape_handler(
     };
 
     match result {
-        Ok(r) => Json(ScrapeResponse {
-            title: r.title,
-            description: r.description,
-            image: r.image,
-            favicon: r.favicon,
-            source: r.source,
-        })
-        .into_response(),
+        Ok(r) => {
+            let r = Arc::new(r);
+            state.cache.set(&body.url, Arc::clone(&r)).await;
+            Json(ScrapeResponse {
+                title: r.title.clone(),
+                description: r.description.clone(),
+                image: r.image.clone(),
+                favicon: r.favicon.clone(),
+                source: r.source.clone(),
+                cached: None,
+            })
+            .into_response()
+        }
 
         Err(scraper::ScrapeError::InvalidUrl) => (
             StatusCode::UNPROCESSABLE_ENTITY,
