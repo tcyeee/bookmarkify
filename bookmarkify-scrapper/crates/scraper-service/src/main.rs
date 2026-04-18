@@ -85,7 +85,7 @@ async fn main() {
     let governor_config = Arc::new(
         GovernorConfigBuilder::default()
             .key_extractor(ApiKeyExtractor)
-            .per_second(1)
+            .per_second(rate_limit_rps as u64)
             .burst_size(rate_limit_rps * 2)
             .finish()
             .expect("invalid governor config"),
