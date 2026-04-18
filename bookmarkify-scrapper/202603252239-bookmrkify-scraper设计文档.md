@@ -65,16 +65,20 @@
 - [x] `POST /scrape` 接口：接收 URL，返回元数据 JSON
 - [x] Layer 1 解析：OG tags、Twitter Card、JSON-LD、`<title>`
 
-### M2 — Layer 2 基础（3–4 天）
+### M2 — Layer 2 基础（3–4 天）✅
 
-- [ ] spider-rs 封装为 async 函数，与 Layer 1 在同一进程内调用
-- [ ] Chrome 实例生命周期管理（防内存泄漏）
+- [x] spider-rs 封装为 async 函数，与 Layer 1 在同一进程内调用
+- [x] Chrome 实例生命周期管理（全局 `Mutex` 单例，串行化 Chrome 访问防泄漏）
 
-### M3 — 横切功能（2–3 天）
+**结论（2026-04-18）：** `headless.rs` 实现完成，`scrape_headless()` 封装 spider-rs stealth + CDP，`POST /scrape` 支持 `headless: true` 参数。集成测试已标记 `#[ignore]`（需真实 Chrome 环境手动运行）。
 
-- [ ] 限流（tower-governor）
-- [ ] 缓存（相同 URL 短期内不重复抓取）
-- [ ] 模块 A → 模块 B fallback 路由逻辑
+### M3 — 横切功能（2–3 天）✅
+
+- [x] 限流（tower-governor 0.4，按 API Key，`RATE_LIMIT_RPS` env var，默认 10 RPS，burst 20）
+- [x] 缓存（moka，URL 规范化后作 key，`CACHE_TTL_SECS` env var，默认 3600s；命中时响应含 `"cached": true`）
+- [x] Layer 1 → Layer 2 自动 fallback（Layer 1 返回 `title: None` 时透明触发 Layer 2，`source` 字段反映实际来源）
+
+**结论（2026-04-18）：** 全部 18 个非 ignore 测试通过，已推送至 `origin/master`。
 
 ### M4 — 部署（2–3 天）
 
@@ -148,5 +152,5 @@ Authorization: Bearer <api-key>
 
 ## 当前状态
 
-- **阶段**：M2（Layer 2 基础）
-- **下一步**：执行 [docs/superpowers/plans/2026-04-18-m2-layer2.md](docs/superpowers/plans/2026-04-18-m2-layer2.md) — 封装 spider-rs 为 async 函数，接入 `POST /scrape headless:true` 路由
+- **阶段**：M4（部署）
+- **下一步**：Dockerfile 编写（单镜像含 Chrome + Rust 二进制），云服务器部署验证，接入 bookmarkify 替换 metascraper
