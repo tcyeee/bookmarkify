@@ -17,6 +17,7 @@ use tower_http::trace::TraceLayer;
 struct AppState {
     client: reqwest::Client,
     api_key: String,
+    headless_timeout_secs: u64,
 }
 
 #[tokio::main]
@@ -33,6 +34,10 @@ async fn main() {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(10);
+    let headless_timeout_secs: u64 = env::var("HEADLESS_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(30);
     let port: u16 = env::var("PORT")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -43,7 +48,7 @@ async fn main() {
         .build()
         .expect("failed to build reqwest client");
 
-    let state = AppState { client, api_key };
+    let state = AppState { client, api_key, headless_timeout_secs };
 
     let protected = Router::new()
         .route("/scrape", post(scrape_handler))
@@ -88,6 +93,7 @@ async fn auth_middleware(
 #[derive(Deserialize)]
 struct ScrapeRequest {
     url: String,
+    headless: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -110,13 +116,19 @@ async fn scrape_handler(
     State(state): State<AppState>,
     Json(body): Json<ScrapeRequest>,
 ) -> Response {
-    match scraper::scrape(&body.url, &state.client).await {
-        Ok(result) => Json(ScrapeResponse {
-            title: result.title,
-            description: result.description,
-            image: result.image,
-            favicon: result.favicon,
-            source: result.source,
+    let result = if body.headless.unwrap_or(false) {
+        headless::scrape_headless(&body.url, state.headless_timeout_secs).await
+    } else {
+        scraper::scrape(&body.url, &state.client).await
+    };
+
+    match result {
+        Ok(r) => Json(ScrapeResponse {
+            title: r.title,
+            description: r.description,
+            image: r.image,
+            favicon: r.favicon,
+            source: r.source,
         })
         .into_response(),
 
