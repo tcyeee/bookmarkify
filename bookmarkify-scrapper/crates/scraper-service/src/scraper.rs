@@ -145,7 +145,9 @@ pub async fn scrape(url: &str, client: &reqwest::Client) -> Result<ScrapeResult,
             } else {
                 ScrapeError::FetchFailed(e.to_string())
             }
-        })?;
+        })?
+        .error_for_status()
+        .map_err(|e| ScrapeError::FetchFailed(e.to_string()))?;
 
     let body = response
         .text()
