@@ -50,13 +50,13 @@
 
 ## 里程碑
 
-### M0 — 验证可行性（1–2 天）✅ PARTIAL PASS
+### M0 — 验证可行性（1–2 天）✅ FULL PASS
 
 - [x] 用 spider-rs 跑 demo：单 URL 抓取 + 截图
 - [x] 验证花瓣、知乎等目标站点能否正常渲染
 - [ ] 确认 Chrome 在目标云服务器环境可运行（sandbox 问题）
 
-**结论（2026-04-18）：** 花瓣元数据绕过成功（title/description/og:image 均正确）；知乎 stealth 策略不稳定，有时返回验证页或空页面；spider-rs `screenshot_bytes` 未生效，截图功能待 M2 专项解决。截图与知乎问题不阻塞 M1，M1 正常推进。详见 [docs/m0-results.md](docs/m0-results.md)。
+**结论（2026-04-18）：** 花瓣、知乎元数据与截图均验证通过。`screenshot_bytes`（bytes:true, save:false）正确返回（花瓣 ~1.1MB，知乎 ~73KB）；知乎 stealth 稳定绕过。详见 [docs/m0-results.md](docs/m0-results.md)。
 
 ### M1 — 模块 A 基础（3–4 天）✅
 
@@ -68,7 +68,6 @@
 ### M2 — Layer 2 基础（3–4 天）
 
 - [ ] spider-rs 封装为 async 函数，与 Layer 1 在同一进程内调用
-- [ ] 截图功能集成，结果上传至 OSS/S3
 - [ ] Chrome 实例生命周期管理（防内存泄漏）
 
 ### M3 — 横切功能（2–3 天）
@@ -150,4 +149,4 @@ Authorization: Bearer <api-key>
 ## 当前状态
 
 - **阶段**：M2（Layer 2 基础）
-- **下一步**：封装 spider-rs 为 async 函数，修复截图功能（screenshot_bytes 未返回问题），集成至 scraper-service
+- **下一步**：执行 [docs/superpowers/plans/2026-04-18-m2-layer2.md](docs/superpowers/plans/2026-04-18-m2-layer2.md) — 封装 spider-rs 为 async 函数，接入 `POST /scrape headless:true` 路由
