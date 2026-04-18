@@ -80,11 +80,79 @@ pub fn extract_json_ld(document: &Html) -> Option<(Option<String>, Option<String
 }
 
 pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
-    todo!()
+    let document = Html::parse_document(html);
+
+    // OG tags
+    if let Some(title) = meta_property(&document, "og:title") {
+        return ScrapeResult {
+            title: Some(title),
+            description: meta_property(&document, "og:description")
+                .or_else(|| meta_name(&document, "description")),
+            image: meta_property(&document, "og:image"),
+            favicon: extract_favicon(&document, base_url),
+            source: "og".to_string(),
+        };
+    }
+
+    // Twitter Card
+    if let Some(title) = meta_name(&document, "twitter:title") {
+        return ScrapeResult {
+            title: Some(title),
+            description: meta_name(&document, "twitter:description")
+                .or_else(|| meta_name(&document, "description")),
+            image: meta_name(&document, "twitter:image"),
+            favicon: extract_favicon(&document, base_url),
+            source: "twitter_card".to_string(),
+        };
+    }
+
+    // JSON-LD
+    if let Some((title, desc, image)) = extract_json_ld(&document) {
+        return ScrapeResult {
+            title,
+            description: desc.or_else(|| meta_name(&document, "description")),
+            image,
+            favicon: extract_favicon(&document, base_url),
+            source: "json_ld".to_string(),
+        };
+    }
+
+    // HTML fallback
+    ScrapeResult {
+        title: extract_title(&document),
+        description: meta_name(&document, "description"),
+        image: None,
+        favicon: extract_favicon(&document, base_url),
+        source: "html".to_string(),
+    }
 }
 
 pub async fn scrape(url: &str, client: &reqwest::Client) -> Result<ScrapeResult, ScrapeError> {
-    todo!()
+    let parsed = reqwest::Url::parse(url).map_err(|_| ScrapeError::InvalidUrl)?;
+
+    let response = client
+        .get(url)
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
+             AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        )
+        .send()
+        .await
+        .map_err(|e| {
+            if e.is_timeout() {
+                ScrapeError::Timeout
+            } else {
+                ScrapeError::FetchFailed(e.to_string())
+            }
+        })?;
+
+    let body = response
+        .text()
+        .await
+        .map_err(|e| ScrapeError::FetchFailed(e.to_string()))?;
+
+    Ok(parse_metadata(&body, &parsed))
 }
 
 #[cfg(test)]
