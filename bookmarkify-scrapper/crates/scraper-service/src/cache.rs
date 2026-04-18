@@ -11,6 +11,7 @@ impl ScrapeCache {
     pub fn new(ttl_secs: u64) -> Self {
         Self {
             inner: Cache::builder()
+                .max_capacity(10_000)
                 .time_to_live(Duration::from_secs(ttl_secs))
                 .build(),
         }
@@ -38,12 +39,13 @@ impl ScrapeCache {
             parsed.set_query(None);
         } else {
             pairs.sort_by(|a, b| a.0.cmp(&b.0));
-            let query = pairs
-                .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect::<Vec<_>>()
-                .join("&");
-            parsed.set_query(Some(&query));
+            {
+                let mut qm = parsed.query_pairs_mut();
+                qm.clear();
+                for (k, v) in &pairs {
+                    qm.append_pair(k, v);
+                }
+            }
         }
         // remove fragment
         parsed.set_fragment(None);
@@ -116,5 +118,14 @@ mod tests {
         // same URL without fragment should hit
         let got = cache.get("https://example.com/page").await;
         assert!(got.is_some(), "should hit cache ignoring fragment");
+    }
+
+    #[tokio::test]
+    async fn cache_normalizes_query_param_order_on_set_and_get() {
+        let cache = ScrapeCache::new(3600);
+        let r = make_result("Sorted");
+        cache.set("https://example.com/?z=3&a=1", Arc::clone(&r)).await;
+        let got = cache.get("https://example.com/?a=1&z=3").await;
+        assert!(got.is_some(), "should hit cache regardless of query param order");
     }
 }
