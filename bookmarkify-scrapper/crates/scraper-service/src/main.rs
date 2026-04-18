@@ -142,7 +142,13 @@ async fn scrape_handler(
     let result = if body.headless.unwrap_or(false) {
         headless::scrape_headless(&body.url, state.headless_timeout_secs).await
     } else {
-        scraper::scrape(&body.url, &state.client).await
+        match scraper::scrape(&body.url, &state.client).await {
+            Ok(r) if r.title.is_none() => {
+                // Layer 1 returned no title — fallback to Layer 2
+                headless::scrape_headless(&body.url, state.headless_timeout_secs).await
+            }
+            other => other,
+        }
     };
 
     match result {
