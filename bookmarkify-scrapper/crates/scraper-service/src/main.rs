@@ -13,7 +13,27 @@ use axum::{
 use cache::ScrapeCache;
 use serde::{Deserialize, Serialize};
 use std::{env, sync::Arc, time::Duration};
+use tower_governor::{
+    governor::GovernorConfigBuilder, key_extractor::KeyExtractor, GovernorError, GovernorLayer,
+};
 use tower_http::trace::TraceLayer;
+
+/// Extracts the API key from the `Authorization: Bearer <key>` header for rate limiting.
+#[derive(Debug, Clone)]
+struct ApiKeyExtractor;
+
+impl KeyExtractor for ApiKeyExtractor {
+    type Key = String;
+
+    fn extract<T>(&self, req: &Request<T>) -> Result<Self::Key, GovernorError> {
+        req.headers()
+            .get("Authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .map(|key| key.to_owned())
+            .ok_or(GovernorError::UnableToExtractKey)
+    }
+}
 
 #[derive(Clone)]
 struct AppState {
@@ -46,6 +66,10 @@ async fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(3600);
     let cache = Arc::new(ScrapeCache::new(cache_ttl_secs));
+    let rate_limit_rps: u32 = env::var("RATE_LIMIT_RPS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10);
     let port: u16 = env::var("PORT")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -58,8 +82,18 @@ async fn main() {
 
     let state = AppState { client, api_key, headless_timeout_secs, cache };
 
+    let governor_config = Arc::new(
+        GovernorConfigBuilder::default()
+            .key_extractor(ApiKeyExtractor)
+            .per_second(1)
+            .burst_size(rate_limit_rps * 2)
+            .finish()
+            .expect("invalid governor config"),
+    );
+
     let protected = Router::new()
         .route("/scrape", post(scrape_handler))
+        .layer(GovernorLayer { config: governor_config })
         .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
     let app = Router::new()
