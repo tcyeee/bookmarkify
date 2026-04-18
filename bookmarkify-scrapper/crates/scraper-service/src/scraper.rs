@@ -8,6 +8,7 @@ pub struct ScrapeResult {
     pub image: Option<String>,
     pub favicon: Option<String>,
     pub source: String,
+    pub screenshot_bytes: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -15,6 +16,7 @@ pub enum ScrapeError {
     InvalidUrl,
     Timeout,
     FetchFailed(String),
+    HeadlessFailed(String),
 }
 
 pub fn meta_property(document: &Html, property: &str) -> Option<String> {
@@ -91,6 +93,7 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
             image: meta_property(&document, "og:image"),
             favicon: extract_favicon(&document, base_url),
             source: "og".to_string(),
+            screenshot_bytes: None,
         };
     }
 
@@ -103,6 +106,7 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
             image: meta_name(&document, "twitter:image"),
             favicon: extract_favicon(&document, base_url),
             source: "twitter_card".to_string(),
+            screenshot_bytes: None,
         };
     }
 
@@ -114,6 +118,7 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
             image,
             favicon: extract_favicon(&document, base_url),
             source: "json_ld".to_string(),
+            screenshot_bytes: None,
         };
     }
 
@@ -124,6 +129,7 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
         image: None,
         favicon: extract_favicon(&document, base_url),
         source: "html".to_string(),
+        screenshot_bytes: None,
     }
 }
 
