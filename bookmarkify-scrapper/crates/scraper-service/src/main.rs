@@ -358,10 +358,14 @@ async fn scrape_handler(
         )
             .into_response(),
 
-        Err(scraper::ScrapeError::OssFailed(msg)) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ErrorResponse { error: "oss upload failed".to_string(), detail: Some(msg) }),
-        )
-            .into_response(),
+        Err(scraper::ScrapeError::OssFailed(msg)) => {
+            // OssFailed is handled in the Ok(r) arm above; this arm is required for
+            // exhaustive matching but cannot be reached via the scrape/headless paths.
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse { error: "oss upload failed".to_string(), detail: Some(msg) }),
+            )
+                .into_response()
+        }
     }
 }

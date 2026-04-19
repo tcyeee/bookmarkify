@@ -23,6 +23,8 @@ impl OssClient {
     }
 
     fn oss(&self) -> oss_rust_sdk::oss::OSS<'_> {
+        // NOTE: oss-rust-sdk creates its own reqwest::Client internally, so
+        // PROXY_URL and REQUEST_TIMEOUT_SECS do not apply to OSS uploads.
         oss_rust_sdk::oss::OSS::new(
             self.key_id.clone(),
             self.key_secret.clone(),
@@ -42,8 +44,10 @@ impl OssClient {
         format!("images/{hash}.{ext}")
     }
 
-    /// Uploads bytes to OSS at `key`. Keys are content-addressed (SHA-256), so uploading the
-    /// same content twice is idempotent. Returns the full public URL on success.
+    /// Uploads bytes to OSS at `key`. Keys are derived from the source URL (SHA-256),
+    /// so the same source URL always maps to the same OSS key. PUT is unconditional —
+    /// no deduplication check is performed (oss-rust-sdk 0.3 has no HEAD API).
+    /// Returns the full public URL on success.
     async fn upload_bytes(
         &self,
         key: &str,
@@ -147,6 +151,13 @@ impl OssClient {
             .and_then(|v| v.to_str().ok())
             .unwrap_or("image/png")
             .to_string();
+
+        // Reject non-image responses (e.g. HTML login walls that return 200)
+        if !content_type.starts_with("image/") {
+            return Err(ScrapeError::OssFailed(format!(
+                "unexpected content type for asset {url}: {content_type}"
+            )));
+        }
 
         let bytes = response
             .bytes()
