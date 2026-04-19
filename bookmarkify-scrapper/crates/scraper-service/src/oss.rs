@@ -55,14 +55,23 @@ impl OssClient {
         let mut put_headers: HashMap<String, String> = HashMap::new();
         put_headers.insert("Content-Type".to_string(), content_type.to_string());
 
-        oss.async_put_object_from_buffer(
-            bytes,
-            key,
-            Some(put_headers),
-            None::<HashMap<String, Option<String>>>,
-        )
-        .await
-        .map_err(|e| ScrapeError::OssFailed(e.to_string()))?;
+        let response_body = oss
+            .async_put_object_from_buffer(
+                bytes,
+                key,
+                Some(put_headers),
+                None::<HashMap<String, Option<String>>>,
+            )
+            .await
+            .map_err(|e| ScrapeError::OssFailed(e.to_string()))?;
+
+        // OSS returns XML error body on 4xx/5xx; empty body means success
+        if !response_body.is_empty() {
+            let body_str = String::from_utf8_lossy(&response_body);
+            if body_str.contains("<Error>") || body_str.contains("<Code>") {
+                return Err(ScrapeError::OssFailed(format!("OSS PUT failed: {body_str}")));
+            }
+        }
 
         Ok(format!("{}/{}", self.base_url, key))
     }
@@ -90,6 +99,8 @@ impl OssClient {
             .header("Referer", &referer)
             .send()
             .await
+            .map_err(|e| ScrapeError::OssFailed(format!("image download failed: {e}")))?
+            .error_for_status()
             .map_err(|e| ScrapeError::OssFailed(format!("image download failed: {e}")))?;
 
         let content_type = response
