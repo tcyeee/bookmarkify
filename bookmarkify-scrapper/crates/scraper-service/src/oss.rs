@@ -1,4 +1,8 @@
+use std::collections::HashMap;
+
 use sha2::{Digest, Sha256};
+
+use crate::scraper::ScrapeError;
 
 pub struct OssClient {
     key_id: String,
@@ -36,6 +40,73 @@ impl OssClient {
         let hash = hex::encode(Sha256::digest(asset_url.as_bytes()));
         let ext = ext_from_content_type(content_type.unwrap_or(""));
         format!("images/{hash}.{ext}")
+    }
+
+    /// Uploads bytes to OSS at `key`. Keys are content-addressed (SHA-256), so uploading the
+    /// same content twice is idempotent. Returns the full public URL on success.
+    async fn upload_bytes(
+        &self,
+        key: &str,
+        bytes: &[u8],
+        content_type: &str,
+    ) -> Result<String, ScrapeError> {
+        let oss = self.oss();
+
+        let mut put_headers: HashMap<String, String> = HashMap::new();
+        put_headers.insert("Content-Type".to_string(), content_type.to_string());
+
+        oss.async_put_object_from_buffer(
+            bytes,
+            key,
+            Some(put_headers),
+            None::<HashMap<String, Option<String>>>,
+        )
+        .await
+        .map_err(|e| ScrapeError::OssFailed(e.to_string()))?;
+
+        Ok(format!("{}/{}", self.base_url, key))
+    }
+
+    /// Downloads the image at `url` (with a Referer header to bypass hotlink protection),
+    /// then uploads to OSS. Returns `None` if `url` is `None`; `Some(oss_url)` on success.
+    pub async fn upload_url_asset(
+        &self,
+        url: Option<&str>,
+        http: &reqwest::Client,
+    ) -> Result<Option<String>, ScrapeError> {
+        let url = match url {
+            Some(u) => u,
+            None => return Ok(None),
+        };
+
+        // Derive Referer from the URL's origin to bypass simple hotlink checks
+        let referer = reqwest::Url::parse(url)
+            .ok()
+            .map(|u| format!("{}://{}", u.scheme(), u.host_str().unwrap_or("")))
+            .unwrap_or_default();
+
+        let response = http
+            .get(url)
+            .header("Referer", &referer)
+            .send()
+            .await
+            .map_err(|e| ScrapeError::OssFailed(format!("image download failed: {e}")))?;
+
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("image/png")
+            .to_string();
+
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| ScrapeError::OssFailed(format!("image read failed: {e}")))?;
+
+        let key = Self::asset_key(url, Some(&content_type));
+        let oss_url = self.upload_bytes(&key, &bytes, &content_type).await?;
+        Ok(Some(oss_url))
     }
 }
 
