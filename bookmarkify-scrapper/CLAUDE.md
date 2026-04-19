@@ -36,6 +36,11 @@ cargo fmt
 | `CACHE_TTL_SECS` | 3600 | Cache entry lifetime |
 | `RATE_LIMIT_RPS` | 10 | Per-API-key requests/sec (burst = 2×) |
 | `PROXY_URL` | (optional) | HTTP proxy URL, e.g. `http://127.0.0.1:7890`. Direct connection if not set. |
+| `OSS_ACCESS_KEY_ID` | (optional) | Alibaba Cloud Access Key ID. All five OSS_* vars must be set to enable OSS upload. |
+| `OSS_ACCESS_KEY_SECRET` | (optional) | Alibaba Cloud Access Key Secret |
+| `OSS_BUCKET` | (optional) | OSS bucket name |
+| `OSS_ENDPOINT` | (optional) | OSS endpoint, e.g. `oss-cn-hangzhou.aliyuncs.com` |
+| `OSS_BASE_URL` | (optional) | Public URL prefix for returned OSS links, e.g. `https://<bucket>.oss-cn-hangzhou.aliyuncs.com` |
 | `RUST_LOG` | info | Tracing filter |
 
 ## Architecture
