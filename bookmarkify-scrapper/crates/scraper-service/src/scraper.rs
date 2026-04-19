@@ -16,6 +16,8 @@ pub struct ScrapeResult {
     pub source: String,
     /// 无头浏览器模式下捕获的截图字节（PNG 格式）；普通抓取模式下为 None
     pub screenshot_bytes: Option<Vec<u8>>,
+    /// 截图上传到 OSS 后的 URL；未上传或上传失败时为 None
+    pub screenshot_url: Option<String>,
 }
 
 /// 抓取过程中可能发生的错误类型。
@@ -29,6 +31,8 @@ pub enum ScrapeError {
     FetchFailed(String),
     /// 无头浏览器启动或页面加载失败，附带错误描述
     HeadlessFailed(String),
+    /// OSS 上传失败，附带错误描述
+    OssFailed(String),
 }
 
 /// 从解析后的 HTML 文档中读取指定 `property` 属性的 `<meta>` 标签内容。
@@ -179,6 +183,7 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
             favicon: extract_favicon(&document, base_url),
             source: "og".to_string(),
             screenshot_bytes: None,
+            screenshot_url: None,
         };
     }
 
@@ -192,6 +197,7 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
             favicon: extract_favicon(&document, base_url),
             source: "twitter_card".to_string(),
             screenshot_bytes: None,
+            screenshot_url: None,
         };
     }
 
@@ -204,6 +210,7 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
             favicon: extract_favicon(&document, base_url),
             source: "json_ld".to_string(),
             screenshot_bytes: None,
+            screenshot_url: None,
         };
     }
 
@@ -215,6 +222,7 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
         favicon: extract_favicon(&document, base_url),
         source: "html".to_string(),
         screenshot_bytes: None,
+        screenshot_url: None,
     }
 }
 
