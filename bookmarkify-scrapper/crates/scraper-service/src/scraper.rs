@@ -1,24 +1,47 @@
 use scraper::{Html, Selector};
 use serde::Serialize;
 
+/// 网页元数据抓取结果，包含标题、描述、图片、图标等信息。
 #[derive(Debug, Serialize, PartialEq)]
 pub struct ScrapeResult {
+    /// 页面标题（来自 og:title、twitter:title、JSON-LD name 或 <title> 标签）
     pub title: Option<String>,
+    /// 页面描述（来自 og:description、twitter:description、JSON-LD description 或 meta description）
     pub description: Option<String>,
+    /// 页面主图（来自 og:image、twitter:image 或 JSON-LD image）
     pub image: Option<String>,
+    /// 网站图标 URL（来自 <link rel="icon"> 或默认的 /favicon.ico）
     pub favicon: Option<String>,
+    /// 数据来源标识，取值为 "og" / "twitter_card" / "json_ld" / "html" / "headless"
     pub source: String,
+    /// 无头浏览器模式下捕获的截图字节（PNG 格式）；普通抓取模式下为 None
     pub screenshot_bytes: Option<Vec<u8>>,
 }
 
+/// 抓取过程中可能发生的错误类型。
 #[derive(Debug)]
 pub enum ScrapeError {
+    /// URL 格式非法，无法解析
     InvalidUrl,
+    /// HTTP 请求或无头浏览器操作超时
     Timeout,
+    /// HTTP 请求失败（网络错误、非 2xx 响应等），附带错误描述
     FetchFailed(String),
+    /// 无头浏览器启动或页面加载失败，附带错误描述
     HeadlessFailed(String),
 }
 
+/// 从解析后的 HTML 文档中读取指定 `property` 属性的 `<meta>` 标签内容。
+///
+/// 例如读取 `<meta property="og:title" content="My Title"/>` 时
+/// 传入 `property = "og:title"`，返回 `Some("My Title")`。
+///
+/// # 参数
+/// - `document`：已解析的 HTML 文档
+/// - `property`：`property` 属性的值（如 `"og:title"`、`"og:image"`）
+///
+/// # 返回
+/// 找到时返回 `content` 属性值，否则返回 `None`。
 pub fn meta_property(document: &Html, property: &str) -> Option<String> {
     let selector = Selector::parse(&format!(r#"meta[property="{}"]"#, property)).ok()?;
     document
@@ -28,6 +51,17 @@ pub fn meta_property(document: &Html, property: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// 从解析后的 HTML 文档中读取指定 `name` 属性的 `<meta>` 标签内容。
+///
+/// 例如读取 `<meta name="description" content="A desc"/>` 时
+/// 传入 `name = "description"`，返回 `Some("A desc")`。
+///
+/// # 参数
+/// - `document`：已解析的 HTML 文档
+/// - `name`：`name` 属性的值（如 `"description"`、`"twitter:title"`）
+///
+/// # 返回
+/// 找到时返回 `content` 属性值，否则返回 `None`。
 pub fn meta_name(document: &Html, name: &str) -> Option<String> {
     let selector = Selector::parse(&format!(r#"meta[name="{}"]"#, name)).ok()?;
     document
@@ -37,6 +71,15 @@ pub fn meta_name(document: &Html, name: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// 从解析后的 HTML 文档中提取 `<title>` 标签的文本内容。
+///
+/// 提取后会去除首尾空白；若标签存在但内容为空则返回 `None`。
+///
+/// # 参数
+/// - `document`：已解析的 HTML 文档
+///
+/// # 返回
+/// 非空标题字符串，或 `None`。
 pub fn extract_title(document: &Html) -> Option<String> {
     let selector = Selector::parse("title").ok()?;
     document
@@ -46,6 +89,17 @@ pub fn extract_title(document: &Html) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// 从解析后的 HTML 文档中提取网站图标（favicon）的绝对 URL。
+///
+/// 查找 `<link rel="icon" href="..."/>` 标签；若未找到则回退到 `{base_url}/favicon.ico`。
+/// 相对路径会基于 `base_url` 解析为绝对 URL。
+///
+/// # 参数
+/// - `document`：已解析的 HTML 文档
+/// - `base_url`：当前页面的基础 URL，用于将相对路径转换为绝对路径
+///
+/// # 返回
+/// favicon 的绝对 URL 字符串，或 `None`（URL join 失败时）。
 pub fn extract_favicon(document: &Html, base_url: &reqwest::Url) -> Option<String> {
     let selector = Selector::parse(r#"link[rel~="icon"]"#).ok()?;
     let href = document
@@ -60,6 +114,21 @@ pub fn extract_favicon(document: &Html, base_url: &reqwest::Url) -> Option<Strin
     Some(favicon_url.to_string())
 }
 
+/// 从解析后的 HTML 文档中提取 JSON-LD 结构化数据里的标题、描述和图片。
+///
+/// 遍历所有 `<script type="application/ld+json">` 标签，找到第一个包含
+/// `name` 字段（非空）的 JSON 对象，提取其 `name`、`description` 和 `image`。
+///
+/// `image` 字段支持两种格式：
+/// - 字符串：`"image": "https://..."`
+/// - 对象：`"image": { "url": "https://..." }`
+///
+/// # 参数
+/// - `document`：已解析的 HTML 文档
+///
+/// # 返回
+/// 找到时返回 `Some((title, description, image))`，其中每项均为 `Option<String>`；
+/// 没有有效 JSON-LD 数据时返回 `None`。
 pub fn extract_json_ld(document: &Html) -> Option<(Option<String>, Option<String>, Option<String>)> {
     let selector = Selector::parse(r#"script[type="application/ld+json"]"#).ok()?;
     for element in document.select(&selector) {
@@ -81,6 +150,22 @@ pub fn extract_json_ld(document: &Html) -> Option<(Option<String>, Option<String
     None
 }
 
+/// 解析 HTML 字符串，按优先级依次提取页面元数据，返回 `ScrapeResult`。
+///
+/// 提取优先级（高到低）：
+/// 1. **Open Graph**：`og:title`、`og:description`、`og:image`
+/// 2. **Twitter Card**：`twitter:title`、`twitter:description`、`twitter:image`
+/// 3. **JSON-LD**：结构化数据中的 `name`、`description`、`image`
+/// 4. **HTML 回退**：`<title>` 标签文本、`meta[name="description"]`
+///
+/// 所有来源均会尝试提取 favicon。`source` 字段记录实际命中的来源。
+///
+/// # 参数
+/// - `html`：原始 HTML 字符串
+/// - `base_url`：页面 URL，用于将相对路径转换为绝对路径
+///
+/// # 返回
+/// 填充了可用字段的 `ScrapeResult`，缺失字段为 `None`。
 pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
     let document = Html::parse_document(html);
 
@@ -133,6 +218,22 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
     }
 }
 
+/// 通过普通 HTTP 请求（Layer 1）抓取指定 URL 的页面元数据。
+///
+/// 使用桌面端 Chrome 的 User-Agent 发送 GET 请求，读取响应体 HTML，
+/// 然后调用 [`parse_metadata`] 提取结构化元数据。
+///
+/// 超时时间由调用方传入的 `client` 决定（在 `AppState` 构建时配置）。
+///
+/// # 参数
+/// - `url`：目标页面 URL 字符串
+/// - `client`：共享的 `reqwest::Client` 实例
+///
+/// # 返回
+/// 成功时返回 `Ok(ScrapeResult)`；失败时返回对应的 `ScrapeError`：
+/// - `InvalidUrl`：URL 格式非法
+/// - `Timeout`：请求超时
+/// - `FetchFailed`：网络错误或 HTTP 错误状态码
 pub async fn scrape(url: &str, client: &reqwest::Client) -> Result<ScrapeResult, ScrapeError> {
     let parsed = reqwest::Url::parse(url).map_err(|_| ScrapeError::InvalidUrl)?;
 

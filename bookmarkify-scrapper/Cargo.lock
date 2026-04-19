@@ -3088,6 +3088,7 @@ dependencies = [
  "serde_json",
  "spider",
  "tokio",
+ "tower",
  "tower-http 0.5.2",
  "tower_governor",
  "tracing",
