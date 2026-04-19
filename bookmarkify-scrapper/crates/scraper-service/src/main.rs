@@ -299,6 +299,7 @@ async fn scrape_handler(
                 match oss.upload_assets(r, &body.url, &state.client).await {
                     Ok(uploaded) => uploaded,
                     Err(scraper::ScrapeError::OssFailed(msg)) => {
+                        tracing::warn!("OSS upload failed for {}: {msg}", body.url);
                         return (
                             StatusCode::SERVICE_UNAVAILABLE,
                             Json(ErrorResponse {
