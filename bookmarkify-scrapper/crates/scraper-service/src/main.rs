@@ -308,5 +308,11 @@ async fn scrape_handler(
             Json(ErrorResponse { error: "headless failed".to_string(), detail: Some(msg) }),
         )
             .into_response(),
+
+        Err(scraper::ScrapeError::OssFailed(msg)) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse { error: "oss upload failed".to_string(), detail: Some(msg) }),
+        )
+            .into_response(),
     }
 }

@@ -110,6 +110,7 @@ mod tests {
             favicon: None,
             source: "og".to_string(),
             screenshot_bytes: None,
+            screenshot_url: None,
         })
     }
 
