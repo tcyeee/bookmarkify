@@ -76,6 +76,44 @@ impl OssClient {
         Ok(format!("{}/{}", self.base_url, key))
     }
 
+    /// Uploads favicon, OG image, and screenshot bytes to OSS concurrently.
+    /// `page_url` is the original scraped URL — used as the key seed for the screenshot.
+    /// Returns a modified `ScrapeResult` with OSS URLs replacing original values.
+    pub async fn upload_assets(
+        &self,
+        mut result: crate::scraper::ScrapeResult,
+        page_url: &str,
+        http: &reqwest::Client,
+    ) -> Result<crate::scraper::ScrapeResult, crate::scraper::ScrapeError> {
+        let screenshot_bytes = result.screenshot_bytes.take(); // removes bytes from result
+        let image_url = result.image.clone();
+        let favicon_url = result.favicon.clone();
+
+        let screenshot_key = Self::screenshot_key(page_url);
+        let screenshot_fut = async {
+            match screenshot_bytes {
+                Some(bytes) => {
+                    self.upload_bytes(&screenshot_key, &bytes, "image/png")
+                        .await
+                        .map(Some)
+                }
+                None => Ok(None),
+            }
+        };
+
+        let (screenshot_result, image_result, favicon_result) = tokio::join!(
+            screenshot_fut,
+            self.upload_url_asset(image_url.as_deref(), http),
+            self.upload_url_asset(favicon_url.as_deref(), http),
+        );
+
+        result.screenshot_url = screenshot_result?;
+        result.image = image_result?;
+        result.favicon = favicon_result?;
+
+        Ok(result)
+    }
+
     /// Downloads the image at `url` (with a Referer header to bypass hotlink protection),
     /// then uploads to OSS. Returns `None` if `url` is `None`; `Some(oss_url)` on success.
     pub async fn upload_url_asset(
