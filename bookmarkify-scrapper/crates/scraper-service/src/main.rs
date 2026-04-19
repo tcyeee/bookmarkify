@@ -310,7 +310,7 @@ async fn scrape_handler(
             .into_response(),
 
         Err(scraper::ScrapeError::OssFailed(msg)) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::SERVICE_UNAVAILABLE,
             Json(ErrorResponse { error: "oss upload failed".to_string(), detail: Some(msg) }),
         )
             .into_response(),
