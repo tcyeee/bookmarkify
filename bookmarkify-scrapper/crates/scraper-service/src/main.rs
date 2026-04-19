@@ -54,6 +54,8 @@ struct AppState {
     headless_timeout_secs: u64,
     /// 基于 URL 的抓取结果内存缓存
     cache: Arc<ScrapeCache>,
+    /// OSS 客户端，用于将截图和图片上传到对象存储（可选）
+    oss: Option<Arc<oss::OssClient>>,
 }
 
 /// 服务入口：读取环境变量、构建路由并启动 HTTP 服务器。
@@ -118,7 +120,14 @@ async fn main() {
 
     let client = client_builder.build().expect("failed to build reqwest client");
 
-    let state = AppState { client, api_key, headless_timeout_secs, cache };
+    let oss = oss::OssClient::from_env().map(Arc::new);
+    if oss.is_some() {
+        tracing::info!("OSS upload enabled");
+    } else {
+        tracing::info!("OSS upload disabled (OSS_* env vars not configured)");
+    }
+
+    let state = AppState { client, api_key, headless_timeout_secs, cache, oss };
 
     // 配置令牌桶：burst_size 设为 RPS 的 2 倍，允许短暂突发流量
     let governor_config = Arc::new(
@@ -212,6 +221,9 @@ struct ScrapeResponse {
     /// 命中缓存时为 `Some(true)`，实时抓取时省略此字段
     #[serde(skip_serializing_if = "Option::is_none")]
     cached: Option<bool>,
+    /// 截图：OSS 上传后为 URL，否则为 base64 编码的 PNG 数据（仅 headless 模式下存在）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    screenshot: Option<String>,
 }
 
 /// 错误响应体结构。
@@ -222,6 +234,11 @@ struct ErrorResponse {
     /// 可选的详细错误信息（如网络错误消息）
     #[serde(skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
+}
+
+fn base64_encode(bytes: &[u8]) -> String {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    STANDARD.encode(bytes)
 }
 
 /// POST /scrape 主处理器：协调缓存查询、普通抓取和无头抓取的完整流程。
@@ -247,6 +264,9 @@ async fn scrape_handler(
 ) -> Response {
     // 优先返回缓存结果，避免重复抓取
     if let Some(cached) = state.cache.get(&body.url).await {
+        let screenshot = cached.screenshot_url.clone().or_else(|| {
+            cached.screenshot_bytes.as_ref().map(|b| base64_encode(b))
+        });
         return Json(ScrapeResponse {
             title: cached.title.clone(),
             description: cached.description.clone(),
@@ -254,6 +274,7 @@ async fn scrape_handler(
             favicon: cached.favicon.clone(),
             source: cached.source.clone(),
             cached: Some(true),
+            screenshot,
         })
         .into_response();
     }
@@ -273,8 +294,33 @@ async fn scrape_handler(
 
     match result {
         Ok(r) => {
+            // If OSS is configured, upload assets and replace URLs; hard-fail on error
+            let r = if let Some(oss) = &state.oss {
+                match oss.upload_assets(r, &body.url, &state.client).await {
+                    Ok(uploaded) => uploaded,
+                    Err(scraper::ScrapeError::OssFailed(msg)) => {
+                        return (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(ErrorResponse {
+                                error: "oss upload failed".to_string(),
+                                detail: Some(msg),
+                            }),
+                        )
+                            .into_response();
+                    }
+                    Err(_) => unreachable!("upload_assets only returns OssFailed"),
+                }
+            } else {
+                r
+            };
+
+            let screenshot = r.screenshot_url.clone().or_else(|| {
+                r.screenshot_bytes.as_ref().map(|b| base64_encode(b))
+            });
+
             let r = Arc::new(r);
             state.cache.set(&body.url, Arc::clone(&r)).await;
+
             Json(ScrapeResponse {
                 title: r.title.clone(),
                 description: r.description.clone(),
@@ -282,6 +328,7 @@ async fn scrape_handler(
                 favicon: r.favicon.clone(),
                 source: r.source.clone(),
                 cached: None,
+                screenshot,
             })
             .into_response()
         }
