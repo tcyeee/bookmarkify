@@ -102,10 +102,19 @@ async fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(3000);
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(timeout_secs))
-        .build()
-        .expect("failed to build reqwest client");
+    let proxy_url = env::var("PROXY_URL").ok();
+
+    let mut client_builder = reqwest::Client::builder()
+        .timeout(Duration::from_secs(timeout_secs));
+
+    if let Some(ref url) = proxy_url {
+        let proxy = reqwest::Proxy::all(url)
+            .expect("PROXY_URL is not a valid proxy URL");
+        client_builder = client_builder.proxy(proxy);
+        tracing::info!("proxy enabled: {url}");
+    }
+
+    let client = client_builder.build().expect("failed to build reqwest client");
 
     let state = AppState { client, api_key, headless_timeout_secs, cache };
 
