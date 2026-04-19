@@ -18,7 +18,7 @@ impl OssClient {
         Some(Self { key_id, key_secret, endpoint, bucket, base_url })
     }
 
-    fn oss(&self) -> oss_rust_sdk::oss::OSS {
+    fn oss(&self) -> oss_rust_sdk::oss::OSS<'_> {
         oss_rust_sdk::oss::OSS::new(
             self.key_id.clone(),
             self.key_secret.clone(),
