@@ -1,0 +1,7 @@
+target/
+screenshots/
+rust_out
+docs/
+*.md
+.git/
+.gitignore

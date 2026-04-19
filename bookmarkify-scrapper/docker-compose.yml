@@ -1,0 +1,23 @@
+services:
+  scraper:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # 必填：Bearer 鉴权令牌
+      API_KEY: ${API_KEY}
+      # 服务监听端口（容器内固定 3000，对外端口由 ports 控制）
+      PORT: 3000
+      # Layer 1 reqwest HTTP 请求超时（秒）
+      REQUEST_TIMEOUT_SECS: ${REQUEST_TIMEOUT_SECS:-10}
+      # Layer 2 headless Chrome 渲染超时（秒）
+      HEADLESS_TIMEOUT_SECS: ${HEADLESS_TIMEOUT_SECS:-30}
+      # 缓存条目生存时间（秒）
+      CACHE_TTL_SECS: ${CACHE_TTL_SECS:-3600}
+      # 每个 API Key 的限速（请求/秒），突发上限为 2 倍
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-10}
+      # 可选：HTTP 代理地址，例如 http://127.0.0.1:7890，留空则直连
+      PROXY_URL: ${PROXY_URL:-}
+      # tracing 日志过滤级别（trace/debug/info/warn/error）
+      RUST_LOG: ${RUST_LOG:-info}
+    restart: unless-stopped
