@@ -18,13 +18,20 @@ use tower_governor::{
 };
 use tower_http::trace::TraceLayer;
 
-/// Extracts the API key from the `Authorization: Bearer <key>` header for rate limiting.
+/// 从 `Authorization: Bearer <key>` 请求头中提取 API Key，用于限流桶的分区键。
+///
+/// `tower_governor` 会对每个唯一的 Key 独立维护令牌桶，
+/// 从而实现基于 API Key 的速率限制（而非基于 IP）。
 #[derive(Debug, Clone)]
 struct ApiKeyExtractor;
 
 impl KeyExtractor for ApiKeyExtractor {
     type Key = String;
 
+    /// 从请求头中提取 `Authorization: Bearer <key>` 里的 `<key>` 部分。
+    ///
+    /// 若请求头缺失、格式不合法或不以 `"Bearer "` 开头，
+    /// 则返回 `GovernorError::UnableToExtractKey`，限流层会拒绝该请求。
     fn extract<T>(&self, req: &Request<T>) -> Result<Self::Key, GovernorError> {
         req.headers()
             .get("Authorization")
@@ -35,14 +42,34 @@ impl KeyExtractor for ApiKeyExtractor {
     }
 }
 
+/// 全局应用状态，通过 `Arc` 在所有请求处理器之间共享。
 #[derive(Clone)]
 struct AppState {
+    /// 共享的 HTTP 客户端，内置连接池和超时配置
     client: reqwest::Client,
+    /// 从环境变量 `API_KEY` 加载的鉴权令牌，用于 Bearer Token 验证
     api_key: String,
+    /// 无头浏览器单次抓取的最大等待时间（秒），对应环境变量 `HEADLESS_TIMEOUT_SECS`
     headless_timeout_secs: u64,
+    /// 基于 URL 的抓取结果内存缓存
     cache: Arc<ScrapeCache>,
 }
 
+/// 服务入口：读取环境变量、构建路由并启动 HTTP 服务器。
+///
+/// ## 环境变量
+/// | 变量名 | 默认值 | 说明 |
+/// |---|---|---|
+/// | `API_KEY` | 必填 | Bearer Token 鉴权密钥 |
+/// | `REQUEST_TIMEOUT_SECS` | 10 | HTTP 请求超时（秒） |
+/// | `HEADLESS_TIMEOUT_SECS` | 30 | 无头浏览器超时（秒） |
+/// | `CACHE_TTL_SECS` | 3600 | 缓存条目存活时间（秒） |
+/// | `RATE_LIMIT_RPS` | 10 | 每个 API Key 的每秒请求上限 |
+/// | `PORT` | 3000 | 监听端口 |
+///
+/// ## 路由
+/// - `GET /health`：健康检查，无需鉴权
+/// - `POST /scrape`：抓取入口，需要 Bearer Token 鉴权 + 速率限制
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -82,6 +109,7 @@ async fn main() {
 
     let state = AppState { client, api_key, headless_timeout_secs, cache };
 
+    // 配置令牌桶：burst_size 设为 RPS 的 2 倍，允许短暂突发流量
     let governor_config = Arc::new(
         GovernorConfigBuilder::default()
             .key_extractor(ApiKeyExtractor)
@@ -91,6 +119,8 @@ async fn main() {
             .expect("invalid governor config"),
     );
 
+    // 受保护路由：先通过鉴权中间件验证 API Key，再通过限流层控制速率
+    // ServiceBuilder 保证层的执行顺序为声明顺序（auth → rate limit → handler）
     let protected = Router::new()
         .route("/scrape", post(scrape_handler))
         .layer(
@@ -111,10 +141,20 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
+/// 健康检查处理器。
+///
+/// 始终返回 `200 OK` 和 `{"status": "ok"}`，供负载均衡器或容器编排系统探活。
 async fn health_handler() -> Json<serde_json::Value> {
     Json(serde_json::json!({"status": "ok"}))
 }
 
+/// Bearer Token 鉴权中间件。
+///
+/// 从 `Authorization` 请求头中提取 `Bearer <token>`，与 `AppState.api_key` 比较。
+/// 匹配则放行到下一个处理器；不匹配或请求头缺失则立即返回 `401 Unauthorized`。
+///
+/// 此中间件位于限流层之前（通过 `ServiceBuilder` 保证顺序），
+/// 确保未鉴权请求不会消耗令牌桶配额。
 async fn auth_middleware(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -135,35 +175,66 @@ async fn auth_middleware(
     }
 }
 
+/// POST /scrape 的请求体结构。
 #[derive(Deserialize)]
 struct ScrapeRequest {
+    /// 目标 URL，必填
     url: String,
+    /// 是否强制使用无头浏览器（Layer 2）。默认为 `false`：先尝试普通 HTTP，
+    /// 若 Layer 1 未获取到标题则自动回退到 Layer 2。
     headless: Option<bool>,
 }
 
+/// POST /scrape 的成功响应体结构。
 #[derive(Serialize)]
 struct ScrapeResponse {
+    /// 页面标题
     title: Option<String>,
+    /// 页面描述
     description: Option<String>,
+    /// 页面主图 URL
     image: Option<String>,
+    /// 网站图标 URL
     favicon: Option<String>,
+    /// 数据来源标识（"og" / "twitter_card" / "json_ld" / "html" / "headless"）
     source: String,
+    /// 命中缓存时为 `Some(true)`，实时抓取时省略此字段
     #[serde(skip_serializing_if = "Option::is_none")]
     cached: Option<bool>,
 }
 
+/// 错误响应体结构。
 #[derive(Serialize)]
 struct ErrorResponse {
+    /// 错误类型描述
     error: String,
+    /// 可选的详细错误信息（如网络错误消息）
     #[serde(skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
 }
 
+/// POST /scrape 主处理器：协调缓存查询、普通抓取和无头抓取的完整流程。
+///
+/// ## 处理流程
+/// 1. **缓存命中**：若 URL 在缓存中存在，直接返回缓存结果（`cached: true`）
+/// 2. **headless=true**：直接调用无头浏览器抓取（Layer 2）
+/// 3. **headless=false（默认）**：
+///    - 先调用普通 HTTP 抓取（Layer 1）
+///    - 若 Layer 1 返回的 `title` 为 `None`（JS 渲染页面），自动回退到 Layer 2
+/// 4. 抓取成功后将结果写入缓存，再返回给客户端
+///
+/// ## 响应状态码
+/// | 状态 | 含义 |
+/// |---|---|
+/// | 200 | 成功（含缓存命中） |
+/// | 422 | URL 格式非法 |
+/// | 504 | 抓取超时 |
+/// | 502 | 网络请求失败或无头浏览器失败 |
 async fn scrape_handler(
     State(state): State<AppState>,
     Json(body): Json<ScrapeRequest>,
 ) -> Response {
-    // cache lookup
+    // 优先返回缓存结果，避免重复抓取
     if let Some(cached) = state.cache.get(&body.url).await {
         return Json(ScrapeResponse {
             title: cached.title.clone(),
@@ -177,6 +248,7 @@ async fn scrape_handler(
     }
 
     let result = if body.headless.unwrap_or(false) {
+        // 调用方明确要求无头浏览器
         headless::scrape_headless(&body.url, state.headless_timeout_secs).await
     } else {
         match scraper::scrape(&body.url, &state.client).await {
