@@ -65,6 +65,7 @@ struct AppState {
 /// | `HEADLESS_TIMEOUT_SECS` | 30 | 无头浏览器超时（秒） |
 /// | `CACHE_TTL_SECS` | 3600 | 缓存条目存活时间（秒） |
 /// | `RATE_LIMIT_RPS` | 10 | 每个 API Key 的每秒请求上限 |
+/// | `PROXY_URL` | (无默认) | HTTP 代理地址，例如 `http://127.0.0.1:7890`，不设则直连 |
 /// | `PORT` | 3000 | 监听端口 |
 ///
 /// ## 路由
@@ -107,8 +108,8 @@ async fn main() {
     let mut client_builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout_secs));
 
-    if let Some(ref url) = proxy_url {
-        let proxy = reqwest::Proxy::all(url)
+    if let Some(url) = proxy_url {
+        let proxy = reqwest::Proxy::all(&url)
             .expect("PROXY_URL is not a valid proxy URL");
         client_builder = client_builder.proxy(proxy);
         tracing::info!("proxy enabled: {url}");
