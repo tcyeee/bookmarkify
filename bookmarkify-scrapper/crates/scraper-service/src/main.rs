@@ -5,8 +5,7 @@ mod scraper;
 
 use axum::{
     extract::State,
-    http::{HeaderMap, Request, StatusCode},
-    middleware::{self, Next},
+    http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::{get, post},
     Router,
@@ -14,42 +13,13 @@ use axum::{
 use cache::ScrapeCache;
 use serde::{Deserialize, Serialize};
 use std::{env, sync::Arc, time::Duration};
-use tower_governor::{
-    governor::GovernorConfigBuilder, key_extractor::KeyExtractor, GovernorError, GovernorLayer,
-};
 use tower_http::trace::TraceLayer;
-
-/// 从 `Authorization: Bearer <key>` 请求头中提取 API Key，用于限流桶的分区键。
-///
-/// `tower_governor` 会对每个唯一的 Key 独立维护令牌桶，
-/// 从而实现基于 API Key 的速率限制（而非基于 IP）。
-#[derive(Debug, Clone)]
-struct ApiKeyExtractor;
-
-impl KeyExtractor for ApiKeyExtractor {
-    type Key = String;
-
-    /// 从请求头中提取 `Authorization: Bearer <key>` 里的 `<key>` 部分。
-    ///
-    /// 若请求头缺失、格式不合法或不以 `"Bearer "` 开头，
-    /// 则返回 `GovernorError::UnableToExtractKey`，限流层会拒绝该请求。
-    fn extract<T>(&self, req: &Request<T>) -> Result<Self::Key, GovernorError> {
-        req.headers()
-            .get("Authorization")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.strip_prefix("Bearer "))
-            .map(|key| key.to_owned())
-            .ok_or(GovernorError::UnableToExtractKey)
-    }
-}
 
 /// 全局应用状态，通过 `Arc` 在所有请求处理器之间共享。
 #[derive(Clone)]
 struct AppState {
     /// 共享的 HTTP 客户端，内置连接池和超时配置
     client: reqwest::Client,
-    /// 从环境变量 `API_KEY` 加载的鉴权令牌，用于 Bearer Token 验证
-    api_key: String,
     /// 无头浏览器单次抓取的最大等待时间（秒），对应环境变量 `HEADLESS_TIMEOUT_SECS`
     headless_timeout_secs: u64,
     /// 基于 URL 的抓取结果内存缓存
@@ -83,7 +53,6 @@ async fn main() {
         )
         .init();
 
-    let api_key = env::var("API_KEY").expect("API_KEY must be set");
     let timeout_secs: u64 = env::var("REQUEST_TIMEOUT_SECS")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -97,10 +66,6 @@ async fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(3600);
     let cache = Arc::new(ScrapeCache::new(cache_ttl_secs));
-    let rate_limit_rps: u32 = env::var("RATE_LIMIT_RPS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(10);
     let port: u16 = env::var("PORT")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -127,31 +92,11 @@ async fn main() {
         tracing::info!("OSS upload disabled (OSS_* env vars not configured)");
     }
 
-    let state = AppState { client, api_key, headless_timeout_secs, cache, oss };
-
-    // 配置令牌桶：burst_size 设为 RPS 的 2 倍，允许短暂突发流量
-    let governor_config = Arc::new(
-        GovernorConfigBuilder::default()
-            .key_extractor(ApiKeyExtractor)
-            .per_second(rate_limit_rps as u64)
-            .burst_size(rate_limit_rps * 2)
-            .finish()
-            .expect("invalid governor config"),
-    );
-
-    // 受保护路由：先通过鉴权中间件验证 API Key，再通过限流层控制速率
-    // ServiceBuilder 保证层的执行顺序为声明顺序（auth → rate limit → handler）
-    let protected = Router::new()
-        .route("/scrape", post(scrape_handler))
-        .layer(
-            tower::ServiceBuilder::new()
-                .layer(middleware::from_fn_with_state(state.clone(), auth_middleware))
-                .layer(GovernorLayer { config: governor_config }),
-        );
+    let state = AppState { client, headless_timeout_secs, cache, oss };
 
     let app = Router::new()
         .route("/health", get(health_handler))
-        .merge(protected)
+        .route("/scrape", post(scrape_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -168,32 +113,6 @@ async fn health_handler() -> Json<serde_json::Value> {
     Json(serde_json::json!({"status": "ok"}))
 }
 
-/// Bearer Token 鉴权中间件。
-///
-/// 从 `Authorization` 请求头中提取 `Bearer <token>`，与 `AppState.api_key` 比较。
-/// 匹配则放行到下一个处理器；不匹配或请求头缺失则立即返回 `401 Unauthorized`。
-///
-/// 此中间件位于限流层之前（通过 `ServiceBuilder` 保证顺序），
-/// 确保未鉴权请求不会消耗令牌桶配额。
-async fn auth_middleware(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    request: Request<axum::body::Body>,
-    next: Next,
-) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
-    let token = headers
-        .get("Authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
-
-    match token {
-        Some(t) if t == state.api_key => Ok(next.run(request).await),
-        _ => Err((
-            StatusCode::UNAUTHORIZED,
-            Json(serde_json::json!({"error": "unauthorized"})),
-        )),
-    }
-}
 
 /// POST /scrape 的请求体结构。
 #[derive(Deserialize)]

@@ -4,21 +4,31 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# HTTP 框架
 axum = "0.7"
+# 异步运行时
 tokio = { version = "1", features = ["full"] }
+# Layer 1：HTTP 抓取客户端
 reqwest = { version = "0.12", features = ["json"] }
+# HTML 解析（CSS 选择器）
 scraper = "0.19"
+# 序列化 / 反序列化
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# 请求追踪中间件
 tower-http = { version = "0.5", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Layer 2：无头 Chrome（含反指纹 stealth 模式）
 spider = { version = "2", features = ["chrome", "chrome_stealth"] }
+# 全局单例（HEADLESS_LOCK 等）
 once_cell = "1"
+# 内存 LRU 缓存
 moka = { version = "0.12", features = ["future"] }
-tower = "0.5"
-tower_governor = { version = "0.4", features = ["axum"] }
+# 阿里云 OSS 上传
 oss-rust-sdk = "0.3"
+# 生成 OSS 对象键（SHA-256）
 sha2 = "0.10"
 hex = "0.4"
+# screenshot 转 base64
 base64 = "0.22"

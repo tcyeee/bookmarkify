@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# 无头 Chrome（含 stealth 模式），用于验证反爬虫绕过方案
 spider = { version = "2", features = ["chrome", "chrome_stealth"] }
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
+# 页面内容正则匹配
 regex = "1"
 once_cell = "1"
