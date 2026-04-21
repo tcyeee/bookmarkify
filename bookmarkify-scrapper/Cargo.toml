@@ -1,3 +1,5 @@
 [workspace]
+# scraper-service: 生产 HTTP 服务（Layer 1 HTTP + Layer 2 无头 Chrome）
+# scraper-demo:    M0 反爬虫验证 Demo，仅用于本地调试，不参与生产部署
 members = ["crates/scraper-demo", "crates/scraper-service"]
 resolver = "2"
