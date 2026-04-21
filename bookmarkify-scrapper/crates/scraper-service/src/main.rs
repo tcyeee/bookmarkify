@@ -12,7 +12,7 @@ use axum::{
 };
 use cache::ScrapeCache;
 use serde::{Deserialize, Serialize};
-use std::{env, sync::Arc, time::Duration};
+use std::{env, sync::Arc, time::{Duration, Instant}};
 use tower_http::trace::TraceLayer;
 
 /// 全局应用状态，通过 `Arc` 在所有请求处理器之间共享。
@@ -133,8 +133,10 @@ struct ScrapeResponse {
     description: Option<String>,
     /// 页面主图 URL
     image: Option<String>,
-    /// 网站图标 URL
+    /// 网站图标（base64 data URL）
     favicon: Option<String>,
+    /// 网站 Logo URL（有 OSS 时为 OSS URL，否则为原始 URL）
+    logo: Option<String>,
     /// 数据来源标识（"og" / "twitter_card" / "json_ld" / "html" / "headless"）
     source: String,
     /// 命中缓存时为 `Some(true)`，实时抓取时省略此字段
@@ -160,6 +162,24 @@ fn base64_encode(bytes: &[u8]) -> String {
     STANDARD.encode(bytes)
 }
 
+async fn favicon_to_base64(url: Option<&str>, http: &reqwest::Client) -> Option<String> {
+    let url = url?;
+    let referer = reqwest::Url::parse(url)
+        .ok()
+        .map(|u| format!("{}://{}", u.scheme(), u.host_str().unwrap_or("")))
+        .unwrap_or_default();
+    let response = http.get(url).header("Referer", &referer).send().await.ok()?.error_for_status().ok()?;
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("image/png")
+        .to_string();
+    let bytes = response.bytes().await.ok()?;
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    Some(format!("data:{content_type};base64,{}", STANDARD.encode(&bytes)))
+}
+
 /// POST /scrape 主处理器：协调缓存查询、普通抓取和无头抓取的完整流程。
 ///
 /// ## 处理流程
@@ -181,16 +201,25 @@ async fn scrape_handler(
     State(state): State<AppState>,
     Json(body): Json<ScrapeRequest>,
 ) -> Response {
+    let start = Instant::now();
+    let domain = reqwest::Url::parse(&body.url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+        .unwrap_or_else(|| body.url.clone());
+
     // 优先返回缓存结果，避免重复抓取
     if let Some(cached) = state.cache.get(&body.url).await {
         let screenshot = cached.screenshot_url.clone().or_else(|| {
             cached.screenshot_bytes.as_ref().map(|b| base64_encode(b))
         });
+        // favicon is stored in cache as a base64 data URL (already converted on first fetch)
+        tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), source = cached.source, "cache hit");
         return Json(ScrapeResponse {
             title: cached.title.clone(),
             description: cached.description.clone(),
             image: cached.image.clone(),
             favicon: cached.favicon.clone(),
+            logo: cached.logo.clone(),
             source: cached.source.clone(),
             cached: Some(true),
             screenshot,
@@ -199,12 +228,13 @@ async fn scrape_handler(
     }
 
     let result = if body.headless.unwrap_or(false) {
-        // 调用方明确要求无头浏览器
+        tracing::info!(domain, "scraping (layer2/headless)");
         headless::scrape_headless(&body.url, state.headless_timeout_secs).await
     } else {
+        tracing::info!(domain, "scraping (layer1)");
         match scraper::scrape(&body.url, &state.client).await {
             Ok(r) if r.title.is_none() => {
-                // Layer 1 returned no title — fallback to Layer 2
+                tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "layer1 no title, falling back to layer2");
                 headless::scrape_headless(&body.url, state.headless_timeout_secs).await
             }
             other => other,
@@ -213,7 +243,8 @@ async fn scrape_handler(
 
     match result {
         Ok(r) => {
-            // If OSS is configured, upload assets and replace URLs; hard-fail on error
+            // If OSS is configured, upload assets and replace URLs; hard-fail on error.
+            // Favicon is always converted to base64 regardless of OSS configuration.
             let r = if let Some(oss) = &state.oss {
                 match oss.upload_assets(r, &body.url, &state.client).await {
                     Ok(uploaded) => uploaded,
@@ -231,7 +262,8 @@ async fn scrape_handler(
                     Err(_) => unreachable!("upload_assets only returns OssFailed"),
                 }
             } else {
-                r
+                let favicon_b64 = favicon_to_base64(r.favicon.as_deref(), &state.client).await;
+                scraper::ScrapeResult { favicon: favicon_b64, ..r }
             };
 
             let screenshot = r.screenshot_url.clone().or_else(|| {
@@ -241,11 +273,14 @@ async fn scrape_handler(
             let r = Arc::new(r);
             state.cache.set(&body.url, Arc::clone(&r)).await;
 
+            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), source = r.source, "scraped ok");
+
             Json(ScrapeResponse {
                 title: r.title.clone(),
                 description: r.description.clone(),
                 image: r.image.clone(),
                 favicon: r.favicon.clone(),
+                logo: r.logo.clone(),
                 source: r.source.clone(),
                 cached: None,
                 screenshot,
@@ -253,29 +288,41 @@ async fn scrape_handler(
             .into_response()
         }
 
-        Err(scraper::ScrapeError::InvalidUrl) => (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ErrorResponse { error: "invalid url".to_string(), detail: None }),
-        )
-            .into_response(),
+        Err(scraper::ScrapeError::InvalidUrl) => {
+            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "scrape failed: invalid url");
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(ErrorResponse { error: "invalid url".to_string(), detail: None }),
+            )
+                .into_response()
+        }
 
-        Err(scraper::ScrapeError::Timeout) => (
-            StatusCode::GATEWAY_TIMEOUT,
-            Json(ErrorResponse { error: "timeout".to_string(), detail: None }),
-        )
-            .into_response(),
+        Err(scraper::ScrapeError::Timeout) => {
+            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "scrape failed: timeout");
+            (
+                StatusCode::GATEWAY_TIMEOUT,
+                Json(ErrorResponse { error: "timeout".to_string(), detail: None }),
+            )
+                .into_response()
+        }
 
-        Err(scraper::ScrapeError::FetchFailed(msg)) => (
-            StatusCode::BAD_GATEWAY,
-            Json(ErrorResponse { error: "fetch failed".to_string(), detail: Some(msg) }),
-        )
-            .into_response(),
+        Err(scraper::ScrapeError::FetchFailed(msg)) => {
+            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), %msg, "scrape failed: fetch error");
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse { error: "fetch failed".to_string(), detail: Some(msg) }),
+            )
+                .into_response()
+        }
 
-        Err(scraper::ScrapeError::HeadlessFailed(msg)) => (
-            StatusCode::BAD_GATEWAY,
-            Json(ErrorResponse { error: "headless failed".to_string(), detail: Some(msg) }),
-        )
-            .into_response(),
+        Err(scraper::ScrapeError::HeadlessFailed(msg)) => {
+            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), %msg, "scrape failed: headless error");
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse { error: "headless failed".to_string(), detail: Some(msg) }),
+            )
+                .into_response()
+        }
 
         Err(scraper::ScrapeError::OssFailed(msg)) => {
             // OssFailed is handled in the Ok(r) arm above; this arm is required for

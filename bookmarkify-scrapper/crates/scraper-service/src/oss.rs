@@ -80,7 +80,8 @@ impl OssClient {
         Ok(format!("{}/{}", self.base_url, key))
     }
 
-    /// Uploads favicon, OG image, and screenshot bytes to OSS concurrently.
+    /// Uploads OG image, logo, and screenshot bytes to OSS concurrently.
+    /// Favicon is never uploaded to OSS — it is always fetched and returned as a base64 data URL.
     /// `page_url` is the original scraped URL — used as the key seed for the screenshot.
     /// Returns a modified `ScrapeResult` with OSS URLs replacing original values.
     pub async fn upload_assets(
@@ -91,6 +92,7 @@ impl OssClient {
     ) -> Result<crate::scraper::ScrapeResult, crate::scraper::ScrapeError> {
         let screenshot_bytes = result.screenshot_bytes.take(); // removes bytes from result
         let image_url = result.image.clone();
+        let logo_url = result.logo.clone();
         let favicon_url = result.favicon.clone();
 
         let screenshot_key = Self::screenshot_key(page_url);
@@ -105,17 +107,61 @@ impl OssClient {
             }
         };
 
-        let (screenshot_result, image_result, favicon_result) = tokio::join!(
+        let (screenshot_result, image_result, logo_result, favicon_result) = tokio::join!(
             screenshot_fut,
             self.upload_url_asset(image_url.as_deref(), http),
-            self.upload_url_asset(favicon_url.as_deref(), http),
+            self.upload_url_asset(logo_url.as_deref(), http),
+            Self::fetch_as_base64(favicon_url.as_deref(), http),
         );
 
         result.screenshot_url = screenshot_result?;
         result.image = image_result?;
+        result.logo = logo_result?;
         result.favicon = favicon_result?;
 
         Ok(result)
+    }
+
+    /// Downloads the image at `url` and returns it as a base64 data URL (`data:<mime>;base64,...`).
+    /// Returns `None` if `url` is `None`; `Some(data_url)` on success.
+    async fn fetch_as_base64(
+        url: Option<&str>,
+        http: &reqwest::Client,
+    ) -> Result<Option<String>, ScrapeError> {
+        let url = match url {
+            Some(u) => u,
+            None => return Ok(None),
+        };
+
+        let referer = reqwest::Url::parse(url)
+            .ok()
+            .map(|u| format!("{}://{}", u.scheme(), u.host_str().unwrap_or("")))
+            .unwrap_or_default();
+
+        let response = http
+            .get(url)
+            .header("Referer", &referer)
+            .send()
+            .await
+            .map_err(|e| ScrapeError::OssFailed(format!("favicon download failed: {e}")))?
+            .error_for_status()
+            .map_err(|e| ScrapeError::OssFailed(format!("favicon download failed: {e}")))?;
+
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("image/png")
+            .to_string();
+
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| ScrapeError::OssFailed(format!("favicon read failed: {e}")))?;
+
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        let b64 = STANDARD.encode(&bytes);
+        Ok(Some(format!("data:{content_type};base64,{b64}")))
     }
 
     /// Downloads the image at `url` (with a Referer header to bypass hotlink protection),

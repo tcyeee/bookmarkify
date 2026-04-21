@@ -45,7 +45,8 @@ Content-Type: application/json
   "title": "Example Domain",
   "description": "This domain is for use in illustrative examples.",
   "image": "https://example.com/og-image.png",
-  "favicon": "https://example.com/favicon.ico",
+  "favicon": "data:image/png;base64,iVBORw0KGgo...",
+  "logo": "https://example.com/logo-180x180.png",
   "screenshot_url": "https://oss.example.com/screenshots/xxx.png",
   "source": "og"
 }
@@ -55,8 +56,9 @@ Content-Type: application/json
 |------|------|------|
 | `title` | string \| null | 页面标题 |
 | `description` | string \| null | 页面描述 |
-| `image` | string \| null | 封面图 URL（OG image 优先） |
-| `favicon` | string \| null | 网站图标 URL |
+| `image` | string \| null | 封面图 URL（OG image 优先）；配置 OSS 时为 OSS URL |
+| `favicon` | string \| null | 网站图标，始终以 base64 data URL 格式返回 |
+| `logo` | string \| null | 网站 Logo URL；来源优先级：JSON-LD logo → apple-touch-icon → 最大尺寸 icon；配置 OSS 时为 OSS URL |
 | `screenshot_url` | string \| null | 截图 URL（仅 `screenshot=true` 且成功时返回） |
 | `source` | string | 元数据来源：`og` \| `twitter_card` \| `json_ld` \| `headless` |
 

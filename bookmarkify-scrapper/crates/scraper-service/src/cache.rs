@@ -108,6 +108,7 @@ mod tests {
             description: None,
             image: None,
             favicon: None,
+            logo: None,
             source: "og".to_string(),
             screenshot_bytes: None,
             screenshot_url: None,

@@ -132,7 +132,8 @@ Content-Type: application/json
   "title": "示例页面标题",
   "description": "页面描述文字",
   "image": "https://example.com/og-image.jpg",
-  "favicon": "https://example.com/favicon.ico",
+  "favicon": "data:image/png;base64,iVBORw0KGgo...",
+  "logo": "https://example.com/logo-180x180.png",
   "source": "og",
   "cached": true,
   "screenshot": "https://my-bucket.oss-cn-hangzhou.aliyuncs.com/screenshots/xxx.png"
@@ -143,8 +144,9 @@ Content-Type: application/json
 |---|---|
 | `title` | 页面标题，可能为 `null` |
 | `description` | 页面描述，可能为 `null` |
-| `image` | 页面主图 URL，可能为 `null` |
-| `favicon` | 网站图标 URL，可能为 `null` |
+| `image` | 页面主图 URL，可能为 `null`；配置 OSS 时为 OSS URL |
+| `favicon` | 网站图标，始终以 base64 data URL 格式返回，可能为 `null` |
+| `logo` | 网站 Logo URL，可能为 `null`；来源优先级：JSON-LD logo → apple-touch-icon → 最大尺寸 icon；配置 OSS 时为 OSS URL |
 | `source` | 数据来源：`"og"` / `"twitter_card"` / `"json_ld"` / `"html"` / `"headless"` |
 | `cached` | 命中缓存时为 `true`，实时抓取时省略此字段 |
 | `screenshot` | 仅无头模式下存在。配置 OSS 时为公网 URL，否则为 base64 编码的 PNG 数据 |
