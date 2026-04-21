@@ -12,6 +12,8 @@ pub struct ScrapeResult {
     pub image: Option<String>,
     /// 网站图标 URL（来自 <link rel="icon"> 或默认的 /favicon.ico）
     pub favicon: Option<String>,
+    /// 网站 Logo URL（来自 JSON-LD logo、apple-touch-icon 或最大尺寸的 icon）
+    pub logo: Option<String>,
     /// 数据来源标识，取值为 "og" / "twitter_card" / "json_ld" / "html" / "headless"
     pub source: String,
     /// 无头浏览器模式下捕获的截图字节（PNG 格式）；普通抓取模式下为 None
@@ -118,6 +120,77 @@ pub fn extract_favicon(document: &Html, base_url: &reqwest::Url) -> Option<Strin
     Some(favicon_url.to_string())
 }
 
+/// 从解析后的 HTML 文档中提取网站 Logo 的绝对 URL。
+///
+/// 按优先级尝试以下来源：
+/// 1. JSON-LD `logo` 字段（字符串或 `{ "url": "..." }` 对象）
+/// 2. `<link rel="apple-touch-icon">` 标签（通常为 180×180 高分辨率图标）
+/// 3. 带 `sizes` 属性的 `<link rel="icon">` 中面积最大的一项
+///
+/// # 参数
+/// - `document`：已解析的 HTML 文档
+/// - `base_url`：当前页面的基础 URL，用于将相对路径转换为绝对路径
+///
+/// # 返回
+/// Logo 的绝对 URL 字符串，或 `None`（均未找到时）。
+pub fn extract_logo(document: &Html, base_url: &reqwest::Url) -> Option<String> {
+    // 1. JSON-LD logo field
+    if let Ok(sel) = Selector::parse(r#"script[type="application/ld+json"]"#) {
+        for element in document.select(&sel) {
+            let text = element.text().collect::<String>();
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                let logo = json.get("logo").and_then(|v| {
+                    v.as_str().map(String::from).or_else(|| {
+                        v.get("url").and_then(|u| u.as_str()).map(String::from)
+                    })
+                });
+                if let Some(url) = logo {
+                    let resolved = base_url.join(&url).map(|u| u.to_string()).unwrap_or(url);
+                    return Some(resolved);
+                }
+            }
+        }
+    }
+
+    // 2. apple-touch-icon
+    if let Ok(sel) = Selector::parse(r#"link[rel~="apple-touch-icon"]"#) {
+        if let Some(href) = document.select(&sel).next().and_then(|e| e.value().attr("href")) {
+            if let Ok(url) = base_url.join(href) {
+                return Some(url.to_string());
+            }
+        }
+    }
+
+    // 3. Largest sized icon
+    if let Ok(sel) = Selector::parse(r#"link[rel~="icon"][sizes]"#) {
+        let mut best: Option<(u32, String)> = None;
+        for elem in document.select(&sel) {
+            let Some(href) = elem.value().attr("href") else { continue };
+            let sizes = elem.value().attr("sizes").unwrap_or("");
+            let area = sizes
+                .split_whitespace()
+                .filter_map(|s| {
+                    let mut parts = s.splitn(2, 'x');
+                    let w: u32 = parts.next()?.parse().ok()?;
+                    let h: u32 = parts.next()?.parse().ok()?;
+                    Some(w.saturating_mul(h))
+                })
+                .max()
+                .unwrap_or(0);
+            if area > 0 && best.as_ref().map_or(true, |(a, _)| area > *a) {
+                if let Ok(url) = base_url.join(href) {
+                    best = Some((area, url.to_string()));
+                }
+            }
+        }
+        if let Some((_, url)) = best {
+            return Some(url);
+        }
+    }
+
+    None
+}
+
 /// 从解析后的 HTML 文档中提取 JSON-LD 结构化数据里的标题、描述和图片。
 ///
 /// 遍历所有 `<script type="application/ld+json">` 标签，找到第一个包含
@@ -173,6 +246,9 @@ pub fn extract_json_ld(document: &Html) -> Option<(Option<String>, Option<String
 pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
     let document = Html::parse_document(html);
 
+    let favicon = extract_favicon(&document, base_url);
+    let logo = extract_logo(&document, base_url);
+
     // OG tags
     if let Some(title) = meta_property(&document, "og:title") {
         return ScrapeResult {
@@ -180,7 +256,8 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
             description: meta_property(&document, "og:description")
                 .or_else(|| meta_name(&document, "description")),
             image: meta_property(&document, "og:image"),
-            favicon: extract_favicon(&document, base_url),
+            favicon,
+            logo,
             source: "og".to_string(),
             screenshot_bytes: None,
             screenshot_url: None,
@@ -194,7 +271,8 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
             description: meta_name(&document, "twitter:description")
                 .or_else(|| meta_name(&document, "description")),
             image: meta_name(&document, "twitter:image"),
-            favicon: extract_favicon(&document, base_url),
+            favicon,
+            logo,
             source: "twitter_card".to_string(),
             screenshot_bytes: None,
             screenshot_url: None,
@@ -207,7 +285,8 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
             title,
             description: desc.or_else(|| meta_name(&document, "description")),
             image,
-            favicon: extract_favicon(&document, base_url),
+            favicon,
+            logo,
             source: "json_ld".to_string(),
             screenshot_bytes: None,
             screenshot_url: None,
@@ -219,7 +298,8 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
         title: extract_title(&document),
         description: meta_name(&document, "description"),
         image: None,
-        favicon: extract_favicon(&document, base_url),
+        favicon,
+        logo,
         source: "html".to_string(),
         screenshot_bytes: None,
         screenshot_url: None,

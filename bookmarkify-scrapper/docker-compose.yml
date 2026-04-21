@@ -13,7 +13,7 @@ services:
       # 缓存条目生存时间（秒）
       CACHE_TTL_SECS: ${CACHE_TTL_SECS:-3600}
       # 可选：HTTP 代理地址，例如 http://127.0.0.1:7890，留空则直连
-      PROXY_URL: ${PROXY_URL:-}
+      PROXY_URL: ${PROXY_URL:http://127.0.0.1:7890}
       # 可选：阿里云 OSS 配置，五个变量须同时设置才生效
       OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
       OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
