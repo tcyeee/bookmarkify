@@ -23,7 +23,7 @@ WORKDIR /app
 
 COPY --from=builder /app/target/release/scraper-service .
 
-ENV CHROME_PATH=/usr/bin/chromium
+ENV CHROME_BIN=/usr/bin/chromium
 
 EXPOSE 3000
 

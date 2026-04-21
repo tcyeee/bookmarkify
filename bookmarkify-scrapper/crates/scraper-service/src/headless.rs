@@ -1,6 +1,6 @@
 use once_cell::sync::Lazy;
 use spider::configuration::{ScreenShotConfig, ScreenshotParams};
-use spider::features::chrome_common::{RequestInterceptConfiguration, WaitForDelay};
+use spider::features::chrome_common::{RequestInterceptConfiguration, WaitForIdleNetwork};
 use spider::website::Website;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -40,6 +40,17 @@ pub async fn scrape_headless(url: &str, timeout_secs: u64) -> Result<ScrapeResul
     // 获取全局锁，确保同一时刻只运行一个 Chrome 实例
     let _guard = HEADLESS_LOCK.lock().await;
 
+    // Chrome 崩溃后会遗留 SingletonLock 文件，阻止下次启动；持锁后安全清除。
+    // 同时处理 macOS 上 /var → /private/var 的 symlink，用 remove_dir_all 彻底清除 profile 目录。
+    let runner_dir = std::env::temp_dir().join("chromiumoxide-runner");
+    let singleton_lock = runner_dir.join("SingletonLock");
+    if singleton_lock.exists() {
+        if std::fs::remove_file(&singleton_lock).is_err() {
+            // 删除单个文件失败时（权限或已变为目录），直接清除整个 runner 目录
+            let _ = std::fs::remove_dir_all(&runner_dir);
+        }
+    }
+
     // 配置截图：在内存中返回字节，不写入磁盘
     let screenshot_config = ScreenShotConfig::new(
         ScreenshotParams::new(Default::default(), Some(true), None),
@@ -50,11 +61,10 @@ pub async fn scrape_headless(url: &str, timeout_secs: u64) -> Result<ScrapeResul
 
     let mut website = Website::new(url);
     website
+        .with_limit(1) // 只抓取目标页面，不跟随任何链接
         .with_stealth(true) // 启用隐身模式，降低被检测为爬虫的概率
-        .with_chrome_intercept(RequestInterceptConfiguration::new(true)) // 拦截广告/追踪请求，加快加载速度
-        .with_wait_for_delay(Some(WaitForDelay {
-            timeout: Some(Duration::from_secs(5)), // 等待 5 秒让 JS 渲染完成
-        }))
+        .with_chrome_intercept(RequestInterceptConfiguration::new(true)) // 拦截广告/追踪请求（需 chrome_intercept feature 时生效）
+        .with_wait_for_idle_network(Some(WaitForIdleNetwork::new(Some(Duration::from_secs(10))))) // 等待网络空闲（JS 渲染完成）
         .with_screenshot(Some(screenshot_config));
 
     // 在总超时限制内执行抓取，超时则返回 Timeout 错误
