@@ -5,12 +5,12 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir -p ~/.cargo && printf '[source.crates-io]\nreplace-with = "rsproxy-sparse"\n\n[source.rsproxy-sparse]\nregistry = "sparse+https://rsproxy.cn/index/"\n\n[net]\ngit-fetch-with-cli = true\n' > ~/.cargo/config.toml
+
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
-COPY vendor/ vendor/
-COPY .cargo/ .cargo/
 
-RUN cargo build -p scraper-service --release --offline
+RUN cargo build -p scraper-service --release
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
