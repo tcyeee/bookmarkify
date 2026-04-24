@@ -1,6 +1,7 @@
 services:
   bookmarkify-scraper:
     image: bookmarkify-scraper:latest
+    container_name: bookmarkify-scraper
     ports:
       - "${PORT:-3000}:3000"
     environment:
