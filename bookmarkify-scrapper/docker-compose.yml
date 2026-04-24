@@ -1,6 +1,6 @@
 services:
-  scraper:
-    build: .
+  bookmarkify-scraper:
+    image: bookmarkify-scraper:latest
     ports:
       - "${PORT:-3000}:3000"
     environment:
