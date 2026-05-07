@@ -67,16 +67,21 @@ async fn main() {
         );
     }
 
-    let proxy_url = env::var("PROXY_URL").ok();
+    let proxy_url = env::var("PROXY_URL").ok().filter(|s| !s.is_empty());
 
     let mut client_builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout_secs));
 
     if let Some(url) = proxy_url {
-        let proxy = reqwest::Proxy::all(&url)
-            .expect("PROXY_URL is not a valid proxy URL");
-        client_builder = client_builder.proxy(proxy);
-        tracing::info!("proxy enabled: {url}");
+        match reqwest::Proxy::all(&url) {
+            Ok(proxy) => {
+                client_builder = client_builder.proxy(proxy);
+                tracing::info!("proxy enabled: {url}");
+            }
+            Err(e) => {
+                tracing::warn!("PROXY_URL '{url}' is invalid, continuing without proxy: {e}");
+            }
+        }
     }
 
     let client = client_builder.build().expect("failed to build reqwest client");
@@ -177,7 +182,10 @@ async fn favicon_to_base64(url: Option<&str>, http: &reqwest::Client) -> Option<
         .and_then(|v| v.to_str().ok())
         .unwrap_or("image/png")
         .to_string();
-    let bytes = response.bytes().await.ok()?;
+    let bytes = scraper::read_body_capped(response, scraper::MAX_FAVICON_BYTES)
+        .await
+        .map_err(|e| tracing::warn!("favicon download failed for {url}: {e}"))
+        .ok()?;
     use base64::{engine::general_purpose::STANDARD, Engine};
     Some(format!("data:{content_type};base64,{}", STANDARD.encode(&bytes)))
 }
@@ -249,7 +257,11 @@ async fn scrape_handler(
             let r = if let Some(oss) = &state.oss {
                 match oss.upload_assets(r, &body.url, &state.client).await {
                     Ok(uploaded) => uploaded,
-                    Err(scraper::ScrapeError::OssFailed(msg)) => {
+                    Err(e) => {
+                        let msg = match &e {
+                            scraper::ScrapeError::OssFailed(m) => m.clone(),
+                            other => format!("{other:?}"),
+                        };
                         tracing::warn!("OSS upload failed for {}: {msg}", body.url);
                         return (
                             StatusCode::SERVICE_UNAVAILABLE,
@@ -260,11 +272,15 @@ async fn scrape_handler(
                         )
                             .into_response();
                     }
-                    Err(_) => unreachable!("upload_assets only returns OssFailed"),
                 }
             } else {
                 let favicon_b64 = favicon_to_base64(r.favicon.as_deref(), &state.client).await;
-                scraper::ScrapeResult { favicon: favicon_b64, ..r }
+                // Pre-encode screenshot once so subsequent cache hits don't re-encode.
+                let mut r = scraper::ScrapeResult { favicon: favicon_b64, ..r };
+                if let Some(bytes) = r.screenshot_bytes.take() {
+                    r.screenshot_url = Some(base64_encode(&bytes));
+                }
+                r
             };
 
             let screenshot = r.screenshot_url.clone().or_else(|| {
@@ -294,6 +310,15 @@ async fn scrape_handler(
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 Json(ErrorResponse { error: "invalid url".to_string(), detail: None }),
+            )
+                .into_response()
+        }
+
+        Err(scraper::ScrapeError::ForbiddenTarget(msg)) => {
+            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), %msg, "scrape failed: forbidden target");
+            (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse { error: "forbidden target".to_string(), detail: Some(msg) }),
             )
                 .into_response()
         }

@@ -1,104 +1,33 @@
-# CLAUDE.md - Bookmarkify Web
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-**Bookmarkify Web** (书签鸭) is the frontend for a bookmark management platform built with Nuxt.js 4 + Vue 3. It provides a browser-style launchpad where users can save, organize, and browse bookmarks with drag-and-drop, real-time updates via WebSocket, and customizable backgrounds. The UI is entirely in Chinese (Simplified).
+**Bookmarkify Web** (书签鸭) is the Nuxt 4 + Vue 3 frontend for a bookmark management platform. It presents a browser-style launchpad where users save, organize, and browse bookmarks with drag-and-drop, real-time updates via WebSocket, and customizable backgrounds. UI text, comments, and debug logs are in Chinese (Simplified) — the app targets Chinese users.
+
+The backend (Kotlin/Spring Boot) lives at `../bookmarkify-api/` on port 7001. See `api.md` for the REST contract.
 
 ## Tech Stack
 
-- **Framework:** Nuxt.js 4.2.1 (Vue 3, SSR/SPA hybrid)
-- **Language:** TypeScript 5.9.3
-- **Styling:** Tailwind CSS 4 + DaisyUI 5 (prefix: `cy-`) + Element Plus 2.11 + Sass
-- **State:** Pinia 3 with `pinia-plugin-persistedstate`
-- **Package Manager:** pnpm
-- **Build:** Vite (via Nuxt)
-- **Animation:** GSAP 3.14, Typed.js, Lenis (smooth scroll)
-- **Grid:** vuuri 0.4 (Muuri-based drag-and-drop)
-- **Utilities:** @vueuse/core, nanoid, clsx + tailwind-merge
+- **Framework:** Nuxt 4.2 (Vue 3, SSR/SPA hybrid), Vite, TypeScript 5.9
+- **Styling:** Tailwind CSS 4 + DaisyUI 5 (prefix `cy-`) + Element Plus 2.11 + Sass
+- **State:** Pinia 3 + `pinia-plugin-persistedstate` (Option Store syntax)
+- **Package manager:** pnpm (Node 18+)
+- **Notable libs:** vuuri (Muuri drag-and-drop grid), GSAP, Typed.js, Lenis, @vueuse/core, vue-command-palette, @imengyu/vue3-context-menu, @iconify/vue
 
-## Project Structure
-
-```
-bookmarkify-web/
-├── app.vue                        # Root Vue component
-├── error.vue                      # Global error page (404/500)
-├── nuxt.config.ts                 # Nuxt configuration
-├── tailwind.config.ts             # Tailwind/DaisyUI config
-├── pages/                         # File-based routing
-│   ├── index.vue                  # Main launchpad/home
-│   ├── welcome.vue                # Landing/onboarding page
-│   ├── setting.vue                # Settings page
-│   └── market.vue                 # Marketplace (stub)
-├── layouts/                       # Nuxt layouts
-│   ├── default.vue                # Bare pass-through
-│   ├── launch.vue                 # Launchpad (bg image/gradient)
-│   ├── setting.vue                # Settings (sidebar nav)
-│   └── explore.vue                # Welcome/landing
-├── components/
-│   ├── common/                    # Header, Footer, CommandPalette, AddBookmarkFab, ActionInput
-│   ├── launch/                    # LaunchItem (dispatches to cell subtypes)
-│   ├── launchpad/                 # AddOneDialog, Detail, cell/ subfolder
-│   │   └── cell/                  # Bookmark, BookmarkLogo, Folder, Function cells
-│   ├── setting/                   # Account, background, preference panels
-│   │   ├── account/               # Profile, avatar, login, verify, bind, delete
-│   │   └── background/            # Gradient config, image upload, preview
-│   ├── home/                      # TimeStr widget
-│   ├── upload/                    # Upload components
-│   ├── stunning/                  # Visual effects: DotPattern, ScrollReveal, ShimmerText, TypedText
-│   └── welcome/                   # FloatingBookmarks animation
-├── stores/                        # Pinia state management
-│   ├── auth.store.ts              # Auth state, login/logout/token refresh
-│   ├── bookmark.store.ts          # Bookmark layout tree, real-time updates
-│   ├── preference.store.ts        # User preferences, background cache
-│   ├── sys.store.ts               # System: key events, dialogs, countdown
-│   └── websocket.store.ts         # WebSocket connection, heartbeat, reconnect
-├── server/                        # Nuxt server-side utilities
-│   ├── apis/
-│   │   ├── http.ts                # HTTP client class (fetch-based, debounce, auto-reauth)
-│   │   └── index.ts               # All API endpoint functions
-│   ├── config/
-│   │   └── image.config.ts        # Image URL helpers, env-aware file URLs
-│   ├── utils/index.ts             # cn(), randomId(), limitAction(), getCurrentEnvironment()
-│   └── routes/upload/[...path].ts # Dev-only static file proxy
-├── middleware/
-│   └── auth.ts                    # Route guard: redirect unauthenticated users
-├── plugins/
-│   ├── auth.ts                    # Startup: reconnect WS, refresh user/bookmarks
-│   ├── keyListener.ts             # Global keyboard event listener
-│   └── contextMenu.ts             # Right-click context menu registration
-├── typing/                        # TypeScript type definitions
-│   ├── index.ts                   # Barrel export
-│   ├── bookmark.ts                # UserLayoutNodeVO, BookmarkShow, etc.
-│   ├── user.ts                    # UserInfo, login/captcha param types
-│   ├── enum.ts                    # All enums (HomeItemType, AuthStatus, etc.)
-│   ├── result.ts                  # Result<T> API response wrapper
-│   ├── setting.ts                 # UserPreference, BacSettingVO, etc.
-│   └── websocket.ts               # SocketMessage
-└── assets/
-    ├── css/                       # app.css, common.scss, icon.scss
-    └── fonts/                     # Jersey10-Regular.ttf
-```
-
-## Build & Run
+## Commands
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Dev server (http://localhost:3000)
-pnpm dev
-
-# Production build
+pnpm install              # also runs `nuxt prepare` via postinstall
+pnpm dev                  # http://localhost:3000 (needs backend at 127.0.0.1:7001)
 pnpm build
-
-# Preview production build
 pnpm preview
-
-# Docker (build first, then containerize)
-pnpm build && docker build -t bookmarkify-web .
+pnpm generate             # static site generation
+docker build -t bookmarkify-web .   # uses existing build output
 ```
 
-**Prerequisites:** Node.js 18+, pnpm, backend API running at `http://127.0.0.1:7001`
+There is no test runner, lint script, or typecheck script configured in `package.json`. No tests exist in the repo.
 
 ## Environment Variables
 
@@ -106,44 +35,44 @@ Copy `.env.example` to `.env`:
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `NUXT_API_BASE` | Backend REST API URL | `http://127.0.0.1:7001` |
+| `NUXT_API_BASE` | Backend REST URL | `http://127.0.0.1:7001` |
 | `NUXT_WS_BASE` | Backend WebSocket URL | `ws://localhost:7001` |
-| `NUXT_PUBLIC_SITE_URL` | Public site URL | `https://bookmarkify.cc` |
+| `NUXT_PUBLIC_SITE_URL` | Public site URL (SEO/canonical) | `https://bookmarkify.cc` |
 
-## Architecture
+## Architecture (the parts that span files)
 
-### Key Patterns
+### Anonymous-first auth
+Every visitor gets a session via `POST /auth/track` — no login required. Guest sessions "upgrade" by verifying phone or email. The auth plugin (`plugins/auth.ts`) restores the session on page load, then reconnects WebSocket and re-fetches user + bookmark data. `middleware/auth.ts` redirects unauthenticated users to `/welcome`. Token is sent via the **`satoken`** HTTP header (not `Authorization`).
 
-1. **Anonymous-first auth:** Backend auto-creates a session via `/auth/track`. Guests get a temporary token and "upgrade" by verifying phone or email.
+### Tree-based bookmark layout
+Bookmarks are a `UserLayoutNodeVO[]` tree in `bookmark.store.ts`. Node types (see `typing/enum.ts` `HomeItemType`): `BOOKMARK`, `BOOKMARK_DIR`, `FUNCTION`, `BOOKMARK_LOADING` (placeholder while the backend parses the URL). `components/launch/LaunchItem.vue` dispatches each node to the right cell component under `components/launchpad/cell/`.
 
-2. **Tree-based bookmark layout:** Bookmarks stored as `UserLayoutNodeVO[]` tree with types: `BOOKMARK`, `BOOKMARK_DIR`, `FUNCTION`, `BOOKMARK_LOADING` (placeholder during async parsing).
+### WebSocket-driven live updates
+After the user adds a URL, the backend parses the page asynchronously (Kafka) and pushes a `HOME_ITEM_UPDATE` message. `stores/websocket.store.ts` connects to `{wsBase}/ws?token={token}`, pings every 5s, and reconnects with exponential backoff (1s → 30s, max 5 attempts). On `HOME_ITEM_UPDATE`, the bookmark store **must replace nodes with new object references** to trigger Vue reactivity — see `updateOneBookmarkCell()` for the pattern. Direct nested mutation will not re-render.
 
-3. **WebSocket real-time updates:** After adding a bookmark, the backend parses the website asynchronously via Kafka, then pushes `HOME_ITEM_UPDATE` via WebSocket. The store applies the update with new object references to trigger Vue reactivity.
+### HTTP client
+All API calls go through the static `http` class in `server/apis/http.ts`. Endpoint functions live in `server/apis/index.ts` and return `Promise<t.SomeType>`.
 
-4. **Request debounce guard:** `http.withDebounce()` prevents duplicate in-flight requests within 600ms.
+- Auto-injects `satoken` header
+- On response code `101` (token expired), it auto re-issues `/auth/track` and retries the original request
+- `http.withDebounce()` deduplicates in-flight requests within a 600ms window
+- Response shape: `Result<T> { code, msg, data, ok }` — `code === 0` is success, `1xx` shows an error toast via `ElMessage.error()`, `3xx` rejects silently
+- Components should not duplicate API error toasts; the client handles them centrally
 
-5. **Background caching:** Background images are converted to DataURL and cached in localStorage. Gradients rendered via CSS `linear-gradient`.
+### Background rendering & preferences
+`preference.store.ts` drives grid cell size (60/80/100px), gap mode, page-turn behavior, title visibility, and link-open target. Background images are converted to DataURL and cached in `localStorage` for instant paint; gradients are pure CSS `linear-gradient` (no image files). Background rendering happens in `layouts/launch.vue`.
 
-6. **Preference-driven UI:** Grid cell size (60/80/100px), gap mode, page turn mode, title visibility, and open-link behavior are all driven by `preferenceStore`.
+### Layouts
+- `launch.vue` — main app (background + launchpad)
+- `setting.vue` — settings sidebar
+- `explore.vue` — `/welcome` landing
+- `default.vue` — pass-through
 
-### API Layer
-
-All API calls go through the static `http` class (`server/apis/http.ts`):
-- Auto token injection via `satoken` header
-- Auto re-login on token expiry (response code 101)
-- Request deduplication with 600ms debounce window
-- Centralized error display via `ElMessage.error()`
-
-Response format: `Result<T> { code, msg, data, ok }` — code 0 = success, 1xx = user error, 3xx = silent error.
-
-### WebSocket
-
-- URL: `{wsBase}/ws?token={token}`
-- Heartbeat: ping every 5 seconds
-- Reconnect: exponential backoff (1s → 30s max, 5 attempts max)
-- Message type: `HOME_ITEM_UPDATE` (bookmark cell refresh)
+Pages declare layout via `definePageMeta({ layout: '...' })`.
 
 ## Path Aliases
+
+Configured in both `nuxt.config.ts` and `tsconfig.json`:
 
 | Alias | Target |
 |---|---|
@@ -152,48 +81,26 @@ Response format: `Result<T> { code, msg, data, ok }` — code 0 = success, 1xx =
 | `@config` | `server/config` |
 | `@typing` | `typing` |
 | `@utils` | `server/utils` |
-| `~/` | Project root (Nuxt standard) |
 
-## Coding Conventions
+Pinia stores, `@vueuse/core` composables, and Vue components are auto-imported by Nuxt — don't add manual imports for them.
 
-### Vue Components
-- All use `<script setup lang="ts">` (Composition API)
-- Props: `defineProps<{...}>()`
-- Emits: `defineEmits<{...}>()`
-- File naming: `PascalCase.vue`
+## Conventions
 
-### Pinia Stores
-- Named exports: `useXxxStore()` pattern
-- Option Store syntax (not Setup Store / Composition API)
-- Persistence: `persist: true` or explicit `persist: { storage: piniaPluginPersistedstate.localStorage() }`
-- WebSocket store does NOT persist
+- **Vue:** `<script setup lang="ts">` only; `defineProps<{...}>()` / `defineEmits<{...}>()`; files `PascalCase.vue`.
+- **Stores:** `camelCase.store.ts`, exported as `useXxxStore()`, **Option Store** syntax (not Setup Store). Persistence via `persist: true` or explicit `persist: { storage: piniaPluginPersistedstate.localStorage() }`. The WebSocket store must NOT persist.
+- **Types:** Define in `typing/`, barrel-export from `typing/index.ts`. Cross-module type access uses `import * as t from '@typing'`.
+- **DaisyUI:** the prefix is `cy-` (e.g. `cy-btn`, `cy-modal`, `cy-tooltip`, `cy-alert`). Prefer DaisyUI components over raw Tailwind / custom CSS when one fits. Themes: `light` (default), `dark` (prefers-dark), `cupcake`. Dark mode toggles `.dark` on `<body>` and `data-theme="dark"`.
+- **Class composition:** use `cn()` from `@utils` (`twMerge(clsx(...))`).
+- **Toasts:** Element Plus `ElMessage.error/success/info` — do not roll a custom toast.
+- **Prettier:** 130 char width, single quotes, no semicolons, bracket same line.
 
-### Styling
-- DaisyUI components use `cy-` prefix: `cy-btn`, `cy-modal`, `cy-input`
-- **Prefer DaisyUI components** for all UI elements (https://daisyui.com) — use `cy-btn`, `cy-badge`, `cy-alert`, `cy-tooltip`, etc. before reaching for raw Tailwind or custom CSS
-- Tailwind utilities used directly in templates
-- Dark mode via `.dark` class on `<body>` + `data-theme="dark"`
-- Custom `cn()` utility for conditional classes: `twMerge(clsx(...))`
-- DaisyUI themes configured: `light` (default), `dark` (prefers-dark), `cupcake`
+## Plugins (load order in `nuxt.config.ts`)
 
-### API Functions
-- Descriptive names: `bookmarksShowAll()`, `captchaVerifyEmail()`, `updateUserPreference()`
-- Typed returns: `Promise<t.SomeType>`
-- HTTP client is a static class (not a composable or plugin)
+`iconify.ts` → `keyListener.ts` → `contextMenu.ts` → `auth.ts`. The auth plugin runs last because it depends on the WebSocket connection and key listener being ready.
 
-### Code Style
-- Prettier: 130 char width, single quotes, no semicolons, bracket same line
-- UI text, comments, and debug logs are in Chinese
-- TypeScript stores: `camelCase.store.ts`
+## Notes
 
-### Error Handling
-- API errors display via `ElMessage.error()` (Element Plus)
-- Token expiry (code 101) triggers auto re-login
-- Codes 1xx show error messages; codes 3xx silently reject
-
-## Important Notes
-
-- **No tests exist** — no test framework or test files in this project
-- The `public/upload/` directory is for dev-only local file serving; production uses `https://file.bookmarkify.cc`
-- `market.vue` is a stub page (not yet implemented)
-- The backend API project lives at `../bookmarkify-api/` (Kotlin/Spring Boot, port 7001)
+- `public/upload/` and `server/routes/upload/[...path].ts` are dev-only static file proxies; production serves files from `https://file.bookmarkify.cc` (see `server/config/image.config.ts`).
+- `pages/market.vue` is a stub; not yet implemented.
+- `AGENTS.md` documents per-domain agent roles (UI, state, API, styling, auth) with deeper conventions for each — useful when scoping a task to one area.
+- `api.md` describes the backend API surface this client consumes.
