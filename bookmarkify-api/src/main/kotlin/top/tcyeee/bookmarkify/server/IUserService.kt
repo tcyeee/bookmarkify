@@ -107,27 +107,6 @@ interface IUserService : IService<UserEntity> {
     fun updateUsername(username: String): Boolean
 
     /**
-     * 修改手机号
-     * @param phone 手机号
-     * @return 是否修改成功
-     */
-    fun changePhone(phone: String): Boolean
-
-    /**
-     * 校验手机号
-     * @param code 验证码
-     * @return 是否校验成功
-     */
-    fun checkPhone(code: Int): Boolean
-
-    /**
-     * 修改邮箱
-     * @param mail 邮箱
-     * @return 是否修改成功
-     */
-    fun changeMail(mail: String): Boolean
-
-    /**
      * 删除用户
      * @param params 删除参数
      * @return 是否删除成功

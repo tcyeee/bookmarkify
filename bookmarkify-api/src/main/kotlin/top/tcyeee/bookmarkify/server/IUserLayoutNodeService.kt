@@ -44,5 +44,12 @@ interface IUserLayoutNodeService : IService<UserLayoutNodeEntity> {
      * @param uid 用户ID
      */
     fun moveNode(params: MoveNodeParams, uid: String): UserLayoutNodeVO
+
+    /**
+     * 删除当前用户名下的桌面节点及其关联的自定义书签
+     * @param layoutNodeIds 要删除的布局节点 ID 列表
+     * @param uid 当前用户 ID（用于权限校验，不属于该用户的节点不会被删除）
+     */
+    fun deleteByIds(layoutNodeIds: List<String>, uid: String)
 }
 

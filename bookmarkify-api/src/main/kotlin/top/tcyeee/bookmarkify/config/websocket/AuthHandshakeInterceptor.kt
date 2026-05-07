@@ -4,6 +4,7 @@ import org.springframework.http.server.ServerHttpRequest
 import org.springframework.http.server.ServerHttpResponse
 import org.springframework.web.socket.WebSocketHandler
 import org.springframework.web.socket.server.HandshakeInterceptor
+import org.springframework.web.util.UriComponentsBuilder
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.utils.StpKit
@@ -21,11 +22,14 @@ class AuthHandshakeInterceptor : HandshakeInterceptor {
         wsHandler: WebSocketHandler,
         attributes: MutableMap<String, Any>
     ): Boolean = true.also {
-        request.uri.query
-            ?.substringAfter("token=")?.takeWhile { it != '&' }
-            ?.let { StpKit.USER.getLoginIdByToken(it) }
-            ?.apply { attributes["uid"] = this }
+        // 用 UriComponentsBuilder 严格按 query param 名称取值，避免 substringAfter("token=")
+        // 把 ?xtoken=foo 之类误识为 token。
+        val token = UriComponentsBuilder.fromUri(request.uri).build().queryParams.getFirst("token")
+            ?.takeIf { it.isNotBlank() }
             ?: throw CommonException(ErrorType.E201)
+        val uid = StpKit.USER.getLoginIdByToken(token)
+            ?: throw CommonException(ErrorType.E201)
+        attributes["uid"] = uid
     }
 
     override fun afterHandshake(

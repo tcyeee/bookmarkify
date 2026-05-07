@@ -2,10 +2,11 @@ package top.tcyeee.bookmarkify.utils
 
 import cn.dev33.satoken.session.SaSession
 import cn.hutool.core.util.IdUtil
-import jakarta.servlet.http.Cookie
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
+import top.tcyeee.bookmarkify.config.exception.CommonException
+import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 
 /**
@@ -16,7 +17,7 @@ import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
  */
 object BaseUtils {
     /* 用户相关方法 */
-    fun uid(): String = user()?.uid ?: throw NullPointerException()
+    fun uid(): String = user()?.uid ?: throw CommonException(ErrorType.E101)
     fun user(): UserSessionInfo? = StpKit.USER.session.get(SaSession.USER)?.let { UserSessionInfo(it) }
 
     fun sessionRegisterDeviceId(
@@ -24,9 +25,14 @@ object BaseUtils {
     ): String {
         // 在session中获取&生成设备ID
         val deviceId = request.cookies?.find { it.name == config.uidCookieName }?.value ?: IdUtil.fastUUID()
-        // 在session中存储设备ID
-        Cookie(config.uidCookieName, deviceId).apply { maxAge = config.uidCookieMaxAge; path = config.uidCookiePath }
-            .also { cookie -> response.addCookie(cookie) }
+        // 直接写 Set-Cookie header：HttpOnly 阻断 JS 读取；Secure 仅在 HTTPS 下下发；
+        // SameSite=Lax 防止跨站 CSRF（jakarta Cookie 没有原生 SameSite setter，所以走 header）。
+        val sameSiteSecure = if (request.isSecure) "; Secure" else ""
+        response.addHeader(
+            "Set-Cookie",
+            "${config.uidCookieName}=$deviceId; Max-Age=${config.uidCookieMaxAge}; " +
+                    "Path=${config.uidCookiePath}; HttpOnly; SameSite=Lax$sameSiteSecure"
+        )
         return deviceId
     }
 }

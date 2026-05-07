@@ -59,7 +59,8 @@ class UserServiceImpl(
      * @return 用户基础信息 + 头像 + 设置 （没有TOKEN）
      */
     override fun me(uid: String): UserInfoShow =
-        requireNotNull(getById(uid)).let { UserInfoShow(it, it.avatarUrlWithSign()) }
+        (getById(uid) ?: throw CommonException(ErrorType.E215))
+            .let { UserInfoShow(it, it.avatarUrlWithSign()) }
 
     fun UserEntity.avatarUrlWithSign(): String? {
         if (StrUtil.isBlank(this.avatarFileId)) return null
@@ -295,15 +296,8 @@ class UserServiceImpl(
     override fun updateUsername(username: String): Boolean =
         ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::nickName, username).update()
 
-    override fun changePhone(phone: String): Boolean =
-        ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::phone, phone).set(UserEntity::verified, true)
-            .update()
-
-    override fun checkPhone(code: Int): Boolean =
-        ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::email, code).update()
-
-    override fun changeMail(mail: String): Boolean =
-        ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::email, mail).update()
+    // 旧的 changePhone / checkPhone / changeMail 实现绕过验证码、且 checkPhone 把数字验证码写进 email 字段，已删除。
+    // 改绑/绑定走 verifySms / verifyEmail 走验证码校验路径。
 
     override fun adminListAll(params: UserSearchParams): IPage<UserAdminVO> =
         baseMapper.selectPage(params.toPage(), params.toWrapper()).convert { UserAdminVO(it) }

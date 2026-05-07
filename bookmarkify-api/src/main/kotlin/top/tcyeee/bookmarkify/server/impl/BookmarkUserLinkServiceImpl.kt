@@ -7,7 +7,6 @@ import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
-import java.util.function.Consumer
 
 /**
  * @author tcyeee
@@ -15,22 +14,27 @@ import java.util.function.Consumer
  */
 @Service
 class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<BookmarkUserLinkMapper, BookmarkUserLink>() {
-    override fun updateOne(params: BookmarkUpdatePrams): Boolean {
-        ktUpdate().eq(BookmarkUserLink::id, params.linkId).set(BookmarkUserLink::title, params.title)
-            .set(BookmarkUserLink::description, params.description).update()
-        return false
-    }
+    override fun updateOne(params: BookmarkUpdatePrams, uid: String): Boolean =
+        ktUpdate().eq(BookmarkUserLink::id, params.linkId)
+            .eq(BookmarkUserLink::uid, uid)
+            .set(BookmarkUserLink::title, params.title)
+            .set(BookmarkUserLink::description, params.description)
+            .update()
 
     @Transactional(rollbackFor = [Exception::class])
     override fun copy(sourceUid: String, targetUid: String) {
         val source: List<BookmarkUserLink> =
             ktQuery().eq(BookmarkUserLink::uid, sourceUid).eq(BookmarkUserLink::deleted, java.lang.Boolean.FALSE).list()
-        source.forEach(Consumer { item: BookmarkUserLink -> item.uid = targetUid })
-        this.saveBatch(source)
+        // 用 data class copy 生成全新主键的副本，避免 saveBatch 用源主键触发冲突或误更新
+        val copies = source.map { it.copy(id = cn.hutool.core.util.IdUtil.fastUUID(), uid = targetUid) }
+        this.saveBatch(copies)
     }
 
-    override fun deleteOneByNodeId(layoutNodeId: String) {
-        ktUpdate().eq(BookmarkUserLink::layoutNodeId, layoutNodeId).remove()
+    override fun deleteOneByNodeId(layoutNodeId: String, uid: String) {
+        ktUpdate()
+            .eq(BookmarkUserLink::layoutNodeId, layoutNodeId)
+            .eq(BookmarkUserLink::uid, uid)
+            .remove()
     }
 
     override fun resetBookmarkId(uid: String, userLinkId: String, bookmarkId: String): Boolean =

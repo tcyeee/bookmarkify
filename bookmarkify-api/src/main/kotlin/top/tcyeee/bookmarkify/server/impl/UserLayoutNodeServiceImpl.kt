@@ -3,6 +3,8 @@ package top.tcyeee.bookmarkify.server.impl
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import top.tcyeee.bookmarkify.config.exception.CommonException
+import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.CreateDirParams
 import top.tcyeee.bookmarkify.entity.MoveNodeParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
@@ -12,6 +14,7 @@ import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
 import top.tcyeee.bookmarkify.server.IBookmarkFunctionService
+import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
 import top.tcyeee.bookmarkify.utils.SocketUtils
@@ -26,6 +29,7 @@ import top.tcyeee.bookmarkify.utils.SocketUtils
 class UserLayoutNodeServiceImpl(
     private val preferenceService: IUserPreferenceService,
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
+    private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val bookmarkFunctionService: IBookmarkFunctionService,
 ) : IUserLayoutNodeService, ServiceImpl<UserLayoutNodeMapper, UserLayoutNodeEntity>() {
 
@@ -79,6 +83,15 @@ class UserLayoutNodeServiceImpl(
 
     @Transactional
     override fun moveNode(params: MoveNodeParams, uid: String): UserLayoutNodeVO {
+        // 校验目标文件夹归属：必须是当前用户的 BOOKMARK_DIR；null 表示根目录，无需校验
+        if (params.dirNodeId != null) {
+            ktQuery()
+                .eq(UserLayoutNodeEntity::id, params.dirNodeId)
+                .eq(UserLayoutNodeEntity::uid, uid)
+                .eq(UserLayoutNodeEntity::type, NodeTypeEnum.BOOKMARK_DIR)
+                .one() ?: throw CommonException(ErrorType.E102, "目标文件夹不存在或无权访问")
+        }
+
         // 记录原父节点，用于移出时处理旧文件夹
         val oldParentId = ktQuery()
             .eq(UserLayoutNodeEntity::id, params.nodeId)
@@ -99,21 +112,27 @@ class UserLayoutNodeServiceImpl(
                 .eq(UserLayoutNodeEntity::uid, uid)
                 .list()
 
-            if (remaining.size == 1) {
-                // 文件夹仅剩一个节点：将其移到根目录，继承文件夹的 sort，然后删除文件夹
-                val lastChild = remaining.first()
-                val folderSort = preferenceService.queryByUid(uid).sortMap[oldParentId]
-                ktUpdate()
-                    .eq(UserLayoutNodeEntity::id, lastChild.id)
-                    .eq(UserLayoutNodeEntity::uid, uid)
-                    .set(UserLayoutNodeEntity::parentId, null)
-                    .update()
-                if (folderSort != null) {
-                    preferenceService.sort(uid, mapOf(lastChild.id to folderSort))
+            when {
+                remaining.isEmpty() -> {
+                    // 文件夹已为空：直接删除，避免遗留空文件夹
+                    removeById(oldParentId)
+                    return layout(uid).also { SocketUtils.homeItemUpdate(uid, it) }
                 }
-                removeById(oldParentId)
-                // 结构变化较大，推送完整布局
-                return layout(uid).also { SocketUtils.homeItemUpdate(uid, it) }
+                remaining.size == 1 -> {
+                    // 文件夹仅剩一个节点：将其移到根目录，继承文件夹的 sort，然后删除文件夹
+                    val lastChild = remaining.first()
+                    val folderSort = preferenceService.queryByUid(uid).sortMap[oldParentId]
+                    ktUpdate()
+                        .eq(UserLayoutNodeEntity::id, lastChild.id)
+                        .eq(UserLayoutNodeEntity::uid, uid)
+                        .set(UserLayoutNodeEntity::parentId, null)
+                        .update()
+                    if (folderSort != null) {
+                        preferenceService.sort(uid, mapOf(lastChild.id to folderSort))
+                    }
+                    removeById(oldParentId)
+                    return layout(uid).also { SocketUtils.homeItemUpdate(uid, it) }
+                }
             }
         }
 
@@ -135,11 +154,27 @@ class UserLayoutNodeServiceImpl(
             SocketUtils.homeItemUpdate(uid, buildDirVO(oldParentId))
         }
 
-        // 移入文件夹：推送目标文件夹并返回；移到根目录：返回旧文件夹（已推送）
-        return if (params.dirNodeId != null) {
-            buildDirVO(params.dirNodeId).also { SocketUtils.homeItemUpdate(uid, it) }
-        } else {
-            buildDirVO(oldParentId!!)
+        // 三种情形：移入文件夹 / 仅从一个文件夹移到根目录 / 根→根（无结构变化）
+        return when {
+            params.dirNodeId != null -> buildDirVO(params.dirNodeId).also { SocketUtils.homeItemUpdate(uid, it) }
+            oldParentId != null -> buildDirVO(oldParentId)
+            else -> layout(uid)
+        }
+    }
+
+    @Transactional
+    override fun deleteByIds(layoutNodeIds: List<String>, uid: String) {
+        if (layoutNodeIds.isEmpty()) return
+        // 先按 uid 过滤出当前用户拥有的节点 ID，避免越权删除他人数据
+        val ownedIds = ktQuery()
+            .`in`(UserLayoutNodeEntity::id, layoutNodeIds)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .list()
+            .map { it.id }
+        if (ownedIds.isEmpty()) return
+        ownedIds.forEach { id ->
+            removeById(id)
+            bookmarkUserLinkService.deleteOneByNodeId(id, uid)
         }
     }
 

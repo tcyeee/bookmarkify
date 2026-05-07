@@ -38,6 +38,7 @@ class LoginController(private val userService: UserServiceImpl) {
     fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo =
         userService.track(request, response)
 
+    @Throttle
     @SaIgnore
     @PostMapping("/login")
     @Operation(summary = "账号密码登录，账号和密码均为Base64编码，密码为MD5加密后的字符串")
