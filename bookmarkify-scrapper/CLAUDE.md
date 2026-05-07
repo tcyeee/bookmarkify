@@ -8,8 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build
 cargo build -p scraper-service --release
 
-# Run (API_KEY required)
-API_KEY=your-secret-key cargo run -p scraper-service
+# Run
+cargo run -p scraper-service
 
 # Test (unit tests only, no browser required)
 cargo test -p scraper-service
@@ -23,18 +23,21 @@ cargo test -p scraper-service <test_name>
 # Lint / format
 cargo clippy -p scraper-service
 cargo fmt
+
+# Docker
+docker build -t bookmarkify-scraper .
+docker-compose up -d
 ```
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `API_KEY` | (required) | Bearer token for auth — listed in docs but **not yet enforced in code** |
 | `PORT` | 3000 | HTTP listen port |
 | `REQUEST_TIMEOUT_SECS` | 10 | Layer 1 HTTP timeout |
-| `HEADLESS_TIMEOUT_SECS` | 30 | Layer 2 Chrome timeout |
+| `HEADLESS_TIMEOUT_SECS` | 30 | Layer 2 Chrome total timeout |
+| `HEADLESS_IDLE_WAIT_SECS` | 10 | Layer 2 network-idle wait for JS rendering |
 | `CACHE_TTL_SECS` | 3600 | Cache entry lifetime |
-| `RATE_LIMIT_RPS` | 10 | Per-API-key requests/sec — **not yet enforced in code** |
 | `PROXY_URL` | (optional) | HTTP proxy URL, e.g. `http://127.0.0.1:7890`. Does **not** apply to OSS uploads (oss-rust-sdk creates its own client). |
 | `OSS_ACCESS_KEY_ID` | (optional) | Alibaba Cloud Access Key ID. All five OSS_* vars must be set to enable OSS upload. |
 | `OSS_ACCESS_KEY_SECRET` | (optional) | Alibaba Cloud Access Key Secret |
@@ -42,6 +45,7 @@ cargo fmt
 | `OSS_ENDPOINT` | (optional) | OSS endpoint, e.g. `oss-cn-hangzhou.aliyuncs.com` |
 | `OSS_BASE_URL` | (optional) | Public URL prefix for returned OSS links, e.g. `https://<bucket>.oss-cn-hangzhou.aliyuncs.com` |
 | `RUST_LOG` | info | Tracing filter |
+| `CHROME_BIN` | (auto) | Path to Chromium binary for headless mode; Docker sets this to `/usr/bin/chromium`. Required for local headless runs if `chromium` is not on PATH. |
 
 ## Architecture
 
@@ -77,7 +81,7 @@ POST /scrape
 **`headless.rs`** — Layer 2 headless Chrome via spider-rs.
 - Global `HEADLESS_LOCK: Mutex<()>` enforces serial Chrome execution (only one browser instance at a time).
 - Clears `chromiumoxide-runner/SingletonLock` before each run to recover from prior Chrome crashes.
-- Features: stealth mode, request interception, idle-network wait, PNG screenshot capture into `screenshot_bytes`.
+- Features: stealth mode, request interception, idle-network wait (configurable via `HEADLESS_IDLE_WAIT_SECS`, separate from `HEADLESS_TIMEOUT_SECS`), PNG screenshot capture into `screenshot_bytes`.
 - Integration tests are `#[ignore]` — run explicitly when Chrome is available.
 
 **`cache.rs`** — In-memory LRU cache via moka.
@@ -91,11 +95,15 @@ POST /scrape
 - OSS object keys are SHA-256 of the source URL, so the same source always maps to the same key (no deduplication check, unconditional PUT).
 - `PROXY_URL` / `REQUEST_TIMEOUT_SECS` do not apply to OSS operations.
 
+## Deployment Notes
+
+- `docker-compose.yml` hardcodes `PROXY_URL: 'http://127.0.0.1:7890'` — remove or override this for environments without a local proxy.
+- The Dockerfile supports `--build-arg USE_CN_MIRROR=1` to enable `rsproxy.cn` (Cargo) and `mirrors.aliyun.com` (apt) for faster builds in China. Defaults to `0` (standard mirrors) for CI/CD compatibility.
+
 ## API
 
 ```
 POST /scrape
-Authorization: Bearer <API_KEY>
 Content-Type: application/json
 
 { "url": "https://example.com", "headless": false }
