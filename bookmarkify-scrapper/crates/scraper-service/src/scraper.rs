@@ -27,6 +27,8 @@ pub struct ScrapeResult {
 pub enum ScrapeError {
     /// URL 格式非法，无法解析
     InvalidUrl,
+    /// 目标主机被 SSRF 防护策略拒绝（私有/回环/链路本地等）
+    ForbiddenTarget(String),
     /// HTTP 请求或无头浏览器操作超时
     Timeout,
     /// HTTP 请求失败（网络错误、非 2xx 响应等），附带错误描述
@@ -43,6 +45,117 @@ pub fn validate_url_scheme(url: &reqwest::Url) -> Result<(), ScrapeError> {
     } else {
         Err(ScrapeError::InvalidUrl)
     }
+}
+
+/// 流式读取响应体，超过 `max_bytes` 时立即中止并返回错误。
+///
+/// 先检查 `Content-Length`：若声明值已超限则直接拒绝；
+/// 否则按 chunk 累积，累计大小超限同样拒绝。
+/// 失败时返回 `Err(描述字符串)`，由调用方包装为合适的 `ScrapeError`。
+pub async fn read_body_capped(
+    response: reqwest::Response,
+    max_bytes: usize,
+) -> Result<Vec<u8>, String> {
+    use futures_util::StreamExt;
+
+    if let Some(len) = response.content_length() {
+        if len as usize > max_bytes {
+            return Err(format!(
+                "response too large: declared {len} bytes, limit {max_bytes}"
+            ));
+        }
+    }
+
+    let mut stream = response.bytes_stream();
+    let mut buf: Vec<u8> = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("read failed: {e}"))?;
+        if buf.len() + chunk.len() > max_bytes {
+            return Err(format!(
+                "response too large: exceeded {max_bytes} bytes during read"
+            ));
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    Ok(buf)
+}
+
+/// HTML / 图片 / favicon 的最大允许字节数。
+pub const MAX_HTML_BYTES: usize = 5 * 1024 * 1024;
+pub const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+pub const MAX_FAVICON_BYTES: usize = 2 * 1024 * 1024;
+
+/// 判断 IP 是否属于禁止抓取的范围（loopback/私有/链路本地/广播/未指定/文档/CGN/ULA 等）。
+pub fn is_forbidden_ip(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            let o = v4.octets();
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+                // 100.64.0.0/10 — Carrier-Grade NAT（RFC 6598）
+                || (o[0] == 100 && (o[1] & 0xC0) == 64)
+        }
+        std::net::IpAddr::V6(v6) => {
+            if v6.is_loopback() || v6.is_unspecified() || v6.is_multicast() {
+                return true;
+            }
+            let seg0 = v6.segments()[0];
+            // fc00::/7 unique-local
+            if (seg0 & 0xfe00) == 0xfc00 {
+                return true;
+            }
+            // fe80::/10 link-local
+            if (seg0 & 0xffc0) == 0xfe80 {
+                return true;
+            }
+            // IPv4-mapped IPv6 (::ffff:a.b.c.d) — apply IPv4 rules
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return is_forbidden_ip(&std::net::IpAddr::V4(v4));
+            }
+            false
+        }
+    }
+}
+
+/// 在发起任何网络请求前校验目标主机：解析 host 并拒绝指向私有/回环/链路本地的地址。
+/// 设置环境变量 `SSRF_ALLOW_PRIVATE=1` 可关闭检查（用于内网集成测试等可信场景）。
+pub async fn validate_target_host(url: &reqwest::Url) -> Result<(), ScrapeError> {
+    if std::env::var("SSRF_ALLOW_PRIVATE").ok().as_deref() == Some("1") {
+        return Ok(());
+    }
+    let host = url.host_str().ok_or(ScrapeError::InvalidUrl)?;
+
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return if is_forbidden_ip(&ip) {
+            Err(ScrapeError::ForbiddenTarget(format!("blocked ip literal: {ip}")))
+        } else {
+            Ok(())
+        };
+    }
+
+    let port = url.port_or_known_default().unwrap_or(443);
+    let addrs = tokio::net::lookup_host(format!("{host}:{port}"))
+        .await
+        .map_err(|e| ScrapeError::FetchFailed(format!("dns lookup failed: {e}")))?;
+
+    let mut had_any = false;
+    for addr in addrs {
+        had_any = true;
+        if is_forbidden_ip(&addr.ip()) {
+            return Err(ScrapeError::ForbiddenTarget(format!(
+                "host {host} resolves to blocked address {}",
+                addr.ip()
+            )));
+        }
+    }
+    if !had_any {
+        return Err(ScrapeError::FetchFailed(format!("dns lookup returned no addresses for {host}")));
+    }
+    Ok(())
 }
 
 /// 从解析后的 HTML 文档中读取指定 `property` 属性的 `<meta>` 标签内容。
@@ -116,16 +229,44 @@ pub fn extract_title(document: &Html) -> Option<String> {
 /// favicon 的绝对 URL 字符串，或 `None`（URL join 失败时）。
 pub fn extract_favicon(document: &Html, base_url: &reqwest::Url) -> Option<String> {
     let selector = Selector::parse(r#"link[rel~="icon"]"#).ok()?;
-    let href = document
-        .select(&selector)
-        .next()
-        .and_then(|e| e.value().attr("href"));
 
-    let favicon_url = match href {
-        Some(h) => base_url.join(h).ok()?,
-        None => base_url.join("/favicon.ico").ok()?,
-    };
-    Some(favicon_url.to_string())
+    // 优先选择 sizes 属性面积最大的 icon；多个无 sizes 时退回到第一个。
+    let mut best_sized: Option<(u32, String)> = None;
+    let mut first_unsized: Option<String> = None;
+    for elem in document.select(&selector) {
+        let Some(href) = elem.value().attr("href") else { continue };
+        let sizes = elem.value().attr("sizes").unwrap_or("");
+        let area = sizes
+            .split_whitespace()
+            .filter_map(|s| {
+                let mut parts = s.splitn(2, 'x');
+                let w: u32 = parts.next()?.parse().ok()?;
+                let h: u32 = parts.next()?.parse().ok()?;
+                Some(w.saturating_mul(h))
+            })
+            .max()
+            .unwrap_or(0);
+
+        if area > 0 {
+            if best_sized.as_ref().is_none_or(|(a, _)| area > *a) {
+                if let Ok(url) = base_url.join(href) {
+                    best_sized = Some((area, url.to_string()));
+                }
+            }
+        } else if first_unsized.is_none() {
+            if let Ok(url) = base_url.join(href) {
+                first_unsized = Some(url.to_string());
+            }
+        }
+    }
+
+    if let Some((_, url)) = best_sized {
+        return Some(url);
+    }
+    if let Some(url) = first_unsized {
+        return Some(url);
+    }
+    base_url.join("/favicon.ico").ok().map(|u| u.to_string())
 }
 
 /// 从解析后的 HTML 文档中提取网站 Logo 的绝对 URL。
@@ -185,7 +326,7 @@ pub fn extract_logo(document: &Html, base_url: &reqwest::Url) -> Option<String> 
                 })
                 .max()
                 .unwrap_or(0);
-            if area > 0 && best.as_ref().map_or(true, |(a, _)| area > *a) {
+            if area > 0 && best.as_ref().is_none_or(|(a, _)| area > *a) {
                 if let Ok(url) = base_url.join(href) {
                     best = Some((area, url.to_string()));
                 }
@@ -216,20 +357,59 @@ pub fn extract_logo(document: &Html, base_url: &reqwest::Url) -> Option<String> 
 /// 没有有效 JSON-LD 数据时返回 `None`。
 pub fn extract_json_ld(document: &Html) -> Option<(Option<String>, Option<String>, Option<String>)> {
     let selector = Selector::parse(r#"script[type="application/ld+json"]"#).ok()?;
+
+    // 优先匹配代表当前页面的类型（WebPage/Article/Product 等），
+    // 避免被 Organization/BreadcrumbList 等"周边"实体抢占标题。
+    const PREFERRED: &[&str] = &[
+        "WebPage", "WebSite", "Article", "NewsArticle", "BlogPosting",
+        "Product", "VideoObject", "Recipe", "Event",
+    ];
+
+    fn extract_fields(json: &serde_json::Value) -> Option<(Option<String>, Option<String>, Option<String>)> {
+        let title = json.get("name").and_then(|v| v.as_str()).map(String::from);
+        title.as_ref()?;
+        let desc = json.get("description").and_then(|v| v.as_str()).map(String::from);
+        let image = json.get("image").and_then(|v| {
+            v.as_str().map(String::from).or_else(|| {
+                v.get("url").and_then(|u| u.as_str()).map(String::from)
+            })
+        });
+        Some((title, desc, image))
+    }
+
+    fn type_matches(json: &serde_json::Value, preferred: &[&str]) -> bool {
+        match json.get("@type") {
+            Some(serde_json::Value::String(s)) => preferred.contains(&s.as_str()),
+            Some(serde_json::Value::Array(arr)) => arr.iter().any(|v| {
+                v.as_str().is_some_and(|s| preferred.contains(&s))
+            }),
+            _ => false,
+        }
+    }
+
+    // 收集所有可解析的 JSON-LD 节点（含 @graph 内的子节点）。
+    let mut candidates: Vec<serde_json::Value> = Vec::new();
     for element in document.select(&selector) {
         let text = element.text().collect::<String>();
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-            let title = json.get("name").and_then(|v| v.as_str()).map(String::from);
-            if title.is_none() {
-                continue;
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else { continue };
+        if let Some(graph) = json.get("@graph").and_then(|v| v.as_array()) {
+            candidates.extend(graph.iter().cloned());
+        }
+        candidates.push(json);
+    }
+
+    // 第一遍：偏好类型 + 有 name
+    for json in &candidates {
+        if type_matches(json, PREFERRED) {
+            if let Some(fields) = extract_fields(json) {
+                return Some(fields);
             }
-            let desc = json.get("description").and_then(|v| v.as_str()).map(String::from);
-            let image = json
-                .get("image")
-                .and_then(|v| v.as_str().map(String::from).or_else(|| {
-                    v.get("url").and_then(|u| u.as_str()).map(String::from)
-                }));
-            return Some((title, desc, image));
+        }
+    }
+    // 第二遍：任何带 name 的节点
+    for json in &candidates {
+        if let Some(fields) = extract_fields(json) {
+            return Some(fields);
         }
     }
     None
@@ -333,6 +513,7 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
 pub async fn scrape(url: &str, client: &reqwest::Client) -> Result<ScrapeResult, ScrapeError> {
     let parsed = reqwest::Url::parse(url).map_err(|_| ScrapeError::InvalidUrl)?;
     validate_url_scheme(&parsed)?;
+    validate_target_host(&parsed).await?;
 
     let response = client
         .get(parsed.clone())
@@ -353,10 +534,10 @@ pub async fn scrape(url: &str, client: &reqwest::Client) -> Result<ScrapeResult,
         .error_for_status()
         .map_err(|e| ScrapeError::FetchFailed(e.to_string()))?;
 
-    let body = response
-        .text()
+    let bytes = read_body_capped(response, MAX_HTML_BYTES)
         .await
-        .map_err(|e| ScrapeError::FetchFailed(e.to_string()))?;
+        .map_err(ScrapeError::FetchFailed)?;
+    let body = String::from_utf8_lossy(&bytes);
 
     Ok(parse_metadata(&body, &parsed))
 }
@@ -416,6 +597,19 @@ mod tests {
     }
 
     #[test]
+    fn extract_favicon_picks_largest_sized() {
+        let d = doc(r#"<html><head>
+            <link rel="icon" sizes="16x16" href="/small.ico"/>
+            <link rel="icon" sizes="64x64" href="/big.ico"/>
+            <link rel="icon" sizes="32x32" href="/medium.ico"/>
+        </head></html>"#);
+        assert_eq!(
+            extract_favicon(&d, &base()),
+            Some("https://example.com/big.ico".to_string())
+        );
+    }
+
+    #[test]
     fn extract_json_ld_extracts_name() {
         let d = doc(r#"<html><head><script type="application/ld+json">{"@type":"Article","name":"LD Title","description":"LD Desc"}</script></head></html>"#);
         let result = extract_json_ld(&d);
@@ -423,6 +617,40 @@ mod tests {
         let (title, desc, _) = result.unwrap();
         assert_eq!(title, Some("LD Title".to_string()));
         assert_eq!(desc, Some("LD Desc".to_string()));
+    }
+
+    #[test]
+    fn extract_json_ld_prefers_article_over_organization() {
+        // Organization comes first in source order; Article should still win because @type is preferred.
+        let d = doc(r#"<html><head>
+            <script type="application/ld+json">{"@type":"Organization","name":"Acme Corp"}</script>
+            <script type="application/ld+json">{"@type":"Article","name":"The Real Page Title"}</script>
+        </head></html>"#);
+        let (title, _, _) = extract_json_ld(&d).expect("should extract");
+        assert_eq!(title, Some("The Real Page Title".to_string()));
+    }
+
+    #[test]
+    fn extract_json_ld_falls_back_to_organization_when_only_one() {
+        let d = doc(r#"<html><head>
+            <script type="application/ld+json">{"@type":"Organization","name":"Acme Corp"}</script>
+        </head></html>"#);
+        let (title, _, _) = extract_json_ld(&d).expect("should extract");
+        assert_eq!(title, Some("Acme Corp".to_string()));
+    }
+
+    #[test]
+    fn extract_json_ld_handles_graph_array() {
+        let d = doc(r#"<html><head>
+            <script type="application/ld+json">{
+                "@graph": [
+                    {"@type":"Organization","name":"Acme Corp"},
+                    {"@type":"WebPage","name":"Page Title"}
+                ]
+            }</script>
+        </head></html>"#);
+        let (title, _, _) = extract_json_ld(&d).expect("should extract");
+        assert_eq!(title, Some("Page Title".to_string()));
     }
 
     #[test]
@@ -442,5 +670,89 @@ mod tests {
         let result = parse_metadata(html, &base());
         assert_eq!(result.title, Some("Plain Title".to_string()));
         assert_eq!(result.source, "html");
+    }
+
+    #[test]
+    fn validate_url_scheme_rejects_file_scheme() {
+        let url = reqwest::Url::parse("file:///etc/passwd").unwrap();
+        assert!(matches!(validate_url_scheme(&url), Err(ScrapeError::InvalidUrl)));
+    }
+
+    #[test]
+    fn validate_url_scheme_accepts_https() {
+        let url = reqwest::Url::parse("https://example.com").unwrap();
+        assert!(validate_url_scheme(&url).is_ok());
+    }
+
+    #[test]
+    fn forbidden_ip_blocks_loopback_v4() {
+        let ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
+        assert!(is_forbidden_ip(&ip));
+    }
+
+    #[test]
+    fn forbidden_ip_blocks_aws_metadata() {
+        let ip: std::net::IpAddr = "169.254.169.254".parse().unwrap();
+        assert!(is_forbidden_ip(&ip));
+    }
+
+    #[test]
+    fn forbidden_ip_blocks_rfc1918() {
+        for ip in ["10.0.0.1", "172.16.0.1", "192.168.1.1"] {
+            let ip: std::net::IpAddr = ip.parse().unwrap();
+            assert!(is_forbidden_ip(&ip), "{ip} should be blocked");
+        }
+    }
+
+    #[test]
+    fn forbidden_ip_blocks_cgn() {
+        let ip: std::net::IpAddr = "100.64.0.1".parse().unwrap();
+        assert!(is_forbidden_ip(&ip));
+    }
+
+    #[test]
+    fn forbidden_ip_allows_public_v4() {
+        let ip: std::net::IpAddr = "8.8.8.8".parse().unwrap();
+        assert!(!is_forbidden_ip(&ip));
+    }
+
+    #[test]
+    fn forbidden_ip_blocks_v6_loopback() {
+        let ip: std::net::IpAddr = "::1".parse().unwrap();
+        assert!(is_forbidden_ip(&ip));
+    }
+
+    #[test]
+    fn forbidden_ip_blocks_v6_link_local() {
+        let ip: std::net::IpAddr = "fe80::1".parse().unwrap();
+        assert!(is_forbidden_ip(&ip));
+    }
+
+    #[test]
+    fn forbidden_ip_blocks_v6_unique_local() {
+        let ip: std::net::IpAddr = "fc00::1".parse().unwrap();
+        assert!(is_forbidden_ip(&ip));
+    }
+
+    #[test]
+    fn forbidden_ip_blocks_v4_mapped_in_v6() {
+        let ip: std::net::IpAddr = "::ffff:127.0.0.1".parse().unwrap();
+        assert!(is_forbidden_ip(&ip));
+    }
+
+    #[tokio::test]
+    async fn validate_target_host_blocks_loopback_literal() {
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        let url = reqwest::Url::parse("http://127.0.0.1:8080/").unwrap();
+        let r = validate_target_host(&url).await;
+        assert!(matches!(r, Err(ScrapeError::ForbiddenTarget(_))), "got {r:?}");
+    }
+
+    #[tokio::test]
+    async fn validate_target_host_blocks_aws_metadata_literal() {
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        let url = reqwest::Url::parse("http://169.254.169.254/").unwrap();
+        let r = validate_target_host(&url).await;
+        assert!(matches!(r, Err(ScrapeError::ForbiddenTarget(_))), "got {r:?}");
     }
 }

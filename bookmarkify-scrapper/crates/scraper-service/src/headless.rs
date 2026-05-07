@@ -5,7 +5,7 @@ use spider::website::Website;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
-use crate::scraper::{parse_metadata, validate_url_scheme, ScrapeError, ScrapeResult};
+use crate::scraper::{parse_metadata, validate_target_host, validate_url_scheme, ScrapeError, ScrapeResult};
 
 /// 全局互斥锁，保证同一时刻只有一个无头 Chrome 操作在运行。
 ///
@@ -31,9 +31,16 @@ static HEADLESS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 pub async fn scrape_headless(url: &str, timeout_secs: u64, idle_wait_secs: u64) -> Result<ScrapeResult, ScrapeError> {
     let parsed = reqwest::Url::parse(url).map_err(|_| ScrapeError::InvalidUrl)?;
     validate_url_scheme(&parsed)?;
+    validate_target_host(&parsed).await?;
 
-    // 获取全局锁，确保同一时刻只运行一个 Chrome 实例
-    let _guard = HEADLESS_LOCK.lock().await;
+    // 获取全局锁，确保同一时刻只运行一个 Chrome 实例。
+    // 锁等待时间不超过总超时预算，避免请求队列无限堆积。
+    let _guard = tokio::time::timeout(
+        Duration::from_secs(timeout_secs),
+        HEADLESS_LOCK.lock(),
+    )
+    .await
+    .map_err(|_| ScrapeError::Timeout)?;
 
     // Chrome 崩溃后会遗留 SingletonLock 文件，阻止下次启动；持锁后安全清除。
     // 同时处理 macOS 上 /var → /private/var 的 symlink，用 remove_dir_all 彻底清除 profile 目录。
@@ -58,7 +65,7 @@ pub async fn scrape_headless(url: &str, timeout_secs: u64, idle_wait_secs: u64) 
     website
         .with_limit(1) // 只抓取目标页面，不跟随任何链接
         .with_stealth(true) // 启用隐身模式，降低被检测为爬虫的概率
-        .with_chrome_intercept(RequestInterceptConfiguration::new(true)) // 拦截广告/追踪请求（需 chrome_intercept feature 时生效）
+        .with_chrome_intercept(RequestInterceptConfiguration::new(true)) // 拦截广告/追踪请求（依赖 spider 的 chrome_intercept feature）
         .with_wait_for_idle_network(Some(WaitForIdleNetwork::new(Some(Duration::from_secs(idle_wait_secs))))) // 等待网络空闲（JS 渲染完成）
         .with_screenshot(Some(screenshot_config));
 

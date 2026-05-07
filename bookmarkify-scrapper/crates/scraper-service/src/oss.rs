@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use sha2::{Digest, Sha256};
 
-use crate::scraper::ScrapeError;
+use crate::scraper::{read_body_capped, ScrapeError, MAX_FAVICON_BYTES, MAX_IMAGE_BYTES};
 
 fn url_origin(url: &str) -> String {
     reqwest::Url::parse(url)
@@ -54,8 +54,39 @@ impl OssClient {
     /// Uploads bytes to OSS at `key`. Keys are derived from the source URL (SHA-256),
     /// so the same source URL always maps to the same OSS key. PUT is unconditional —
     /// no deduplication check is performed (oss-rust-sdk 0.3 has no HEAD API).
+    /// 失败时按指数退避重试最多 3 次。
     /// Returns the full public URL on success.
     async fn upload_bytes(
+        &self,
+        key: &str,
+        bytes: &[u8],
+        content_type: &str,
+    ) -> Result<String, ScrapeError> {
+        const MAX_ATTEMPTS: u32 = 3;
+        let mut last_err: Option<ScrapeError> = None;
+
+        for attempt in 0..MAX_ATTEMPTS {
+            if attempt > 0 {
+                let backoff_ms = 200u64 * (1 << (attempt - 1));
+                tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+            }
+
+            match self.upload_bytes_once(key, bytes, content_type).await {
+                Ok(url) => return Ok(url),
+                Err(e) => {
+                    tracing::warn!(
+                        "OSS upload attempt {}/{MAX_ATTEMPTS} for key {key} failed: {e:?}",
+                        attempt + 1
+                    );
+                    last_err = Some(e);
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| ScrapeError::OssFailed("upload retry exhausted".to_string())))
+    }
+
+    async fn upload_bytes_once(
         &self,
         key: &str,
         bytes: &[u8],
@@ -124,13 +155,20 @@ impl OssClient {
         result.screenshot_url = screenshot_result?;
         result.image = image_result?;
         result.logo = logo_result?;
-        result.favicon = favicon_result?;
+        // Favicon failures are non-fatal: a missing favicon should not 503 the whole request.
+        result.favicon = match favicon_result {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("favicon download failed for {page_url}: {e:?}");
+                None
+            }
+        };
 
         Ok(result)
     }
 
     /// Downloads the image at `url` and returns it as a base64 data URL (`data:<mime>;base64,...`).
-    /// Returns `None` if `url` is `None`; `Some(data_url)` on success.
+    /// Returns `None` if `url` is `None` or download fails — favicon errors are non-fatal.
     async fn fetch_as_base64(
         url: Option<&str>,
         http: &reqwest::Client,
@@ -158,8 +196,7 @@ impl OssClient {
             .unwrap_or("image/png")
             .to_string();
 
-        let bytes = response
-            .bytes()
+        let bytes = read_body_capped(response, MAX_FAVICON_BYTES)
             .await
             .map_err(|e| ScrapeError::OssFailed(format!("favicon read failed: {e}")))?;
 
@@ -205,8 +242,7 @@ impl OssClient {
             )));
         }
 
-        let bytes = response
-            .bytes()
+        let bytes = read_body_capped(response, MAX_IMAGE_BYTES)
             .await
             .map_err(|e| ScrapeError::OssFailed(format!("image read failed: {e}")))?;
 
