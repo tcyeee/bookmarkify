@@ -53,8 +53,7 @@ async function onDelete() {
   const bookmarkStore = useBookmarkStore()
   try {
     await bookmarksDel([props.nodeId])
-    const index = bookmarkStore.layoutNode.findIndex((it) => it.id === props.nodeId)
-    if (index !== -1) bookmarkStore.layoutNode.splice(index, 1)
+    bookmarkStore.deleteOneBookmarkCell(props.nodeId)
   } catch (error) {
     console.error('[Bookmark] 删除加载中书签失败', error)
   }

@@ -26,18 +26,28 @@ export const useBookmarkStore = defineStore('homeItems', {
       const children = res?.children ?? []
       this.layoutNode = this.sortData(children)
       console.log(`[DEBUG]桌面布局全部信息更新:${this.layoutNode?.length}`)
-      if (this.layoutNode === undefined) throw new Error('Bookmarks is undefined')
       return this.layoutNode
     },
 
     // 在书签列表中临时插入一个“加载中”的占位项
     addEmpty(item: UserLayoutNodeVO) {
       const placeholder: UserLayoutNodeVO = {
-        children: [],
         ...item,
+        children: item.children ?? [],
         type: HomeItemType.BOOKMARK_LOADING,
       }
       this.layoutNode?.push(placeholder)
+    },
+
+    // 递归删除一个节点(可能位于根或文件夹内),并保持响应式引用更新
+    deleteOneBookmarkCell(id: string) {
+      const removeRecursive = (nodes: Array<UserLayoutNodeVO>): Array<UserLayoutNodeVO> =>
+        nodes
+          .filter((n) => n.id !== id)
+          .map((n) =>
+            n.children && n.children.length > 0 ? { ...n, children: removeRecursive(n.children) } : n,
+          )
+      this.layoutNode = removeRecursive(this.layoutNode ?? [])
     },
 
     // 局部更新某一个桌面布局Item（通常由 WebSocket 推送触发），包含子节点
