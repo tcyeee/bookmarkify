@@ -30,8 +30,9 @@ export const usePreferenceStore = defineStore('preference', {
     preference: undefined as UserPreference | null | undefined,
     // 用户头像文件
     avatar: undefined as UserFile | undefined,
-    // 背景图片的 DataURL 缓存，优先从 localStorage 读取
-    backgroundImageDataUrl: (import.meta.client ? localStorage.getItem('backgroundImageDataUrl') : null) as string | null,
+    // 背景图片的 DataURL 缓存。初始为 null,避免 SSR/客户端 hydration 不一致;
+    // 真正的值由持久化插件还原 / hydrateBackgroundCache() 从 localStorage 读取。
+    backgroundImageDataUrl: null as string | null,
     // 平台提供的默认背景资源
     defaultImageBackgroundsList: [] as UserFile[],
     defaultGradientBackgroundsList: [] as BacGradientVO[],
@@ -112,6 +113,14 @@ export const usePreferenceStore = defineStore('preference', {
 
     setImageBackgroundUploading(value: boolean) {
       this.imageBackgroundUploading = value
+    },
+
+    // 客户端首屏 hydration 完成后调用,从 localStorage 恢复背景缓存
+    hydrateBackgroundCache() {
+      if (!import.meta.client) return
+      if (this.backgroundImageDataUrl) return
+      const cached = localStorage.getItem('backgroundImageDataUrl')
+      if (cached) this.backgroundImageDataUrl = cached
     },
 
     async cacheBackgroundImage(file?: any) {

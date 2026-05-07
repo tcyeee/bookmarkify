@@ -81,6 +81,7 @@ import { ref, watch, computed } from 'vue'
 import { useMagicKeys, onKeyStroke } from '@vueuse/core'
 import { Command } from 'vue-command-palette'
 import {
+  AuthStatusEnum,
   BookmarkImageSize,
   BookmarkGapMode,
   BookmarkOpenMode,
@@ -154,14 +155,14 @@ rootGroups.set('常用操作', [
 rootGroups.set('路由', [
   {
     value: 'go-index',
-    label: `前往首页${authStore.authStatus === 'NONE' ? ' (请先登陆)' : ''}`,
+    label: `前往首页${authStore.authStatus === AuthStatusEnum.NONE ? ' (请先登陆)' : ''}`,
     run: () => {
       navigate('/')
     },
   },
   {
     value: 'go-setting',
-    label: `前往设置${authStore.authStatus === 'NONE' ? ' (请先登陆)' : ''}`,
+    label: `前往设置${authStore.authStatus === AuthStatusEnum.NONE ? ' (请先登陆)' : ''}`,
     run: () => {
       navigate('/setting')
     },

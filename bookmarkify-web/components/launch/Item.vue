@@ -23,8 +23,7 @@ async function delOne(item: UserLayoutNodeVO) {
   if (props.toggleDrag) return
   try {
     await bookmarksDel([item.id])
-    const index = bookmarkStore.layoutNode.findIndex((it) => it.id === item.id)
-    if (index !== -1) bookmarkStore.layoutNode.splice(index, 1)
+    bookmarkStore.deleteOneBookmarkCell(item.id)
   } catch (error) {
     console.error('[LaunchItem] 删除书签失败', error)
   }

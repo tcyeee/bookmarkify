@@ -326,7 +326,8 @@ async function createFolder(draggedId: string, targetId: string) {
   const targetNode = nodes.find((n) => n.id === targetId)
   if (!draggedNode || !targetNode) return
 
-  const sort = nodes.findIndex((n) => n.id === draggedId)
+  const draggedIndex = nodes.findIndex((n) => n.id === draggedId)
+  const sort = draggedIndex === -1 ? nodes.length : draggedIndex
 
   try {
     const folderNode = await bookmarksCreateDir([draggedId, targetId], '新建文件夹', sort)

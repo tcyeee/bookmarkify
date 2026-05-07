@@ -228,7 +228,7 @@ function onEmailInput(e: Event) {
 
 function onEmailCodeInput(e: Event) {
   const target = e.target as HTMLInputElement
-  const onlyDigits = target.value.replace(/\D/g, '').slice(0, 6)
+  const onlyDigits = target.value.replace(/\D/g, '').slice(0, 4)
   target.value = onlyDigits
   form.emailCode = onlyDigits
   if (emailCodeError.value) {

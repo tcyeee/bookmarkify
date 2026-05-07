@@ -11,6 +11,10 @@ export const useWebSocketStore = defineStore('socket', {
   state: () => ({
     // 当前 WebSocket 实例
     socket: undefined as WebSocket | undefined,
+    // 当前连接所使用的 token,用于在 token 变化时强制重建连接
+    currentToken: '' as string,
+    // 是否为主动断开(主动断开后不会自动重连)
+    manualClose: false,
     // 预留的消息处理映射（按类型分发回调）
     actions: new Map() as Map<SocketTypes, Function>,
     // 心跳定时器句柄
@@ -33,8 +37,17 @@ export const useWebSocketStore = defineStore('socket', {
     connect(token: string) {
       // 仅在客户端环境运行
       if (import.meta.server) return
-      // 已有连接时不重复连接
-      if (this.socket) return
+      // 已有连接且 token 未变化:无需重连
+      if (this.socket && this.currentToken === token) return
+      // token 变更或显式重连:先关闭旧连接,避免遗留过期 socket
+      if (this.socket) {
+        this.manualClose = true
+        try { this.socket.close() } catch { /* noop */ }
+        this.socket = undefined
+      }
+
+      this.manualClose = false
+      this.currentToken = token
 
       const url: string = `${useRuntimeConfig().public.wsBase}/ws?token=${token}`
       console.log(`[WebSocket] 连接: ${url}`)
@@ -46,12 +59,13 @@ export const useWebSocketStore = defineStore('socket', {
         this.isConnected = false
       }
 
-      // 连接关闭处理
+      // 连接关闭处理:非主动断开则尝试重连
       this.socket.onclose = () => {
         console.log('[WebSocket] 连接关闭')
         this.socket = undefined
         this.isConnected = false
-        this.stopHeartbeat() // 停止心跳
+        this.stopHeartbeat()
+        if (!this.manualClose) this.reconnect()
       }
 
       // 连接成功处理
@@ -62,9 +76,17 @@ export const useWebSocketStore = defineStore('socket', {
         this.startHeartbeat() // 开启心跳检测
       }
 
-      // 接收消息处理
+      // 接收消息处理:服务端 pong 等心跳帧不是 JSON,需先过滤
       this.socket.onmessage = (event) => {
-        const message = JSON.parse(event.data) as SocketMessage
+        const raw = event.data
+        if (typeof raw !== 'string' || raw === 'pong' || raw === 'ping') return
+        let message: SocketMessage
+        try {
+          message = JSON.parse(raw) as SocketMessage
+        } catch (err) {
+          console.warn('[WebSocket] 收到非 JSON 消息,已忽略:', raw)
+          return
+        }
         console.log(`[WebSocket] 收到消息:${message.type}`)
         if (message.type === SocketTypes.HOME_ITEM_UPDATE) {
           const bookmarkStore = useBookmarkStore()
@@ -108,17 +130,29 @@ export const useWebSocketStore = defineStore('socket', {
 
         const authStore = useAuthStore()
         const token: string = authStore.account?.token ?? ''
-        this.connect(token) // 重新连接
+        if (!token) return
+        // 重连前清掉缓存 token,确保 connect 真的会建立新连接
+        this.currentToken = ''
+        this.connect(token)
       }, delay)
     },
 
     // 主动断开连接并清空 socket
     disconnect() {
       if (import.meta.server) return
+      this.manualClose = true
+      if (this.reconnectTimeout) {
+        clearTimeout(this.reconnectTimeout)
+        this.reconnectTimeout = undefined
+      }
+      this.stopHeartbeat()
       if (this.socket) {
-        this.socket.close()
+        try { this.socket.close() } catch { /* noop */ }
         this.socket = undefined
       }
+      this.currentToken = ''
+      this.isConnected = false
+      this.reconnectAttempts = 0
     },
   },
 })

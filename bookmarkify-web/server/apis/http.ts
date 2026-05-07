@@ -34,30 +34,29 @@ export default class http {
 
     if (!authStore.account?.token) await authStore.loginOrRegister()
 
-    // 创建 FormData
     const formData = new FormData()
     formData.append('file', file)
 
-    // 创建请求
+    const url = useRuntimeConfig().public.apiBase + path
     console.log(`[API] UPLOAD::${path}`)
-    const token = authStore.account?.token ?? ''
-    const request: Request = new Request(useRuntimeConfig().public.apiBase + path, {
-      headers: { satoken: token },
-      body: formData,
-      method: 'POST',
-    })
 
-    return this.withDebounce(`UPLOAD:${request.url}`, async () => {
+    const exec = async (retried: boolean): Promise<any> => {
+      const token = authStore.account?.token ?? ''
       try {
-        const response = await fetch(request)
-        const data = await response.json()
-        return resultCheck(data as Result<object>, request)
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { satoken: token },
+          body: formData,
+        })
+        const data = (await response.json()) as Result<object>
+        return await handleResult(data, () => exec(true), retried)
       } catch (error) {
-        // @ts-ignore
         if (error instanceof TypeError && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
         return Promise.reject(error)
       }
-    })
+    }
+
+    return this.withDebounce(`UPLOAD:${url}`, () => exec(false))
   }
 
   static async start(path: string, method: string, params?: any): Promise<any> {
@@ -66,44 +65,45 @@ export default class http {
     // 除了Login，其他都需要token
     if (method != 'GET' && !path.startsWith('/auth/') && !authStore.account?.token) await authStore.loginOrRegister()
 
-    // 创建请求
     console.log(`[API] ${method}::${path}`)
     if (method == 'GET' && params) path += `?${new URLSearchParams(params).toString()}`
-    const body = method == 'POST' ? JSON.stringify(params) : undefined
-    const request: Request = new Request(useRuntimeConfig().public.apiBase + path, {
-      headers: { 'Content-Type': 'application/json', satoken: authStore.account?.token ?? '' },
-      body: body,
-      method: method,
-    })
+    const body = method !== 'GET' && params != null ? JSON.stringify(params) : undefined
+    const url = useRuntimeConfig().public.apiBase + path
 
-    return this.withDebounce(`${method}:${request.url}:${body ?? ''}`, async () => {
+    // 关键修复:每次请求都构造新的 fetch 调用,使用最新 token
+    // 旧实现复用同一 Request 对象,导致 POST body 流被消费后无法重试,
+    // 且重试路径直接返回 Response 而未走 resultCheck 解析。
+    const exec = async (retried: boolean): Promise<any> => {
+      const token = authStore.account?.token ?? ''
       try {
-        const response = await fetch(request)
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json', satoken: token },
+          body,
+        })
         const text = await response.text()
-        if (!text) return Promise.resolve(null)
-        const data = JSON.parse(text)
-        return resultCheck(data as Result<object>, request)
+        if (!text) return null
+        const data = JSON.parse(text) as Result<object>
+        return await handleResult(data, () => exec(true), retried)
       } catch (error) {
-        // @ts-ignore
         if (error instanceof TypeError && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
         return Promise.reject(error)
       }
-    })
+    }
+
+    return this.withDebounce(`${method}:${url}:${body ?? ''}`, () => exec(false))
   }
 }
 
 // 对返回结果进行检查
-async function resultCheck(result: Result<object>, request: Request): Promise<any> {
-  if (request.method === 'OPTIONS') return Promise.resolve(null)
-  if (result.ok) return Promise.resolve(result.data)
-  // 如果遇到token失效,则重新登录
-  if ([101].includes(result.code)) {
+async function handleResult(result: Result<object>, retry: () => Promise<any>, retried: boolean): Promise<any> {
+  if (result.ok) return result.data
+
+  // 如果遇到token失效,则重新登录后用新 token 重试一次(限一次,避免循环)
+  if (result.code === 101 && !retried) {
     const authStore = useAuthStore()
     const account: UserInfo = await authStore.loginOrRegister()
-    if (account.token) {
-      request.headers.set('satoken', account.token)
-      return await fetch(request)
-    }
+    if (account.token) return retry()
   }
 
   // 如果result.code是“1”开头，则需要提示
