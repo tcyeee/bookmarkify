@@ -4,6 +4,13 @@ use sha2::{Digest, Sha256};
 
 use crate::scraper::ScrapeError;
 
+fn url_origin(url: &str) -> String {
+    reqwest::Url::parse(url)
+        .ok()
+        .map(|u| format!("{}://{}", u.scheme(), u.host_str().unwrap_or("")))
+        .unwrap_or_default()
+}
+
 pub struct OssClient {
     key_id: String,
     key_secret: String,
@@ -133,10 +140,7 @@ impl OssClient {
             None => return Ok(None),
         };
 
-        let referer = reqwest::Url::parse(url)
-            .ok()
-            .map(|u| format!("{}://{}", u.scheme(), u.host_str().unwrap_or("")))
-            .unwrap_or_default();
+        let referer = url_origin(url);
 
         let response = http
             .get(url)
@@ -166,7 +170,7 @@ impl OssClient {
 
     /// Downloads the image at `url` (with a Referer header to bypass hotlink protection),
     /// then uploads to OSS. Returns `None` if `url` is `None`; `Some(oss_url)` on success.
-    pub async fn upload_url_asset(
+    pub(crate) async fn upload_url_asset(
         &self,
         url: Option<&str>,
         http: &reqwest::Client,
@@ -176,11 +180,7 @@ impl OssClient {
             None => return Ok(None),
         };
 
-        // Derive Referer from the URL's origin to bypass simple hotlink checks
-        let referer = reqwest::Url::parse(url)
-            .ok()
-            .map(|u| format!("{}://{}", u.scheme(), u.host_str().unwrap_or("")))
-            .unwrap_or_default();
+        let referer = url_origin(url);
 
         let response = http
             .get(url)

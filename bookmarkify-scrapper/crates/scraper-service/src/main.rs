@@ -22,6 +22,8 @@ struct AppState {
     client: reqwest::Client,
     /// 无头浏览器单次抓取的最大等待时间（秒），对应环境变量 `HEADLESS_TIMEOUT_SECS`
     headless_timeout_secs: u64,
+    /// 网络空闲等待时间（秒），对应环境变量 `HEADLESS_IDLE_WAIT_SECS`
+    headless_idle_wait_secs: u64,
     /// 基于 URL 的抓取结果内存缓存
     cache: Arc<ScrapeCache>,
     /// OSS 客户端，用于将截图和图片上传到对象存储（可选）
@@ -33,17 +35,16 @@ struct AppState {
 /// ## 环境变量
 /// | 变量名 | 默认值 | 说明 |
 /// |---|---|---|
-/// | `API_KEY` | 必填 | Bearer Token 鉴权密钥 |
 /// | `REQUEST_TIMEOUT_SECS` | 10 | HTTP 请求超时（秒） |
 /// | `HEADLESS_TIMEOUT_SECS` | 30 | 无头浏览器超时（秒） |
+/// | `HEADLESS_IDLE_WAIT_SECS` | 10 | 网络空闲等待时间（秒），用于等待 JS 渲染完成 |
 /// | `CACHE_TTL_SECS` | 3600 | 缓存条目存活时间（秒） |
-/// | `RATE_LIMIT_RPS` | 10 | 每个 API Key 的每秒请求上限 |
 /// | `PROXY_URL` | (无默认) | HTTP 代理地址，例如 `http://127.0.0.1:7890`，不设则直连 |
 /// | `PORT` | 3000 | 监听端口 |
 ///
 /// ## 路由
-/// - `GET /health`：健康检查，无需鉴权
-/// - `POST /scrape`：抓取入口，需要 Bearer Token 鉴权 + 速率限制
+/// - `GET /health`：健康检查
+/// - `POST /scrape`：抓取入口
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -53,23 +54,18 @@ async fn main() {
         )
         .init();
 
-    let timeout_secs: u64 = env::var("REQUEST_TIMEOUT_SECS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(10);
-    let headless_timeout_secs: u64 = env::var("HEADLESS_TIMEOUT_SECS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(30);
-    let cache_ttl_secs: u64 = env::var("CACHE_TTL_SECS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(3600);
+    let timeout_secs: u64 = env_or("REQUEST_TIMEOUT_SECS", 10);
+    let headless_timeout_secs: u64 = env_or("HEADLESS_TIMEOUT_SECS", 30);
+    let headless_idle_wait_secs: u64 = env_or("HEADLESS_IDLE_WAIT_SECS", 10);
+    let cache_ttl_secs: u64 = env_or("CACHE_TTL_SECS", 3600);
     let cache = Arc::new(ScrapeCache::new(cache_ttl_secs));
-    let port: u16 = env::var("PORT")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(3000);
+    let port: u16 = env_or("PORT", 3000);
+
+    if headless_idle_wait_secs >= headless_timeout_secs {
+        tracing::warn!(
+            "HEADLESS_IDLE_WAIT_SECS ({headless_idle_wait_secs}) >= HEADLESS_TIMEOUT_SECS ({headless_timeout_secs}): headless scrapes will always timeout"
+        );
+    }
 
     let proxy_url = env::var("PROXY_URL").ok();
 
@@ -92,7 +88,7 @@ async fn main() {
         tracing::info!("OSS upload disabled (OSS_* env vars not configured)");
     }
 
-    let state = AppState { client, headless_timeout_secs, cache, oss };
+    let state = AppState { client, headless_timeout_secs, headless_idle_wait_secs, cache, oss };
 
     let app = Router::new()
         .route("/health", get(health_handler))
@@ -102,8 +98,10 @@ async fn main() {
 
     let addr = format!("0.0.0.0:{port}");
     tracing::info!("scraper-service listening on {addr}");
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await
+        .expect("failed to bind TCP listener");
+    axum::serve(listener, app).await
+        .expect("server error");
 }
 
 /// 健康检查处理器。
@@ -155,6 +153,10 @@ struct ErrorResponse {
     /// 可选的详细错误信息（如网络错误消息）
     #[serde(skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
+}
+
+fn env_or<T: std::str::FromStr>(key: &str, default: T) -> T {
+    env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
 }
 
 fn base64_encode(bytes: &[u8]) -> String {
@@ -212,7 +214,6 @@ async fn scrape_handler(
         let screenshot = cached.screenshot_url.clone().or_else(|| {
             cached.screenshot_bytes.as_ref().map(|b| base64_encode(b))
         });
-        // favicon is stored in cache as a base64 data URL (already converted on first fetch)
         tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), source = cached.source, "cache hit");
         return Json(ScrapeResponse {
             title: cached.title.clone(),
@@ -229,13 +230,13 @@ async fn scrape_handler(
 
     let result = if body.headless.unwrap_or(false) {
         tracing::info!(domain, "scraping (layer2/headless)");
-        headless::scrape_headless(&body.url, state.headless_timeout_secs).await
+        headless::scrape_headless(&body.url, state.headless_timeout_secs, state.headless_idle_wait_secs).await
     } else {
         tracing::info!(domain, "scraping (layer1)");
         match scraper::scrape(&body.url, &state.client).await {
             Ok(r) if r.title.is_none() => {
                 tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "layer1 no title, falling back to layer2");
-                headless::scrape_headless(&body.url, state.headless_timeout_secs).await
+                headless::scrape_headless(&body.url, state.headless_timeout_secs, state.headless_idle_wait_secs).await
             }
             other => other,
         }

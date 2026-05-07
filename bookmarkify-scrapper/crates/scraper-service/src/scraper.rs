@@ -37,6 +37,14 @@ pub enum ScrapeError {
     OssFailed(String),
 }
 
+pub fn validate_url_scheme(url: &reqwest::Url) -> Result<(), ScrapeError> {
+    if matches!(url.scheme(), "http" | "https") {
+        Ok(())
+    } else {
+        Err(ScrapeError::InvalidUrl)
+    }
+}
+
 /// 从解析后的 HTML 文档中读取指定 `property` 属性的 `<meta>` 标签内容。
 ///
 /// 例如读取 `<meta property="og:title" content="My Title"/>` 时
@@ -324,13 +332,14 @@ pub fn parse_metadata(html: &str, base_url: &reqwest::Url) -> ScrapeResult {
 /// - `FetchFailed`：网络错误或 HTTP 错误状态码
 pub async fn scrape(url: &str, client: &reqwest::Client) -> Result<ScrapeResult, ScrapeError> {
     let parsed = reqwest::Url::parse(url).map_err(|_| ScrapeError::InvalidUrl)?;
+    validate_url_scheme(&parsed)?;
 
     let response = client
         .get(parsed.clone())
         .header(
             "User-Agent",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
-             AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+             AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
         )
         .send()
         .await
