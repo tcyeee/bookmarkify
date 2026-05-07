@@ -19,8 +19,7 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
     fun onMessage(record: ConsumerRecord<String, String>) {
         log.info("[Kafka] 收到消息: key=${DigestUtil.md5Hex(record.toString())} message=${record.value()}")
         val obj = runCatching { JSONUtil.parseObj(record.value()) }.getOrElse {
-            log.warn("[Kafka] 无法解析消息为JSON: ${it.message}")
-            it.printStackTrace()
+            log.warn("[Kafka] 无法解析消息为JSON: msg={}", it.message, it)
             return
         }
         runCatching {
@@ -33,7 +32,8 @@ class KafkaMessageListener(private val bookmarkService: IBookmarkService) {
                 else -> throw CommonException(ErrorType.E231)
             }
         }.getOrElse {
-            log.warn("[Kafka] err: ${obj.getStr("action")}")
+            // 打全栈以便排查；auto-commit=true 时这里出错消息不会重投，靠日志兜底
+            log.error("[Kafka] action={} failed: {}", obj.getStr("action"), it.message, it)
             return
         }
     }

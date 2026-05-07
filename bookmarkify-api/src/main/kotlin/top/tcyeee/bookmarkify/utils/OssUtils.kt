@@ -132,7 +132,7 @@ class OssUtils {
                         bookmarkId = bookmarkId,
                         size = logoInfo.size,
                         width = logoInfo.width,
-                        height = logoInfo.width,
+                        height = logoInfo.height,
                         suffix = FileUtil.extName(logoInfo.url) ?: "png",
                         isOgImg = false
                     )
@@ -147,7 +147,24 @@ class OssUtils {
          */
         fun restoreImg(fileType: FileType, url: String, bookmarkId: String): ImgInfo {
             log.debug("[restoreImg] 开始拉取远程图片: fileType={}, url={}, bookmarkId={}", fileType, url, bookmarkId)
-            val connection = runCatching { URI.create(url).toURL().openConnection() }
+            // SSRF 防护：仅允许 http/https，且解析后的 IP 不能是回环/链路本地/任意地址/RFC1918 内网
+            val parsedUrl = runCatching { URI.create(url).toURL() }
+                .getOrElse { throw CommonException(ErrorType.E223, it.message) }
+            val scheme = parsedUrl.protocol?.lowercase()
+            if (scheme != "http" && scheme != "https") {
+                throw CommonException(ErrorType.E223, "scheme:$scheme")
+            }
+            val host = parsedUrl.host?.takeIf { it.isNotBlank() }
+                ?: throw CommonException(ErrorType.E223, "host:empty")
+            val addr = runCatching { java.net.InetAddress.getByName(host) }
+                .getOrElse { throw CommonException(ErrorType.E223, "dns:$host") }
+            if (addr.isAnyLocalAddress || addr.isLoopbackAddress
+                || addr.isLinkLocalAddress || addr.isSiteLocalAddress
+            ) {
+                throw CommonException(ErrorType.E223, "private:$host")
+            }
+
+            val connection = runCatching { parsedUrl.openConnection() }
                 .getOrElse { throw CommonException(ErrorType.E223, it.message) }
                 .apply { connectTimeout = 5000; readTimeout = 5000 }
 

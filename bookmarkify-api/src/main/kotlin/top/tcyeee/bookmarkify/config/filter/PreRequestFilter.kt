@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentLinkedDeque
 import org.slf4j.LoggerFactory
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpStatus
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
@@ -60,6 +61,26 @@ class PreRequestFilter(private val objectMapper: ObjectMapper) : Filter {
         filterChain.doFilter(request, response)
     }
 
+    /**
+     * 周期性清理：丢弃过期时间戳，并把没有任何有效请求的 token 整条移除，
+     * 避免 WINDOW_MAP 随轮换 token 无界增长（OOM 风险）。
+     */
+    @Scheduled(fixedRate = CLEANUP_INTERVAL_MILLIS)
+    fun evictStaleEntries() {
+        val now = System.currentTimeMillis()
+        val iter = WINDOW_MAP.entries.iterator()
+        while (iter.hasNext()) {
+            val deque = iter.next().value
+            synchronized(deque) {
+                while (true) {
+                    val head = deque.peekFirst() ?: break
+                    if (now - head > WINDOW_MILLIS) deque.pollFirst() else break
+                }
+                if (deque.isEmpty()) iter.remove()
+            }
+        }
+    }
+
     private fun isThrottled(token: String): Boolean {
         val now = System.currentTimeMillis()
         val deque = WINDOW_MAP.computeIfAbsent(token) { ConcurrentLinkedDeque() }
@@ -78,6 +99,7 @@ class PreRequestFilter(private val objectMapper: ObjectMapper) : Filter {
         private const val TOKEN_HEADER = "satoken"
         private const val WINDOW_MILLIS = 1000L
         private const val MAX_REQUESTS_PER_WINDOW = 20
+        private const val CLEANUP_INTERVAL_MILLIS = 60_000L
         private val WINDOW_MAP: ConcurrentHashMap<String, ConcurrentLinkedDeque<Long>> =
                 ConcurrentHashMap()
     }

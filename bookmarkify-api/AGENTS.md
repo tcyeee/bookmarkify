@@ -166,7 +166,6 @@ bookmarkify/
 
 **Key files:**
 - `utils/OssUtils.kt` — OSS client, upload, sign, resize
-- `utils/FileUtils.kt` — File type detection, base64 conversion
 - `server/impl/FileServiceImpl.kt` — File upload service
 - `entity/entity/UserFile.kt` — File record entity
 

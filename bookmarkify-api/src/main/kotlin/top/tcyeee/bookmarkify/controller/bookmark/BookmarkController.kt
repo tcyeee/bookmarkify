@@ -1,6 +1,5 @@
 package top.tcyeee.bookmarkify.controller.bookmark
 
-import cn.dev33.satoken.annotation.SaIgnore
 import com.baomidou.mybatisplus.core.metadata.IPage
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -15,7 +14,6 @@ import top.tcyeee.bookmarkify.entity.MoveNodeParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
-import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
@@ -34,7 +32,6 @@ class BookmarksController(
     private val bookmarkService: IBookmarkService,
     private val preferenceService: IUserPreferenceService,
     private val layoutNodeService: IUserLayoutNodeService,
-    private val layoutNodeMapper: UserLayoutNodeMapper,
 ) {
 
     @Operation(summary = "通过书签简称/标题/描述/根域名,搜索书签")
@@ -86,17 +83,13 @@ class BookmarksController(
      */
     @PostMapping("/delete")
     @Operation(summary = "删除用户的自定义书签以及桌面元素")
-    fun delete(@RequestBody params: List<String>) = params.forEach {
-        // 删除node
-        layoutNodeMapper.deleteById(it)
-        // 删除个人书签
-        bookmarkUserLinkService.deleteOneByNodeId(it)
-    }
+    fun delete(@RequestBody params: List<String>) = layoutNodeService.deleteByIds(params, BaseUtils.uid())
 
     @Throttle
     @PostMapping("/update")
     @Operation(summary = "修改")
-    fun update(@RequestBody params: BookmarkUpdatePrams): Boolean = bookmarkUserLinkService.updateOne(params)
+    fun update(@RequestBody params: BookmarkUpdatePrams): Boolean =
+        bookmarkUserLinkService.updateOne(params, BaseUtils.uid())
 
     @Throttle
     @GetMapping("/addOne")
@@ -106,10 +99,4 @@ class BookmarksController(
     @GetMapping("/linkOne")
     @Operation(summary = "关联书签")
     fun linkOne(@RequestParam bookmarkId: String) = bookmarkService.linkOne(bookmarkId, BaseUtils.uid())
-
-    @Throttle
-    @SaIgnore
-    @GetMapping("/check")
-    fun queryOne(@RequestParam url: String) =
-        bookmarkService.addOne(url, "6a5775f7-e0ed-4883-aba5-06e001386c6d")
 }

@@ -30,17 +30,8 @@ class UserController(private val userService: IUserService) {
     @Operation(summary = "修改用户信息")
     fun updateUsername(@RequestBody params: UserInfoUpdateParams) = userService.updateInfo(params)
 
-    @PostMapping("changePhone")
-    @Operation(summary = "修改手机号-发送短信")
-    fun changePhone(params: String) = userService.changePhone(params)
-
-    @PostMapping("checkPhone")
-    @Operation(summary = "修改手机号-确定短信")
-    fun checkPhone(params: Int) = userService.checkPhone(params)
-
-    @PostMapping("changeMail")
-    @Operation(summary = "修改手机号-发送邮箱")
-    fun changeMail(params: String) = userService.changeMail(params)
+    // 旧的 changePhone / checkPhone / changeMail 直接改库且无验证，已下线。
+    // 改绑/绑定流程统一走 /auth/captcha/verifySms 与 /auth/captcha/verifyEmail。
 
     @PostMapping("changePassword")
     @Operation(summary = "修改密码，旧密码和新密码均为Base64编码的MD5字符串")

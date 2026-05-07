@@ -99,7 +99,7 @@ class BookmarkServiceImpl(
     override fun checkAll() =
         ktQuery()
             .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
-            .lt(BookmarkEntity::verifyFlag, false).list()
+            .eq(BookmarkEntity::verifyFlag, false).list()
             .forEach { kafkaMessageService.bookmarkParse(it.id) }
 
     override fun addOne(url: String, uid: String): UserLayoutNodeVO {

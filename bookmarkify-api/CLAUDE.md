@@ -1,4 +1,6 @@
-# CLAUDE.md - Bookmarkify API
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -17,9 +19,11 @@
 - **Object Storage:** Alibaba Cloud OSS
 - **SMS:** Alibaba Cloud SMS
 - **Email:** WeChat Work API (not SMTP)
-- **HTML Parsing:** Jsoup 1.17.2
+- **HTML Parsing:** Jsoup 1.17.2 (local) — toggleable with Iframely third-party API
+- **LLM:** DeepSeek API (used to infer app/brand short name from page titles)
 - **API Docs:** Knife4j (OpenAPI 3)
 - **WebSocket:** Spring WebSocket at `/ws`
+- **Sibling services** (separate repos): `bookmarkify-scrapper` (Rust headless scraper), `bookmarkify-web` (Nuxt frontend)
 
 ## Project Structure
 
@@ -68,11 +72,17 @@ src/main/resources/
 ## Build & Run
 
 ```bash
-# Build
+# Build → produces build/libs/bookmarkify-api.jar
 ./gradlew bootJar
 
 # Run (dev profile)
 ./gradlew bootRun --args='--spring.profiles.active=dev'
+
+# Tests — JUnit5 is wired up in build.gradle but src/test/ does not exist yet
+./gradlew test
+
+# Show resolved dependency tree (useful when bumping versions)
+./gradlew dependencies
 
 # Docker
 docker build -f DockerFile -t bookmarkify-api .
@@ -94,6 +104,8 @@ Required variables (see `.evn.local.example`):
 | `BOOKMARKIFY_ALIYUN_OSS_*` | Aliyun OSS (endpoint, keys, bucket, domain) |
 | `BOOKMARKIFY_KAFKA_BOOTSTRAP_SERVERS` | Kafka broker address |
 | `SPRING_KAFKA_BOOTSTRAP_SERVERS` | Kafka (base config) |
+| `BOOKMARKIFY_IFRAMELY_API_KEY` | Iframely third-party page-metadata API |
+| `BOOKMARKIFY_DEEPSEEK_API_KEY` | DeepSeek LLM (app-name inference) |
 
 ## Architecture
 
@@ -118,6 +130,7 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 5. **Desktop layout tree:** `user_layout_node` stores a tree with `parentId` (ROOT → folders → bookmarks). Sort order is a JSON map in `user_preference` to avoid bulk DB writes.
 6. **AOP caching/throttling:** `@RedisCache` for method-level caching; `@Throttle` for per-user rate limiting via Redis SETNX.
 7. **Unified response wrapper:** `GlobalExceptionHandler` (ResponseBodyAdvice) wraps all responses in `ResultWrapper{ok, code, data, msg}`.
+8. **Pluggable parser:** `bookmarkify.config.use-third-party-parser` toggles between local `WebsiteParser` (Jsoup) and `ApiServiceImpl.queryWebsiteInfo` (Iframely). DeepSeek is invoked separately via `IApiService.inferAppName` to extract a short brand name from the parsed title.
 
 ### Database Tables
 
@@ -174,7 +187,8 @@ Single topic `BOOKMARKIFY`, actions:
 ## Important Notes
 
 - The `bin/` directory contains compiled class output — do not edit files there
-- `TestController.kt` is fully commented out (dead code)
-- `HomeItem` / `HomeItemMapper` are legacy — replaced by `UserLayoutNode` system
-- The `server/` package (not `service/`) holds service interfaces
+- `TestController.kt` exists but its body is commented out (kept as scratch / dead code)
+- `HomeItem` / `HomeItemMapper` (and `HomeItemServiceImpl.kt`) are legacy — superseded by the `UserLayoutNode` system; avoid extending them in new work
+- The `server/` package (not `service/`) holds service interfaces — keep this naming when adding services
 - Admin login credentials default to `tcyeee@outlook.com` / `admin` in config
+- `AGENTS.md` in this repo defines role-scoped guidance (Backend / Kafka / DB / Auth / Infra / File Storage); consult it when a task fits one of those scopes
