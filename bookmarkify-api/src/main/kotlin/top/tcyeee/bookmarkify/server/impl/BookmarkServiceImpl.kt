@@ -3,8 +3,12 @@ package top.tcyeee.bookmarkify.server.impl
 import cn.hutool.core.date.LocalDateTimeUtil
 import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
+import org.springframework.context.ApplicationEventPublisher
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
+import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
@@ -17,8 +21,10 @@ import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.mapper.*
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.config.event.BookmarkParseAndNoticeEvent
+import top.tcyeee.bookmarkify.config.event.BookmarkParseAndResetUserItemEvent
+import top.tcyeee.bookmarkify.config.event.BookmarkParseEvent
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
-import top.tcyeee.bookmarkify.server.IKafkaMessageService
 import top.tcyeee.bookmarkify.utils.*
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
@@ -31,13 +37,18 @@ import java.time.temporal.ChronoUnit
 class BookmarkServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
     private val projectConfig: ProjectConfig,
-    private val kafkaMessageService: IKafkaMessageService,
+    private val eventPublisher: ApplicationEventPublisher,
     private val apiService: IApiService,
     private val layoutNodeMapper: UserLayoutNodeMapper,
     private val websiteLogoMapper: WebsiteLogoMapper,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val bookmarkFunctionMapper: BookmarkFunctionMapper,
+    transactionManager: PlatformTransactionManager,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
+
+    // 用于在「网络抓取完成之后」把多条 DB 写入包进一个短事务，
+    // 避免直接在方法上加 @Transactional 而在整个抓取期间长时间占用数据库连接。
+    private val txTemplate = TransactionTemplate(transactionManager)
 
     // 找到全部的系统默认书签,存储用户桌面布局和自定义书签
     override fun setDefaultBookmark(uid: String) =
@@ -83,24 +94,35 @@ class BookmarkServiceImpl(
     override fun importBookmarkFile(file: MultipartFile, uid: String) {
         // 1. 解析上传文件，获取扁平化后的书签结构
         val structures: List<SystemBookmarkStructure> = ChromeBookmarkParser.trim(file)
-        // 2. 保存所有的文件夹,同时保存 nodeId
-        structures.map { item -> UserLayoutNodeEntity(uid, item).also { item.nodeId = it.id } }
-            .also { layoutNodeMapper.insert(it) }
-        // 3. 批量保存布局节点和用户自定义书签（bookmarkId 暂置 LOADING，后续逐个绑定）
-        val pair = structures.flatMap { node -> node.bookmarks.map { it.pair(uid, node.nodeId) } }
-            .also { data -> layoutNodeMapper.insert(data.map { it.first }) }
-            .also { data -> bookmarkUserLinkMapper.insert(data.map { it.second }) }
-        // 4. 异步解析每个 URL，解析完成后重新绑定用户自定义书签
+        // 2~3 的批量写入需原子提交：任一批失败都不应留下孤儿文件夹/节点。整段没有网络 IO，事务很短。
+        val pair = txTemplate.execute {
+            // 2. 保存所有的文件夹,同时保存 nodeId
+            structures.map { item -> UserLayoutNodeEntity(uid, item).also { item.nodeId = it.id } }
+                .also { layoutNodeMapper.insert(it) }
+            // 3. 批量保存布局节点和用户自定义书签（bookmarkId 暂置 LOADING，后续逐个绑定）
+            structures.flatMap { node -> node.bookmarks.map { it.pair(uid, node.nodeId) } }
+                .also { data -> layoutNodeMapper.insert(data.map { it.first }) }
+                .also { data -> bookmarkUserLinkMapper.insert(data.map { it.second }) }
+        } ?: emptyList()
+        // 4. 异步解析每个 URL，解析完成后重新绑定用户自定义书签（事务提交后再发布事件，避免回滚后仍触发解析）
         pair.forEach {
-            kafkaMessageService.bookmarkParseAndResetUserItem(uid, it.second.urlFull, it.second.id, it.first.id)
+            eventPublisher.publishEvent(BookmarkParseAndResetUserItemEvent(uid, it.second.urlFull, it.second.id, it.first.id))
         }
     }
 
     override fun checkAll() =
+        // F-08: Limit each scheduler tick to CHECKALL_BATCH_SIZE records.
+        // The previous .lt(verifyFlag, false) was a no-op on PostgreSQL booleans, so in
+        // production there may be a large backlog of unverified bookmarks. Without a limit,
+        // the first post-fix run would flood the parse executor and delay newly-added bookmark parsing.
         ktQuery()
             .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
-            .eq(BookmarkEntity::verifyFlag, false).list()
-            .forEach { kafkaMessageService.bookmarkParse(it.id) }
+            .eq(BookmarkEntity::verifyFlag, false)
+            // 最旧的优先处理，配合 LIMIT 保证积压记录会被逐批消费，不会被新记录饿死。
+            .orderByAsc(BookmarkEntity::updateTime)
+            .last("LIMIT $CHECKALL_BATCH_SIZE")
+            .list()
+            .forEach { eventPublisher.publishEvent(BookmarkParseEvent(it.id)) }
 
     override fun addOne(url: String, uid: String): UserLayoutNodeVO {
         log.debug("[addOne] uid=$uid 开始添加书签, rawUrl=$url")
@@ -109,17 +131,11 @@ class BookmarkServiceImpl(
         val bookmarkUrl: BookmarkUrlWrapper = WebsiteParser.urlWrapper(url)
         log.debug("[addOne] Step1 URL 标准化完成: urlHost=${bookmarkUrl.urlHost}, urlFull=${bookmarkUrl.urlFull}")
 
-        // 2. 按 urlHost 查找系统中是否已存在该书签记录；
-        //    不存在则创建新的占位书签并持久化。
+        // 2. 按 urlHost 获取或创建 canonical 书签记录。
         //    多个用户共享同一条 bookmark 记录（一对多），避免重复抓取同一网站。
-        val existingBookmark = this.getByHost(bookmarkUrl.urlHost)
-        val bookmark = existingBookmark ?: BookmarkEntity(bookmarkUrl).also {
-            save(it)
-            log.debug("[addOne] Step2 书签不存在，已创建新书签记录: bookmarkId=${it.id}, urlHost=${bookmarkUrl.urlHost}")
-        }
-        if (existingBookmark != null) {
-            log.debug("[addOne] Step2 命中已有书签记录: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}, parseStatus=${bookmark.parseStatus}")
-        }
+        //    getOrCreateByHost 容忍并发插入同一 host（依赖 url_host 唯一约束）。
+        val bookmark = getOrCreateByHost(bookmarkUrl)
+        log.debug("[addOne] Step2 书签记录就绪: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}, parseStatus=${bookmark.parseStatus}")
 
         // 3. 为当前用户创建桌面布局节点，初始类型为 BOOKMARK_LOADING，
         //    在书签解析完成前前端展示 loading 占位状态。
@@ -133,12 +149,12 @@ class BookmarkServiceImpl(
         log.debug("[addOne] Step4 已创建用户关联记录: userLinkId=${userLink.id}, bookmarkId=${bookmark.id}")
 
         // 5. 检查书签是否需要重新解析（首次添加 / 上次解析距今超过 1 天）：
-        //    ↳ 需要解析 → 立即返回 loading 占位 VO，同时向 Kafka 发送异步解析任务。
-        //                  解析完成后由 kafKaBookmarkParseAndNotice 通过 WebSocket 将最终结果推送到客户端。
+        //    ↳ 需要解析 → 立即返回 loading 占位 VO，同时发布异步解析事件。
+        //                  解析完成后由 parseAndNotice 通过 WebSocket 将最终结果推送到客户端。
         if (bookmark.checkFlag()) {
-            log.debug("[addOne] Step5 书签需要解析，返回 LOADING 占位，已发送 Kafka 异步任务: bookmarkId=${bookmark.id}, userLinkId=${userLink.id}, nodeId=${nodeEntity.id}")
+            log.debug("[addOne] Step5 书签需要解析，返回 LOADING 占位，已发布异步解析事件: bookmarkId=${bookmark.id}, userLinkId=${userLink.id}, nodeId=${nodeEntity.id}")
             return nodeEntity.loadingVO(bookmark.urlHost)
-                .also { kafkaMessageService.bookmarkParseAndNotice(uid, bookmark.id, userLink.id, nodeEntity.id) }
+                .also { eventPublisher.publishEvent(BookmarkParseAndNoticeEvent(uid, bookmark.id, userLink.id, nodeEntity.id)) }
         }
 
         // 6. 书签在有效期内（1 天内已解析），无需重新抓取。
@@ -155,26 +171,26 @@ class BookmarkServiceImpl(
     override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =
         ktQuery().`in`(BookmarkEntity::urlHost, defaultBookmarkify).list()
 
-    // ────── Kafka 消费入口 ──────
+    // ────── 异步解析入口（由 BookmarkParseEventListener 调用）──────
 
-    override fun kafkaBookmarkParse(bookmarkId: String) {
+    override fun parseAndSave(bookmarkId: String) {
         parseBookmark(baseMapper.selectById(bookmarkId))
     }
 
     /** 解析书签，然后保存到数据库，同时通知到用户 */
-    override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
-        log.debug("[kafKaBookmarkParseAndNotice-4] 开始书签解析: uid=$uid, bookmarkId=$bookmarkId, userLinkId=$userLinkId, nodeId=$nodeId")
+    override fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
+        log.debug("[parseAndNotice-4] 开始书签解析: uid=$uid, bookmarkId=$bookmarkId, userLinkId=$userLinkId, nodeId=$nodeId")
         parseBookmark(baseMapper.selectById(bookmarkId))
-        log.debug("[kafKaBookmarkParseAndNotice-4] 书签解析完成, 开始构建展示数据: userLinkId=$userLinkId")
+        log.debug("[parseAndNotice-4] 书签解析完成, 开始构建展示数据: userLinkId=$userLinkId")
         val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
-        log.debug("[kafKaBookmarkParseAndNotice-4] 已查询 bookmarkShow, title=${bookmarkShow.title}, 开始更新布局节点类型: nodeId=$nodeId")
+        log.debug("[parseAndNotice-4] 已查询 bookmarkShow, title=${bookmarkShow.title}, 开始更新布局节点类型: nodeId=$nodeId")
         val layoutEntity = layoutNodeMapper.selectById(nodeId).also {
             it.type = NodeTypeEnum.BOOKMARK
             layoutNodeMapper.updateById(it)
         }
-        log.debug("[kafKaBookmarkParseAndNotice-4] 布局节点已更新为 BOOKMARK, 准备推送 WebSocket: uid=$uid, nodeId=$nodeId")
+        log.debug("[parseAndNotice-4] 布局节点已更新为 BOOKMARK, 准备推送 WebSocket: uid=$uid, nodeId=$nodeId")
         UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
-        log.debug("[kafKaBookmarkParseAndNotice-4] WebSocket 推送完成: uid=$uid, nodeId=$nodeId")
+        log.debug("[parseAndNotice-4] WebSocket 推送完成: uid=$uid, nodeId=$nodeId")
     }
 
     /**
@@ -186,35 +202,23 @@ class BookmarkServiceImpl(
      * 为什么要重新绑定？
      * 答: 用户添加网址的时候是批量添加的,只能提前批量返回用户自定义的书签,用户自定义的书签具体有没有存在源书签还不知道,所以查询完毕知道以后,再重新关联回去
      */
-    override fun kafkaBookmarkParseAndResetUserItem(
+    override fun parseAndResetUserItem(
         uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String
     ) {
         val urlWrapper = WebsiteParser.urlWrapper(rawUrl)
-        val entity = this.findByHost(urlWrapper.urlHost) ?: BookmarkEntity(urlWrapper).also { save(it) }
+        val entity = getOrCreateByHost(urlWrapper)
         if (entity.parseStatus == ParseStatusEnum.LOADING) parseBookmark(entity)
-        bookmarkUserLinkService.resetBookmarkId(uid, userLinkId, entity.id)
-        val layoutNode: UserLayoutNodeEntity = layoutNodeMapper.selectById(layoutNodeId)
-            ?.apply { type = NodeTypeEnum.BOOKMARK }
-            ?.also { layoutNodeMapper.updateById(it) }
-            ?: throw CommonException(ErrorType.E999)
+        // 抓取已结束，下面两处写入（重绑 userLink + 更新节点类型）需原子提交，放进短事务。
+        val layoutNode: UserLayoutNodeEntity = txTemplate.execute {
+            bookmarkUserLinkService.resetBookmarkId(uid, userLinkId, entity.id)
+            layoutNodeMapper.selectById(layoutNodeId)
+                ?.apply { type = NodeTypeEnum.BOOKMARK }
+                ?.also { layoutNodeMapper.updateById(it) }
+                ?: throw CommonException(ErrorType.E999)
+        }!!
         bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
             .let { UserLayoutNodeVO(layoutNode, it) }
             .also { SocketUtils.homeItemUpdate(uid, it) }
-    }
-
-    /** 解析书签，保存书签到根节点，并通知到用户 */
-    override fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, parentNodeId: String?) {
-        log.debug("[kafKaBookmarkParseAndNotice-3] 开始: uid=$uid, bookmarkId=$bookmarkId, parentNodeId=$parentNodeId")
-        val bookmark = parseBookmark(baseMapper.selectById(bookmarkId))
-        log.debug("[kafKaBookmarkParseAndNotice-3] 书签解析完成: bookmarkId=${bookmark.id}, parseStatus=${bookmark.parseStatus}, appName=${bookmark.appName}")
-        val layoutEntity = UserLayoutNodeEntity(uid = uid, parentId = parentNodeId).also { layoutNodeMapper.insert(it) }
-        log.debug("[kafKaBookmarkParseAndNotice-3] 已创建布局节点: nodeId=${layoutEntity.id}, parentNodeId=$parentNodeId")
-        val userLinkEntity = BookmarkUserLink(bookmark, layoutEntity.id, uid).also { bookmarkUserLinkMapper.insert(it) }
-        log.debug("[kafKaBookmarkParseAndNotice-3] 已创建用户关联记录: userLinkId=${userLinkEntity.id}")
-        val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkEntity.id).initLogo()
-        log.debug("[kafKaBookmarkParseAndNotice-3] 已查询 bookmarkShow, 准备推送 WebSocket: uid=$uid, nodeId=${layoutEntity.id}")
-        UserLayoutNodeVO(layoutEntity, bookmarkShow).also { SocketUtils.homeItemUpdate(uid, it) }
-        log.debug("[kafKaBookmarkParseAndNotice-3] WebSocket 推送完成: uid=$uid, nodeId=${layoutEntity.id}")
     }
 
     // ────── 公开接口（明确指定解析方式时调用）──────
@@ -256,8 +260,8 @@ class BookmarkServiceImpl(
                 isActivity = false
                 parseErrMsg = it.message
                 baseMapper.insertOrUpdate(this)
-                it.printStackTrace()
             }
+            log.warn("[parseLocally] 页面抓取失败: bookmarkId=${bookmark.id}, status=$status, err=${it.message}")
             return bookmark
         }
         log.debug("[parseLocally] 页面抓取成功, 开始填充元信息: bookmarkId=${bookmark.id}, title=${wrapper.title}")
@@ -339,6 +343,20 @@ class BookmarkServiceImpl(
 
     private fun getByHost(urlHost: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, urlHost).one()
 
+    /**
+     * 按 host 获取或创建 canonical 书签。
+     * `bookmark.url_host` 上有唯一约束：并发插入同一 host 时，落败的一方捕获唯一键冲突后
+     * 回查已存在记录，保证「一域一条」，杜绝重复 canonical 记录。
+     */
+    private fun getOrCreateByHost(urlWrapper: BookmarkUrlWrapper): BookmarkEntity {
+        getByHost(urlWrapper.urlHost)?.let { return it }
+        return try {
+            BookmarkEntity(urlWrapper).also { save(it) }
+        } catch (e: DuplicateKeyException) {
+            getByHost(urlWrapper.urlHost) ?: throw e
+        }
+    }
+
     private fun findById(bookmarkId: String): BookmarkEntity =
         requireNotNull(ktQuery().eq(BookmarkEntity::id, bookmarkId).one())
 
@@ -347,5 +365,11 @@ class BookmarkServiceImpl(
         this.isActivity = true
         this.updateTime = LocalDateTime.now()
         baseMapper.insertOrUpdate(this)
+    }
+
+    companion object {
+        // F-08: cap each checkAll() run to prevent flooding the parse executor when a large backlog
+        // of unverified bookmarks exists (e.g., on first deployment after fixing the .lt→.eq bug).
+        private const val CHECKALL_BATCH_SIZE = 100
     }
 }

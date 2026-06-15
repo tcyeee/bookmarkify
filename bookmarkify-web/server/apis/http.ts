@@ -51,7 +51,7 @@ export default class http {
         const data = (await response.json()) as Result<object>
         return await handleResult(data, () => exec(true), retried)
       } catch (error) {
-        if (error instanceof TypeError && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
+        if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
         return Promise.reject(error)
       }
     }
@@ -86,7 +86,7 @@ export default class http {
         const data = JSON.parse(text) as Result<object>
         return await handleResult(data, () => exec(true), retried)
       } catch (error) {
-        if (error instanceof TypeError && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
+        if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
         return Promise.reject(error)
       }
     }

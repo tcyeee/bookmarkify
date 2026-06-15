@@ -33,14 +33,13 @@ pub async fn scrape_headless(url: &str, timeout_secs: u64, idle_wait_secs: u64) 
     validate_url_scheme(&parsed)?;
     validate_target_host(&parsed).await?;
 
-    // 获取全局锁，确保同一时刻只运行一个 Chrome 实例。
-    // 锁等待时间不超过总超时预算，避免请求队列无限堆积。
-    let _guard = tokio::time::timeout(
-        Duration::from_secs(timeout_secs),
-        HEADLESS_LOCK.lock(),
-    )
-    .await
-    .map_err(|_| ScrapeError::Timeout)?;
+    // 以共享 deadline 约束锁等待 + Chrome 执行，确保两阶段合计不超过 timeout_secs。
+    // 旧代码对两个阶段各用独立的 timeout_secs，最坏情况总延迟达 2×timeout_secs。
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
+
+    let _guard = tokio::time::timeout_at(deadline, HEADLESS_LOCK.lock())
+        .await
+        .map_err(|_| ScrapeError::Timeout)?;
 
     // Chrome 崩溃后会遗留 SingletonLock 文件，阻止下次启动；持锁后安全清除。
     // 同时处理 macOS 上 /var → /private/var 的 symlink，用 remove_dir_all 彻底清除 profile 目录。
@@ -69,8 +68,13 @@ pub async fn scrape_headless(url: &str, timeout_secs: u64, idle_wait_secs: u64) 
         .with_wait_for_idle_network(Some(WaitForIdleNetwork::new(Some(Duration::from_secs(idle_wait_secs))))) // 等待网络空闲（JS 渲染完成）
         .with_screenshot(Some(screenshot_config));
 
-    // 在总超时限制内执行抓取，超时则返回 Timeout 错误
-    let pages = tokio::time::timeout(Duration::from_secs(timeout_secs), async move {
+    // 使用 deadline 的剩余时间作为 Chrome 执行超时，避免超出总预算
+    let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+    if remaining.is_zero() {
+        return Err(ScrapeError::Timeout);
+    }
+
+    let pages = tokio::time::timeout(remaining, async move {
         website.scrape().await;
         website.get_pages().map(|p| p.to_vec())
     })

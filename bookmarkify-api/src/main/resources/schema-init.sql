@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS bookmark (
     create_time         TIMESTAMP       NOT NULL DEFAULT NOW(),
     update_time         TIMESTAMP
 );
+-- canonical 书签按域名去重：一域一条。应用层 getOrCreateByHost 依赖此唯一约束容忍并发插入。
+-- 注意：若存量数据已有重复 url_host，需先清理重复行再建索引。
+CREATE UNIQUE INDEX IF NOT EXISTS uk_bookmark_url_host ON bookmark (url_host);
 
 -- 3. bookmark_user_link
 CREATE TABLE IF NOT EXISTS bookmark_user_link (

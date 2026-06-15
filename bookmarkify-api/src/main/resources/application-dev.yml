@@ -10,18 +10,12 @@ spring:
       host: ${BOOKMARKIFY_REDIS_HOST}
       port: ${BOOKMARKIFY_REDIS_PORT}
       password: ${BOOKMARKIFY_REDIS_PASSWORD}
-  kafka:
-    bootstrap-servers: ${BOOKMARKIFY_KAFKA_BOOTSTRAP_SERVERS}
 
 logging:
   level:
-#    org.springframework.kafka: DEBUG
-#    org.apache.kafka.clients.consumer: DEBUG
     top.tcyeee.bookmarkify.server.impl.BookmarkServiceImpl: DEBUG
 
 bookmarkify:
-  kafka:
-    topic: BOOKMARKIFY_DEV
   config:
     # 这里必须是前端项目中/public/upload目录，否则图片无法正常读取
     img-path: ${BOOKMARKIFY_FILE_UPLOAD_DIR}

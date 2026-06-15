@@ -11,6 +11,8 @@ use crate::scraper::ScrapeResult;
 pub struct ScrapeCache {
     /// 底层 moka 异步缓存，键为规范化后的 URL 字符串，值为共享的抓取结果
     inner: Cache<String, Arc<ScrapeResult>>,
+    /// 近期失败 URL 的负缓存（60s TTL），防止重复触发高开销的 headless 抓取
+    errors: Cache<String, ()>,
 }
 
 impl ScrapeCache {
@@ -26,6 +28,10 @@ impl ScrapeCache {
             inner: Cache::builder()
                 .max_capacity(10_000)
                 .time_to_live(Duration::from_secs(ttl_secs))
+                .build(),
+            errors: Cache::builder()
+                .max_capacity(1_000)
+                .time_to_live(Duration::from_secs(60))
                 .build(),
         }
     }
@@ -43,6 +49,19 @@ impl ScrapeCache {
     pub async fn get(&self, url: &str) -> Option<Arc<ScrapeResult>> {
         let key = Self::normalize(url)?;
         self.inner.get(&key).await
+    }
+
+    /// 查询 URL 是否在负缓存中（即近期是否发生过失败）。
+    pub async fn get_error(&self, url: &str) -> bool {
+        let Some(key) = Self::normalize(url) else { return false };
+        self.errors.get(&key).await.is_some()
+    }
+
+    /// 将 URL 标记为近期失败，写入负缓存（TTL 60s）。
+    pub async fn set_error(&self, url: &str) {
+        if let Some(key) = Self::normalize(url) {
+            self.errors.insert(key, ()).await;
+        }
     }
 
     /// 将抓取结果存入缓存，以规范化后的 URL 作为键。

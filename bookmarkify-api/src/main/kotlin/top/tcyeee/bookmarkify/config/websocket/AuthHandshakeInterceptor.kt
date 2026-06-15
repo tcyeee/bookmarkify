@@ -5,6 +5,7 @@ import org.springframework.http.server.ServerHttpResponse
 import org.springframework.web.socket.WebSocketHandler
 import org.springframework.web.socket.server.HandshakeInterceptor
 import org.springframework.web.util.UriComponentsBuilder
+import org.springframework.web.util.UriUtils
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.utils.StpKit
@@ -24,8 +25,16 @@ class AuthHandshakeInterceptor : HandshakeInterceptor {
     ): Boolean = true.also {
         // 用 UriComponentsBuilder 严格按 query param 名称取值，避免 substringAfter("token=")
         // 把 ?xtoken=foo 之类误识为 token。
-        val token = UriComponentsBuilder.fromUri(request.uri).build().queryParams.getFirst("token")
+        // fromUri() stores the raw (percent-encoded) query string internally, so
+        // getFirst() returns the encoded value (e.g. "abc%2Bdef"). We must decode it
+        // with UriUtils.decode (RFC 3986) rather than URLDecoder (which wrongly maps '+' → space).
+        // F-09: without this decode step, tokens containing '+' or '=' arrive percent-encoded
+        // and Sa-Token's lookup fails even for a valid session.
+        val rawToken = UriComponentsBuilder.fromUri(request.uri).build().queryParams.getFirst("token")
             ?.takeIf { it.isNotBlank() }
+            ?: throw CommonException(ErrorType.E201)
+        val token = UriUtils.decode(rawToken, Charsets.UTF_8)
+            .takeIf { it.isNotBlank() }
             ?: throw CommonException(ErrorType.E201)
         val uid = StpKit.USER.getLoginIdByToken(token)
             ?: throw CommonException(ErrorType.E201)

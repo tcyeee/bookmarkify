@@ -43,14 +43,11 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 管理员查询全部书签 */
     fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO>
 
-    /** 解析书签,保存书签到根节点,并通知到用户 */
-    fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, parentNodeId: String?)
-
-    /** 解析书签,然后保存到数据库,同时通知到用户 */
-    fun kafKaBookmarkParseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String)
+    /** 解析书签,然后保存到数据库,同时通过 WebSocket 通知用户（异步事件入口） */
+    fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String)
 
     /**
-     * 通过网址解析为书签,同时重新绑定到添加这个网址的用户
+     * 通过网址解析为书签,同时重新绑定到添加这个网址的用户（异步事件入口）
      * 1.解析书签,更新书签状态(之前是LOADING)
      * 2.根据host重新绑定用户自定义书签
      * 3.修改用户布局元素状态(之前是LOADING)
@@ -58,10 +55,10 @@ interface IBookmarkService : IService<BookmarkEntity> {
      * 为什么要重新绑定？
      * 答: 用户添加网址的时候是批量添加的,只能提前批量返回用户自定义的书签,用户自定义的书签具体有没有存在源书签还不知道,所以查询完毕知道以后,再重新关联回去
      */
-    fun kafkaBookmarkParseAndResetUserItem(uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String)
+    fun parseAndResetUserItem(uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String)
 
-    /** 根据书签ID解析书签：依据配置决定使用第三方 API 还是内置解析器 */
-    fun kafkaBookmarkParse(bookmarkId: String)
+    /** 根据书签ID解析书签并保存：依据配置决定使用第三方 API 还是内置解析器（异步事件入口） */
+    fun parseAndSave(bookmarkId: String)
 
     /** 通过 iframely 第三方 API 解析书签元信息并持久化；若书签已通过验证则直接返回已有记录 */
     fun parseBookmarkByApi(bookmark: BookmarkEntity): BookmarkEntity

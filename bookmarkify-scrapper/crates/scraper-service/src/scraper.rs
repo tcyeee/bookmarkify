@@ -121,6 +121,62 @@ pub fn is_forbidden_ip(ip: &std::net::IpAddr) -> bool {
     }
 }
 
+/// reqwest 自定义 DNS 解析器：在每次实际 TCP 连接前验证解析出的 IP，从根本上防止
+/// DNS 重绑定攻击（TOCTOU）。所有通过共享 `reqwest::Client` 发出的请求（包括 OG image、
+/// logo、favicon 等次级资源）均受此保护。
+/// 设置 `SSRF_ALLOW_PRIVATE=1` 可跳过验证（集成测试用）。
+pub struct SsrfSafeResolver;
+
+impl reqwest::dns::Resolve for SsrfSafeResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        Box::pin(async move {
+            if std::env::var("SSRF_ALLOW_PRIVATE").ok().as_deref() == Some("1") {
+                let addrs = tokio::net::lookup_host(format!("{}:0", name.as_str()))
+                    .await
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+                return Ok(Box::new(addrs) as reqwest::dns::Addrs);
+            }
+
+            let host = name.as_str();
+
+            // IP 字面量：直接校验，无需 DNS 查询
+            if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+                if is_forbidden_ip(&ip) {
+                    return Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        format!("SSRF blocked: {ip} is a forbidden address"),
+                    )) as Box<dyn std::error::Error + Send + Sync>);
+                }
+                let addr = std::net::SocketAddr::new(ip, 0);
+                return Ok(Box::new(std::iter::once(addr)) as reqwest::dns::Addrs);
+            }
+
+            let addrs: Vec<std::net::SocketAddr> = tokio::net::lookup_host(format!("{host}:0"))
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?
+                .collect();
+
+            if addrs.is_empty() {
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("DNS returned no addresses for {host}"),
+                )) as Box<dyn std::error::Error + Send + Sync>);
+            }
+
+            for addr in &addrs {
+                if is_forbidden_ip(&addr.ip()) {
+                    return Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        format!("SSRF blocked: {host} resolves to forbidden address {}", addr.ip()),
+                    )) as Box<dyn std::error::Error + Send + Sync>);
+                }
+            }
+
+            Ok(Box::new(addrs.into_iter()) as reqwest::dns::Addrs)
+        })
+    }
+}
+
 /// 在发起任何网络请求前校验目标主机：解析 host 并拒绝指向私有/回环/链路本地的地址。
 /// 设置环境变量 `SSRF_ALLOW_PRIVATE=1` 可关闭检查（用于内网集成测试等可信场景）。
 pub async fn validate_target_host(url: &reqwest::Url) -> Result<(), ScrapeError> {
