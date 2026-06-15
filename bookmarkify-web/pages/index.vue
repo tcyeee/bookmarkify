@@ -53,10 +53,12 @@ function onShowDetail(bookmark: BookmarkShow) {
 }
 
 const folderPanelVisible = ref(false)
-const folderPanelItem = ref<UserLayoutNodeVO | null>(null)
+const folderPanelId = ref<string | null>(null)
+// computed 保证 folderPanelItem 始终指向 store 中的最新节点，而非点击时的快照
+const folderPanelItem = computed(() => bookmarkStore.layoutNode?.find((n) => n.id === folderPanelId.value) ?? null)
 
 function onOpenDir(item: UserLayoutNodeVO) {
-  folderPanelItem.value = item
+  folderPanelId.value = item.id
   folderPanelVisible.value = true
 }
 

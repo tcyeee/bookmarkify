@@ -23,6 +23,12 @@ class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<Bookma
 
     @Transactional(rollbackFor = [Exception::class])
     override fun copy(sourceUid: String, targetUid: String) {
+        // F-06 (dead-code warning): This method has no current callers and MUST NOT be activated
+        // without first copying the UserLayoutNodeEntity rows for targetUid and providing a
+        // nodeIdMap (oldNodeId -> newNodeId) to remap layoutNodeId. Without that remapping,
+        // every copied BookmarkUserLink row will reference a layout node owned by sourceUid;
+        // layout() looks up bookmark data by layoutNodeId and will silently return null for all
+        // of them, making the copied bookmarks invisible on targetUid's desktop.
         val source: List<BookmarkUserLink> =
             ktQuery().eq(BookmarkUserLink::uid, sourceUid).eq(BookmarkUserLink::deleted, java.lang.Boolean.FALSE).list()
         // 用 data class copy 生成全新主键的副本，避免 saveBatch 用源主键触发冲突或误更新

@@ -31,6 +31,7 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
 import top.tcyeee.bookmarkify.utils.MailUtils
+import top.tcyeee.bookmarkify.utils.PasswordUtils
 import top.tcyeee.bookmarkify.utils.RedisUtils
 import top.tcyeee.bookmarkify.utils.StpKit
 
@@ -131,28 +132,45 @@ class UserServiceImpl(
 
     override fun loginByAccount(params: AccountLoginParams): UserSessionInfo {
         val account = String(Base64.getDecoder().decode(params.account))
-        val password = String(Base64.getDecoder().decode(params.password))
-        val user = ktQuery().eq(UserEntity::password, password)
+        // 客户端传来的是 Base64(md5(明文))，解码后即规范凭据（md5 串），不再用它做整列等值查询
+        val credential = String(Base64.getDecoder().decode(params.password))
+        val user = ktQuery()
             .and { it.eq(UserEntity::email, account).or().eq(UserEntity::phone, account) }.one()
             ?: throw CommonException(ErrorType.E110)
         if (user.disabled) throw CommonException(ErrorType.E110)
+        if (!PasswordUtils.matches(credential, user.password)) throw CommonException(ErrorType.E110)
+        upgradePasswordIfLegacy(user, credential)
         StpKit.USER.logout()
         StpKit.USER.login(user.id, true)
         return user.authVO(StpKit.USER.tokenValue).writeToSession()
     }
 
     override fun changePassword(uid: String, params: ChangePasswordParams): Boolean {
-        val oldPassword = String(Base64.getDecoder().decode(params.oldPassword))
-        val newPassword = String(Base64.getDecoder().decode(params.newPassword))
-        val updated = ktUpdate().eq(UserEntity::id, uid).eq(UserEntity::password, oldPassword)
-            .set(UserEntity::password, newPassword).update()
-        if (!updated) throw CommonException(ErrorType.E110)
-        return true
+        val oldCredential = String(Base64.getDecoder().decode(params.oldPassword))
+        val newCredential = String(Base64.getDecoder().decode(params.newPassword))
+        val user = getById(uid) ?: throw CommonException(ErrorType.E110)
+        if (!PasswordUtils.matches(oldCredential, user.password)) throw CommonException(ErrorType.E110)
+        return ktUpdate().eq(UserEntity::id, uid)
+            .set(UserEntity::password, PasswordUtils.encode(newCredential)).update()
     }
 
-    override fun findByNameAndPwd(account: String, password: String): UserEntity? =
-        ktQuery().eq(UserEntity::password, SecureUtil.md5(password))
+    override fun findByNameAndPwd(account: String, password: String): UserEntity? {
+        val credential = SecureUtil.md5(password)
+        val user = ktQuery()
             .and { it.eq(UserEntity::email, account).or().eq(UserEntity::phone, account) }.one()
+            ?: return null
+        if (!PasswordUtils.matches(credential, user.password)) return null
+        upgradePasswordIfLegacy(user, credential)
+        return user
+    }
+
+    /** 旧的明文 md5 行在校验通过后，原地升级为带盐 BCrypt（登录即升级） */
+    private fun upgradePasswordIfLegacy(user: UserEntity, credential: String) {
+        if (PasswordUtils.needsUpgrade(user.password)) {
+            ktUpdate().eq(UserEntity::id, user.id)
+                .set(UserEntity::password, PasswordUtils.encode(credential)).update()
+        }
+    }
 
     override fun verifyEmail(
         request: HttpServletRequest, response: HttpServletResponse, uid: String, params: EmailVerifyParams
@@ -289,9 +307,14 @@ class UserServiceImpl(
         return file.currentName
     }
 
-    override fun del(params: UserDelParams): Boolean =
-        ktUpdate().eq(UserEntity::id, BaseUtils.uid()).eq(UserEntity::password, SecureUtil.md5(params.password))
-            .set(UserEntity::deleted, true).update()
+    override fun del(params: UserDelParams): Boolean {
+        val uid = BaseUtils.uid()
+        val user = getById(uid) ?: throw CommonException(ErrorType.E110)
+        if (!PasswordUtils.matches(SecureUtil.md5(params.password), user.password)) {
+            throw CommonException(ErrorType.E110)
+        }
+        return ktUpdate().eq(UserEntity::id, uid).set(UserEntity::deleted, true).update()
+    }
 
     override fun updateUsername(username: String): Boolean =
         ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::nickName, username).update()

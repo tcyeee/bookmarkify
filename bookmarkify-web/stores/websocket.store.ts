@@ -40,7 +40,9 @@ export const useWebSocketStore = defineStore('socket', {
       // 已有连接且 token 未变化:无需重连
       if (this.socket && this.currentToken === token) return
       // token 变更或显式重连:先关闭旧连接,避免遗留过期 socket
+      // 先置空 onclose,防止异步触发时 manualClose 已被重置为 false 导致误重连
       if (this.socket) {
+        this.socket.onclose = null
         this.manualClose = true
         try { this.socket.close() } catch { /* noop */ }
         this.socket = undefined
@@ -49,8 +51,10 @@ export const useWebSocketStore = defineStore('socket', {
       this.manualClose = false
       this.currentToken = token
 
-      const url: string = `${useRuntimeConfig().public.wsBase}/ws?token=${token}`
-      console.log(`[WebSocket] 连接: ${url}`)
+      const wsBase = useRuntimeConfig().public.wsBase
+      const url: string = `${wsBase}/ws?token=${token}`
+      // 不要把 token 打到控制台：会话凭据泄露到浏览器日志/录屏中
+      console.log(`[WebSocket] 连接: ${wsBase}/ws`)
       this.socket = new WebSocket(url)
 
       // 连接错误处理

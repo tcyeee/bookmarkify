@@ -64,35 +64,43 @@ class PreRequestFilter(private val objectMapper: ObjectMapper) : Filter {
     /**
      * 周期性清理：丢弃过期时间戳，并把没有任何有效请求的 token 整条移除，
      * 避免 WINDOW_MAP 随轮换 token 无界增长（OOM 风险）。
+     *
+     * F-07: Uses ConcurrentHashMap.compute() for each key so that the drain-and-remove
+     * is atomic with respect to concurrent isThrottled() calls on the same token.
+     * The old synchronized(deque) approach had a window between iter.remove() and
+     * the next computeIfAbsent() where two threads could obtain different deque
+     * instances for the same token, splitting the rate-limit state across two locks.
      */
     @Scheduled(fixedRate = CLEANUP_INTERVAL_MILLIS)
     fun evictStaleEntries() {
         val now = System.currentTimeMillis()
-        val iter = WINDOW_MAP.entries.iterator()
-        while (iter.hasNext()) {
-            val deque = iter.next().value
-            synchronized(deque) {
+        WINDOW_MAP.keys.toList().forEach { key ->
+            WINDOW_MAP.compute(key) { _, deque ->
+                if (deque == null) return@compute null
                 while (true) {
                     val head = deque.peekFirst() ?: break
                     if (now - head > WINDOW_MILLIS) deque.pollFirst() else break
                 }
-                if (deque.isEmpty()) iter.remove()
+                if (deque.isEmpty()) null else deque
             }
         }
     }
 
     private fun isThrottled(token: String): Boolean {
         val now = System.currentTimeMillis()
-        val deque = WINDOW_MAP.computeIfAbsent(token) { ConcurrentLinkedDeque() }
-        synchronized(deque) {
-            while (true) {
-                val head = deque.peekFirst() ?: break
-                if (now - head > WINDOW_MILLIS) deque.pollFirst() else break
+        var throttled = false
+        // F-07: compute() holds a bucket-level lock for this key, making the
+        // check-and-record atomic with evictStaleEntries()'s drain-and-remove.
+        WINDOW_MAP.compute(token) { _, existing ->
+            val deque = existing ?: ConcurrentLinkedDeque()
+            while (deque.isNotEmpty() && now - deque.peekFirst()!! > WINDOW_MILLIS) {
+                deque.pollFirst()
             }
-            if (deque.size >= MAX_REQUESTS_PER_WINDOW) return true
-            deque.addLast(now)
+            throttled = deque.size >= MAX_REQUESTS_PER_WINDOW
+            if (!throttled) deque.addLast(now)
+            deque
         }
-        return false
+        return throttled
     }
 
     companion object {

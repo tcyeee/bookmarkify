@@ -105,6 +105,17 @@ class UserLayoutNodeServiceImpl(
             .set(UserLayoutNodeEntity::parentId, params.dirNodeId)
             .update()
 
+        // F-10: Re-verify the target folder still exists after the move.
+        // Under READ COMMITTED isolation there is a TOCTOU window between the ownership check
+        // above and this update; a concurrent delete could remove the folder in between.
+        // The re-check is inside the same @Transactional context so a failure rolls back.
+        if (params.dirNodeId != null) {
+            ktQuery()
+                .eq(UserLayoutNodeEntity::id, params.dirNodeId)
+                .eq(UserLayoutNodeEntity::uid, uid)
+                .one() ?: throw CommonException(ErrorType.E102, "目标文件夹在操作过程中被删除，操作已回滚")
+        }
+
         // 节点离开了某个文件夹，检查该文件夹剩余子节点数
         if (oldParentId != null && oldParentId != params.dirNodeId) {
             val remaining = ktQuery()
@@ -165,16 +176,26 @@ class UserLayoutNodeServiceImpl(
     @Transactional
     override fun deleteByIds(layoutNodeIds: List<String>, uid: String) {
         if (layoutNodeIds.isEmpty()) return
-        // 先按 uid 过滤出当前用户拥有的节点 ID，避免越权删除他人数据
-        val ownedIds = ktQuery()
+        // Filter to only nodes owned by this user to prevent cross-user deletion.
+        val owned = ktQuery()
             .`in`(UserLayoutNodeEntity::id, layoutNodeIds)
             .eq(UserLayoutNodeEntity::uid, uid)
             .list()
-            .map { it.id }
-        if (ownedIds.isEmpty()) return
-        ownedIds.forEach { id ->
-            removeById(id)
-            bookmarkUserLinkService.deleteOneByNodeId(id, uid)
+        if (owned.isEmpty()) return
+        owned.forEach { node ->
+            // F-03: Cascade into BOOKMARK_DIR children before deleting the folder itself.
+            // Without this, child nodes survive with a dangling parentId and silently
+            // re-surface at root level on the next layout() call.
+            if (node.type == NodeTypeEnum.BOOKMARK_DIR) {
+                val childIds = ktQuery()
+                    .eq(UserLayoutNodeEntity::parentId, node.id)
+                    .eq(UserLayoutNodeEntity::uid, uid)
+                    .list()
+                    .map { it.id }
+                if (childIds.isNotEmpty()) deleteByIds(childIds, uid)
+            }
+            removeById(node.id)
+            bookmarkUserLinkService.deleteOneByNodeId(node.id, uid)
         }
     }
 

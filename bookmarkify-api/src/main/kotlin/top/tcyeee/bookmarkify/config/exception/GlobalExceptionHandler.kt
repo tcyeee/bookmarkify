@@ -45,8 +45,15 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
     fun handleException(e: Exception, request: HttpServletRequest): ResultWrapper {
         return when (e) {
             is CommonException -> {
-                e.printStackTrace()
+                // 业务异常属正常控制流，仅 debug 记录，避免噪声与栈打印
+                log.debug("[业务异常] {} | [{}] {}", request.requestURI, e.errorType.name, e.message)
                 error(e.errorType, e.customMessage ?: e.errorType.msg)
+            }
+
+            // 未登录是常规情况，无需栈
+            is NotLoginException -> {
+                log.debug("[未登录] {}", request.requestURI)
+                error(ErrorType.E101)
             }
 
             is NullPointerException, is HttpMessageNotReadableException -> print(ErrorType.E102, e, request)
@@ -56,13 +63,12 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
             }
 
             is RedisCommandTimeoutException -> print(ErrorType.E203, e, request)
-            is NotLoginException -> print(ErrorType.E101, e, request)
             else -> print(ErrorType.E999, e, request)
         }
     }
 
     /**
-     * 错误统一处理
+     * 非预期错误统一处理：记录完整栈到日志（SLF4J，而非 stderr），返回标准错误体。
      *
      * @param type    错误类型
      * @param e       错误详情
@@ -70,10 +76,7 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
      * @return 错误信息
      */
     private fun print(type: ErrorType, e: Exception, request: HttpServletRequest): ResultWrapper {
-        if (type == ErrorType.E999) {
-            log.error("Σ(oﾟдﾟoﾉ)  ${request.requestURI} | [${type.name}] ${e.message}")
-        }
-        e.printStackTrace()
+        log.error("Σ(oﾟдﾟoﾉ)  {} | [{}] {}", request.requestURI, type.name, e.message, e)
         return error(type)
     }
 

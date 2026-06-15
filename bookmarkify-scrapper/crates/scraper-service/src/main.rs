@@ -70,6 +70,7 @@ async fn main() {
     let proxy_url = env::var("PROXY_URL").ok().filter(|s| !s.is_empty());
 
     let mut client_builder = reqwest::Client::builder()
+        .dns_resolver(Arc::new(scraper::SsrfSafeResolver))
         .timeout(Duration::from_secs(timeout_secs));
 
     if let Some(url) = proxy_url {
@@ -171,17 +172,21 @@ fn base64_encode(bytes: &[u8]) -> String {
 
 async fn favicon_to_base64(url: Option<&str>, http: &reqwest::Client) -> Option<String> {
     let url = url?;
-    let referer = reqwest::Url::parse(url)
-        .ok()
-        .map(|u| format!("{}://{}", u.scheme(), u.host_str().unwrap_or("")))
-        .unwrap_or_default();
+    let parsed = reqwest::Url::parse(url).ok()?;
+    // SSRF pre-flight: reject private/loopback targets before making the request.
+    // The shared client's SsrfSafeResolver also enforces this at the DNS level,
+    // but the pre-flight gives a clean early return rather than a connection error.
+    scraper::validate_target_host(&parsed).await.ok()?;
+    let referer = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
     let response = http.get(url).header("Referer", &referer).send().await.ok()?.error_for_status().ok()?;
     let content_type = response
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("image/png")
-        .to_string();
+        // Strip control characters (e.g. \t) to prevent data-URI injection
+        .map(|s| s.chars().take_while(|c| !c.is_ascii_control()).collect::<String>())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "image/png".to_string());
     let bytes = scraper::read_body_capped(response, scraper::MAX_FAVICON_BYTES)
         .await
         .map_err(|e| tracing::warn!("favicon download failed for {url}: {e}"))
@@ -216,6 +221,19 @@ async fn scrape_handler(
         .ok()
         .and_then(|u| u.host_str().map(str::to_string))
         .unwrap_or_else(|| body.url.clone());
+
+    // 近期失败的 URL 直接拒绝，防止重复触发高开销的 headless 抓取
+    if state.cache.get_error(&body.url).await {
+        tracing::info!(domain, "scrape rejected: recently failed (negative cache hit)");
+        return (
+            StatusCode::BAD_GATEWAY,
+            Json(ErrorResponse {
+                error: "scrape failed recently, retry after 60s".to_string(),
+                detail: None,
+            }),
+        )
+            .into_response();
+    }
 
     // 优先返回缓存结果，避免重复抓取
     if let Some(cached) = state.cache.get(&body.url).await {
@@ -252,27 +270,11 @@ async fn scrape_handler(
 
     match result {
         Ok(r) => {
-            // If OSS is configured, upload assets and replace URLs; hard-fail on error.
-            // Favicon is always converted to base64 regardless of OSS configuration.
+            // If OSS is configured, upload assets concurrently. Asset failures (image,
+            // logo, screenshot, favicon) are non-fatal: fields are set to None or the
+            // original URL with a warning rather than failing the whole request.
             let r = if let Some(oss) = &state.oss {
-                match oss.upload_assets(r, &body.url, &state.client).await {
-                    Ok(uploaded) => uploaded,
-                    Err(e) => {
-                        let msg = match &e {
-                            scraper::ScrapeError::OssFailed(m) => m.clone(),
-                            other => format!("{other:?}"),
-                        };
-                        tracing::warn!("OSS upload failed for {}: {msg}", body.url);
-                        return (
-                            StatusCode::SERVICE_UNAVAILABLE,
-                            Json(ErrorResponse {
-                                error: "oss upload failed".to_string(),
-                                detail: Some(msg),
-                            }),
-                        )
-                            .into_response();
-                    }
-                }
+                oss.upload_assets(r, &body.url, &state.client).await
             } else {
                 let favicon_b64 = favicon_to_base64(r.favicon.as_deref(), &state.client).await;
                 // Pre-encode screenshot once so subsequent cache hits don't re-encode.
@@ -325,6 +327,7 @@ async fn scrape_handler(
 
         Err(scraper::ScrapeError::Timeout) => {
             tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "scrape failed: timeout");
+            state.cache.set_error(&body.url).await;
             (
                 StatusCode::GATEWAY_TIMEOUT,
                 Json(ErrorResponse { error: "timeout".to_string(), detail: None }),
@@ -334,6 +337,7 @@ async fn scrape_handler(
 
         Err(scraper::ScrapeError::FetchFailed(msg)) => {
             tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), %msg, "scrape failed: fetch error");
+            state.cache.set_error(&body.url).await;
             (
                 StatusCode::BAD_GATEWAY,
                 Json(ErrorResponse { error: "fetch failed".to_string(), detail: Some(msg) }),
@@ -343,6 +347,7 @@ async fn scrape_handler(
 
         Err(scraper::ScrapeError::HeadlessFailed(msg)) => {
             tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), %msg, "scrape failed: headless error");
+            state.cache.set_error(&body.url).await;
             (
                 StatusCode::BAD_GATEWAY,
                 Json(ErrorResponse { error: "headless failed".to_string(), detail: Some(msg) }),
@@ -351,8 +356,8 @@ async fn scrape_handler(
         }
 
         Err(scraper::ScrapeError::OssFailed(msg)) => {
-            // OssFailed is handled in the Ok(r) arm above; this arm is required for
-            // exhaustive matching but cannot be reached via the scrape/headless paths.
+            // upload_assets no longer propagates OssFailed (asset failures are non-fatal).
+            // This arm satisfies exhaustive matching; it cannot be reached in practice.
             (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse { error: "oss upload failed".to_string(), detail: Some(msg) }),

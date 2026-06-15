@@ -5,6 +5,7 @@ import cn.dev33.satoken.stp.SaTokenInfo
 import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AdminLoginParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.entity.RoleEnum
@@ -19,6 +20,7 @@ import top.tcyeee.bookmarkify.utils.StpKit
 @RequestMapping("/admin")
 class AdminController(private val userService: IUserService) {
 
+    @Throttle(byIp = true)
     @SaIgnore
     @PostMapping("/login")
     fun login(@RequestBody params: AdminLoginParams): SaTokenInfo {

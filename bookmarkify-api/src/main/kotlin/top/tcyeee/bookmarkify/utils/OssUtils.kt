@@ -18,6 +18,7 @@ import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
 import top.tcyeee.bookmarkify.entity.enums.FileType
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.URI
 import javax.imageio.ImageIO
@@ -164,9 +165,21 @@ class OssUtils {
                 throw CommonException(ErrorType.E223, "private:$host")
             }
 
-            val connection = runCatching { parsedUrl.openConnection() }
+            // F-05 (DNS rebinding): pin the connection to the already-validated IP so the JVM
+            // cannot re-resolve the hostname and get a different (private) address on the second lookup.
+            val safeUrl = URI(parsedUrl.protocol, null, addr.hostAddress, parsedUrl.port, parsedUrl.file, null, null).toURL()
+            val connection = runCatching { safeUrl.openConnection() }
                 .getOrElse { throw CommonException(ErrorType.E223, it.message) }
-                .apply { connectTimeout = 5000; readTimeout = 5000 }
+                .apply {
+                    connectTimeout = 5000
+                    readTimeout = 5000
+                    // F-01 (SSRF redirect): disable automatic redirect following.
+                    // Without this a 301/302 from the validated public server could redirect
+                    // to a private/internal address, bypassing the SSRF guard entirely.
+                    (this as? java.net.HttpURLConnection)?.instanceFollowRedirects = false
+                    // Restore the original Host header so virtual-hosted sites resolve correctly.
+                    setRequestProperty("Host", host)
+                }
 
             // 限制文件大小
             val length = connection.contentLengthLong
@@ -188,11 +201,10 @@ class OssUtils {
         fun uploadImg(inputStream: InputStream, fileType: FileType, url: String, bookmarkId: String): ImgInfo {
             log.debug("[uploadImg] fileType={}, url={}, bookmarkId={}", fileType, url, bookmarkId)
             if (!fileType.isImg()) throw CommonException(ErrorType.E999)
-            val bytes = inputStream.readBytes()
-                .also {
-                    log.debug("[uploadImg] 读取字节数={}, limit={}", it.size, fileType.limit)
-                    if (it.size > fileType.limit) throw CommonException(ErrorType.E219)
-                }
+            // F-OOM: 远端可能不返回 Content-Length（绕过 restoreImg 的预检查），因此这里必须有界读取，
+            // 绝不能用 readBytes() 把整个流一次性吞进堆内存——否则恶意/异常服务器可触发 OOM。
+            val bytes = inputStream.readBounded(fileType.limit)
+                .also { log.debug("[uploadImg] 读取字节数={}, limit={}", it.size, fileType.limit) }
 
             // 则检查图片的长和宽(后续用于重命名)
             val img: Pair<Int, Int> = runCatching { ImageIO.read(ByteArrayInputStream(bytes)) }
@@ -223,6 +235,23 @@ class OssUtils {
          * @param path 文件的最终存储地址(包含名称和后缀) eg /logo/dkgy-hfauw-ekadfa/og.png
          * return 最终线上地址
          */
+        /**
+         * 有界读取：最多读取 [limit] 字节，超出立即抛出，避免无 Content-Length 时的 OOM。
+         */
+        private fun InputStream.readBounded(limit: Int): ByteArray {
+            val buffer = ByteArrayOutputStream()
+            val chunk = ByteArray(8192)
+            var total = 0
+            while (true) {
+                val read = this.read(chunk)
+                if (read == -1) break
+                total += read
+                if (total > limit) throw CommonException(ErrorType.E219, "length>$limit")
+                buffer.write(chunk, 0, read)
+            }
+            return buffer.toByteArray()
+        }
+
         private fun upload(inputStream: InputStream, path: String) =
             runCatching { ossClient.putObject(bucket, path, inputStream) }
                 .getOrElse { throw CommonException(ErrorType.E224, it.message) }

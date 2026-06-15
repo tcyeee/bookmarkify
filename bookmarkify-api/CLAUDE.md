@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Database:** PostgreSQL (schema: `bookmarkify`)
 - **ORM:** MyBatis-Plus 3.5.15
 - **Cache/Session:** Redis (Spring Data Redis)
-- **Messaging:** Apache Kafka (topic: `BOOKMARKIFY`)
+- **Async:** Spring `@Async` + `ApplicationEvent` (in-process background parsing; no message broker)
 - **Auth:** Sa-Token 1.40.0 (dual realm: USER + ADMIN)
 - **Object Storage:** Alibaba Cloud OSS
 - **SMS:** Alibaba Cloud SMS
@@ -36,7 +36,8 @@ src/main/kotlin/top/tcyeee/bookmarkify/
 │   ├── exception/                    # GlobalExceptionHandler, ErrorType codes
 │   ├── filter/                       # Rate limiter, Sa-Token interceptors
 │   ├── init/                         # AppInit (ApplicationRunner startup)
-│   ├── kafka/                        # KafkaMessageListener, topic/action enums
+│   ├── async/                        # AsyncConfig (@EnableAsync, bookmarkParseExecutor)
+│   ├── event/                        # Parse events + @Async BookmarkParseEventListener
 │   ├── result/                       # ResultWrapper, PageBean
 │   ├── throttle/                     # @Throttle annotation + AOP aspect
 │   └── websocket/                    # WebSocket config, handler, session manager
@@ -63,7 +64,7 @@ src/main/kotlin/top/tcyeee/bookmarkify/
 
 ```
 src/main/resources/
-├── application.yml                   # Base config (port 7001, Kafka, Sa-Token)
+├── application.yml                   # Base config (port 7001, Sa-Token)
 ├── application-dev.yml               # Dev profile (local DB/Redis)
 ├── application-online.yml            # Prod profile (all env vars)
 └── banner.txt                        # ASCII banner
@@ -102,8 +103,6 @@ Required variables (see `.evn.local.example`):
 | `BOOKMARKIFY_FILE_UPLOAD_DIR` / `PREFIX` | Local file storage paths |
 | `BOOKMARKIFY_WECHAT_WORK_CORPID/CORPSECRET` | WeChat Work email API |
 | `BOOKMARKIFY_ALIYUN_OSS_*` | Aliyun OSS (endpoint, keys, bucket, domain) |
-| `BOOKMARKIFY_KAFKA_BOOTSTRAP_SERVERS` | Kafka broker address |
-| `SPRING_KAFKA_BOOTSTRAP_SERVERS` | Kafka (base config) |
 | `BOOKMARKIFY_IFRAMELY_API_KEY` | Iframely third-party page-metadata API |
 | `BOOKMARKIFY_DEEPSEEK_API_KEY` | DeepSeek LLM (app-name inference) |
 
@@ -116,7 +115,7 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
                                                                                           ↕
                                                                               Redis (cache/session)
                                                                                           ↕
-                                                                              Kafka (async parsing)
+                                                                  Async executor (@Async parsing)
                                                                                           ↕
                                                                               WebSocket (push updates)
 ```
@@ -126,7 +125,7 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 1. **Dual auth realms:** `StpKit.USER` for regular users, `StpKit.ADMIN` for admin panel. Completely separate session stores.
 2. **Anonymous-first identity:** Every visitor gets a `deviceUid` cookie and auto-created `sys_user`. Users "upgrade" by verifying phone/email.
 3. **Bookmark deduplication:** The `bookmark` table stores one canonical record per domain. User-specific data lives in `bookmark_user_link`.
-4. **Async parsing pipeline:** Adding a bookmark returns a loading placeholder immediately. Kafka consumer parses the website, uploads logos to OSS, and pushes the result via WebSocket (`HOME_ITEM_UPDATE`).
+4. **Async parsing pipeline:** Adding a bookmark returns a loading placeholder immediately. A Spring `ApplicationEvent` is published; an `@Async` listener (`BookmarkParseEventListener`, running on the `bookmarkParseExecutor` thread pool) parses the website, uploads logos to OSS, and pushes the result via WebSocket (`HOME_ITEM_UPDATE`). Failed parses are not retried inline — `checkAll()` cron reconciles unverified bookmarks.
 5. **Desktop layout tree:** `user_layout_node` stores a tree with `parentId` (ROOT → folders → bookmarks). Sort order is a JSON map in `user_preference` to avoid bulk DB writes.
 6. **AOP caching/throttling:** `@RedisCache` for method-level caching; `@Throttle` for per-user rate limiting via Redis SETNX.
 7. **Unified response wrapper:** `GlobalExceptionHandler` (ResponseBodyAdvice) wraps all responses in `ResultWrapper{ok, code, data, msg}`.
@@ -148,12 +147,12 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 | `website_logo` | Logo/OG metadata for bookmarks |
 | `sms_record` | SMS send logs |
 
-### Kafka Topics & Actions
+### Async Parse Events
 
-Single topic `BOOKMARKIFY`, actions:
-- `BOOKMARK_PARSE` — Re-parse a bookmark (cron / startup)
-- `PARSE_NOTICE_EXISTING` — Parse + WebSocket push (single add)
-- `BOOKMARK_PARSE_AND_RESET_USER_ITEM` — Parse + bind user link (import)
+In-process Spring events (`config/event/`), dispatched by `BookmarkParseEventListener` on the `bookmarkParseExecutor` pool (`config/async/AsyncConfig.kt`):
+- `BookmarkParseEvent` — Parse + save a bookmark (cron / startup)
+- `BookmarkParseAndNoticeEvent` — Parse + WebSocket push (single add)
+- `BookmarkParseAndResetUserItemEvent` — Parse + bind user link (import)
 
 ### Redis Cache Keys
 
@@ -191,4 +190,4 @@ Single topic `BOOKMARKIFY`, actions:
 - `HomeItem` / `HomeItemMapper` (and `HomeItemServiceImpl.kt`) are legacy — superseded by the `UserLayoutNode` system; avoid extending them in new work
 - The `server/` package (not `service/`) holds service interfaces — keep this naming when adding services
 - Admin login credentials default to `tcyeee@outlook.com` / `admin` in config
-- `AGENTS.md` in this repo defines role-scoped guidance (Backend / Kafka / DB / Auth / Infra / File Storage); consult it when a task fits one of those scopes
+- `AGENTS.md` in this repo defines role-scoped guidance (Backend / Async / DB / Auth / Infra / File Storage); consult it when a task fits one of those scopes

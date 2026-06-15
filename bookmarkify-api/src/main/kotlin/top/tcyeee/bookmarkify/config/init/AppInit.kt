@@ -4,13 +4,14 @@ import cn.hutool.core.util.IdUtil
 import cn.hutool.json.JSONUtil
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
+import top.tcyeee.bookmarkify.config.event.BookmarkParseEvent
 import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.server.IBackgroundGradientService
 import top.tcyeee.bookmarkify.server.IBookmarkService
-import top.tcyeee.bookmarkify.server.IKafkaMessageService
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 
 /**
@@ -25,7 +26,7 @@ class AppInit(
     private val projectConfig: ProjectConfig,
     private val bookmarkService: IBookmarkService,
     private val bookmarkMapper: BookmarkMapper,
-    private val messageService: IKafkaMessageService,
+    private val eventPublisher: ApplicationEventPublisher,
 ) : ApplicationRunner {
     override fun run(args: ApplicationArguments?) {
         // 检查是否有默认渐变数据,没有则初始化
@@ -50,8 +51,8 @@ class AppInit(
         (defaultHostList - hasStoreHostList).map { WebsiteParser.urlToBookmark(it) }
             // 批量插入
             .also { bookmarkMapper.insert(it) }.map { it.id }
-            // 逐一检查
-            .forEach { messageService.bookmarkParse(it) }
+            // 逐一发布异步解析事件
+            .forEach { eventPublisher.publishEvent(BookmarkParseEvent(it)) }
 
     }
 }
