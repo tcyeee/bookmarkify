@@ -4,9 +4,17 @@ services:
     image: ${SCRAPPER_IMAGE}
     container_name: bookmarkify-scraper
     restart: unless-stopped
+    # Memory cap — headless Chrome can spike; serialized to one browser at a time.
+    # mem_limit is the hard ceiling; memswap_limit allows a little swap headroom so
+    # occasional spikes don't OOM-kill Chrome mid-scrape. Tune for the host.
+    mem_limit: 1g
+    mem_reservation: 256m
+    memswap_limit: 2g
     ports:
-      # Bound to localhost only — not publicly exposed. Host 3000 is owned by bookmarkify-web.
-      - "127.0.0.1:3001:3000"
+      # Exposed on all interfaces for external testing. Host 3000 is owned by bookmarkify-web.
+      # NOTE: also open inbound TCP 3001 in the Tencent Cloud security group.
+      # Re-bind to "127.0.0.1:3001:3000" once testing is done to make it private again.
+      - "3001:3000"
     environment:
       TZ: Asia/Shanghai
       # Container listens on 3000 (host port is controlled by the mapping above)
