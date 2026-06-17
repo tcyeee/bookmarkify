@@ -26,16 +26,13 @@
 bookmarkify-scrapper/
 ├── Cargo.toml                       # Workspace 配置
 └── crates/
-    ├── scraper-service/             # 生产服务
+    └── scraper-service/             # 生产服务
     │   └── src/
     │       ├── main.rs              # HTTP 服务器、路由、AppState
     │       ├── scraper.rs           # Layer 1：HTML 元数据解析
     │       ├── headless.rs          # Layer 2：无头 Chrome 抓取
     │       ├── cache.rs             # URL 规范化缓存
     │       └── oss.rs               # 阿里云 OSS 上传客户端
-    └── scraper-demo/                # M0 验证 Demo（不用于生产）
-        └── src/
-            └── main.rs              # 花瓣/知乎反爬验证脚本
 ```
 
 ## 快速开始

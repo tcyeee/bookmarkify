@@ -49,9 +49,8 @@ docker-compose up -d
 
 ## Architecture
 
-Cargo workspace with two crates:
+Cargo workspace with a single crate:
 - `crates/scraper-service/` — production HTTP service
-- `crates/scraper-demo/` — M0 anti-crawler validation demo (not used in production)
 
 ### Request Flow
 

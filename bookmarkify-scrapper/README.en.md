@@ -26,15 +26,12 @@ A web metadata scraping service for bookmarks, supporting both static pages and 
 bookmarkify-scrapper/
 ├── Cargo.toml                       # Workspace configuration
 └── crates/
-    ├── scraper-service/             # Production service
+    └── scraper-service/             # Production service
     │   └── src/
     │       ├── main.rs              # HTTP server, routing, auth, rate limiting
     │       ├── scraper.rs           # Layer 1: HTML metadata parsing
     │       ├── headless.rs          # Layer 2: headless Chrome scraping
     │       └── cache.rs             # URL-normalized in-memory cache
-    └── scraper-demo/                # M0 validation demo (not for production)
-        └── src/
-            └── main.rs              # Anti-crawler verification script
 ```
 
 ## Getting Started
