@@ -1,4 +1,6 @@
 target/
+vendor/
+.worktrees/
 screenshots/
 rust_out
 docs/
