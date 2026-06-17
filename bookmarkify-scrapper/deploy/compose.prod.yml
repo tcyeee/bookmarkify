@@ -23,6 +23,11 @@ services:
       HEADLESS_TIMEOUT_SECS: 30
       CACHE_TTL_SECS: 3600
       RUST_LOG: info
+      # Outbound proxy via the `clash` container (containerized Mihomo) on app_network.
+      # Both Layer 1 (reqwest) and Layer 2 (headless Chrome) honor this; domestic sites
+      # go direct via Clash's GEOIP,CN,DIRECT rule. The clash container is managed on the
+      # host by /opt/clash/docker-compose.yml (not by this CI deploy).
+      PROXY_URL: http://clash:7890
       # Aliyun OSS upload — all five must be set to enable; values come from .env
       OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
       OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
