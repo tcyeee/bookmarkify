@@ -223,7 +223,7 @@ class BookmarkServiceImpl(
 
     // ────── 公开接口（明确指定解析方式时调用）──────
 
-    /** 通过 iframely 第三方 API 解析书签，若书签已通过手动认证则直接返回 */
+    /** 通过 scrapper 远程解析书签，若书签已通过手动认证则直接返回 */
     override fun parseBookmarkByApi(bookmark: BookmarkEntity): BookmarkEntity {
         val existing = baseMapper.selectById(bookmark.id)
         if (existing != null && existing.verifyFlag) return existing
@@ -242,7 +242,7 @@ class BookmarkServiceImpl(
             log.debug("[parseBookmark] 书签已手动认证(verifyFlag=true), 跳过解析直接返回: bookmarkId=${bookmark.id}")
             return existing
         }
-        val mode = if (projectConfig.useThirdPartyParser) "第三方API" else "本地Jsoup"
+        val mode = if (projectConfig.useThirdPartyParser) "远程scrapper" else "本地Jsoup"
         log.debug("[parseBookmark] 选择解析模式: $mode, bookmarkId=${bookmark.id}")
         return if (projectConfig.useThirdPartyParser) parseByApi(bookmark) else parseLocally(bookmark)
     }
@@ -275,17 +275,19 @@ class BookmarkServiceImpl(
     }
 
     /**
-     * 第三方 API 解析（iframely）：通过 API 获取元信息 + favicon base64 + LOGO/OG 存 OSS
+     * 远程解析（scrapper）：通过自部署的 bookmarkify-scrapper 获取元信息 + favicon base64 + LOGO/OG 存 OSS
      */
     private fun parseByApi(bookmark: BookmarkEntity): BookmarkEntity {
-        log.debug("[parseByApi] 开始第三方API解析(iframely): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")
+        log.debug("[parseByApi] 开始远程解析(scrapper): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
                 val icons = vo.toManifestIcons()
-                log.debug("[parseByApi] API 返回成功: bookmarkId=${bookmark.id}, title=${vo.meta?.title}, iconCount=${icons.size}")
+                log.debug("[parseByApi] scrapper 返回成功: bookmarkId=${bookmark.id}, title=${vo.title}, source=${vo.source}, iconCount=${icons.size}")
                 // 填充基础信息 + iconBase64 + DeepSeek 简称推断，保存一次
                 vo.entity(bookmark).also {
-                    it.iconBase64 = ChromeBookmarkParser.icoBase64(icons, it.rawUrl)
+                    // scrapper 已返回 base64 data URL 的 favicon，优先直用；否则回退到本地下载
+                    it.iconBase64 = vo.favicon?.takeIf { f -> f.isNotBlank() }
+                        ?: ChromeBookmarkParser.icoBase64(icons, it.rawUrl)
                     inferAndSetAppName(it)
                     baseMapper.insertOrUpdate(it)
                     log.debug("[parseByApi] 元信息已保存: bookmarkId=${it.id}, appName=${it.appName}, parseStatus=${it.parseStatus}")

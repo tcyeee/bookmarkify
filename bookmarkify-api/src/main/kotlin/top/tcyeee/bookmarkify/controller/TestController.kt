@@ -19,21 +19,18 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 @Tag(name = "测试相关")
 @RequestMapping("/test")
 class TestController(
-    private val bookmarkService: IBookmarkService,
-    private val iapiService: IApiService
+    private val bookmarkService: IBookmarkService, private val iapiService: IApiService
 ) {
 
     @SaIgnore
     @GetMapping("/link")
-    fun linkTest(type: Int, param: String): Boolean {
+    fun linkTest(type: Int, param: String): Any {
         if (type == 1) {
-            bookmarkService.ktQuery().list()
-                .forEach { bookmarkService.parseBookmarkByApi(it) }
+            bookmarkService.ktQuery().list().forEach { bookmarkService.parseBookmarkByApi(it) }
             return true
         }
         if (type == 2) {
-            iapiService.queryWebsiteInfo(param)
-            return true
+            return iapiService.queryWebsiteInfo(param)
         }
         if (type == 3) {
             iapiService.queryWebsiteInfo(param)

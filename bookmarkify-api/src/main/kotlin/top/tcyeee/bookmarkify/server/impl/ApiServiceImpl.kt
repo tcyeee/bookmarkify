@@ -5,39 +5,46 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.DeepSeekConfig
-import top.tcyeee.bookmarkify.config.entity.IframelyConfig
+import top.tcyeee.bookmarkify.config.entity.ScrapperConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekMessage
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekRequest
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekResponse
-import top.tcyeee.bookmarkify.entity.dto.IframelyResponse
+import top.tcyeee.bookmarkify.entity.dto.ScrapeRequest
+import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
 import top.tcyeee.bookmarkify.server.IApiService
 
 @Service
 class ApiServiceImpl(
-    private val iframelyConfig: IframelyConfig,
+    private val scrapperConfig: ScrapperConfig,
     private val deepSeekConfig: DeepSeekConfig,
     private val objectMapper: ObjectMapper,
 ) : IApiService {
 
-    override fun queryWebsiteInfo(domain: String): IframelyResponse {
+    override fun queryWebsiteInfo(domain: String): ScrapeResponse {
         val url = buildUrl(domain)
-        val responseBody = runCatching {
-            HttpUtil.createGet("https://iframe.ly/api/iframely")
-                .form("url", url)
-                .form("api_key", iframelyConfig.apiKey)
-                .timeout(10000)
+        val request = ScrapeRequest(url = url)
+
+        // scrapper 可能回退到无头浏览器（HEADLESS_TIMEOUT + IDLE_WAIT），超时给足 60s
+        val httpResponse = runCatching {
+            HttpUtil.createPost("${scrapperConfig.baseUrl.trimEnd('/')}/scrape")
+                .header("Content-Type", "application/json")
+                .body(objectMapper.writeValueAsString(request))
+                .timeout(60000)
                 .execute()
-                .body()
         }.getOrElse { throw CommonException(ErrorType.E304, it.message ?: it.toString()) }
 
-        val response = runCatching { objectMapper.readValue<IframelyResponse>(responseBody) }
-            .getOrElse { throw CommonException(ErrorType.E304, "iframely 响应解析失败") }
+        val body = httpResponse.body()
+        if (!httpResponse.isOk) {
+            // 错误响应体形如 {"error":"timeout","detail":"..."}
+            val msg = runCatching { objectMapper.readTree(body).path("error").asText(null) }.getOrNull()
+                ?: "scrapper 返回 ${httpResponse.status}"
+            throw CommonException(ErrorType.E304, msg)
+        }
 
-        if (response.error != null) throw CommonException(ErrorType.E304, response.error)
-
-        return response
+        return runCatching { objectMapper.readValue<ScrapeResponse>(body) }
+            .getOrElse { throw CommonException(ErrorType.E304, "scrapper 响应解析失败") }
     }
 
     override fun inferAppName(title: String): String? {

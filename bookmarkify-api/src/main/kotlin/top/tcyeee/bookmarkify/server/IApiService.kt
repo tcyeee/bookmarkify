@@ -1,13 +1,14 @@
 package top.tcyeee.bookmarkify.server
 
-import top.tcyeee.bookmarkify.entity.dto.IframelyResponse
+import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
 
 /**
  * @author tcyeee
  * @date 3/14/26 14:07
  */
 interface IApiService {
-    fun queryWebsiteInfo(domain: String): IframelyResponse
+    /** 通过自部署的 bookmarkify-scrapper 解析网站基础信息 */
+    fun queryWebsiteInfo(domain: String): ScrapeResponse
 
     /**
      * 通过 DeepSeek 从网站标题中提取品牌简称
