@@ -1,0 +1,32 @@
+services:
+  bookmarkify-scraper:
+    # Image ref (…/scrapper:<git-sha>) is written into .env by the deploy workflow
+    image: ${SCRAPPER_IMAGE}
+    container_name: bookmarkify-scraper
+    restart: unless-stopped
+    ports:
+      # Bound to localhost only — not publicly exposed. Host 3000 is owned by bookmarkify-web.
+      - "127.0.0.1:3001:3000"
+    environment:
+      TZ: Asia/Shanghai
+      # Container listens on 3000 (host port is controlled by the mapping above)
+      PORT: 3000
+      REQUEST_TIMEOUT_SECS: 10
+      HEADLESS_TIMEOUT_SECS: 30
+      CACHE_TTL_SECS: 3600
+      RUST_LOG: info
+      # Aliyun OSS upload — all five must be set to enable; values come from .env
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
+      OSS_BUCKET: ${OSS_BUCKET}
+      OSS_ENDPOINT: ${OSS_ENDPOINT}
+      OSS_BASE_URL: ${OSS_BASE_URL}
+    networks:
+      - app_network
+
+networks:
+  # Shared with the other Bookmarkify services so the API can reach this
+  # container as http://bookmarkify-scraper:3000. Reused if it already exists,
+  # created (bridge) otherwise.
+  app_network:
+    name: app_network
