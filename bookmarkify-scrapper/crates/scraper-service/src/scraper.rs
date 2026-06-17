@@ -125,10 +125,22 @@ pub fn is_forbidden_ip(ip: &std::net::IpAddr) -> bool {
 /// DNS 重绑定攻击（TOCTOU）。所有通过共享 `reqwest::Client` 发出的请求（包括 OG image、
 /// logo、favicon 等次级资源）均受此保护。
 /// 设置 `SSRF_ALLOW_PRIVATE=1` 可跳过验证（集成测试用）。
-pub struct SsrfSafeResolver;
+pub struct SsrfSafeResolver {
+    /// 受信任的出站代理主机名：解析它时跳过私网 IP 校验。代理由服务端 `PROXY_URL` 配置，
+    /// 通常位于 docker 私网（如 `clash:7890` → 172.19.x），属可信目标，不应被 SSRF 防护误拦。
+    proxy_host: Option<String>,
+}
+
+impl SsrfSafeResolver {
+    /// `proxy_host`：从 `PROXY_URL` 解析出的代理主机名（无代理时为 `None`）。
+    pub fn new(proxy_host: Option<String>) -> Self {
+        Self { proxy_host }
+    }
+}
 
 impl reqwest::dns::Resolve for SsrfSafeResolver {
     fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let proxy_host = self.proxy_host.clone();
         Box::pin(async move {
             if std::env::var("SSRF_ALLOW_PRIVATE").ok().as_deref() == Some("1") {
                 let addrs = tokio::net::lookup_host(format!("{}:0", name.as_str()))
@@ -139,9 +151,14 @@ impl reqwest::dns::Resolve for SsrfSafeResolver {
 
             let host = name.as_str();
 
+            // 受信任的代理主机跳过私网校验（代理是服务端配置，常驻 docker 私网）
+            let is_trusted_proxy = proxy_host
+                .as_deref()
+                .is_some_and(|p| p.eq_ignore_ascii_case(host));
+
             // IP 字面量：直接校验，无需 DNS 查询
             if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-                if is_forbidden_ip(&ip) {
+                if is_forbidden_ip(&ip) && !is_trusted_proxy {
                     return Err(Box::new(std::io::Error::new(
                         std::io::ErrorKind::PermissionDenied,
                         format!("SSRF blocked: {ip} is a forbidden address"),
@@ -163,12 +180,14 @@ impl reqwest::dns::Resolve for SsrfSafeResolver {
                 )) as Box<dyn std::error::Error + Send + Sync>);
             }
 
-            for addr in &addrs {
-                if is_forbidden_ip(&addr.ip()) {
-                    return Err(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::PermissionDenied,
-                        format!("SSRF blocked: {host} resolves to forbidden address {}", addr.ip()),
-                    )) as Box<dyn std::error::Error + Send + Sync>);
+            if !is_trusted_proxy {
+                for addr in &addrs {
+                    if is_forbidden_ip(&addr.ip()) {
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::PermissionDenied,
+                            format!("SSRF blocked: {host} resolves to forbidden address {}", addr.ip()),
+                        )) as Box<dyn std::error::Error + Send + Sync>);
+                    }
                 }
             }
 
