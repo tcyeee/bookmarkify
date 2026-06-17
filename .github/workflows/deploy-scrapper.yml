@@ -16,8 +16,6 @@ concurrency:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    outputs:
-      image: ${{ steps.meta.outputs.image }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,12 +28,8 @@ jobs:
           username: ${{ secrets.TCR_USERNAME }}
           password: ${{ secrets.TCR_PASSWORD }}
 
-      - name: Compute image refs
-        id: meta
-        run: |
-          BASE="${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/scrapper"
-          echo "IMAGE_BASE=${BASE}" >> "$GITHUB_ENV"
-          echo "image=${BASE}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - name: Compute image base
+        run: echo "IMAGE_BASE=${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/scrapper" >> "$GITHUB_ENV"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -112,7 +106,7 @@ jobs:
             echo "Deploy OK: $SCRAPPER_IMAGE"
         env:
           COMPOSE_B64: ${{ steps.prep.outputs.compose_b64 }}
-          SCRAPPER_IMAGE: ${{ needs.build-and-push.outputs.image }}
+          SCRAPPER_IMAGE: ${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/scrapper:${{ github.sha }}
           TCR_REGISTRY: ${{ secrets.TCR_REGISTRY }}
           TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
           TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
