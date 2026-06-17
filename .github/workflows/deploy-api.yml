@@ -1,0 +1,123 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [prod]
+    paths:
+      - 'bookmarkify-api/**'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+# Never run two API deploys at once; let an in-flight one finish.
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to Tencent TCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.TCR_REGISTRY }}
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
+
+      - name: Compute image base
+        run: echo "IMAGE_BASE=${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/api" >> "$GITHUB_ENV"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: bookmarkify-api
+          file: bookmarkify-api/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_BASE }}:latest
+            ${{ env.IMAGE_BASE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Encode compose file
+        id: prep
+        run: |
+          echo "compose_b64=$(base64 -w0 bookmarkify-api/deploy/compose.prod.yml)" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_SSH_PORT || 22 }}
+          envs: COMPOSE_B64,API_IMAGE,TCR_REGISTRY,TCR_USERNAME,TCR_PASSWORD,SPRING_DATASOURCE_PASSWORD,SPRING_DATA_REDIS_PASSWORD,BOOKMARKIFY_WECHAT_WORK_CORPID,BOOKMARKIFY_WECHAT_WORK_CORPSECRET,BOOKMARKIFY_DEEPSEEK_API_KEY,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET
+          script: |
+            set -euo pipefail
+
+            APP_DIR="$HOME/bookmarkify-api"
+            mkdir -p "$APP_DIR"
+
+            # Compose file (single source of truth from the repo)
+            echo "$COMPOSE_B64" | base64 -d > "$APP_DIR/compose.yml"
+
+            # Runtime env consumed by compose interpolation
+            umask 077
+            cat > "$APP_DIR/.env" <<EOF
+            API_IMAGE=$API_IMAGE
+            SPRING_DATASOURCE_PASSWORD=$SPRING_DATASOURCE_PASSWORD
+            SPRING_DATA_REDIS_PASSWORD=$SPRING_DATA_REDIS_PASSWORD
+            BOOKMARKIFY_WECHAT_WORK_CORPID=$BOOKMARKIFY_WECHAT_WORK_CORPID
+            BOOKMARKIFY_WECHAT_WORK_CORPSECRET=$BOOKMARKIFY_WECHAT_WORK_CORPSECRET
+            BOOKMARKIFY_DEEPSEEK_API_KEY=$BOOKMARKIFY_DEEPSEEK_API_KEY
+            OSS_ACCESS_KEY_ID=$OSS_ACCESS_KEY_ID
+            OSS_ACCESS_KEY_SECRET=$OSS_ACCESS_KEY_SECRET
+            OSS_BUCKET=$OSS_BUCKET
+            EOF
+
+            echo "$TCR_PASSWORD" | docker login "$TCR_REGISTRY" -u "$TCR_USERNAME" --password-stdin
+
+            cd "$APP_DIR"
+            docker compose pull
+            docker compose up -d
+
+            # Health check: poll the API on its host-mapped port (auth/track is a GET that returns 200).
+            ok=0
+            for i in $(seq 1 40); do
+              if curl -fsS http://127.0.0.1:7001/auth/track >/dev/null 2>&1; then ok=1; break; fi
+              sleep 3
+            done
+
+            docker image prune -f || true
+
+            if [ "$ok" != "1" ]; then
+              echo "::error::Health check failed for $API_IMAGE"
+              docker compose logs --tail=120 || true
+              exit 1
+            fi
+            echo "Deploy OK: $API_IMAGE"
+        env:
+          COMPOSE_B64: ${{ steps.prep.outputs.compose_b64 }}
+          API_IMAGE: ${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/api:${{ github.sha }}
+          TCR_REGISTRY: ${{ secrets.TCR_REGISTRY }}
+          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
+          TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
+          SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+          SPRING_DATA_REDIS_PASSWORD: ${{ secrets.SPRING_DATA_REDIS_PASSWORD }}
+          BOOKMARKIFY_WECHAT_WORK_CORPID: ${{ secrets.BOOKMARKIFY_WECHAT_WORK_CORPID }}
+          BOOKMARKIFY_WECHAT_WORK_CORPSECRET: ${{ secrets.BOOKMARKIFY_WECHAT_WORK_CORPSECRET }}
+          BOOKMARKIFY_DEEPSEEK_API_KEY: ${{ secrets.BOOKMARKIFY_DEEPSEEK_API_KEY }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_BUCKET: ${{ secrets.OSS_BUCKET }}

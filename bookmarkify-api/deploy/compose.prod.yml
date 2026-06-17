@@ -1,0 +1,49 @@
+services:
+  bookmarkify-api:
+    # Image ref (…/api:<git-sha>) is written into .env by the deploy workflow.
+    image: ${API_IMAGE}
+    container_name: bookmarkify-api
+    restart: unless-stopped
+    ports:
+      # nginx (on app_network) reaches this as http://bookmarkify-api:7001; the host
+      # mapping is kept only for direct debugging (curl localhost:7001) and CI health checks.
+      - "7001:7001"
+    volumes:
+      - "/root/bookmarkify/file:/opt/bookmarkify/file"
+      - "/root/bookmarkify/logs:/opt/bookmarkify/logs"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+    environment:
+      SPRING_PROFILES_ACTIVE: online
+      TZ: Asia/Shanghai
+      # --- PostgreSQL (host/db non-sensitive; password from .env) ---
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/app?currentSchema=bookmarkify&stringtype=unspecified"
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      # --- Redis (host/port non-sensitive; password from .env) ---
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${SPRING_DATA_REDIS_PASSWORD}
+      # --- File storage ---
+      LOG_DIR: /opt/bookmarkify/logs
+      FILE_UPLOAD_DIR: /opt/bookmarkify/file/
+      FILE_UPLOAD_PREFIX: https://file.bookmarkify.cc
+      # --- WeChat Work email API (secrets from .env) ---
+      BOOKMARKIFY_WECHAT_WORK_CORPID: ${BOOKMARKIFY_WECHAT_WORK_CORPID}
+      BOOKMARKIFY_WECHAT_WORK_CORPSECRET: ${BOOKMARKIFY_WECHAT_WORK_CORPSECRET}
+      # --- Aliyun OSS (keys from shared OSS_* secrets; endpoint/bucket/domain fixed) ---
+      BOOKMARKIFY_ALIYUN_OSS_ENDPOINT: oss-cn-hangzhou.aliyuncs.com
+      BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
+      BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
+      BOOKMARKIFY_ALIYUN_OSS_BUCKET_NAME: ${OSS_BUCKET}
+      BOOKMARKIFY_ALIYUN_OSS_DOMAIN: https://file.tcyeee.top
+      # --- DeepSeek LLM (secret from .env) ---
+      BOOKMARKIFY_DEEPSEEK_API_KEY: ${BOOKMARKIFY_DEEPSEEK_API_KEY}
+    networks:
+      - app_network
+
+networks:
+  # Shared with the other Bookmarkify services so the API reaches postgres/redis/scraper
+  # by container alias, and nginx reaches the API as http://bookmarkify-api:7001.
+  app_network:
+    name: app_network

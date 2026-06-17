@@ -1,0 +1,10 @@
+# Keep the Docker build context small and reproducible — the jar is built in-image.
+build/
+bin/
+.gradle/
+.kotlin/
+.idea/
+.vscode/
+.git/
+.env
+*.log
