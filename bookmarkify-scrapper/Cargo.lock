@@ -3242,17 +3242,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scraper-demo"
-version = "0.1.0"
-dependencies = [
- "once_cell",
- "regex",
- "serde_json",
- "spider",
- "tokio",
-]
-
-[[package]]
 name = "scraper-service"
 version = "0.1.0"
 dependencies = [
