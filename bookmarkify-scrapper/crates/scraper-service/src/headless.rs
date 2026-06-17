@@ -70,7 +70,11 @@ pub async fn scrape_headless(url: &str, timeout_secs: u64, idle_wait_secs: u64) 
 
     let mut website = Website::new(url);
     website
-        .with_limit(1) // 只抓取目标页面，不跟随任何链接
+        // 只抓取目标页面，不跟随任何链接。注意 spider 的预算判定存在 off-by-one：
+        // is_over_inner_budget 在 budget==1 时即判定"超预算"并跳过该链接，因此 with_limit(1)
+        // 会连种子页本身都跳过（返回零页面 → "no page returned"）。with_limit(2) 实际只放行
+        // 种子页：种子页 budget 2→1 放行，其后所有链接 budget==1 一律被判超预算而跳过。
+        .with_limit(2)
         .with_proxies(proxies) // 经 PROXY_URL 让 Chrome 走代理（--proxy-server）
         .with_stealth(true) // 启用隐身模式，降低被检测为爬虫的概率
         .with_chrome_intercept(RequestInterceptConfiguration::new(true)) // 拦截广告/追踪请求（依赖 spider 的 chrome_intercept feature）
