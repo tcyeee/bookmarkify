@@ -69,8 +69,14 @@ async fn main() {
 
     let proxy_url = env::var("PROXY_URL").ok().filter(|s| !s.is_empty());
 
+    // 从 PROXY_URL 提取代理主机名，让 SSRF 解析器放行它（代理常驻 docker 私网）
+    let proxy_host = proxy_url
+        .as_deref()
+        .and_then(|u| reqwest::Url::parse(u).ok())
+        .and_then(|u| u.host_str().map(|h| h.to_string()));
+
     let mut client_builder = reqwest::Client::builder()
-        .dns_resolver(Arc::new(scraper::SsrfSafeResolver))
+        .dns_resolver(Arc::new(scraper::SsrfSafeResolver::new(proxy_host)))
         .timeout(Duration::from_secs(timeout_secs));
 
     if let Some(url) = proxy_url {
