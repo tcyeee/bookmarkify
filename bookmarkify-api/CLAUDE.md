@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Object Storage:** Alibaba Cloud OSS
 - **SMS:** Alibaba Cloud SMS
 - **Email:** WeChat Work API (not SMTP)
-- **HTML Parsing:** Jsoup 1.17.2 (local) — toggleable with Iframely third-party API
+- **HTML Parsing:** Jsoup 1.17.2 (local) — toggleable with self-hosted `bookmarkify-scrapper` (remote)
 - **LLM:** DeepSeek API (used to infer app/brand short name from page titles)
 - **API Docs:** Knife4j (OpenAPI 3)
 - **WebSocket:** Spring WebSocket at `/ws`
@@ -103,7 +103,7 @@ Required variables (see `.evn.local.example`):
 | `BOOKMARKIFY_FILE_UPLOAD_DIR` / `PREFIX` | Local file storage paths |
 | `BOOKMARKIFY_WECHAT_WORK_CORPID/CORPSECRET` | WeChat Work email API |
 | `BOOKMARKIFY_ALIYUN_OSS_*` | Aliyun OSS (endpoint, keys, bucket, domain) |
-| `BOOKMARKIFY_IFRAMELY_API_KEY` | Iframely third-party page-metadata API |
+| `BOOKMARKIFY_SCRAPPER_BASE_URL` | Self-hosted bookmarkify-scrapper base URL (replaced Iframely) |
 | `BOOKMARKIFY_DEEPSEEK_API_KEY` | DeepSeek LLM (app-name inference) |
 
 ## Architecture
@@ -129,7 +129,7 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 5. **Desktop layout tree:** `user_layout_node` stores a tree with `parentId` (ROOT → folders → bookmarks). Sort order is a JSON map in `user_preference` to avoid bulk DB writes.
 6. **AOP caching/throttling:** `@RedisCache` for method-level caching; `@Throttle` for per-user rate limiting via Redis SETNX.
 7. **Unified response wrapper:** `GlobalExceptionHandler` (ResponseBodyAdvice) wraps all responses in `ResultWrapper{ok, code, data, msg}`.
-8. **Pluggable parser:** `bookmarkify.config.use-third-party-parser` toggles between local `WebsiteParser` (Jsoup) and `ApiServiceImpl.queryWebsiteInfo` (Iframely). DeepSeek is invoked separately via `IApiService.inferAppName` to extract a short brand name from the parsed title.
+8. **Pluggable parser:** `bookmarkify.config.use-third-party-parser` toggles between local `WebsiteParser` (Jsoup) and `ApiServiceImpl.queryWebsiteInfo`, which calls the self-hosted `bookmarkify-scrapper` `POST /scrape` (configured via `bookmarkify.scrapper.base-url`). DeepSeek is invoked separately via `IApiService.inferAppName` to extract a short brand name from the parsed title.
 
 ### Database Tables
 

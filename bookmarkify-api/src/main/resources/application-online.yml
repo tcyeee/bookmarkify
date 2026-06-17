@@ -12,6 +12,9 @@ spring:
       password: ${SPRING_DATA_REDIS_PASSWORD}
 
 bookmarkify:
+  scrapper:
+    # 生产环境 API 与 scrapper 同在 app_network，走容器别名直连内部端口 3000
+    base-url: ${BOOKMARKIFY_SCRAPPER_BASE_URL:http://bookmarkify-scraper:3000}
   config:
     img-path: ${FILE_UPLOAD_DIR}
     img-prefix: ${FILE_UPLOAD_PREFIX}

@@ -16,6 +16,9 @@ logging:
     top.tcyeee.bookmarkify.server.impl.BookmarkServiceImpl: DEBUG
 
 bookmarkify:
+  scrapper:
+    # 本地开发连远程已部署的 scrapper（容器 3000 映射到宿主机 3001，对外开放）
+    base-url: http://123.206.216.124:3001
   config:
     # 这里必须是前端项目中/public/upload目录，否则图片无法正常读取
     img-path: ${BOOKMARKIFY_FILE_UPLOAD_DIR}
