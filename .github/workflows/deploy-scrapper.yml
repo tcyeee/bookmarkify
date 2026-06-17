@@ -115,3 +115,24 @@ jobs:
           OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
           OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
           OSS_BASE_URL: ${{ secrets.OSS_BASE_URL }}
+
+      # Push a WeChat notification via Server酱 once the deploy + health check pass.
+      # Set the SERVERCHAN_SENDKEY repo secret to enable; without it this step is a no-op.
+      - name: Notify success (Server酱)
+        if: success()
+        env:
+          SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SENDKEY:-}" ]; then
+            echo "SERVERCHAN_SENDKEY not set — skipping notification."
+            exit 0
+          fi
+          DESP=$(printf '**Commit**: `%s`\n\n**Message**: %s\n\n[查看运行记录](%s)' \
+            "${GITHUB_SHA:0:7}" "$COMMIT_MSG" "$RUN_URL")
+          curl -fsS "https://sctapi.ftqq.com/${SENDKEY}.send" \
+            --data-urlencode "title=✅ Scrapper 部署成功" \
+            --data-urlencode "desp=$DESP" >/dev/null
+          echo "Notification sent."
