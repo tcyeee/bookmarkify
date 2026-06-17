@@ -60,9 +60,18 @@ pub async fn scrape_headless(url: &str, timeout_secs: u64, idle_wait_secs: u64) 
         None,
     );
 
+    // 复用 PROXY_URL 环境变量：非空时让无头 Chrome 也走代理。
+    // spider 据此为 Chrome 拼出 --proxy-server 启动参数（见 spider features/chrome.rs），
+    // 与 main.rs 中 reqwest 客户端的代理保持一致。None 时为无操作（直连）。
+    let proxies = std::env::var("PROXY_URL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(|url| vec![url]);
+
     let mut website = Website::new(url);
     website
         .with_limit(1) // 只抓取目标页面，不跟随任何链接
+        .with_proxies(proxies) // 经 PROXY_URL 让 Chrome 走代理（--proxy-server）
         .with_stealth(true) // 启用隐身模式，降低被检测为爬虫的概率
         .with_chrome_intercept(RequestInterceptConfiguration::new(true)) // 拦截广告/追踪请求（依赖 spider 的 chrome_intercept feature）
         .with_wait_for_idle_network(Some(WaitForIdleNetwork::new(Some(Duration::from_secs(idle_wait_secs))))) // 等待网络空闲（JS 渲染完成）

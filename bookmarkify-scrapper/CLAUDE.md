@@ -38,7 +38,7 @@ docker-compose up -d
 | `HEADLESS_TIMEOUT_SECS` | 30 | Layer 2 Chrome total timeout |
 | `HEADLESS_IDLE_WAIT_SECS` | 10 | Layer 2 network-idle wait for JS rendering |
 | `CACHE_TTL_SECS` | 3600 | Cache entry lifetime |
-| `PROXY_URL` | (optional) | HTTP proxy URL, e.g. `http://127.0.0.1:7890`. Does **not** apply to OSS uploads (oss-rust-sdk creates its own client). |
+| `PROXY_URL` | (optional) | HTTP proxy URL, e.g. `http://127.0.0.1:7890` (or `http://clash:7890` in prod). Applies to **both** Layer 1 (reqwest) and Layer 2 (headless Chrome `--proxy-server`). Does **not** apply to OSS uploads (oss-rust-sdk creates its own client). |
 | `OSS_ACCESS_KEY_ID` | (optional) | Alibaba Cloud Access Key ID. All five OSS_* vars must be set to enable OSS upload. |
 | `OSS_ACCESS_KEY_SECRET` | (optional) | Alibaba Cloud Access Key Secret |
 | `OSS_BUCKET` | (optional) | OSS bucket name |
