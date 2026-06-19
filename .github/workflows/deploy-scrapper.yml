@@ -133,6 +133,19 @@ jobs:
           DESP=$(printf '**Commit**: `%s`\n\n**Message**: %s\n\n[查看运行记录](%s)' \
             "${GITHUB_SHA:0:7}" "$COMMIT_MSG" "$RUN_URL")
           curl -fsS "https://sctapi.ftqq.com/${SENDKEY}.send" \
-            --data-urlencode "title=✅ Scrapper 部署成功" \
+            --data-urlencode "title=✅ bookmarkify-scrapper 部署成功" \
             --data-urlencode "desp=$DESP" >/dev/null
           echo "Notification sent."
+
+      - name: Notify failure (Server酱)
+        if: failure()
+        env:
+          SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SENDKEY:-}" ]; then exit 0; fi
+          DESP=$(printf '**Commit**: `%s`\n\n[查看失败日志](%s)' "${GITHUB_SHA:0:7}" "$RUN_URL")
+          curl -fsS "https://sctapi.ftqq.com/${SENDKEY}.send" \
+            --data-urlencode "title=❌ bookmarkify-scrapper 部署失败" \
+            --data-urlencode "desp=$DESP" >/dev/null || true
