@@ -1,0 +1,27 @@
+services:
+  bookmarkify-web:
+    # Image ref (…/web:<git-sha>) is written into .env by the deploy workflow.
+    image: ${WEB_IMAGE}
+    container_name: bookmarkify-web
+    restart: unless-stopped
+    ports:
+      # nginx (on app_network) reaches this as http://bookmarkify-web:3000; the host
+      # mapping is localhost-only, kept for direct debugging and CI health checks.
+      - "127.0.0.1:3000:3000"
+    environment:
+      TZ: Asia/Shanghai
+      NODE_ENV: production
+      # Nuxt runtimeConfig.public overrides (browser-facing, same-origin via nginx).
+      # nginx proxies /api/* and /ws on bookmarkify.cc to bookmarkify-api, so the
+      # client talks to the API on the same origin — no CORS, no extra subdomain.
+      NUXT_PUBLIC_API_BASE: https://bookmarkify.cc/api
+      NUXT_PUBLIC_WS_BASE: wss://bookmarkify.cc
+      NUXT_PUBLIC_SITE_URL: https://bookmarkify.cc
+    networks:
+      - app_network
+
+networks:
+  # Shared with the other Bookmarkify services so nginx reaches this container as
+  # http://bookmarkify-web:3000. Reused if it already exists, created otherwise.
+  app_network:
+    name: app_network
