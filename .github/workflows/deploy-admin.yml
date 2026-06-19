@@ -1,0 +1,104 @@
+name: Deploy Admin
+
+on:
+  push:
+    branches: [prod]
+  workflow_dispatch:
+
+# Never run two admin deploys at once; let an in-flight one finish.
+concurrency:
+  group: deploy-admin
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: bookmarkify-admin/pnpm-lock.yaml
+
+      - name: Install deps
+        working-directory: bookmarkify-admin
+        run: pnpm install --frozen-lockfile
+
+      # Vben reads env ONLY from .env files (dotenv.parse), never the shell, and
+      # VITE_GLOB_* values are baked into _app.config.js at build time. Override
+      # the demo mock URL so the admin calls /api/admin/** — nginx proxies /api/
+      # to bookmarkify-api:7001 (stripping /api). .env.production.local has the
+      # highest precedence and is ephemeral to this runner.
+      - name: Write production env overrides
+        working-directory: bookmarkify-admin/apps/web-ele
+        run: |
+          {
+            echo "VITE_GLOB_API_URL=/api"
+            echo "VITE_BASE=/"
+            echo "VITE_ARCHIVER=false"
+          } > .env.production.local
+
+      # Builds @vben/web-ele in production mode → apps/web-ele/dist (hash router,
+      # so a single /index.html SPA fallback covers every route).
+      - name: Build admin
+        working-directory: bookmarkify-admin
+        run: pnpm build:ele
+
+      # rsync the static output to the dir nginx serves for admin.bookmarkify.cc
+      # (/home/ubuntu/www → /var/www in the nginx container). --delete keeps it in sync.
+      - name: Deploy to server (rsync)
+        env:
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_PORT: ${{ secrets.SERVER_SSH_PORT || 22 }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "$SERVER_PORT" "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/id_deploy -p $SERVER_PORT -o StrictHostKeyChecking=accept-new" \
+            bookmarkify-admin/apps/web-ele/dist/ \
+            "$SERVER_USER@$SERVER_HOST:/home/ubuntu/www/bookmarkify-admin/"
+
+      # Push a WeChat notification via Server酱 once the deploy succeeds.
+      # Set the SERVERCHAN_SENDKEY repo secret to enable; without it this is a no-op.
+      - name: Notify success (Server酱)
+        if: success()
+        env:
+          SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SENDKEY:-}" ]; then
+            echo "SERVERCHAN_SENDKEY not set — skipping notification."
+            exit 0
+          fi
+          DESP=$(printf '**Commit**: `%s`\n\n**Message**: %s\n\n[查看运行记录](%s)' \
+            "${GITHUB_SHA:0:7}" "$COMMIT_MSG" "$RUN_URL")
+          curl -fsS "https://sctapi.ftqq.com/${SENDKEY}.send" \
+            --data-urlencode "title=✅ Admin 部署成功" \
+            --data-urlencode "desp=$DESP" >/dev/null
+          echo "Notification sent."
+
+      - name: Notify failure (Server酱)
+        if: failure()
+        env:
+          SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SENDKEY:-}" ]; then exit 0; fi
+          DESP=$(printf '**Commit**: `%s`\n\n[查看失败日志](%s)' "${GITHUB_SHA:0:7}" "$RUN_URL")
+          curl -fsS "https://sctapi.ftqq.com/${SENDKEY}.send" \
+            --data-urlencode "title=❌ Admin 部署失败" \
+            --data-urlencode "desp=$DESP" >/dev/null || true
