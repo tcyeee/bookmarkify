@@ -40,13 +40,7 @@ export default defineNuxtConfig({
         { rel: 'canonical', href: `${siteUrl}/welcome` },
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
       ],
-      script: [
-        {
-          src: 'https://cloud.umami.is/script.js',
-          defer: true,
-          'data-website-id': '53ab5e59-d09c-4ce0-9265-6722eea41842',
-        },
-      ],
+      // 埋点改用自托管 GoatCounter，脚本加载收口在 plugins/analytics.client.ts
     },
   },
   alias: {
@@ -57,7 +51,13 @@ export default defineNuxtConfig({
     '@utils': resolve(__dirname, 'server/utils'),
   },
   modules: ['@pinia/nuxt', '@element-plus/nuxt', 'pinia-plugin-persistedstate/nuxt'],
-  plugins: ['~/plugins/iconify.ts', '~/plugins/keyListener.ts', '~/plugins/contextMenu.ts', '~/plugins/auth.ts'],
+  plugins: [
+    '~/plugins/iconify.ts',
+    '~/plugins/keyListener.ts',
+    '~/plugins/contextMenu.ts',
+    '~/plugins/auth.ts',
+    '~/plugins/analytics.client.ts',
+  ],
   vite: {
     plugins: [tailwindcss()],
   },
