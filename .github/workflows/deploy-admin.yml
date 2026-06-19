@@ -31,14 +31,21 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Vben reads env ONLY from .env files (dotenv.parse), never the shell, and
-      # VITE_GLOB_* values are baked into _app.config.js at build time. Override
-      # the demo mock URL so the admin calls /api/admin/** — nginx proxies /api/
-      # to bookmarkify-api:7001 (stripping /api). .env.production.local has the
-      # highest precedence and is ephemeral to this runner.
+      # VITE_GLOB_* values are baked into _app.config.js at build time.
+      # .env.production.local has the highest precedence and is ephemeral here.
+      #   - VITE_GLOB_API_URL=/api -> admin calls /api/admin/**, nginx strips /api
+      #     and proxies to bookmarkify-api:7001.
+      #   - VITE_APP_TITLE / NAMESPACE / STORE_SECURE_KEY normally live in the
+      #     gitignored apps/web-ele/.env, which is ABSENT in CI. Without
+      #     VITE_APP_TITLE the index.html EJS build fails ("not defined"), so we
+      #     supply them here.
       - name: Write production env overrides
         working-directory: bookmarkify-admin/apps/web-ele
         run: |
           {
+            echo "VITE_APP_TITLE=书签鸭 Admin"
+            echo "VITE_APP_NAMESPACE=bookmarkify-admin"
+            echo "VITE_APP_STORE_SECURE_KEY=bookmarkify-admin-store-key"
             echo "VITE_GLOB_API_URL=/api"
             echo "VITE_BASE=/"
             echo "VITE_ARCHIVER=false"
