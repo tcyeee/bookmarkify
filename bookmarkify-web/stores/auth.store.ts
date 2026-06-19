@@ -24,6 +24,7 @@ export const useAuthStore = defineStore('auth', {
         // 邮箱验证码登录/注册，成功后合并到当前账号信息
         const result = await captchaVerifyEmail(params)
         this.account = { ...this.account, ...result }
+        if (import.meta.client) useNuxtApp().$track('login-email')
         return result
       } catch (err: any) {
         return Promise.reject(err)
@@ -37,6 +38,7 @@ export const useAuthStore = defineStore('auth', {
           password: btoa(md5(params.password)),
         })
         this.account = { ...this.account, ...result }
+        if (import.meta.client) useNuxtApp().$track('login-password')
         return result
       } catch (err: any) {
         return Promise.reject(err)
@@ -48,6 +50,7 @@ export const useAuthStore = defineStore('auth', {
         // 手机短信验证码登录/注册，成功后合并到当前账号信息
         const result = await captchaVerifySms(params)
         this.account = { ...this.account, ...result }
+        if (import.meta.client) useNuxtApp().$track('login-phone')
         return result
       } catch (err: any) {
         return Promise.reject(err)

@@ -108,6 +108,7 @@ import { useDebounceFn } from '@vueuse/core'
 
 const sysStore = useSysStore()
 const bookmarkStore = useBookmarkStore()
+const { $track } = useNuxtApp()
 
 const emit = defineEmits<{ (e: 'success', res: UserLayoutNodeVO): void }>()
 
@@ -183,6 +184,7 @@ function addOne() {
   }
 
   bookmarksAddOne(data.input).then((res: UserLayoutNodeVO) => {
+    $track('bookmark-add')
     handleSuccess(res)
     data.notice = '添加成功!'
     data.input = undefined
@@ -208,6 +210,7 @@ function checkInput() {
 
 function selectBookmark(item: any) {
   bookmarksLinkOne(item.id).then((res: UserLayoutNodeVO) => {
+    $track('bookmark-link')
     handleSuccess(res)
     data.notice = '关联成功!'
     data.input = undefined
