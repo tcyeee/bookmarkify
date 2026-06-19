@@ -23,9 +23,12 @@ pnpm install              # also runs `nuxt prepare` via postinstall
 pnpm dev                  # http://localhost:3000 (needs backend at 127.0.0.1:7001)
 pnpm build
 pnpm preview
-pnpm generate             # static site generation
-docker build -t bookmarkify-web .   # uses existing build output
+pnpm generate             # static site generation → .output/public
 ```
+
+## Deployment
+
+Deployed as a **static site** (`nuxt generate` → `.output/public`) served directly by nginx — there is no Node/Docker runtime in production. CI (`.github/workflows/deploy-web.yml`, monorepo root) builds on push to the `prod` branch, rsyncs `.output/public` to `/home/ubuntu/www/bookmarkify-web/` on the server (nginx `location /` serves it with a `/200.html` SPA fallback), then notifies WeChat via Server酱. The prod public URLs (`NUXT_API_BASE=https://bookmarkify.cc/api`, `NUXT_WS_BASE=wss://bookmarkify.cc`) are baked in at build time by the workflow.
 
 There is no test runner, lint script, or typecheck script configured in `package.json`. No tests exist in the repo.
 
