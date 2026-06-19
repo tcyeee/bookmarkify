@@ -3,9 +3,6 @@ name: Deploy Web
 on:
   push:
     branches: [prod]
-    paths:
-      - 'bookmarkify-web/**'
-      - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
 # Never run two web deploys at once; let an in-flight one finish.
@@ -14,94 +11,84 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Login to Tencent TCR
-        uses: docker/login-action@v3
+      - uses: pnpm/action-setup@v4
         with:
-          registry: ${{ secrets.TCR_REGISTRY }}
-          username: ${{ secrets.TCR_USERNAME }}
-          password: ${{ secrets.TCR_PASSWORD }}
+          version: 10
 
-      - name: Compute image base
-        run: echo "IMAGE_BASE=${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/web" >> "$GITHUB_ENV"
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
+      - uses: actions/setup-node@v4
         with:
-          context: bookmarkify-web
-          file: bookmarkify-web/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ env.IMAGE_BASE }}:latest
-            ${{ env.IMAGE_BASE }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: bookmarkify-web/pnpm-lock.yaml
 
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - name: Install deps
+        working-directory: bookmarkify-web
+        run: pnpm install --frozen-lockfile
 
-      - name: Encode compose file
-        id: prep
-        run: |
-          echo "compose_b64=$(base64 -w0 bookmarkify-web/deploy/compose.prod.yml)" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy on server
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_SSH_PORT || 22 }}
-          envs: COMPOSE_B64,WEB_IMAGE,TCR_REGISTRY,TCR_USERNAME,TCR_PASSWORD
-          script: |
-            set -euo pipefail
-
-            APP_DIR="$HOME/bookmarkify-web"
-            mkdir -p "$APP_DIR"
-
-            # Compose file (single source of truth from the repo)
-            echo "$COMPOSE_B64" | base64 -d > "$APP_DIR/compose.yml"
-
-            # Runtime env consumed by compose interpolation
-            umask 077
-            cat > "$APP_DIR/.env" <<EOF
-            WEB_IMAGE=$WEB_IMAGE
-            EOF
-
-            echo "$TCR_PASSWORD" | docker login "$TCR_REGISTRY" -u "$TCR_USERNAME" --password-stdin
-
-            cd "$APP_DIR"
-            docker compose pull
-            docker compose up -d
-
-            # Health check: poll the Nuxt server on its localhost-bound port.
-            ok=0
-            for i in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then ok=1; break; fi
-              sleep 3
-            done
-
-            docker image prune -f || true
-
-            if [ "$ok" != "1" ]; then
-              echo "::error::Health check failed for $WEB_IMAGE"
-              docker compose logs --tail=120 || true
-              exit 1
-            fi
-            echo "Deploy OK: $WEB_IMAGE"
+      # Static site generation (nuxt generate → .output/public). The public
+      # runtimeConfig is baked in at build time, so the prod URLs are set here.
+      - name: Generate static site
+        working-directory: bookmarkify-web
         env:
-          COMPOSE_B64: ${{ steps.prep.outputs.compose_b64 }}
-          WEB_IMAGE: ${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/web:${{ github.sha }}
-          TCR_REGISTRY: ${{ secrets.TCR_REGISTRY }}
-          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
-          TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
+          NUXT_API_BASE: https://bookmarkify.cc/api
+          NUXT_WS_BASE: wss://bookmarkify.cc
+          NUXT_PUBLIC_SITE_URL: https://bookmarkify.cc
+        run: pnpm generate
+
+      # rsync the static output to the dir nginx serves (/home/ubuntu/www →
+      # /var/www in the nginx container). --delete keeps the dir in sync.
+      - name: Deploy to server (rsync)
+        env:
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_PORT: ${{ secrets.SERVER_SSH_PORT || 22 }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "$SERVER_PORT" "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/id_deploy -p $SERVER_PORT -o StrictHostKeyChecking=accept-new" \
+            bookmarkify-web/.output/public/ \
+            "$SERVER_USER@$SERVER_HOST:/home/ubuntu/www/bookmarkify-web/"
+
+      # Push a WeChat notification via Server酱 once the deploy succeeds.
+      # Set the SERVERCHAN_SENDKEY repo secret to enable; without it this is a no-op.
+      - name: Notify success (Server酱)
+        if: success()
+        env:
+          SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SENDKEY:-}" ]; then
+            echo "SERVERCHAN_SENDKEY not set — skipping notification."
+            exit 0
+          fi
+          DESP=$(printf '**Commit**: `%s`\n\n**Message**: %s\n\n[查看运行记录](%s)' \
+            "${GITHUB_SHA:0:7}" "$COMMIT_MSG" "$RUN_URL")
+          curl -fsS "https://sctapi.ftqq.com/${SENDKEY}.send" \
+            --data-urlencode "title=✅ Web 部署成功" \
+            --data-urlencode "desp=$DESP" >/dev/null
+          echo "Notification sent."
+
+      - name: Notify failure (Server酱)
+        if: failure()
+        env:
+          SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SENDKEY:-}" ]; then exit 0; fi
+          DESP=$(printf '**Commit**: `%s`\n\n[查看失败日志](%s)' "${GITHUB_SHA:0:7}" "$RUN_URL")
+          curl -fsS "https://sctapi.ftqq.com/${SENDKEY}.send" \
+            --data-urlencode "title=❌ Web 部署失败" \
+            --data-urlencode "desp=$DESP" >/dev/null || true
