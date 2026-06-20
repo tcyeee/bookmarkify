@@ -18,7 +18,6 @@ data class UserSessionInfo(
     @field:Schema(description = "UID") var uid: String,
     @field:Schema(description = "用户名称") var nickName: String,
     @field:Schema(description = "用户绑定的邮箱") var email: String? = null,
-    @field:Schema(description = "用户绑定的手机号") var phone: String? = null,
 
     @field:Schema(description = "用户是否验证") var verified: Boolean = false,
     @field:Schema(description = "用户TOKEN") var token: String,
@@ -27,10 +26,9 @@ data class UserSessionInfo(
         uid = user.id,
         nickName = user.nickName,
         email = user.email,
-        phone = user.phone,
         token = token,
     ) {
-        this.verified = this.phone != null || this.email != null
+        this.verified = this.email != null
     }
 
     /* 写入STP的Session */
@@ -40,7 +38,6 @@ data class UserSessionInfo(
         this.set("token", token)
         this.set("verified", verified)
         if (email != null) this.set("email", email)
-        if (phone != null) this.set("phone", phone)
     }
         .let { JSONUtil.toJsonStr(it) }
         .also { StpKit.USER.session.set(SaSession.USER, it) }
@@ -54,7 +51,6 @@ data class UserSessionInfo(
         this.token = res.getStr("token")
 
         if (res.containsKey("email")) this.email = res.getStr("email")
-        if (res.containsKey("phone")) this.phone = res.getStr("phone")
-        this.verified = res.containsKey("phone") || res.containsKey("email")
+        this.verified = res.containsKey("email")
     }
 }

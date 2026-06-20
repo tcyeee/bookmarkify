@@ -178,7 +178,6 @@ data class UserAdminVO(
     @field:Schema(description = "用户昵称") var nickName: String,
     @field:Schema(description = "设备UID") var deviceId: String,
     @field:Schema(description = "邮箱") var email: String? = null,
-    @field:Schema(description = "手机号") var phone: String? = null,
     @field:Schema(description = "用户角色") var role: RoleEnum = RoleEnum.USER,
     @field:Schema(description = "是否被删除") var deleted: Boolean = false,
     @field:Schema(description = "是否禁用") var disabled: Boolean = false,

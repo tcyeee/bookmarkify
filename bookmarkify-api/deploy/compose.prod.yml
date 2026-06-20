@@ -17,7 +17,7 @@ services:
       SPRING_PROFILES_ACTIVE: online
       TZ: Asia/Shanghai
       # --- PostgreSQL (host/db non-sensitive; password from .env) ---
-      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/app?currentSchema=bookmarkify&stringtype=unspecified"
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/bookmarkify?stringtype=unspecified"
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       # --- Redis (host/port non-sensitive; password from .env) ---
