@@ -200,6 +200,13 @@ class UserServiceImpl(
             HttpUtil.createGet("https://oauth2.googleapis.com/tokeninfo")
                 .form("id_token", idToken)
                 .timeout(8000)
+                .apply {
+                    // 国内服务器无法直连 Google,经配置的 HTTP 代理(如 docker 内的 clash:7890)转发;
+                    // 仅作用于本次请求,不影响 OSS / DeepSeek / 企业微信等国内服务的直连
+                    if (projectConfig.googleProxyHost.isNotBlank() && projectConfig.googleProxyPort > 0) {
+                        setHttpProxy(projectConfig.googleProxyHost, projectConfig.googleProxyPort)
+                    }
+                }
                 .execute()
         }.getOrElse { throw CommonException(ErrorType.E111, "无法连接 Google 校验服务") }
 

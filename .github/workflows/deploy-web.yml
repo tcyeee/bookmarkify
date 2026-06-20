@@ -41,8 +41,8 @@ jobs:
           NUXT_API_BASE: https://bookmarkify.cc/api
           NUXT_WS_BASE: wss://bookmarkify.cc
           NUXT_PUBLIC_SITE_URL: https://bookmarkify.cc
-          # Google 登录 ClientId（公开值，存为仓库 secret 便于改动；留空则不显示谷歌登录按钮）
-          NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NUXT_PUBLIC_GOOGLE_CLIENT_ID }}
+          # Google 登录 ClientId（公开值，前端 JS 里本就可见，直接内联；如需更换可改此处或覆盖为 secret）
+          NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NUXT_PUBLIC_GOOGLE_CLIENT_ID || '534119394768-5ed59pcgub9a1s45a9uvu69alvk1ddko.apps.googleusercontent.com' }}
         run: pnpm generate
 
       # rsync the static output to the dir nginx serves (/home/ubuntu/www →
