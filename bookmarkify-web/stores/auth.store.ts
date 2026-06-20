@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { AuthStatusEnum, type EmailVerifyParams, type LoginParams, type UserInfo } from '@typing'
-import { authLoginByAccount, authLogout, captchaVerifyEmail, queryUserInfo } from '@api'
-import { md5 } from '@utils'
+import { authLoginByAccount, authLoginByGoogle, authLogout, captchaVerifyEmail, queryUserInfo, uploadAvatar } from '@api'
+import { generateDefaultAvatarFile, md5 } from '@utils'
 import { usePreferenceStore } from './preference.store'
 
 export const useAuthStore = defineStore('auth', {
@@ -45,6 +45,18 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    async loginWithGoogle(idToken: string): Promise<UserInfo> {
+      try {
+        // Google ID Token 登录/注册，成功后合并到当前账号信息
+        const result = await authLoginByGoogle({ idToken })
+        this.account = { ...this.account, ...result }
+        if (import.meta.client) useNuxtApp().$track('login-google')
+        return result
+      } catch (err: any) {
+        return Promise.reject(err)
+      }
+    },
+
     async refreshUserInfo(): Promise<UserInfo> {
       try {
         // 重新拉取用户信息，失败后处理过期态并自动重新登录
@@ -69,6 +81,24 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    async ensureDefaultAvatar() {
+      // 仅客户端执行（依赖 File / fetch）
+      if (!import.meta.client) return
+      const account = this.account as (UserInfo & { avatarUrl?: string | null }) | undefined
+      if (!account?.uid) return
+      // 已有头像则不覆盖，仅在为空时生成
+      if (account.avatarUrl) return
+      try {
+        const file = generateDefaultAvatarFile(account.uid)
+        await uploadAvatar(file)
+        // 重新拉取以获取带签名的头像 url 并同步到 store
+        await this.refreshUserInfo()
+      } catch (err) {
+        // 失败静默降级，不阻塞登录；下次进入仍会因 avatarUrl 为空而重试
+        console.error('[AVATAR] ensureDefaultAvatar failed', err)
+      }
+    },
+
     async postLoginSetup() {
       if (!this.account?.token) return
 
@@ -80,6 +110,8 @@ export const useAuthStore = defineStore('auth', {
       const preferenceStore = usePreferenceStore()
       const bookmarkStore = useBookmarkStore()
       await Promise.all([this.refreshUserInfo(), preferenceStore.fetchPreference(), bookmarkStore.update()])
+      // 无头像时自动生成并上传默认头像（自愈历史无头像用户）
+      await this.ensureDefaultAvatar()
     },
 
     async logout() {
