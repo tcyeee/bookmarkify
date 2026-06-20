@@ -238,6 +238,15 @@ const recalcColumns = () => {
   columnCount.value = next
 }
 
+// WebSocket 就地替换单元格内容（如 LOADING→BOOKMARK）时，
+// Vuuri 内部按 id diff 感知不到同 id 节点的内容变化，需 bump gridKey 强制重新同步。
+watch(
+  () => bookmarkStore.cellRevision,
+  () => {
+    gridKey.value++
+  },
+)
+
 onMounted(() => {
   recalcColumns()
   watch([CELL_SIZE, CELL_GAP], () => recalcColumns())

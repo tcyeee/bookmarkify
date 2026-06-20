@@ -8,6 +8,12 @@
   --font-jersey10: 'Jersey10', ui-sans-serif, system-ui, sans-serif;
 }
 
+/* 受 auth 中间件保护的页面为纯客户端渲染（见 nuxt.config routeRules），JS 水合前是空壳。
+   给 html 一个与品牌主题色一致的深色底，避免水合前出现刺眼的白屏闪烁。 */
+html {
+  background-color: #0f172a;
+}
+
 @font-face {
   font-family: 'Jersey10';
   src: url('../fonts/Jersey10-Regular.ttf') format('truetype');

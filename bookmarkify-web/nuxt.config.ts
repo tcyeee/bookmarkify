@@ -50,6 +50,22 @@ export default defineNuxtConfig({
     '@typing': resolve(__dirname, 'typing'),
     '@utils': resolve(__dirname, 'server/utils'),
   },
+  // 登录态只存在于客户端 localStorage（auth.store 持久化）。受 auth 中间件保护的页面
+  // 若在 `nuxt generate` 阶段 SSR 预渲染，服务端读不到登录态 → 中间件重定向到 /welcome，
+  // 该重定向会被烘焙进静态 HTML（<meta http-equiv="refresh" url=/welcome>）。刷新首页时
+  // 浏览器先加载 welcome 再由客户端水合后跳回，造成约 1s 的 welcome 闪屏。
+  // 将这些页面改为纯客户端渲染（ssr:false），静态产物只是空壳，登录判定在首屏绘制前于
+  // 客户端完成，从而消除闪屏；/welcome 仍保留 SSR 以保证落地页 SEO。
+  routeRules: {
+    '/': { ssr: false },
+    '/setting': { ssr: false },
+  },
+  // 首页改为 SPA 后爬虫无法再从 `/` 发现 /welcome，需显式声明以保证落地页仍被预渲染（SEO）。
+  nitro: {
+    prerender: {
+      routes: ['/welcome'],
+    },
+  },
   modules: ['@pinia/nuxt', '@element-plus/nuxt', 'pinia-plugin-persistedstate/nuxt'],
   plugins: [
     '~/plugins/iconify.ts',
