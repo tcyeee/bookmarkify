@@ -14,41 +14,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Login to Tencent TCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.TCR_REGISTRY }}
-          username: ${{ secrets.TCR_USERNAME }}
-          password: ${{ secrets.TCR_PASSWORD }}
-
-      - name: Compute image base
-        run: echo "IMAGE_BASE=${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/api" >> "$GITHUB_ENV"
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: bookmarkify-api
-          file: bookmarkify-api/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ env.IMAGE_BASE }}:latest
-            ${{ env.IMAGE_BASE }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
   deploy:
-    needs: build-and-push
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Compile the fat jar here on the RAM-rich runner (~35s). The memory-hungry
+      # Kotlin/Gradle build stays off the small prod server, and only the ~60-80MB jar
+      # crosses the border — not a full image with the JRE base layer (which the docker
+      # push to Tencent TCR did, taking ~42 min cross-border).
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Build fat jar
+        working-directory: bookmarkify-api
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean bootJar
+
+      # Flat staging dir so scp lands files directly in the server build context.
+      - name: Stage deploy artifacts
+        run: |
+          mkdir -p stage
+          cp bookmarkify-api/build/libs/bookmarkify-api.jar stage/
+          cp bookmarkify-api/Dockerfile stage/
+
+      # Ship the jar + thin runtime Dockerfile to the server's build context.
+      - name: Copy artifacts to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_SSH_PORT || 22 }}
+          source: "stage/*"
+          target: "/home/${{ secrets.SERVER_USER }}/bookmarkify-api/stage"
+          strip_components: 1
+          overwrite: true
 
       - name: Encode compose file
         id: prep
@@ -62,11 +67,12 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_SSH_PORT || 22 }}
-          envs: COMPOSE_B64,API_IMAGE,TCR_REGISTRY,TCR_USERNAME,TCR_PASSWORD,SPRING_DATASOURCE_PASSWORD,SPRING_DATA_REDIS_PASSWORD,BOOKMARKIFY_WECHAT_WORK_CORPID,BOOKMARKIFY_WECHAT_WORK_CORPSECRET,BOOKMARKIFY_DEEPSEEK_API_KEY,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET
+          envs: COMPOSE_B64,API_IMAGE,SPRING_DATASOURCE_PASSWORD,SPRING_DATA_REDIS_PASSWORD,BOOKMARKIFY_WECHAT_WORK_CORPID,BOOKMARKIFY_WECHAT_WORK_CORPSECRET,BOOKMARKIFY_DEEPSEEK_API_KEY,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET
           script: |
             set -euo pipefail
 
             APP_DIR="$HOME/bookmarkify-api"
+            STAGE_DIR="$APP_DIR/stage"
             mkdir -p "$APP_DIR"
 
             # Compose file (single source of truth from the repo)
@@ -86,10 +92,12 @@ jobs:
             OSS_BUCKET=$OSS_BUCKET
             EOF
 
-            echo "$TCR_PASSWORD" | docker login "$TCR_REGISTRY" -u "$TCR_USERNAME" --password-stdin
+            # Assemble the runtime image locally: just COPY the jar onto the JRE base
+            # (already present on the host). Seconds, tens of MB RAM — no compilation.
+            test -f "$STAGE_DIR/bookmarkify-api.jar"
+            docker build -t "$API_IMAGE" -f "$STAGE_DIR/Dockerfile" "$STAGE_DIR"
 
             cd "$APP_DIR"
-            docker compose pull
             docker compose up -d
 
             # Health check: poll the API on its host-mapped port (auth/track is a GET that returns 200).
@@ -99,7 +107,10 @@ jobs:
               sleep 3
             done
 
+            # Reclaim disk: drop dangling layers and older bookmarkify-api image tags.
             docker image prune -f || true
+            docker images 'bookmarkify-api' --format '{{.Repository}}:{{.Tag}}' \
+              | grep -vF "$API_IMAGE" | xargs -r docker rmi -f 2>/dev/null || true
 
             if [ "$ok" != "1" ]; then
               echo "::error::Health check failed for $API_IMAGE"
@@ -109,10 +120,7 @@ jobs:
             echo "Deploy OK: $API_IMAGE"
         env:
           COMPOSE_B64: ${{ steps.prep.outputs.compose_b64 }}
-          API_IMAGE: ${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/api:${{ github.sha }}
-          TCR_REGISTRY: ${{ secrets.TCR_REGISTRY }}
-          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
-          TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
+          API_IMAGE: bookmarkify-api:${{ github.sha }}
           SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
           SPRING_DATA_REDIS_PASSWORD: ${{ secrets.SPRING_DATA_REDIS_PASSWORD }}
           BOOKMARKIFY_WECHAT_WORK_CORPID: ${{ secrets.BOOKMARKIFY_WECHAT_WORK_CORPID }}
