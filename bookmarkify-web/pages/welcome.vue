@@ -23,19 +23,11 @@
           <!-- 开始使用按钮 -->
           <div
             @click="isLoggedIn ? navigateTo('/') : (showLoginDialog = true)"
-            :class="[
-              'group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15 cursor-pointer select-none',
-              startLoading ? 'opacity-75 cursor-wait pointer-events-none' : '',
-            ]"
-            :aria-busy="startLoading">
+            class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15 cursor-pointer select-none">
             <ShimmerText
               :shimmerWidth="100"
               class="inline-flex dark:text-black/50! items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 text-lg">
-              <template v-if="startLoading">
-                <Icon icon="memory:rotate-clockwise" class="size-6 animate-spin" />
-                <span>&emsp;处理中...</span>
-              </template>
-              <template v-else-if="isLoggedIn">
+              <template v-if="isLoggedIn">
                 <span>🚀 回到控制台</span>
                 <Icon icon="memory:arrow-right" class="ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
               </template>
@@ -133,7 +125,7 @@
           <Icon icon="memory:close" class="size-[18px]" />
         </button>
       </template>
-      <WelcomeLoginDialog @success="onLoginSuccess" @skip="startUse" />
+      <WelcomeLoginDialog @success="onLoginSuccess" />
     </el-dialog>
 
     <!-- 回到顶部 -->
@@ -162,19 +154,7 @@ definePageMeta({ middleware: 'auth', layout: 'explore' })
 
 const authStore = useAuthStore()
 const isLoggedIn = computed(() => authStore.authStatus === AuthStatusEnum.AUTHED)
-const startLoading = ref(false)
 const showLoginDialog = ref(false)
-
-async function startUse() {
-  if (startLoading.value) return
-  startLoading.value = true
-  try {
-    await authStore.loginOrRegister()
-    await navigateTo('/')
-  } finally {
-    startLoading.value = false
-  }
-}
 
 async function onLoginSuccess() {
   showLoginDialog.value = false

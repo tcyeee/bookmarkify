@@ -1,17 +1,31 @@
-# Nuxt dev/build outputs
+# ─── OS / Editor ───
+.DS_Store
+.idea
+.fleet
+.gradle
+
+# ─── Logs ───
+logs
+*.log
+
+# ─── Node / pnpm ───
+node_modules
+
+# ─── Nuxt / Vite build outputs (bookmarkify-web) ───
 .output
 .data
 .nuxt
 .nitro
 .cache
-.idea
 dist
 build
-
 bookmarkify-web/public/upload
 
-# Node dependencies
-node_modules
+# ─── Turborepo / build artifacts (bookmarkify-admin) ───
+.turbo
+dist.zip
+
+# ─── Kotlin / Gradle (bookmarkify-api) ───
 bookmarkify-api/bin
 bookmarkify-api/build
 bookmarkify-api/out
@@ -21,17 +35,6 @@ bookmarkify-api/libs
 bookmarkify-api/logs
 bookmarkify-api/tmp
 
-# Logs
-logs
-*.log
-
-# Misc
-.DS_Store
-.fleet
-.idea
-.gradle
-
-
-# Local env files
+# ─── Local env files ───
 .env
 !.env.example
