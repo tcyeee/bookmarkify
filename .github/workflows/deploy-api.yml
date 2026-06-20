@@ -20,9 +20,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Compile the fat jar here on the RAM-rich runner (~35s). The memory-hungry
-      # Kotlin/Gradle build stays off the small prod server, and only the ~60-80MB jar
-      # crosses the border — not a full image with the JRE base layer (which the docker
-      # push to Tencent TCR did, taking ~42 min cross-border).
+      # Kotlin/Gradle build stays off the small prod server.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -35,30 +33,44 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon clean bootJar
 
-      # Flat staging dir so scp lands files directly in the server build context.
-      - name: Stage deploy artifacts
+      # Relay the jar through Aliyun OSS instead of a direct cross-border push/scp:
+      # runner → OSS upload, then the server pulls it intra-China (fast). Avoids the
+      # ~42 min cross-border `docker push` to Tencent TCR and the equally slow direct scp.
+      - name: Upload jar to OSS
+        id: oss
+        env:
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+          # Match the bucket region used by the app (see compose.prod.yml). To speed up
+          # the runner→OSS leg further, enable Transfer Acceleration on the bucket and
+          # switch this to oss-accelerate.aliyuncs.com.
+          OSS_ENDPOINT: oss-cn-hangzhou.aliyuncs.com
+          GIT_SHA: ${{ github.sha }}
         run: |
-          mkdir -p stage
-          cp bookmarkify-api/build/libs/bookmarkify-api.jar stage/
-          cp bookmarkify-api/Dockerfile stage/
+          set -euo pipefail
+          curl -fsSL -o ossutil.zip https://gosspublic.alicdn.com/ossutil/v2/2.1.1/ossutil-2.1.1-linux-amd64.zip
+          unzip -q ossutil.zip
+          OSSUTIL="$PWD/ossutil-2.1.1-linux-amd64/ossutil"
+          chmod +x "$OSSUTIL"
 
-      # Ship the jar + thin runtime Dockerfile to the server's build context.
-      - name: Copy artifacts to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_SSH_PORT || 22 }}
-          source: "stage/*"
-          target: "/home/${{ secrets.SERVER_USER }}/bookmarkify-api/stage"
-          strip_components: 1
-          overwrite: true
+          KEY="deploy/bookmarkify-api-${GIT_SHA}.jar"
+          "$OSSUTIL" cp bookmarkify-api/build/libs/bookmarkify-api.jar "oss://${OSS_BUCKET}/${KEY}" \
+            -f -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
 
-      - name: Encode compose file
+          # Pre-signed GET URL (1h) so the server fetches without needing OSS creds.
+          URL=$("$OSSUTIL" presign "oss://${OSS_BUCKET}/${KEY}" --expires-duration 1h \
+            -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET" \
+            | grep -Eo 'https?://[^[:space:]]+' | head -1)
+          test -n "$URL"
+          echo "::add-mask::$URL"
+          echo "jar_url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Encode files
         id: prep
         run: |
           echo "compose_b64=$(base64 -w0 bookmarkify-api/deploy/compose.prod.yml)" >> "$GITHUB_OUTPUT"
+          echo "dockerfile_b64=$(base64 -w0 bookmarkify-api/Dockerfile)" >> "$GITHUB_OUTPUT"
 
       - name: Deploy on server
         uses: appleboy/ssh-action@v1.2.0
@@ -67,16 +79,21 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_SSH_PORT || 22 }}
-          envs: COMPOSE_B64,API_IMAGE,SPRING_DATASOURCE_PASSWORD,SPRING_DATA_REDIS_PASSWORD,BOOKMARKIFY_WECHAT_WORK_CORPID,BOOKMARKIFY_WECHAT_WORK_CORPSECRET,BOOKMARKIFY_DEEPSEEK_API_KEY,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET
+          envs: COMPOSE_B64,DOCKERFILE_B64,JAR_URL,API_IMAGE,SPRING_DATASOURCE_PASSWORD,SPRING_DATA_REDIS_PASSWORD,BOOKMARKIFY_WECHAT_WORK_CORPID,BOOKMARKIFY_WECHAT_WORK_CORPSECRET,BOOKMARKIFY_DEEPSEEK_API_KEY,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET
           script: |
             set -euo pipefail
 
             APP_DIR="$HOME/bookmarkify-api"
             STAGE_DIR="$APP_DIR/stage"
-            mkdir -p "$APP_DIR"
+            mkdir -p "$STAGE_DIR"
 
-            # Compose file (single source of truth from the repo)
+            # Compose file + thin Dockerfile (single source of truth from the repo)
             echo "$COMPOSE_B64" | base64 -d > "$APP_DIR/compose.yml"
+            echo "$DOCKERFILE_B64" | base64 -d > "$STAGE_DIR/Dockerfile"
+
+            # Pull the jar from OSS over the intra-China network (fast).
+            curl -fsSL "$JAR_URL" -o "$STAGE_DIR/bookmarkify-api.jar"
+            test -s "$STAGE_DIR/bookmarkify-api.jar"
 
             # Runtime env consumed by compose interpolation
             umask 077
@@ -94,7 +111,6 @@ jobs:
 
             # Assemble the runtime image locally: just COPY the jar onto the JRE base
             # (already present on the host). Seconds, tens of MB RAM — no compilation.
-            test -f "$STAGE_DIR/bookmarkify-api.jar"
             docker build -t "$API_IMAGE" -f "$STAGE_DIR/Dockerfile" "$STAGE_DIR"
 
             cd "$APP_DIR"
@@ -120,6 +136,8 @@ jobs:
             echo "Deploy OK: $API_IMAGE"
         env:
           COMPOSE_B64: ${{ steps.prep.outputs.compose_b64 }}
+          DOCKERFILE_B64: ${{ steps.prep.outputs.dockerfile_b64 }}
+          JAR_URL: ${{ steps.oss.outputs.jar_url }}
           API_IMAGE: bookmarkify-api:${{ github.sha }}
           SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
           SPRING_DATA_REDIS_PASSWORD: ${{ secrets.SPRING_DATA_REDIS_PASSWORD }}
