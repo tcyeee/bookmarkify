@@ -92,7 +92,7 @@ class ApiServiceImpl(
         candidates: List<CategoryCandidate>,
     ): List<String> {
         if (candidates.isEmpty()) return emptyList()
-        val allowed = candidates.map { it.slug }.toSet()
+        val allowed = candidates.map { it.slug.lowercase() }.toSet()
 
         val catalogue = candidates.joinToString("\n") { c ->
             "- ${c.slug}（${c.name}）${c.description?.let { "：$it" } ?: ""}"

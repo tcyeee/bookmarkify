@@ -20,14 +20,14 @@ class BookmarkCategoryServiceImpl(
     transactionManager: PlatformTransactionManager,
 ) : IBookmarkCategoryService, ServiceImpl<BookmarkCategoryMapper, BookmarkCategory>() {
 
-    private val log = LoggerFactory.getLogger(javaClass)
+    private val logger = LoggerFactory.getLogger(javaClass)
     private val txTemplate = TransactionTemplate(transactionManager)
 
     override fun categorize(bookmark: BookmarkEntity) {
         runCatching {
             val categories = websiteCategoryService.activeCandidates()
             if (categories.isEmpty()) {
-                log.debug("[categorize] 字典为空，跳过: bookmarkId=${bookmark.id}")
+                logger.debug("[categorize] 字典为空，跳过: bookmarkId=${bookmark.id}")
                 return
             }
             val candidates = categories.map { CategoryCandidate(it.slug, it.name, it.description) }
@@ -35,16 +35,16 @@ class BookmarkCategoryServiceImpl(
                 bookmark.title, bookmark.description, bookmark.urlHost, candidates,
             )
             if (slugs.isEmpty()) {
-                log.debug("[categorize] DeepSeek 未返回有效分类: bookmarkId=${bookmark.id}")
+                logger.debug("[categorize] DeepSeek 未返回有效分类: bookmarkId=${bookmark.id}")
                 return
             }
             val slugToId = categories.associate { it.slug to it.id }
             val categoryIds = slugs.mapNotNull { slugToId[it] }
             if (categoryIds.isEmpty()) return
             replaceLinks(bookmark.id, categoryIds)
-            log.debug("[categorize] 分类完成: bookmarkId=${bookmark.id}, slugs=$slugs")
+            logger.debug("[categorize] 分类完成: bookmarkId=${bookmark.id}, slugs=$slugs")
         }.onFailure {
-            log.warn("[categorize] 分类失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}")
+            logger.warn("[categorize] 分类失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}")
         }
     }
 
