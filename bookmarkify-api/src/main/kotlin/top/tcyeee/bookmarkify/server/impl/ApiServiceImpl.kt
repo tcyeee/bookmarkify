@@ -8,6 +8,7 @@ import top.tcyeee.bookmarkify.config.entity.DeepSeekConfig
 import top.tcyeee.bookmarkify.config.entity.ScrapperConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekMessage
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekRequest
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekResponse
@@ -82,6 +83,56 @@ class ApiServiceImpl(
                 .choices?.firstOrNull()?.message?.content
                 ?.trim()?.takeIf { it.isNotBlank() }
         }.getOrNull()
+    }
+
+    override fun inferCategories(
+        title: String?,
+        description: String?,
+        host: String,
+        candidates: List<CategoryCandidate>,
+    ): List<String> {
+        if (candidates.isEmpty()) return emptyList()
+        val allowed = candidates.map { it.slug }.toSet()
+
+        val catalogue = candidates.joinToString("\n") { c ->
+            "- ${c.slug}（${c.name}）${c.description?.let { "：$it" } ?: ""}"
+        }
+        val systemPrompt = """
+            你是一个网站分类助手。下面是允许使用的分类列表（slug 及含义）：
+            $catalogue
+            根据用户给出的网站信息，从上面的列表中选出 1~3 个最贴切的分类。
+            规则：只返回 slug 本身，多个用英文逗号分隔；只能用列表里出现过的 slug；
+            不要任何解释、标点或额外文字。实在无法判断时返回 other。
+        """.trimIndent()
+        val userContent = "host: $host\ntitle: ${title ?: ""}\ndescription: ${description ?: ""}"
+
+        val request = DeepSeekRequest(
+            messages = listOf(
+                DeepSeekMessage(role = "system", content = systemPrompt),
+                DeepSeekMessage(role = "user", content = userContent),
+            ),
+            maxTokens = 40,
+        )
+
+        val responseBody = runCatching {
+            HttpUtil.createPost("https://api.deepseek.com/chat/completions")
+                .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
+                .header("Content-Type", "application/json")
+                .body(objectMapper.writeValueAsString(request))
+                .timeout(10000)
+                .execute()
+                .body()
+        }.getOrNull() ?: return emptyList()
+
+        val raw = runCatching {
+            objectMapper.readValue<DeepSeekResponse>(responseBody)
+                .choices?.firstOrNull()?.message?.content
+        }.getOrNull() ?: return emptyList()
+
+        return raw.split(',', '，', '\n', ' ')
+            .map { it.trim().lowercase() }
+            .filter { it.isNotBlank() && it in allowed }
+            .distinct()
     }
 
     private fun buildUrl(domain: String): String {
