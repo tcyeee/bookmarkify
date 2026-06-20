@@ -30,8 +30,6 @@ data class GradientConfigParams(
     @field:Schema(description = "渐变方向角度，默认135") var direction: Int = 135,
 )
 
-data class CaptchaSmsParams(val phone: String, val captcha: String)
-data class SmsVerifyParams(val phone: String, val smsCode: String)
 data class EmailVerifyParams(val email: String, val code: String)
 data class SendEmailParams(val email: String)
 data class UserDelParams(val password: String)

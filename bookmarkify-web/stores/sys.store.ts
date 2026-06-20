@@ -16,10 +16,6 @@ export const useSysStore = defineStore('sys', {
     settingTabIndex: 0,
     // “添加书签”对话框是否可见
     addBookmarkDialogVisible: false,
-    // 短信验证码倒计时秒数
-    smsCountdown: 0,
-    // 短信验证码倒计时计时器句柄
-    smsCountdownTimer: null as ReturnType<typeof setInterval> | null,
     // 邮箱验证码倒计时秒数
     emailCountdown: 0,
     // 邮箱验证码倒计时计时器句柄
@@ -60,27 +56,6 @@ export const useSysStore = defineStore('sys', {
     // 切换是否阻止键盘事件
     togglePreventKeyEventsFlag(value: boolean) {
       this.preventKeyEventsFlag = value
-    },
-
-    // 启动短信验证码倒计时
-    startSmsCountdown(initial = 60) {
-      this.smsCountdown = initial
-      if (this.smsCountdownTimer !== null) clearInterval(this.smsCountdownTimer)
-      this.smsCountdownTimer = setInterval(() => {
-        this.smsCountdown--
-        if (this.smsCountdown <= 0) {
-          this.stopSmsCountdown()
-        }
-      }, 1000)
-    },
-
-    // 停止短信验证码倒计时并清零
-    stopSmsCountdown() {
-      if (this.smsCountdownTimer !== null) {
-        clearInterval(this.smsCountdownTimer)
-        this.smsCountdownTimer = null
-      }
-      this.smsCountdown = 0
     },
 
     // 启动邮箱验证码倒计时

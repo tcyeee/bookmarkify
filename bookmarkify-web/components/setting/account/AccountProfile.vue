@@ -51,20 +51,6 @@
             <BindEmailModal :email="form.email" :disabled="saving" @success="handleEmailBindSuccess" />
           </div>
         </div>
-
-        <div
-          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
-          <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
-            <Icon icon="memory:speaker" class="size-5 text-slate-500 dark:text-slate-400" />
-            <div>
-              <div class="font-medium">手机号</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">{{ maskedPhone || '未绑定手机号' }}</div>
-            </div>
-          </div>
-          <div class="flex items-center gap-3">
-            <BindPhoneModal :phone="form.phone" :disabled="saving" @success="handlePhoneBindSuccess" />
-          </div>
-        </div>
       </div>
 
       <!-- 帐户操作 -->
@@ -110,7 +96,6 @@ import AvatarUpload from './AvatarUpload.vue'
 import { useAuthStore } from '@stores/auth.store'
 import { usePreferenceStore } from '@stores/preference.store'
 import AccountDelete from './AccountDelete.vue'
-import BindPhoneModal from './BindPhoneModal.vue'
 import BindEmailModal from './BindEmailModal.vue'
 import AccountLogout from './AccountLogout.vue'
 import ActionInput from '../../common/ActionInput.vue'
@@ -143,25 +128,14 @@ const maskedEmail = computed(() => {
   const middle = '*'.repeat(local.length - 2)
   return `${start}${middle}${end}@${domain}`
 })
-const maskedPhone = computed(() => {
-  const phone = form.phone
-  if (!phone) return ''
-  if (phone.length <= 4) return phone
-  const start = phone.slice(0, 3)
-  const end = phone.slice(-4)
-  const middle = '*'.repeat(Math.max(phone.length - 7, 0))
-  return `${start}${middle}${end}`
-})
 const displayNickName = computed(() => account.value?.nickName || '未命名用户')
 const isDirty = computed(() => {
   const nicknameChanged = form.nickName !== (account.value?.nickName || '')
-  const phoneChanged = form.phone !== (account.value?.phone || '')
   const emailChanged = form.email !== (account.value?.email || '')
-  return nicknameChanged || phoneChanged || emailChanged
+  return nicknameChanged || emailChanged
 })
 const form = reactive({
   nickName: '',
-  phone: '',
   email: '',
 })
 const saving = ref(false)
@@ -170,7 +144,6 @@ watch(
   account,
   (val) => {
     form.nickName = val?.nickName || ''
-    form.phone = val?.phone || ''
     form.email = val?.email || ''
   },
   { immediate: true },
@@ -181,7 +154,6 @@ async function saveProfile() {
   try {
     await updateUserInfo({
       nickName: form.nickName,
-      phone: form.phone,
       email: form.email,
     })
     await authStore.refreshUserInfo()
@@ -195,17 +167,12 @@ async function saveProfile() {
 
 function resetForm() {
   form.nickName = account.value?.nickName || ''
-  form.phone = account.value?.phone || ''
   form.email = account.value?.email || ''
 }
 
 async function handleAvatarUpdate(avatarPath: string) {
   // 头像上传成功后，更新用户信息中的头像路径
   await authStore.refreshUserInfo()
-}
-
-function handlePhoneBindSuccess(phone: string) {
-  form.phone = phone
 }
 
 function handleEmailBindSuccess(email: string) {

@@ -2,16 +2,12 @@ package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.IService
-import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.web.multipart.MultipartFile
-import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.BackSettingParams
-import top.tcyeee.bookmarkify.entity.CaptchaSmsParams
 import top.tcyeee.bookmarkify.entity.EmailVerifyParams
 import top.tcyeee.bookmarkify.entity.GradientConfigParams
-import top.tcyeee.bookmarkify.entity.SmsVerifyParams
 import top.tcyeee.bookmarkify.entity.AccountLoginParams
 import top.tcyeee.bookmarkify.entity.ChangePasswordParams
 import top.tcyeee.bookmarkify.entity.UserAdminVO
@@ -28,14 +24,6 @@ import top.tcyeee.bookmarkify.entity.entity.UserEntity
  * @date 3/11/25 20:01
  */
 interface IUserService : IService<UserEntity> {
-    /**
-     * SESSION 注册用户信息
-     * @param request request
-     * @param response response
-     * @return 用户基础信息+token (注意：这里不包含用户头像和用户设置)
-     */
-    fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo
-
     fun loginOut(response: HttpServletResponse)
 
     /**
@@ -114,51 +102,18 @@ interface IUserService : IService<UserEntity> {
     fun del(params: UserDelParams): Boolean
 
     /**
-     * 获取图形验证码
-     * @param uid 用户ID
-     * @return 图形验证码结果
-     */
-    fun captchaImage(uid: String): ResultWrapper
-
-    /**
-     * 发送短信验证码
-     * @param uid 用户ID
-     * @param params 短信参数
-     * @return 是否发送成功
-     */
-    fun sendSms(uid: String, params: CaptchaSmsParams): Boolean
-
-    /**
-     * 校验短信验证码
-     * @param request 请求对象
-     * @param response 响应对象
-     * @param uid 用户ID
-     * @param params 短信验证参数
-     * @return 用户会话信息
-     */
-    fun verifySms(
-        request: HttpServletRequest, response: HttpServletResponse, uid: String, params: SmsVerifyParams
-    ): UserSessionInfo
-
-    /**
      * 发送邮箱验证码
-     * @param uid 用户ID
      * @param email 邮箱地址
-     * @return 是否发送成功
+     * @return 本次发送的区分代码(2 位大写字母),用于前端展示帮助用户识别对应邮件;发送失败抛 [top.tcyeee.bookmarkify.config.exception.CommonException]
      */
-    fun sendEmail(uid: String, email: String): Boolean
+    fun sendEmail(email: String): String
 
     /**
-     * 校验邮箱验证码
-     * @param request 请求对象
-     * @param response 响应对象
-     * @param uid 用户ID
+     * 校验邮箱验证码并登录（邮箱不存在则注册）
      * @param params 邮箱验证参数
      * @return 用户会话信息
      */
-    fun verifyEmail(
-        request: HttpServletRequest, response: HttpServletResponse, uid: String, params: EmailVerifyParams
-    ): UserSessionInfo
+    fun verifyEmail(params: EmailVerifyParams): UserSessionInfo
 
     fun findByNameAndPwd(account: String, password: String): UserEntity?
 

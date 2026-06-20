@@ -23,9 +23,28 @@ class MailUtils {
     @Value("\${bookmarkify.wechat.corpsecret}")
     private lateinit var corpsecret: String
 
-    enum class EmailType(val title: String, val content: String) {
+    enum class EmailType(val title: String) {
         /* 验证码 */
-        VERIFY_CODE("验证码", "您的验证码为: %s, 15分钟内有效"),
+        VERIFY_CODE("验证码"),
+    }
+
+    /**
+     * 构建邮件正文(HTML)
+     *
+     * @param code 验证码(数字),大号加粗高亮,作为视觉焦点
+     * @param ref  区分代码(字母),小号灰字,仅用于帮助用户识别本封邮件,不参与校验
+     */
+    private fun buildContent(type: EmailType, code: String, ref: String): String = when (type) {
+        EmailType.VERIFY_CODE -> """
+            <div style="font-family:-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;max-width:420px;margin:0 auto;padding:28px 24px;color:#1f2937;">
+              <p style="margin:0 0 16px;font-size:15px;">您正在登录 <strong>书签鸭</strong>，本次验证码为：</p>
+              <div style="margin:8px 0 20px;text-align:center;">
+                <span style="display:inline-block;font-size:34px;font-weight:700;letter-spacing:10px;color:#4f46e5;background:#eef2ff;border-radius:12px;padding:14px 24px 14px 34px;">$code</span>
+              </div>
+              <p style="margin:0 0 6px;font-size:13px;color:#6b7280;">验证码 15 分钟内有效，请勿泄露给他人。</p>
+              <p style="margin:14px 0 0;font-size:12px;color:#9ca3af;">本次请求标识：<span style="font-weight:600;">$ref</span>（仅用于识别本封邮件，无需填写）</p>
+            </div>
+        """.trimIndent()
     }
 
     /* 获取腾讯云邮TOKEN */
@@ -39,7 +58,7 @@ class MailUtils {
             .also { RedisUtils.setConst(RedisType.WECHAT_WORK_ACCESS_TOKEN, it) }
     }
 
-    fun send(to: String, type: EmailType, code: String): Boolean {
+    fun send(to: String, type: EmailType, code: String, ref: String): Boolean {
         try {
             val accessToken = getAccessToken()
             val url = "https://qyapi.weixin.qq.com/cgi-bin/exmail/app/compose_send?access_token=$accessToken"
@@ -47,7 +66,8 @@ class MailUtils {
             val payload = mapOf(
                 "to" to mapOf("emails" to listOf(to)),
                 "subject" to type.title,
-                "content" to String.format(type.content, code)
+                "content_type" to "html",
+                "content" to buildContent(type, code, ref)
             )
 
             val response = HttpUtil.post(url, JSONUtil.toJsonStr(payload))
