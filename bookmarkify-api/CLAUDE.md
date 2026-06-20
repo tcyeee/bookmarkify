@@ -85,10 +85,21 @@ src/main/resources/
 # Show resolved dependency tree (useful when bumping versions)
 ./gradlew dependencies
 
-# Docker
-docker build -f DockerFile -t bookmarkify-api .
+# Docker — the Dockerfile is runtime-only (it just COPYs a prebuilt jar onto a
+# JRE; it does NOT compile). Build the jar first, then the image.
+./gradlew bootJar
+cp build/libs/bookmarkify-api.jar .          # Dockerfile expects ./bookmarkify-api.jar
+docker build -t bookmarkify-api .
 docker run -p 7001:7001 bookmarkify-api
 ```
+
+## Deployment
+
+Deploys via GitHub Actions on push to the **`prod`** branch (`.github/workflows/deploy-api.yml`).
+The cross-border `docker push` to Tencent TCR was retired (2026-06-20, ~42 min → ~2 min): the
+runner compiles the jar, uploads it to Aliyun OSS, and the server pulls it intra-China and
+assembles the thin runtime image locally (no Kotlin compile on the small prod host). Each run
+clears the previous deploy's jar from OSS. TCR is no longer involved.
 
 **Server port:** 7001
 
