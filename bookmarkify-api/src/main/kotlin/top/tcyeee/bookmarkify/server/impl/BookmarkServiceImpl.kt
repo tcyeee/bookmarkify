@@ -24,6 +24,7 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.config.event.BookmarkParseAndNoticeEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseAndResetUserItemEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseEvent
+import top.tcyeee.bookmarkify.server.IBookmarkCategoryService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.utils.*
 import java.time.LocalDateTime
@@ -43,6 +44,7 @@ class BookmarkServiceImpl(
     private val websiteLogoMapper: WebsiteLogoMapper,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val bookmarkFunctionMapper: BookmarkFunctionMapper,
+    private val bookmarkCategoryService: IBookmarkCategoryService,
     transactionManager: PlatformTransactionManager,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
 
@@ -244,7 +246,11 @@ class BookmarkServiceImpl(
         }
         val mode = if (projectConfig.useThirdPartyParser) "远程scrapper" else "本地Jsoup"
         log.debug("[parseBookmark] 选择解析模式: $mode, bookmarkId=${bookmark.id}")
-        return if (projectConfig.useThirdPartyParser) parseByApi(bookmark) else parseLocally(bookmark)
+        val parsed = if (projectConfig.useThirdPartyParser) parseByApi(bookmark) else parseLocally(bookmark)
+        if (parsed.parseStatus == ParseStatusEnum.SUCCESS || parsed.parseStatus == ParseStatusEnum.BLOCKED) {
+            bookmarkCategoryService.categorize(parsed)
+        }
+        return parsed
     }
 
     /**
