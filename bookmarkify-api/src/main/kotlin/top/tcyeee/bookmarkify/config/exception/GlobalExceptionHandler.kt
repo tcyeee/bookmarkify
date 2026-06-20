@@ -13,6 +13,7 @@ import org.springframework.http.server.ServerHttpResponse
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.config.result.ResultWrapper.Companion.error
@@ -54,6 +55,13 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
             is NotLoginException -> {
                 log.debug("[未登录] {}", request.requestURI)
                 error(ErrorType.E101)
+            }
+
+            // 客户端在响应写回前已断开连接（刷新/切走/超时取消）：连接已不可用，
+            // 无法再写任何响应，仅 debug 记录，避免污染 error 日志与触发告警。
+            is AsyncRequestNotUsableException -> {
+                log.debug("[客户端断开] {} | {}", request.requestURI, e.message)
+                error(ErrorType.E999)
             }
 
             is NullPointerException, is HttpMessageNotReadableException -> print(ErrorType.E102, e, request)
