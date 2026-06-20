@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { AuthStatusEnum, type EmailVerifyParams, type LoginParams, type SmsVerifyParams, type UserInfo } from '@typing'
-import { authLoginByAccount, authLogout, captchaVerifyEmail, captchaVerifySms, queryUserInfo, track } from '@api'
+import { AuthStatusEnum, type EmailVerifyParams, type LoginParams, type UserInfo } from '@typing'
+import { authLoginByAccount, authLogout, captchaVerifyEmail, queryUserInfo } from '@api'
 import { md5 } from '@utils'
 import { usePreferenceStore } from './preference.store'
 
@@ -45,18 +45,6 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async loginWithPhone(params: SmsVerifyParams): Promise<UserInfo> {
-      try {
-        // 手机短信验证码登录/注册，成功后合并到当前账号信息
-        const result = await captchaVerifySms(params)
-        this.account = { ...this.account, ...result }
-        if (import.meta.client) useNuxtApp().$track('login-phone')
-        return result
-      } catch (err: any) {
-        return Promise.reject(err)
-      }
-    },
-
     async refreshUserInfo(): Promise<UserInfo> {
       try {
         // 重新拉取用户信息，失败后处理过期态并自动重新登录
@@ -73,8 +61,8 @@ export const useAuthStore = defineStore('auth', {
       } catch (err: any) {
         if (err.code == 202) {
           await this.logout()
-          if (import.meta.client) ElMessage.error('用户信息已过期,已重新登录,请刷新页面')
-          return await this.loginOrRegister()
+          if (import.meta.client) ElMessage.error('登录已过期,请重新登录')
+          throw err
         }
         if (import.meta.client) ElMessage.error(err.message || '刷新用户信息失败')
         throw err
@@ -92,17 +80,6 @@ export const useAuthStore = defineStore('auth', {
       const preferenceStore = usePreferenceStore()
       const bookmarkStore = useBookmarkStore()
       await Promise.all([this.refreshUserInfo(), preferenceStore.fetchPreference(), bookmarkStore.update()])
-    },
-
-    async loginOrRegister(): Promise<UserInfo> {
-      console.log('DEBUG: 登录或者注册，刷新最新用户信息')
-      // track 返回最新用户 token；用于初次登录或 token 续期
-      const user = await track()
-      this.account = { ...this.account, ...user }
-      if (!user.token) return Promise.reject('登陆数据异常')
-
-      await this.postLoginSetup()
-      return Promise.resolve(this.account as UserInfo)
     },
 
     async logout() {
@@ -133,7 +110,7 @@ export const useAuthStore = defineStore('auth', {
           localStorage.removeItem('homeItems')
           localStorage.removeItem('user')
           localStorage.removeItem('backgroundImageDataUrl')
-          document.cookie = 'satoken=;auth=;user=;deviceUid=; Max-Age=0; path=/'
+          document.cookie = 'satoken=;auth=;user=; Max-Age=0; path=/'
         }
 
         navigateTo('/welcome')

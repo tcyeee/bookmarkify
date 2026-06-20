@@ -25,6 +25,9 @@
       <p class="text-center text-sm text-white/45">
         已向 <span class="text-white/75">{{ maskedEmail }}</span> 发送验证码
       </p>
+      <p v-if="tagCode" class="text-center text-xs text-white/40">
+        请查收标识为 <span class="font-semibold tracking-widest text-indigo-300">{{ tagCode }}</span> 的邮件
+      </p>
 
       <!-- OTP 输入框 -->
       <div class="relative mx-auto my-3 w-fit cursor-text" @click="codeInputRef?.focus()">
@@ -60,6 +63,16 @@
 
       <p v-if="codeError" class="text-center text-sm text-red-400">{{ codeError }}</p>
 
+      <button
+        type="button"
+        :class="BTN_CLS"
+        :style="BTN_STYLE"
+        :disabled="!isCodeValid || loading"
+        @click="submit">
+        <Icon v-if="loading" icon="memory:rotate-clockwise" class="size-4 animate-spin" />
+        {{ loading ? '登录中...' : '确认登录' }}
+      </button>
+
       <div class="flex justify-between text-sm">
         <button type="button" class="text-white/35 hover:text-white/70 transition-colors" @click="step = 1">
           ← 返回
@@ -72,16 +85,6 @@
           {{ countdown > 0 ? `${countdown}s 后重发` : '重新发送' }}
         </button>
       </div>
-
-      <button
-        type="button"
-        :class="BTN_CLS"
-        :style="BTN_STYLE"
-        :disabled="!isCodeValid || loading"
-        @click="submit">
-        <Icon v-if="loading" icon="memory:rotate-clockwise" class="size-4 animate-spin" />
-        {{ loading ? '登录中...' : '确认登录' }}
-      </button>
     </template>
   </div>
 </template>
@@ -90,7 +93,7 @@
 import { captchaSendEmail } from '@api'
 import { useAuthStore } from '@stores/auth.store'
 
-const emit = defineEmits<{ (e: 'success'): void }>()
+const emit = defineEmits<{ (e: 'success'): void; (e: 'step', step: number): void }>()
 
 const INPUT_CLS =
   'rounded-xl border border-white/10 bg-white/8 px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition-all duration-200 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-400/20'
@@ -102,6 +105,7 @@ const authStore = useAuthStore()
 const sysStore = useSysStore()
 
 const step = ref(1)
+watch(step, (v) => emit('step', v))
 const codeInputRef = ref<HTMLInputElement>()
 const countdown = computed(() => sysStore.emailCountdown)
 
@@ -109,6 +113,8 @@ const form = reactive({ email: '', code: '' })
 const loading = ref(false)
 const sending = ref(false)
 const codeError = ref('')
+// 本次发送的区分代码(2 位字母),与邮件内一致,帮助用户在收件箱里对上当前这封邮件
+const tagCode = ref('')
 
 const isEmailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
 const isCodeValid = computed(() => /^\d{4}$/.test(form.code.trim()))
@@ -142,7 +148,7 @@ async function sendCode() {
   codeError.value = ''
   sending.value = true
   try {
-    await captchaSendEmail({ email: form.email })
+    tagCode.value = await captchaSendEmail({ email: form.email })
     sysStore.startEmailCountdown()
     ElNotification.success({ message: '已发送邮箱验证码' })
     step.value = 2

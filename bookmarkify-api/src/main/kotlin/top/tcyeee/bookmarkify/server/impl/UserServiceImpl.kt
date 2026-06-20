@@ -1,7 +1,7 @@
 package top.tcyeee.bookmarkify.server.impl
 
-import cn.hutool.captcha.CaptchaUtil
 import java.util.Base64
+import cn.hutool.core.util.IdUtil
 import cn.hutool.core.util.RandomUtil
 import cn.hutool.core.util.StrUtil
 import cn.hutool.crypto.SecureUtil
@@ -9,7 +9,6 @@ import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import jakarta.servlet.http.Cookie
-import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -18,7 +17,6 @@ import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
-import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.AccountLoginParams
 import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
@@ -48,7 +46,6 @@ class UserServiceImpl(
     private val fileMapper: FileMapper,
     private val fileService: FileServiceImpl,
     private val projectConfig: ProjectConfig,
-    private val smsService: SmsServiceImpl,
     private val mailUtils: MailUtils,
     private val bookmarkService: IBookmarkService,
     private val userPreferenceMapper: UserPreferenceMapper
@@ -69,28 +66,23 @@ class UserServiceImpl(
     }
 
     /**
-     * 注册用户信息
-     * @param request request
-     * @param response response
-     * @return 用户基础信息+token (注意：这里不包含用户头像和用户设置)
+     * 创建一个已验证的正式用户，并初始化默认数据（功能 / 偏好 / 书签）。
+     * @param email 绑定的邮箱
+     * @return 新建用户实体
      */
-    @Transactional
-    override fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo {
-        if (StpKit.USER.isLogin && BaseUtils.user() != null) return BaseUtils.user()!!
-
-        val userEntity: UserEntity = BaseUtils.sessionRegisterDeviceId(request, response, projectConfig)
-            .let { this.queryOrRegisterByDeviceId(it) }
-
+    private fun createVerifiedUser(email: String): UserEntity {
+        val userEntity = UserEntity(IdUtil.fastUUID()).apply {
+            this.email = email
+            this.verified = true
+        }
+        save(userEntity)
         // 初始化用户设置
         bookmarkService.setDefaultFunction(userEntity.id)
         // 初始化用户偏好设置
         userPreferenceMapper.insert(UserPreferenceEntity(uid = userEntity.id))
         // 初始化用户书签
         bookmarkService.setDefaultBookmark(userEntity.id)
-        // 初始化用户权限
-        StpKit.USER.login(userEntity.id, true)
-
-        return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
+        return userEntity
     }
 
     override fun loginOut(response: HttpServletResponse) {
@@ -100,38 +92,23 @@ class UserServiceImpl(
         Cookie(projectConfig.uidCookieName, "").apply { maxAge = 0; path = "/" }.also { response.addCookie(it) }
     }
 
-    override fun sendSms(uid: String, params: CaptchaSmsParams): Boolean {
-        val cache = RedisUtils.get<String>(RedisType.CAPTCHA_CODE, uid) ?: throw CommonException(ErrorType.E105)
-        if (cache != params.captcha.lowercase().trim()) throw CommonException(ErrorType.E302)
-        smsService.sendVerificationCode(params.phone)
-        return true
-    }
-
-    override fun sendEmail(uid: String, email: String): Boolean {
+    override fun sendEmail(email: String): String {
+        // 邮箱统一归一化(trim + lowercase):发码与验码必须用同一份键,否则验证码读不到;
+        // 同时保证 DB 唯一性,避免大小写差异注册出重复账号。
+        val normalized = email.trim().lowercase()
         val code = RandomUtil.randomInt(1000, 9999).toString()
-        val success = mailUtils.send(email, MailUtils.EmailType.VERIFY_CODE, code)
-        if (success) RedisUtils.set(RedisType.CODE_EMAIL, uid, code)
-        return success
-    }
-
-    override fun verifySms(
-        request: HttpServletRequest, response: HttpServletResponse, uid: String, params: SmsVerifyParams
-    ): UserSessionInfo {
-        return verifyCodeAndBind(uid = uid, redisType = RedisType.CODE_PHONE, getCacheCode = {
-            RedisUtils.get<Int>(RedisType.CODE_PHONE, uid)?.toString() ?: throw CommonException(ErrorType.E105)
-        }, inputCode = params.smsCode, findUser = {
-            ktQuery().eq(UserEntity::phone, params.phone.trim()).one()
-        }, bindToCurrentUser = {
-            ktUpdate().eq(UserEntity::id, uid).set(UserEntity::phone, params.phone.trim())
-                .set(UserEntity::verified, true).update()
-        }, updateSession = {
-            it.phone = params.phone.trim()
-            it.verified = true
-        })
+        // 区分代码:2 位大写字母,纯展示用途,帮助用户在收件箱里识别本次请求对应的那封邮件,避免用错旧验证码。
+        // 用字母与数字验证码区隔形态,降低混淆;不参与校验、不入 Redis。
+        val ref = (1..2).map { ('A'..'Z').random() }.joinToString("")
+        val success = mailUtils.send(normalized, MailUtils.EmailType.VERIFY_CODE, code, ref)
+        if (!success) throw CommonException(ErrorType.E106)
+        RedisUtils.set(RedisType.CODE_EMAIL, normalized, code)
+        return ref
     }
 
     override fun loginByAccount(params: AccountLoginParams): UserSessionInfo {
-        val account = String(Base64.getDecoder().decode(params.account))
+        // 账号(邮箱/手机)归一化,与邮箱验证码登录同口径,避免大小写差异登不进;手机号 lowercase 为无副作用
+        val account = String(Base64.getDecoder().decode(params.account)).trim().lowercase()
         // 客户端传来的是 Base64(md5(明文))，解码后即规范凭据（md5 串），不再用它做整列等值查询
         val credential = String(Base64.getDecoder().decode(params.password))
         val user = ktQuery()
@@ -156,8 +133,10 @@ class UserServiceImpl(
 
     override fun findByNameAndPwd(account: String, password: String): UserEntity? {
         val credential = SecureUtil.md5(password)
+        // 账号(邮箱/手机)归一化,与其他登录路径同口径
+        val normalized = account.trim().lowercase()
         val user = ktQuery()
-            .and { it.eq(UserEntity::email, account).or().eq(UserEntity::phone, account) }.one()
+            .and { it.eq(UserEntity::email, normalized).or().eq(UserEntity::phone, normalized) }.one()
             ?: return null
         if (!PasswordUtils.matches(credential, user.password)) return null
         upgradePasswordIfLegacy(user, credential)
@@ -172,70 +151,25 @@ class UserServiceImpl(
         }
     }
 
-    override fun verifyEmail(
-        request: HttpServletRequest, response: HttpServletResponse, uid: String, params: EmailVerifyParams
-    ): UserSessionInfo {
-        return verifyCodeAndBind(uid = uid, redisType = RedisType.CODE_EMAIL, getCacheCode = {
-            RedisUtils.get<String>(RedisType.CODE_EMAIL, uid) ?: throw CommonException(ErrorType.E105)
-        }, inputCode = params.code, findUser = {
-            ktQuery().eq(UserEntity::email, params.email.trim()).one()
-        }, bindToCurrentUser = {
-            ktUpdate().eq(UserEntity::id, uid).set(UserEntity::email, params.email.trim())
-                .set(UserEntity::verified, true).update()
-        }, updateSession = { it.email = params.email.trim(); it.verified = true })
-    }
-
     /**
-     * 验证码登录/验证/绑定
-     *
-     * # 可能使用到该接口的情况:
-     * 1. 用户正在使用验证码登录 => 将当前临时账户和手机号所在帐户合并
-     * 2. 用户正在绑定/更换手机号 => 在Session中更新, 返回当前帐户信息
+     * 校验邮箱验证码并登录：
+     * - 邮箱已存在 => 登录该账户
+     * - 邮箱不存在 => 注册一个新的正式用户并登录
      */
-    private fun verifyCodeAndBind(
-        uid: String,
-        redisType: RedisType,
-        getCacheCode: () -> String,
-        inputCode: String,
-        findUser: () -> UserEntity?,
-        bindToCurrentUser: (String) -> Unit,
-        updateSession: (UserSessionInfo) -> Unit
-    ): UserSessionInfo {
-        val cacheCode = getCacheCode()
-        if (cacheCode != inputCode.trim()) throw CommonException(ErrorType.E301)
-        RedisUtils.del(redisType, uid)
+    @Transactional
+    override fun verifyEmail(params: EmailVerifyParams): UserSessionInfo {
+        // 与 sendEmail 保持同一归一化口径(trim + lowercase)
+        val email = params.email.trim().lowercase()
+        val cacheCode = RedisUtils.get<String>(RedisType.CODE_EMAIL, email) ?: throw CommonException(ErrorType.E105)
+        if (cacheCode != params.code.trim()) throw CommonException(ErrorType.E301)
+        RedisUtils.del(RedisType.CODE_EMAIL, email)
 
-        val userEntity = findUser()
-        // 用户正在使用验证码登录
-        return if (userEntity != null) {
-            StpKit.USER.logout()
-            StpKit.USER.session.clear()
-            StpKit.USER.login(userEntity.id, true)
-            userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
-        } else {
-            // 没认证账户则绑定到当前账户
-            bindToCurrentUser(uid)
-            val sessionUser = BaseUtils.user() ?: throw CommonException(ErrorType.E215)
-            updateSession(sessionUser)
-            sessionUser.writeToSession()
-            sessionUser
-        }
+        val userEntity = ktQuery().eq(UserEntity::email, email).one() ?: createVerifiedUser(email)
+        // 该接口为公开端点,正常调用时无登录态;若携带了有效旧 token 则先登出再切换账户
+        if (StpKit.USER.isLogin) StpKit.USER.logout()
+        StpKit.USER.login(userEntity.id, true)
+        return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
     }
-
-    override fun captchaImage(uid: String): ResultWrapper {
-        val lineCaptcha = CaptchaUtil.createLineCaptcha(200, 100, 4, 100)
-        val code = lineCaptcha.code
-        RedisUtils.set(RedisType.CAPTCHA_CODE, uid, code.lowercase())
-        return ResultWrapper.ok(lineCaptcha.imageBase64)
-    }
-
-    /**
-     * 查询或者注册拿到用户信息
-     * @param deviceId 用户唯一ID（后端生成）
-     * @return 用户信息
-     */
-    private fun queryOrRegisterByDeviceId(deviceId: String): UserEntity =
-        ktQuery().eq(UserEntity::deviceId, deviceId).one() ?: UserEntity(deviceId).also { save(it) }
 
     override fun queryUserBacSetting(uid: String): BacSettingVO {
         return backSettingService.queryShowByUid(uid)

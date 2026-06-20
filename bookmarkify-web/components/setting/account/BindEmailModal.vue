@@ -36,6 +36,9 @@
         <template v-else-if="step === 2">
           <div class="mt-4">
             <p class="text-sm text-slate-600 dark:text-slate-300 mb-2">已向 {{ maskedEmail }} 发送验证码邮件</p>
+            <p v-if="tagCode" class="text-xs text-slate-400 dark:text-slate-500 mb-2">
+              请查收标识为 <span class="font-semibold tracking-widest text-primary">{{ tagCode }}</span> 的邮件
+            </p>
 
             <div class="relative w-full max-w-[280px] mx-auto mt-6 mb-4">
               <!-- 隐藏的真实输入框，负责接收输入事件 -->
@@ -139,6 +142,8 @@ const countdown = computed(() => sysStore.emailCountdown)
 const loading = ref(false)
 const sending = ref(false)
 const emailCodeError = ref('')
+// 本次发送的区分代码(2 位字母),与邮件内一致,帮助用户在收件箱里对上当前这封邮件
+const tagCode = ref('')
 const buttonText = computed(() => (props.email ? '更换邮箱' : '绑定邮箱'))
 const isEmailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
 const isEmailCodeValid = computed(() => /^\d{4}$/.test(form.emailCode.trim()))
@@ -206,6 +211,7 @@ function handleDialogClose() {
   form.emailCode = ''
   step.value = 1
   emailCodeError.value = ''
+  tagCode.value = ''
 }
 
 onMounted(() => {
@@ -255,7 +261,7 @@ async function sendEmailCode() {
   emailCodeError.value = ''
   sending.value = true
   try {
-    await captchaSendEmail({ email: form.email })
+    tagCode.value = await captchaSendEmail({ email: form.email })
     ElNotification.success({ message: '已发送邮箱验证码' })
     step.value = 2
     startCountdown()
