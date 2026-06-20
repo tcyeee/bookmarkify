@@ -3,7 +3,8 @@ package top.tcyeee.bookmarkify.server.impl
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.entity.BookmarkCategory
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
@@ -16,9 +17,11 @@ import top.tcyeee.bookmarkify.server.IWebsiteCategoryService
 class BookmarkCategoryServiceImpl(
     private val websiteCategoryService: IWebsiteCategoryService,
     private val apiService: IApiService,
+    transactionManager: PlatformTransactionManager,
 ) : IBookmarkCategoryService, ServiceImpl<BookmarkCategoryMapper, BookmarkCategory>() {
 
     private val log = LoggerFactory.getLogger(javaClass)
+    private val txTemplate = TransactionTemplate(transactionManager)
 
     override fun categorize(bookmark: BookmarkEntity) {
         runCatching {
@@ -45,10 +48,12 @@ class BookmarkCategoryServiceImpl(
         }
     }
 
-    /** 幂等替换：物理删除旧关联，再插入新关联（避开 unique 约束与软删冲突） */
-    @Transactional
+    /** 幂等替换：物理删除旧关联，再插入新关联（避开 unique 约束与软删冲突）。
+     *  用 TransactionTemplate 包住删除+插入，保证原子（@Transactional 在同 bean 自调用下会失效）。 */
     fun replaceLinks(bookmarkId: String, categoryIds: List<String>) {
-        ktUpdate().eq(BookmarkCategory::bookmarkId, bookmarkId).remove()
-        saveBatch(categoryIds.map { BookmarkCategory(bookmarkId, it) })
+        txTemplate.execute {
+            ktUpdate().eq(BookmarkCategory::bookmarkId, bookmarkId).remove()
+            saveBatch(categoryIds.map { BookmarkCategory(bookmarkId, it) })
+        }
     }
 }
