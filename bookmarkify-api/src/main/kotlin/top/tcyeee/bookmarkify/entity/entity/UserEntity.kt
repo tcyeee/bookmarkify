@@ -20,7 +20,6 @@ data class UserEntity(
     @field:Size(max = 200) @field:Schema(description = "设备UID") var deviceId: String,
 
     @field:Size(max = 200) @field:Schema(description = "邮箱") var email: String? = null,
-    @field:Size(max = 20) @field:Schema(description = "手机号") var phone: String? = null,
     @field:Size(max = 200) @field:Schema(description = "用户密码MD5") var password: String? = null,
     @field:Schema(description = "头像文件地址") var avatarFileId: String? = null,
     @field:Schema(description = "用户角色 默认'USER'") var role: RoleEnum = RoleEnum.USER,

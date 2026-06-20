@@ -30,12 +30,10 @@ data class GradientConfigParams(
     @field:Schema(description = "渐变方向角度，默认135") var direction: Int = 135,
 )
 
-data class CaptchaSmsParams(val phone: String, val captcha: String)
-data class SmsVerifyParams(val phone: String, val smsCode: String)
 data class EmailVerifyParams(val email: String, val code: String)
 data class SendEmailParams(val email: String)
 data class UserDelParams(val password: String)
-data class UserInfoUpdateParams(var nickName: String, var phone: String?)
+data class UserInfoUpdateParams(var nickName: String)
 data class BookmarkUpdatePrams(var linkId: String, var title: String, var description: String)
 data class AdminLoginParams(val account: String, val password: String)
 data class AccountLoginParams(val account: String, val password: String)
@@ -101,7 +99,6 @@ data class UserSearchParams(
             query.and {
                 it.like(UserEntity::nickName, name)
                     .or().like(UserEntity::email, name)
-                    .or().like(UserEntity::phone, name)
             }
         }
         return query

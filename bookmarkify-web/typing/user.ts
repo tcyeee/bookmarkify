@@ -5,24 +5,10 @@ export interface LoginParams {
   password: string
 }
 
-export interface UserAuthParams {
-  deviceUid: string
-  token?: string
-}
-
-export interface CaptchaSmsParams {
-  phone: string
-  captcha: string
-}
-
 export interface CaptchaEmailParams {
   email: string
 }
 
-export interface SmsVerifyParams {
-  phone: string
-  smsCode: string
-}
 export interface EmailVerifyParams {
   email: string
   code: string
@@ -41,12 +27,11 @@ export interface UserFileVO {
 
 export interface UserInfoUpdate {
   nickName?: string
-  phone?: string
   email?: string
 }
 
 export interface LoginMethod {
-  key: 'phone' | 'email' | 'password' | 'guest'
+  key: 'email' | 'password'
   label: string
   icon: string
   description: string

@@ -1,4 +1,3 @@
-import type { UserInfo } from '@typing'
 import type { Result } from '@typing'
 import { useAuthStore } from '@stores/auth.store'
 
@@ -32,7 +31,11 @@ export default class http {
   static async uploadFile(path: string, file: File): Promise<any> {
     const authStore = useAuthStore()
 
-    if (!authStore.account?.token) await authStore.loginOrRegister()
+    // 上传是受保护操作,未登录直接登出并跳转欢迎页
+    if (!authStore.account?.token) {
+      await authStore.logout()
+      return Promise.reject(new Error('未登录'))
+    }
 
     const formData = new FormData()
     formData.append('file', file)
@@ -40,7 +43,7 @@ export default class http {
     const url = useRuntimeConfig().public.apiBase + path
     console.log(`[API] UPLOAD::${path}`)
 
-    const exec = async (retried: boolean): Promise<any> => {
+    const exec = async (): Promise<any> => {
       const token = authStore.account?.token ?? ''
       try {
         const response = await fetch(url, {
@@ -49,31 +52,32 @@ export default class http {
           body: formData,
         })
         const data = (await response.json()) as Result<object>
-        return await handleResult(data, () => exec(true), retried)
+        return await handleResult(data)
       } catch (error) {
         if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
         return Promise.reject(error)
       }
     }
 
-    return this.withDebounce(`UPLOAD:${url}`, () => exec(false))
+    return this.withDebounce(`UPLOAD:${url}`, () => exec())
   }
 
   static async start(path: string, method: string, params?: any): Promise<any> {
     const authStore = useAuthStore()
 
-    // 除了Login，其他都需要token
-    if (method != 'GET' && !path.startsWith('/auth/') && !authStore.account?.token) await authStore.loginOrRegister()
+    // 除 /auth/** 外的写操作都需要登录;未登录则登出并跳转欢迎页
+    if (method != 'GET' && !path.startsWith('/auth/') && !authStore.account?.token) {
+      await authStore.logout()
+      return Promise.reject(new Error('未登录'))
+    }
 
     console.log(`[API] ${method}::${path}`)
     if (method == 'GET' && params) path += `?${new URLSearchParams(params).toString()}`
     const body = method !== 'GET' && params != null ? JSON.stringify(params) : undefined
     const url = useRuntimeConfig().public.apiBase + path
 
-    // 关键修复:每次请求都构造新的 fetch 调用,使用最新 token
-    // 旧实现复用同一 Request 对象,导致 POST body 流被消费后无法重试,
-    // 且重试路径直接返回 Response 而未走 resultCheck 解析。
-    const exec = async (retried: boolean): Promise<any> => {
+    // 每次请求都构造新的 fetch 调用,使用最新 token
+    const exec = async (): Promise<any> => {
       const token = authStore.account?.token ?? ''
       try {
         const response = await fetch(url, {
@@ -84,26 +88,26 @@ export default class http {
         const text = await response.text()
         if (!text) return null
         const data = JSON.parse(text) as Result<object>
-        return await handleResult(data, () => exec(true), retried)
+        return await handleResult(data)
       } catch (error) {
         if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
         return Promise.reject(error)
       }
     }
 
-    return this.withDebounce(`${method}:${url}:${body ?? ''}`, () => exec(false))
+    return this.withDebounce(`${method}:${url}:${body ?? ''}`, () => exec())
   }
 }
 
 // 对返回结果进行检查
-async function handleResult(result: Result<object>, retry: () => Promise<any>, retried: boolean): Promise<any> {
+async function handleResult(result: Result<object>): Promise<any> {
   if (result.ok) return result.data
 
-  // 如果遇到token失效,则重新登录后用新 token 重试一次(限一次,避免循环)
-  if (result.code === 101 && !retried) {
+  // token 失效(101):登出并跳转欢迎页,不再静默重新登录
+  if (result.code === 101) {
     const authStore = useAuthStore()
-    const account: UserInfo = await authStore.loginOrRegister()
-    if (account.token) return retry()
+    await authStore.logout()
+    return Promise.reject(result)
   }
 
   // 如果result.code是“1”开头，则需要提示

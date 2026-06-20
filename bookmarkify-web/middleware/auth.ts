@@ -9,7 +9,8 @@ import { useAuthStore } from '@stores/auth.store'
  */
 export default defineNuxtRouteMiddleware((to, from) => {
   const authStore = useAuthStore()
-  const isNone = AuthStatusEnum.NONE === authStore.authStatus
+  // 必须是已认证用户(真实登录)才能使用;访客匿名会话(LOGGED)不算
+  const isAuthed = AuthStatusEnum.AUTHED === authStore.authStatus
 
   // 引导页
   const welcomePage = '/welcome'
@@ -18,8 +19,8 @@ export default defineNuxtRouteMiddleware((to, from) => {
   // 受限页面列表
   const restrictPageList = ['/', '/setting']
 
-  // 访问受限页面且没有登录,跳转到引导页
-  if (restrictPageList.includes(to.path) && isNone) return navigateTo(welcomePage)
+  // 访问受限页面但未登录,跳转到引导页
+  if (restrictPageList.includes(to.path) && !isAuthed) return navigateTo(welcomePage)
   // 访问引导页且已登录,跳转到首页
-  if (to.path === welcomePage && !isNone) return navigateTo(consolePage)
+  if (to.path === welcomePage && isAuthed) return navigateTo(consolePage)
 })

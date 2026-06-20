@@ -29,12 +29,12 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                b.url_host                                   AS urlHost,
                b.app_name                                   AS appName,
                c.height                                     AS hdSize
-            FROM bookmarkify.bookmark_user_link a
-                     LEFT JOIN bookmarkify.bookmark b
+            FROM bookmark_user_link a
+                     LEFT JOIN bookmark b
                                ON a.bookmark_id = b.id
                      LEFT JOIN LATERAL (
                 SELECT wl.height
-                FROM bookmarkify.website_logo wl
+                FROM website_logo wl
                 WHERE wl.bookmark_id = a.bookmark_id
                   AND wl.is_og_img IS FALSE
                   AND wl.height >= 150
@@ -62,12 +62,12 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                b.url_host                                   AS urlHost,
                b.app_name                                   AS appName,
                c.height                                     AS hdSize
-            FROM bookmarkify.bookmark_user_link a
-                     LEFT JOIN bookmarkify.bookmark b
+            FROM bookmark_user_link a
+                     LEFT JOIN bookmark b
                                ON a.bookmark_id = b.id
                      LEFT JOIN LATERAL (
                 SELECT wl.height
-                FROM bookmarkify.website_logo wl
+                FROM website_logo wl
                 WHERE wl.bookmark_id = a.bookmark_id
                   AND wl.is_og_img IS FALSE
                   AND wl.height >= 180

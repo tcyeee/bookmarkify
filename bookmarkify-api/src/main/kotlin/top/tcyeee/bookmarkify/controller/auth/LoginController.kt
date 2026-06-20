@@ -3,7 +3,6 @@ package top.tcyeee.bookmarkify.controller.auth
 import cn.dev33.satoken.annotation.SaIgnore
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
-import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
@@ -14,13 +13,10 @@ import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AccountLoginParams
-import top.tcyeee.bookmarkify.entity.CaptchaSmsParams
 import top.tcyeee.bookmarkify.entity.EmailVerifyParams
 import top.tcyeee.bookmarkify.entity.SendEmailParams
-import top.tcyeee.bookmarkify.entity.SmsVerifyParams
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.server.impl.UserServiceImpl
-import top.tcyeee.bookmarkify.utils.BaseUtils
 
 /**
  * @author tcyeee
@@ -31,12 +27,6 @@ import top.tcyeee.bookmarkify.utils.BaseUtils
 @RequestMapping("/auth")
 @Validated
 class LoginController(private val userService: UserServiceImpl) {
-
-    @SaIgnore
-    @GetMapping("/track")
-    @Operation(summary = "创建用户标记")
-    fun track(request: HttpServletRequest, response: HttpServletResponse): UserSessionInfo =
-        userService.track(request, response)
 
     @Throttle(byIp = true)
     @SaIgnore
@@ -49,33 +39,15 @@ class LoginController(private val userService: UserServiceImpl) {
     @Operation(summary = "退出登录")
     fun logout(response: HttpServletResponse) = userService.loginOut(response)
 
-    @GetMapping("captcha/image")
-    @Operation(summary = "获取人机验证图案，返回base64")
-    fun captchaImage(): ResultWrapper = userService.captchaImage(BaseUtils.uid())
-
-    @Throttle
-    @PostMapping("captcha/sms")
-    @Operation(summary = "校验人机验证码后发送短信验证码")
-    fun sendSms(@RequestBody params: CaptchaSmsParams): Boolean = userService.sendSms(BaseUtils.uid(), params)
-
-    @Throttle
-    @PostMapping("captcha/verifySms")
-    @Operation(summary = "校验短信验证码并绑定手机号")
-    fun verifySms(
-        request: HttpServletRequest, response: HttpServletResponse, @RequestBody params: SmsVerifyParams
-    ): UserSessionInfo = userService.verifySms(request, response, BaseUtils.uid(), params)
-
-    @Throttle(5 * 1000)
+    @Throttle(5 * 1000, byIp = true)
+    @SaIgnore
     @PostMapping("captcha/email")
-    @Operation(summary = "发送邮箱验证码")
-    fun sendEmail(@RequestBody params: SendEmailParams): Boolean = userService.sendEmail(BaseUtils.uid(), params.email)
+    @Operation(summary = "发送邮箱验证码，返回本次发送的区分代码（2 位大写字母，用于前端展示）")
+    fun sendEmail(@RequestBody params: SendEmailParams): ResultWrapper = ResultWrapper.ok(userService.sendEmail(params.email))
 
-    @Throttle
+    @Throttle(byIp = true)
+    @SaIgnore
     @PostMapping("captcha/verifyEmail")
-    @Operation(summary = "校验邮箱验证码并绑定邮箱")
-    fun verifyEmail(
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-        @RequestBody params: EmailVerifyParams
-    ): UserSessionInfo = userService.verifyEmail(request, response, BaseUtils.uid(), params)
+    @Operation(summary = "校验邮箱验证码并登录（邮箱不存在则注册）")
+    fun verifyEmail(@RequestBody params: EmailVerifyParams): UserSessionInfo = userService.verifyEmail(params)
 }
