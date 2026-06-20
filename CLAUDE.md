@@ -89,7 +89,11 @@ Both `bookmarkify-web` and `bookmarkify-scrapper` listen on port **3000**. You c
 
 ## Infrastructure (deploy/)
 
-`deploy/compose.yml` — Docker Compose for the full stack; every secret is a `REPLACE_FLAG` placeholder that must be substituted manually before use. `deploy/nginx/` — reverse-proxy config. `deploy/jenkins/` — CI/CD pipeline definitions.
+`deploy/compose.yml` — Docker Compose for the full stack; every secret is a `REPLACE_FLAG` placeholder that must be substituted manually before use. `deploy/nginx/` — reverse-proxy config (`bookmakify.cc.conf`, `admin.bookmarkify.cc.conf`, `file.bookmakify.cc.conf`).
+
+## Deployment (CI/CD)
+
+All four services deploy via GitHub Actions (`.github/workflows/deploy-{api,web,scrapper,admin}.yml`), **triggered on push to the `prod` branch** (or manual `workflow_dispatch`). `main` is the working branch; deploys happen by promoting to `prod`. The `api`/`scrapper` workflows are path-filtered to their own directory; `web`/`admin` run on every `prod` push. Concurrency guards prevent overlapping deploys, and WeChat/Server酱 notifications fire on success/failure. Target host: `ubuntu@123.206.216.124`. API & scrapper build Docker images (Tencent TCR) and run via Compose; web & admin are static builds rsynced to nginx-served directories.
 
 ## Prerequisites
 
