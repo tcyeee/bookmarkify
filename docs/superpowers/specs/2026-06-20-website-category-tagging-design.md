@@ -69,7 +69,9 @@ Schema `bookmarkify`。沿用现有约定：snake_case 表名、`varchar` String
 ### 重解析幂等
 
 网站会被定时对账重解析（`BookmarkEntity.checkFlag()` / `checkAll()` cron）。因此每次分类执行为：
-**先删除该 `bookmark_id` 的旧 link（物理或软删），再插入新 link**，保证可重复执行、结果稳定。
+**先物理删除该 `bookmark_id` 的旧 link（`DELETE WHERE bookmark_id = ?`），再插入新 link**，保证可重复执行、结果稳定。
+采用物理删除（而非软删）是为了避免与 `unique(bookmark_id, category_id)` 约束冲突——软删后重插同一组合会触发唯一键冲突。
+`bookmark_category.deleted` 列仍保留，供未来「用户手动移除某分类」等软删场景使用。
 
 ### 起始词表（seed）
 

@@ -8,6 +8,8 @@ export const captchaVerifyEmail = (params: t.EmailVerifyParams) =>
   http.post('/auth/captcha/verifyEmail', params) as Promise<t.UserInfo>
 export const authLoginByAccount = (params: t.LoginParams) =>
   http.post('/auth/login', params) as Promise<t.UserInfo>
+export const authLoginByGoogle = (params: t.GoogleLoginParams) =>
+  http.post('/auth/google', params) as Promise<t.UserInfo>
 
 /* =========[ /bookmark ]========= */
 export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<t.UserLayoutNodeVO>

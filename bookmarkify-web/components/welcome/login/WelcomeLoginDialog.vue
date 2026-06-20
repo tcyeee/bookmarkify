@@ -13,31 +13,23 @@
   <EmailLoginPanel v-if="selectedMethod === 'email'" :key="'email'" @success="onSuccess" @step="verifyStep = $event" />
   <PasswordLoginPanel v-else-if="selectedMethod === 'password'" :key="'password'" @success="onSuccess" />
 
-  <!-- 分割线 + 第三方登录 -->
-  <!-- <div class="mt-6">
+  <!-- 分割线 + 第三方登录（验证码输入步骤时隐藏） -->
+  <div v-if="!isVerifying" class="mt-6">
     <div class="flex items-center gap-3 text-xs text-white/20">
       <span class="h-px flex-1 bg-white/8"></span>
-      <span>第三方登录</span>
+      <span>或</span>
       <span class="h-px flex-1 bg-white/8"></span>
     </div>
-    <div class="mt-4 flex justify-center gap-3">
-      <button
-        v-for="s in socials"
-        :key="s.label"
-        type="button"
-        :aria-label="s.label"
-        :title="s.label"
-        @click="showNotReady(s.label)"
-        class="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/40 transition-all duration-200 hover:scale-105 hover:border-indigo-400/50 hover:bg-white/10 hover:text-white/80">
-        <span :class="[s.icon, 'icon-size-20']"></span>
-      </button>
+    <div class="mt-4 flex justify-center">
+      <GoogleLoginButton @success="onSuccess" />
     </div>
-  </div> -->
+  </div>
 </template>
 
 <script lang="ts" setup>
 import EmailLoginPanel from './EmailLoginPanel.vue'
 import PasswordLoginPanel from './PasswordLoginPanel.vue'
+import GoogleLoginButton from './GoogleLoginButton.vue'
 import { useAuthStore } from '@stores/auth.store'
 
 const emit = defineEmits<{
@@ -52,19 +44,8 @@ const verifyStep = ref(1)
 const isVerifying = computed(() => verifyStep.value === 2)
 watch(selectedMethod, () => (verifyStep.value = 1))
 
-const socials = [
-  { label: '微信', icon: 'icon--icon-wechat' },
-  { label: 'Github', icon: 'icon--icon-github' },
-  { label: '谷歌', icon: 'icon--icon-google' },
-  { label: '抖音', icon: 'icon--icon-tiktok' },
-]
-
 async function onSuccess() {
   await authStore.postLoginSetup()
   emit('success')
-}
-
-function showNotReady(provider: string) {
-  ElMessage.info(`暂未适配 ${provider} 登录`)
 }
 </script>

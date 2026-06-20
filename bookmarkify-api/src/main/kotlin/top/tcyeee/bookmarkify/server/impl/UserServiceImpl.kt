@@ -5,6 +5,7 @@ import cn.hutool.core.util.IdUtil
 import cn.hutool.core.util.RandomUtil
 import cn.hutool.core.util.StrUtil
 import cn.hutool.crypto.SecureUtil
+import cn.hutool.http.HttpUtil
 import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
@@ -167,6 +168,59 @@ class UserServiceImpl(
         if (StpKit.USER.isLogin) StpKit.USER.logout()
         StpKit.USER.login(userEntity.id, true)
         return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
+    }
+
+    /**
+     * 校验 Google ID Token 并登录:
+     * - Google 邮箱已存在 => 登录该账户
+     * - 邮箱不存在 => 注册一个新的正式用户并登录
+     *
+     * ID Token 的签名校验交由 Google 的 tokeninfo 端点完成(服务器需能访问 Google)。
+     */
+    @Transactional
+    override fun loginByGoogle(params: GoogleLoginParams): UserSessionInfo {
+        val email = verifyGoogleIdToken(params.idToken)
+
+        val userEntity = ktQuery().eq(UserEntity::email, email).one() ?: createVerifiedUser(email)
+        if (StpKit.USER.isLogin) StpKit.USER.logout()
+        StpKit.USER.login(userEntity.id, true)
+        return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
+    }
+
+    /**
+     * 调用 Google tokeninfo 端点校验 ID Token,返回归一化后的已验证邮箱。
+     * 校验项: 签名(由 Google 完成) + aud(必须等于本站 ClientId) + iss + email_verified。
+     */
+    private fun verifyGoogleIdToken(idToken: String): String {
+        val clientId = projectConfig.googleClientId
+        if (clientId.isBlank()) throw CommonException(ErrorType.E111, "服务端未配置 Google ClientId")
+        if (idToken.isBlank()) throw CommonException(ErrorType.E111)
+
+        val response = runCatching {
+            HttpUtil.createGet("https://oauth2.googleapis.com/tokeninfo")
+                .form("id_token", idToken)
+                .timeout(8000)
+                .execute()
+        }.getOrElse { throw CommonException(ErrorType.E111, "无法连接 Google 校验服务") }
+
+        if (!response.isOk) throw CommonException(ErrorType.E111)
+
+        val claims = runCatching { JSONUtil.parseObj(response.body()) }
+            .getOrElse { throw CommonException(ErrorType.E111) }
+
+        // aud 必须等于本站签发的 Client ID,否则可能是别处签发的令牌
+        if (claims.getStr("aud") != clientId) throw CommonException(ErrorType.E111, "Client ID 不匹配")
+        // 签发方校验
+        val iss = claims.getStr("iss")
+        if (iss != "accounts.google.com" && iss != "https://accounts.google.com") {
+            throw CommonException(ErrorType.E111, "非法的令牌签发方")
+        }
+        // 邮箱必须存在且已被 Google 验证
+        val email = claims.getStr("email")?.trim()?.lowercase()
+        if (email.isNullOrBlank()) throw CommonException(ErrorType.E111, "未获取到邮箱")
+        if (claims.getStr("email_verified") != "true") throw CommonException(ErrorType.E111, "邮箱未通过 Google 验证")
+
+        return email
     }
 
     override fun queryUserBacSetting(uid: String): BacSettingVO {

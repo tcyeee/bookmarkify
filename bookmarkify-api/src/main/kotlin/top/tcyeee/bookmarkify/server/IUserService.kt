@@ -7,6 +7,7 @@ import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.BackSettingParams
 import top.tcyeee.bookmarkify.entity.EmailVerifyParams
+import top.tcyeee.bookmarkify.entity.GoogleLoginParams
 import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.entity.AccountLoginParams
 import top.tcyeee.bookmarkify.entity.ChangePasswordParams
@@ -114,6 +115,13 @@ interface IUserService : IService<UserEntity> {
      * @return 用户会话信息
      */
     fun verifyEmail(params: EmailVerifyParams): UserSessionInfo
+
+    /**
+     * 校验 Google ID Token 并登录（Google 邮箱不存在则注册）
+     * @param params 含前端 Google Identity Services 返回的 ID Token
+     * @return 用户会话信息
+     */
+    fun loginByGoogle(params: GoogleLoginParams): UserSessionInfo
 
     fun findByNameAndPwd(account: String, password: String): UserEntity?
 

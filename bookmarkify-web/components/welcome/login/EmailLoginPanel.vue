@@ -161,6 +161,9 @@ async function sendCode() {
 
 async function resend() {
   if (countdown.value > 0) return
+  // 清空原本的验证码输入,避免重发后旧验证码残留
+  form.code = ''
+  codeError.value = ''
   step.value = 1
   await nextTick()
   await sendCode()
