@@ -30,14 +30,6 @@
   <EmailLoginPanel v-else-if="selectedMethod === 'email'" :key="'email'" @success="onSuccess" />
   <PasswordLoginPanel v-else-if="selectedMethod === 'password'" :key="'password'" @success="onSuccess" />
 
-  <!-- 跳过登录 -->
-  <button
-    type="button"
-    class="mt-5 w-full py-1 text-center text-sm text-white/25 transition-colors duration-200 hover:text-white/55"
-    @click="$emit('skip')">
-    跳过登录，以访客身份继续使用 →
-  </button>
-
   <!-- 分割线 + 第三方登录 -->
   <!-- <div class="mt-6">
     <div class="flex items-center gap-3 text-xs text-white/20">
@@ -68,7 +60,6 @@ import { useAuthStore } from '@stores/auth.store'
 
 const emit = defineEmits<{
   (e: 'success'): void
-  (e: 'skip'): void
 }>()
 
 const authStore = useAuthStore()
