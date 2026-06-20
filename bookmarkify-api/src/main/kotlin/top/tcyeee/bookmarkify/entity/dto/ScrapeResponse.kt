@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.entity.dto
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
+import java.net.URI
 import java.time.LocalDateTime
 
 /** bookmarkify-scrapper POST /scrape 的请求体 */
@@ -50,9 +51,22 @@ data class ScrapeResponse(
      * （OssUtils.restoreWebsiteLogoAndOg）：
      * - image → sizes="og"（宽屏 OG 分享图）
      * - logo  → 普通 LOGO
+     *
+     * scrapper 解析 HTML 时可能返回相对路径（如 `/icon.png`），OSS 下载要求绝对 URL，
+     * 否则 `URI.toURL()` 会抛 "URI is not absolute"。这里统一相对 [pageUrl] 解析为绝对 URL。
      */
-    fun toManifestIcons(): List<ManifestIcon> = buildList {
-        image?.takeIf { it.isNotBlank() }?.let { add(ManifestIcon(src = it, sizes = "og")) }
-        logo?.takeIf { it.isNotBlank() }?.let { add(ManifestIcon(src = it)) }
+    fun toManifestIcons(pageUrl: String? = null): List<ManifestIcon> = buildList {
+        image?.takeIf { it.isNotBlank() }?.let { add(ManifestIcon(src = absolutize(it, pageUrl), sizes = "og")) }
+        logo?.takeIf { it.isNotBlank() }?.let { add(ManifestIcon(src = absolutize(it, pageUrl))) }
     }
+
+    /** 将可能为相对路径的 [src] 相对 [pageUrl] 解析为绝对 URL；无法解析时原样返回 */
+    private fun absolutize(src: String, pageUrl: String?): String = runCatching {
+        val uri = URI(src)
+        when {
+            uri.isAbsolute -> src
+            pageUrl.isNullOrBlank() -> src
+            else -> URI(pageUrl).resolve(uri).toString()
+        }
+    }.getOrDefault(src)
 }

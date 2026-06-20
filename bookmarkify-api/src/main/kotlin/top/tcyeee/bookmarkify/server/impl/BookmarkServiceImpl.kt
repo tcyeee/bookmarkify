@@ -281,7 +281,7 @@ class BookmarkServiceImpl(
         log.debug("[parseByApi] 开始远程解析(scrapper): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
-                val icons = vo.toManifestIcons()
+                val icons = vo.toManifestIcons(bookmark.rawUrl)
                 log.debug("[parseByApi] scrapper 返回成功: bookmarkId=${bookmark.id}, title=${vo.title}, source=${vo.source}, iconCount=${icons.size}")
                 // 填充基础信息 + iconBase64 + DeepSeek 简称推断，保存一次
                 vo.entity(bookmark).also {

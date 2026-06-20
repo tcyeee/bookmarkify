@@ -24,4 +24,5 @@ class ProjectConfig(
     var defaultBackgroundGradient: List<DefaultBackgroundGradientConfig> = emptyList(), // 默认渐变背景
     var maxCustomBackgroundCount: Int = 5,     // 自定义背景（图片/渐变）最大数量
     var useThirdPartyParser: Boolean = false,  // 书签解析模式: true=远程scrapper, false=本地Jsoup解析
+    var googleClientId: String = "",           // Google 登录 OAuth Client ID（用于校验 ID Token 的 aud）
 )

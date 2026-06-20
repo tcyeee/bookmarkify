@@ -3,6 +3,9 @@ name: Deploy Admin
 on:
   push:
     branches: [prod]
+    paths:
+      - 'bookmarkify-admin/**'
+      - '.github/workflows/deploy-admin.yml'
   workflow_dispatch:
 
 # Never run two admin deploys at once; let an in-flight one finish.

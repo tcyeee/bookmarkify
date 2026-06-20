@@ -56,6 +56,7 @@ bookmarkify:
       password: admin
   config:
     use-third-party-parser: true  # 书签解析模式: true=远程scrapper, false=本地Jsoup解析
+    google-client-id: ${BOOKMARKIFY_GOOGLE_CLIENT_ID:}  # Google 登录 OAuth Client ID（用于校验 ID Token 的 aud），未配置则关闭谷歌登录
     uid-cookie-name: 'deviceUid'    # 匿名用户 cookie 名称
     uid-cookie-path: "/"            # 匿名用户 cookie 路径
     uid-cookie-max-age: 315360000   # 10 年（秒）

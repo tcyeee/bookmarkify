@@ -14,6 +14,7 @@ import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AccountLoginParams
 import top.tcyeee.bookmarkify.entity.EmailVerifyParams
+import top.tcyeee.bookmarkify.entity.GoogleLoginParams
 import top.tcyeee.bookmarkify.entity.SendEmailParams
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.server.impl.UserServiceImpl
@@ -50,4 +51,10 @@ class LoginController(private val userService: UserServiceImpl) {
     @PostMapping("captcha/verifyEmail")
     @Operation(summary = "校验邮箱验证码并登录（邮箱不存在则注册）")
     fun verifyEmail(@RequestBody params: EmailVerifyParams): UserSessionInfo = userService.verifyEmail(params)
+
+    @Throttle(byIp = true)
+    @SaIgnore
+    @PostMapping("/google")
+    @Operation(summary = "校验 Google ID Token 并登录（Google 邮箱不存在则注册）")
+    fun loginByGoogle(@RequestBody params: GoogleLoginParams): UserSessionInfo = userService.loginByGoogle(params)
 }

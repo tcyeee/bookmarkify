@@ -66,6 +66,7 @@ export default defineNuxtConfig({
       apiBase: process.env.NUXT_API_BASE,
       wsBase: process.env.NUXT_WS_BASE,
       siteUrl,
+      googleClientId: process.env.NUXT_PUBLIC_GOOGLE_CLIENT_ID,
     },
   },
   build: {

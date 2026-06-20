@@ -14,6 +14,10 @@ export interface EmailVerifyParams {
   code: string
 }
 
+export interface GoogleLoginParams {
+  idToken: string
+}
+
 export interface UserFile {
   environment: CurrentEnvironment
   currentName: string

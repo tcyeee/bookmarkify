@@ -3,6 +3,9 @@ name: Deploy Web
 on:
   push:
     branches: [prod]
+    paths:
+      - 'bookmarkify-web/**'
+      - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
 # Never run two web deploys at once; let an in-flight one finish.
@@ -38,6 +41,8 @@ jobs:
           NUXT_API_BASE: https://bookmarkify.cc/api
           NUXT_WS_BASE: wss://bookmarkify.cc
           NUXT_PUBLIC_SITE_URL: https://bookmarkify.cc
+          # Google 登录 ClientId（公开值，存为仓库 secret 便于改动；留空则不显示谷歌登录按钮）
+          NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NUXT_PUBLIC_GOOGLE_CLIENT_ID }}
         run: pnpm generate
 
       # rsync the static output to the dir nginx serves (/home/ubuntu/www →
