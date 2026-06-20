@@ -39,6 +39,10 @@ services:
       BOOKMARKIFY_ALIYUN_OSS_DOMAIN: https://file.tcyeee.top
       # --- DeepSeek LLM (secret from .env) ---
       BOOKMARKIFY_DEEPSEEK_API_KEY: ${BOOKMARKIFY_DEEPSEEK_API_KEY}
+      # --- Google 登录（Client ID 为公开值；国内服务器经同网络的 clash 容器代理访问 Google）---
+      BOOKMARKIFY_GOOGLE_CLIENT_ID: 534119394768-5ed59pcgub9a1s45a9uvu69alvk1ddko.apps.googleusercontent.com
+      BOOKMARKIFY_GOOGLE_PROXY_HOST: clash
+      BOOKMARKIFY_GOOGLE_PROXY_PORT: 7890
     networks:
       - app_network
 

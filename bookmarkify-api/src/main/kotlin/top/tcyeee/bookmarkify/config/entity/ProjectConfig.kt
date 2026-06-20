@@ -25,4 +25,6 @@ class ProjectConfig(
     var maxCustomBackgroundCount: Int = 5,     // 自定义背景（图片/渐变）最大数量
     var useThirdPartyParser: Boolean = false,  // 书签解析模式: true=远程scrapper, false=本地Jsoup解析
     var googleClientId: String = "",           // Google 登录 OAuth Client ID（用于校验 ID Token 的 aud）
+    var googleProxyHost: String = "",          // 校验 Google ID Token 时的 HTTP 代理主机（国内服务器需经 VPN 代理访问 Google），空则直连
+    var googleProxyPort: Int = 0,              // 代理端口，配合 googleProxyHost 使用
 )
