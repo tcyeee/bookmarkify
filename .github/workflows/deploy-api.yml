@@ -57,6 +57,12 @@ jobs:
           chmod +x "$OSSUTIL"
 
           KEY="deploy/bookmarkify-api-${GIT_SHA}.jar"
+
+          # OSS is only a transfer relay — clear jars left by previous deploys so the
+          # bucket keeps just this run's artifact. (Concurrency guard prevents overlap.)
+          "$OSSUTIL" rm "oss://${OSS_BUCKET}/deploy/" -r -f \
+            -e "$OSS_ENDPOINT" --region "$OSS_REGION" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET" || true
+
           "$OSSUTIL" cp bookmarkify-api/build/libs/bookmarkify-api.jar "oss://${OSS_BUCKET}/${KEY}" \
             -f -e "$OSS_ENDPOINT" --region "$OSS_REGION" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
 
