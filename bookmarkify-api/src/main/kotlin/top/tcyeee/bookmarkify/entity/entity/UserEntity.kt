@@ -1,12 +1,12 @@
 package top.tcyeee.bookmarkify.entity.entity
 
 import cn.hutool.core.util.IdUtil
-import cn.hutool.core.util.RandomUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Size
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
+import top.tcyeee.bookmarkify.utils.NicknameGenerator
 import java.time.LocalDateTime
 
 /**
@@ -31,7 +31,7 @@ data class UserEntity(
 ) {
     constructor(deviceId: String) : this(
         id = IdUtil.fastUUID(),
-        nickName = "用户_" + RandomUtil.randomString(5),
+        nickName = NicknameGenerator.random(),
         deviceId = deviceId,
     )
 
