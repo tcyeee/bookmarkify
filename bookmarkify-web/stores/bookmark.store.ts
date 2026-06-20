@@ -5,6 +5,10 @@ import { bookmarksShowAll } from '@api'
 export const useBookmarkStore = defineStore('homeItems', {
   state: () => ({
     layoutNode: [] as Array<UserLayoutNodeVO>, // 用户桌面布局信息
+    // 单元格内容被「就地替换」时自增（如 LOADING→BOOKMARK）。
+    // Vuuri 仅按 id 做增删 diff，无法感知同 id 节点的内容变化，
+    // 页面 watch 此值后 bump gridKey 强制 Vuuri 重新同步。
+    cellRevision: 0,
   }),
 
   actions: {
@@ -86,6 +90,8 @@ export const useBookmarkStore = defineStore('homeItems', {
 
       // 创建全新的数组引用，确保 Vue 响应式系统能够检测到变化
       this.layoutNode = updateNodeRecursive(this.layoutNode)
+      // 通知页面：节点为「就地内容替换」，需强制 Vuuri 重新同步
+      this.cellRevision++
     },
   },
   persist: { storage: piniaPluginPersistedstate.localStorage() },
