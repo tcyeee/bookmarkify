@@ -46,6 +46,8 @@ jobs:
           # the runner→OSS leg further, enable Transfer Acceleration on the bucket and
           # switch this to oss-accelerate.aliyuncs.com.
           OSS_ENDPOINT: oss-cn-hangzhou.aliyuncs.com
+          # ossutil v2 signs with v4 by default, which requires an explicit region.
+          OSS_REGION: cn-hangzhou
           GIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -56,11 +58,11 @@ jobs:
 
           KEY="deploy/bookmarkify-api-${GIT_SHA}.jar"
           "$OSSUTIL" cp bookmarkify-api/build/libs/bookmarkify-api.jar "oss://${OSS_BUCKET}/${KEY}" \
-            -f -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
+            -f -e "$OSS_ENDPOINT" --region "$OSS_REGION" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
 
           # Pre-signed GET URL (1h) so the server fetches without needing OSS creds.
           URL=$("$OSSUTIL" presign "oss://${OSS_BUCKET}/${KEY}" --expires-duration 1h \
-            -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET" \
+            -e "$OSS_ENDPOINT" --region "$OSS_REGION" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET" \
             | grep -Eo 'https?://[^[:space:]]+' | head -1)
           test -n "$URL"
           echo "::add-mask::$URL"
