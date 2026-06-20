@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server
 
+import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
 
 /**
@@ -16,4 +17,15 @@ interface IApiService {
      * @return 提取到的简称（如"小红书"），无法判断时返回 null
      */
     fun inferAppName(title: String): String?
+
+    /**
+     * 通过 DeepSeek 从固定候选词表中为网站挑选分类 slug（可多个）。
+     * @return 命中的 slug 列表（已按 candidates 校验、去重）；失败或无结果返回空列表。
+     */
+    fun inferCategories(
+        title: String?,
+        description: String?,
+        host: String,
+        candidates: List<CategoryCandidate>,
+    ): List<String>
 }
