@@ -107,12 +107,11 @@ class UserServiceImpl(
     }
 
     override fun loginByAccount(params: AccountLoginParams): UserSessionInfo {
-        // 账号(邮箱/手机)归一化,与邮箱验证码登录同口径,避免大小写差异登不进;手机号 lowercase 为无副作用
+        // 账号(邮箱)归一化,与邮箱验证码登录同口径,避免大小写差异登不进
         val account = String(Base64.getDecoder().decode(params.account)).trim().lowercase()
         // 客户端传来的是 Base64(md5(明文))，解码后即规范凭据（md5 串），不再用它做整列等值查询
         val credential = String(Base64.getDecoder().decode(params.password))
-        val user = ktQuery()
-            .and { it.eq(UserEntity::email, account).or().eq(UserEntity::phone, account) }.one()
+        val user = ktQuery().eq(UserEntity::email, account).one()
             ?: throw CommonException(ErrorType.E110)
         if (user.disabled) throw CommonException(ErrorType.E110)
         if (!PasswordUtils.matches(credential, user.password)) throw CommonException(ErrorType.E110)
@@ -133,10 +132,9 @@ class UserServiceImpl(
 
     override fun findByNameAndPwd(account: String, password: String): UserEntity? {
         val credential = SecureUtil.md5(password)
-        // 账号(邮箱/手机)归一化,与其他登录路径同口径
+        // 账号(邮箱)归一化,与其他登录路径同口径
         val normalized = account.trim().lowercase()
-        val user = ktQuery()
-            .and { it.eq(UserEntity::email, normalized).or().eq(UserEntity::phone, normalized) }.one()
+        val user = ktQuery().eq(UserEntity::email, normalized).one()
             ?: return null
         if (!PasswordUtils.matches(credential, user.password)) return null
         upgradePasswordIfLegacy(user, credential)
@@ -253,8 +251,7 @@ class UserServiceImpl(
     override fun updateUsername(username: String): Boolean =
         ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::nickName, username).update()
 
-    // 旧的 changePhone / checkPhone / changeMail 实现绕过验证码、且 checkPhone 把数字验证码写进 email 字段，已删除。
-    // 改绑/绑定走 verifySms / verifyEmail 走验证码校验路径。
+    // 旧的手机号绑定/改绑实现绕过验证码，已随手机号功能一并删除。绑定/改绑统一走 verifyEmail 的验证码校验路径。
 
     override fun adminListAll(params: UserSearchParams): IPage<UserAdminVO> =
         baseMapper.selectPage(params.toPage(), params.toWrapper()).convert { UserAdminVO(it) }
