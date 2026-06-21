@@ -73,8 +73,8 @@ async function uploadSelectedFile() {
 
     resetFileInput()
     await Promise.all([preferenceStore.refreshBackgroundConfig(), authStore.refreshUserInfo()])
-  } catch (error: any) {
-    ElMessage.error(error.message || '背景上传失败，请重试')
+  } catch {
+    // 错误已由 http 层统一提示
   } finally {
     preferenceStore.setImageBackgroundUploading(false)
   }

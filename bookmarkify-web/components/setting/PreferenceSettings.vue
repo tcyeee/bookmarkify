@@ -179,8 +179,8 @@ async function loadPreference() {
   try {
     await preferenceStore.fetchPreference()
     syncPreference(preference.value ?? undefined)
-  } catch (error: any) {
-    ElMessage.error(error?.message || '获取偏好设置失败')
+  } catch {
+    // 错误已由 http 层统一提示
   } finally {
     preferenceLoading.value = false
     preferenceLoaded.value = true
@@ -197,8 +197,8 @@ async function savePreference() {
   try {
     await preferenceStore.savePreference(preferenceForm.value)
     preferenceOrigin.value = snapshotPreference(preferenceForm.value)
-  } catch (error: any) {
-    ElMessage.error(error?.message || '保存失败，请稍后重试')
+  } catch {
+    // 错误已由 http 层统一提示
   } finally {
     preferenceSaving.value = false
     if (pendingSave) {

@@ -76,6 +76,10 @@ export default defineNuxtConfig({
   ],
   vite: {
     plugins: [tailwindcss()],
+    // 生产构建剔除调试日志（保留 console.warn/error 以便线上排障）
+    esbuild: {
+      pure: process.env.NODE_ENV === 'production' ? ['console.log', 'console.debug'] : [],
+    },
   },
   runtimeConfig: {
     public: {

@@ -2,54 +2,50 @@ import http from './http'
 import type * as t from '@typing'
 
 /* =========[ /auth ]========= */
-export const authLogout = () => http.get('/auth/logout') as Promise<void>
-export const captchaSendEmail = (params: t.CaptchaEmailParams) => http.post('/auth/captcha/email', params) as Promise<string>
-export const captchaVerifyEmail = (params: t.EmailVerifyParams) =>
-  http.post('/auth/captcha/verifyEmail', params) as Promise<t.UserInfo>
-export const authLoginByAccount = (params: t.LoginParams) =>
-  http.post('/auth/login', params) as Promise<t.UserInfo>
-export const authLoginByGoogle = (params: t.GoogleLoginParams) =>
-  http.post('/auth/google', params) as Promise<t.UserInfo>
+export const authLogout = () => http.get<void>('/auth/logout')
+export const captchaSendEmail = (params: t.CaptchaEmailParams) => http.post<string>('/auth/captcha/email', params)
+export const captchaVerifyEmail = (params: t.EmailVerifyParams) => http.post<t.UserInfo>('/auth/captcha/verifyEmail', params)
+export const authLoginByAccount = (params: t.LoginParams) => http.post<t.UserInfo>('/auth/login', params)
+export const authLoginByGoogle = (params: t.GoogleLoginParams) => http.post<t.UserInfo>('/auth/google', params)
 
 /* =========[ /bookmark ]========= */
-export const bookmarksShowAll = () => http.post('/bookmark/query') as Promise<t.UserLayoutNodeVO>
-export const bookmarksSearch = (name: string) => http.post(`/bookmark/search?name=${encodeURIComponent(name)}`) as Promise<Array<any>>
-export const bookmarksAddOne = (url: string) => http.get('/bookmark/addOne', { url: url }) as Promise<t.UserLayoutNodeVO>
-export const bookmarksLinkOne = (bookmarkId: string) => http.get('/bookmark/linkOne', { bookmarkId }) as Promise<t.UserLayoutNodeVO>
-export const bookmarksSort = (params: Record<string, number>) => http.post('/bookmark/sort', params) as Promise<boolean>
-export const bookmarksDel = (params: Array<string>) => http.post('/bookmark/delete', params) as Promise<boolean>
-export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post('/bookmark/update', params) as Promise<t.BookmarkShow>
-export const bookmarksUpload = (file: File) => http.upload('/bookmark/upload', file) as Promise<boolean>
+export const bookmarksShowAll = () => http.post<t.UserLayoutNodeVO>('/bookmark/query')
+export const bookmarksSearch = (name: string) => http.post<Array<any>>(`/bookmark/search?name=${encodeURIComponent(name)}`)
+export const bookmarksAddOne = (url: string) => http.get<t.UserLayoutNodeVO>('/bookmark/addOne', { url: url })
+export const bookmarksLinkOne = (bookmarkId: string) => http.get<t.UserLayoutNodeVO>('/bookmark/linkOne', { bookmarkId })
+export const bookmarksSort = (params: Record<string, number>) => http.post<boolean>('/bookmark/sort', params)
+export const bookmarksDel = (params: Array<string>) => http.post<boolean>('/bookmark/delete', params)
+export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post<t.BookmarkShow>('/bookmark/update', params)
+export const bookmarksUpload = (file: File) => http.upload<boolean>('/bookmark/upload', file)
 export const bookmarksList = (params?: t.BookmarkListParams) =>
-  http.post('/bookmark/list', params ?? {}) as Promise<t.BookmarkPage<t.BookmarkShow>>
+  http.post<t.BookmarkPage<t.BookmarkShow>>('/bookmark/list', params ?? {})
 export const bookmarksCreateDir = (nodeIds: [string, string], name: string, sort: number) =>
-  http.post('/bookmark/createDir', { nodeIds, name, sort }) as Promise<t.UserLayoutNodeVO>
+  http.post<t.UserLayoutNodeVO>('/bookmark/createDir', { nodeIds, name, sort })
 export const bookmarksRenameDir = (nodeId: string, name: string) =>
-  http.post('/bookmark/renameDir', { nodeId, name }) as Promise<boolean>
+  http.post<boolean>('/bookmark/renameDir', { nodeId, name })
 export const bookmarksMoveNode = (nodeId: string, dirNodeId: string | null) =>
-  http.post('/bookmark/moveNode', { nodeId, dirNodeId }) as Promise<t.UserLayoutNodeVO>
+  http.post<t.UserLayoutNodeVO>('/bookmark/moveNode', { nodeId, dirNodeId })
 
 /* =========[ /user ]========= */
-export const updateUserInfo = (param: t.UserInfoUpdate) => http.post('/user/updateInfo', param) as Promise<boolean>
-export const queryUserInfo = () => http.get('/user/info') as Promise<t.UserInfo>
-export const accountDelete = (pwd: string) => http.post('/user/del', { password: btoa(pwd) }) as Promise<boolean>
-export const uploadAvatar = (file: File) => http.upload('/user/uploadAvatar', file) as Promise<string>
+export const updateUserInfo = (param: t.UserInfoUpdate) => http.post<boolean>('/user/updateInfo', param)
+export const queryUserInfo = () => http.get<t.UserInfo>('/user/info')
+export const accountDelete = (pwd: string) => http.post<boolean>('/user/del', { password: btoa(pwd) })
+export const uploadAvatar = (file: File) => http.upload<string>('/user/uploadAvatar', file)
 
 /* =========[ /setting ]========= */
-export const uploadBacPic = (file: File) => http.upload('/background/uploadBacPic', file) as Promise<string>
-export const updateBacColor = (params: t.BacGradientVO) => http.post('/background/updateBacColor', params) as Promise<boolean>
-export const defaultBackgrounds = () => http.get('/background/default') as Promise<t.DefaultBackgroundsResponse>
+export const uploadBacPic = (file: File) => http.upload<string>('/background/uploadBacPic', file)
+export const updateBacColor = (params: t.BacGradientVO) => http.post<boolean>('/background/updateBacColor', params)
+export const defaultBackgrounds = () => http.get<t.DefaultBackgroundsResponse>('/background/default')
 export const defaultImageBackgrounds = async () => (await defaultBackgrounds()).images
 export const defaultGradientBackgrounds = async () => (await defaultBackgrounds()).gradients
-export const myBackgrounds = () => http.get('/background/mine') as Promise<t.DefaultBackgroundsResponse>
-export const resetBacBackground = () => http.get('/background/background/reset') as Promise<boolean>
+export const myBackgrounds = () => http.get<t.DefaultBackgroundsResponse>('/background/mine')
+export const resetBacBackground = () => http.get<boolean>('/background/background/reset')
 export const selectBackground = (params: t.BackSettingParams) =>
-  http.post('/background/selectBackground', params) as Promise<t.BacSettingVO>
+  http.post<t.BacSettingVO>('/background/selectBackground', params)
 export const updateGradientBackground = (params: t.GradientConfigParams) =>
-  http.post('/background/gradient/update', params) as Promise<boolean>
-export const deleteGradientBackground = (id: string) =>
-  http.start(`/background/gradient/${id}`, 'DELETE') as Promise<boolean>
+  http.post<boolean>('/background/gradient/update', params)
+export const deleteGradientBackground = (id: string) => http.start<boolean>(`/background/gradient/${id}`, 'DELETE')
 
 /* =========[ /preference ]========= */
-export const queryUserPreference = () => http.get('/preference') as Promise<t.UserPreference | null>
-export const updateUserPreference = (params: t.UserPreference) => http.post('/preference', params) as Promise<boolean>
+export const queryUserPreference = () => http.get<t.UserPreference | null>('/preference')
+export const updateUserPreference = (params: t.UserPreference) => http.post<boolean>('/preference', params)

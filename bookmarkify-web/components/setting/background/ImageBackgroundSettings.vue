@@ -153,8 +153,8 @@ async function selectImagePreset(preset: ImagePreset) {
     selectedImageId.value = extractImageId(setting.bacImgFile) ?? setting.backgroundLinkId ?? preset.id
     ElNotification.success({ message: '已应用图片背景' })
 
-  } catch (error: any) {
-    ElMessage.error(error.message || '应用图片背景失败，请重试')
+  } catch {
+    // 错误已由 http 层统一提示
   } finally {
     applyingImageId.value = null
   }
