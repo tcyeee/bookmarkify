@@ -5,7 +5,7 @@
     <div class="w-full flex justify-center">
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
-        <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}-${gridKey}`" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @drag-start="onDragStart" @drag-end="onDragEnd" @drag-release-end="onDragReleaseEnd">
+        <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}-${gridKey}`" group-id="launchpad" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @drag-start="onDragStart" @drag-end="onDragEnd" @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
             <LaunchItem :key="`${item.id}-${item.type}`" :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" @show-detail="onShowDetail" @open-dir="onOpenDir" />
           </template>
