@@ -18,7 +18,7 @@
     <LaunchpadDetail :data="detailBookmark" />
   </el-dialog>
 
-  <LaunchpadFolderPanel :visible="folderPanelVisible" :folder="folderPanelItem" @close="folderPanelVisible = false" />
+  <LaunchpadFolderPanel :visible="folderPanelVisible" :folder="folderPanelItem" :anchor-rect="folderAnchorRect" @close="folderPanelVisible = false" />
 </template>
 
 <script lang="ts" setup>
@@ -56,10 +56,13 @@ function onShowDetail(bookmark: BookmarkShow) {
 
 const folderPanelVisible = ref(false)
 const folderPanelId = ref<string | null>(null)
+const folderAnchorRect = ref<DOMRect | null>(null)
 // computed 保证 folderPanelItem 始终指向 store 中的最新节点，而非点击时的快照
 const folderPanelItem = computed(() => (folderPanelId.value ? nodeById.value.get(folderPanelId.value) ?? null : null))
 
 function onOpenDir(item: UserLayoutNodeVO) {
+  const el = document.querySelector(`.demo-grid [data-item-key="${item.id}"]`) as HTMLElement | null
+  folderAnchorRect.value = el ? el.getBoundingClientRect() : null
   folderPanelId.value = item.id
   folderPanelVisible.value = true
 }

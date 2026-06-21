@@ -1,12 +1,12 @@
 <template>
   <Teleport to="body">
     <Transition name="folder-panel">
-      <div v-if="visible" class="fixed inset-0 z-50 flex flex-col items-center justify-center" @click.self="close">
-        <!-- 背景遮罩 -->
+      <div v-if="visible" class="fixed inset-0 z-50">
+        <!-- 遮罩：承载 dim/blur，点击收起；与卡片同级，不是卡片祖先 -->
         <div class="absolute inset-0 bg-black/30 backdrop-blur-md" @click="close" />
 
-        <!-- 面板主体 -->
-        <div class="relative z-10 w-[70vw] rounded-3xl bg-white/20 backdrop-blur-xl border border-white/30 shadow-2xl p-5">
+        <!-- 卡片：原位定位，无 backdrop-filter -->
+        <div class="absolute z-10 rounded-3xl bg-white/20 border border-white/30 shadow-2xl p-5" :style="cardStyle">
           <!-- 文件夹名称（点击进入编辑）-->
           <div class="mb-4 flex justify-center">
             <input
@@ -83,7 +83,7 @@ import { usePreferenceStore } from '@stores/preference.store'
 import { bookmarksRenameDir, bookmarksMoveNode, bookmarksSort } from '@api'
 import BookmarkLogo from './cell/BookmarkLogo.vue'
 
-const props = defineProps<{ visible: boolean; folder: UserLayoutNodeVO | null }>()
+const props = defineProps<{ visible: boolean; folder: UserLayoutNodeVO | null; anchorRect?: DOMRect | null }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const preferenceStore = usePreferenceStore()
@@ -101,10 +101,20 @@ const Vuuri = import.meta.client
 const ITEM_GAP = 16
 const ITEM_WIDTH = computed(() => iconSize.value + ITEM_GAP)
 const ITEM_HEIGHT = computed(() => iconSize.value + ITEM_GAP + (showTitle.value ? 28 : 0))
-const { width: windowWidth } = useWindowSize()
+const { width: windowWidth, height: windowHeight } = useWindowSize()
 const PANEL_CONTENT_WIDTH = computed(() => windowWidth.value * 0.7 - 40) // 70vw - p-5*2
 
 const columnCount = computed(() => Math.max(1, Math.floor((PANEL_CONTENT_WIDTH.value + ITEM_GAP) / ITEM_WIDTH.value)))
+
+/** 卡片定位：以锚点图标为中心展开，超出视口则夹紧 */
+const cardStyle = computed(() => {
+  const r = props.anchorRect
+  const w = columnCount.value * ITEM_WIDTH.value + 40 // p-5*2 = 20+20 = 40px
+  if (!r) return { left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: `${w}px` }
+  const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), windowWidth.value - w - 8)
+  const top = Math.min(Math.max(8, r.top), windowHeight.value - 8)
+  return { left: `${left}px`, top: `${top}px`, width: `${w}px` }
+})
 const vuuriStyle = computed(() => ({
   width: `${columnCount.value * ITEM_WIDTH.value}px`,
 }))
@@ -237,7 +247,8 @@ function close() {
 .folder-panel-enter-from,
 .folder-panel-leave-to {
   opacity: 0;
-  transform: scale(0.95);
+  transform: scale(0.85);
+  transform-origin: center;
 }
 
 .folder-grid .muuri-item {
