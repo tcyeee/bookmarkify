@@ -44,6 +44,7 @@
                 :get-item-height="() => `${ITEM_HEIGHT}px`"
                 @input="onGridInput"
                 @drag-start="dragging = true"
+                @receive="onFolderReceive"
                 @drag-release-end="onDragReleaseEnd">
                 <template #item="{ item }">
                   <div
@@ -74,7 +75,7 @@ import { computed, defineAsyncComponent, defineComponent, nextTick, ref, watch }
 import { useWindowSize, useEventListener } from '@vueuse/core'
 import { BookmarkOpenMode, HomeItemType, type UserLayoutNodeVO } from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
-import { bookmarksRenameDir, bookmarksSort } from '@api'
+import { bookmarksRenameDir, bookmarksSort, bookmarksMoveNode } from '@api'
 import BookmarkLogo from './cell/BookmarkLogo.vue'
 
 const props = defineProps<{ visible: boolean; folder: UserLayoutNodeVO | null; anchorRect?: DOMRect | null }>()
@@ -149,8 +150,35 @@ function onGridInput(list: UserLayoutNodeVO[]) {
   if (dragging.value) pendingSort = true
 }
 
+// 反向拖入：主网格图标进入本文件夹（vuuri group 的 receive），记录待持久化的 id
+const folderReceivedId = ref<string | null>(null)
+function onFolderReceive(e: any) {
+  folderReceivedId.value = (e?.item?.getElement?.() as HTMLElement | undefined)?.dataset?.itemKey ?? null
+}
+
 async function onDragReleaseEnd() {
   dragging.value = false
+
+  // 反向拖入：主网格图标落入本文件夹 → 改归属到本文件夹 + 重排 children
+  const receivedId = folderReceivedId.value
+  folderReceivedId.value = null
+  if (receivedId && props.folder) {
+    try {
+      await bookmarksMoveNode(receivedId, props.folder.id)
+    } catch {
+      // 错误已由 http 层统一提示
+    }
+    const params: Record<string, number> = {}
+    localChildren.value.forEach((node, index) => {
+      params[node.id] = index
+    })
+    bookmarksSort(params)
+    const dir = bookmarkStore.layoutNode?.find((n) => n.id === props.folder?.id)
+    if (dir) dir.children = [...localChildren.value]
+    return
+  }
+
+  // 文件夹内部重排
   if (!pendingSort) return
   pendingSort = false
   const params: Record<string, number> = {}
