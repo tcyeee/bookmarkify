@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server
 import com.baomidou.mybatisplus.extension.service.IService
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
+import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
@@ -42,6 +43,9 @@ interface IBookmarkService : IService<BookmarkEntity> {
 
     /** 管理员查询全部书签 */
     fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO>
+
+    /** 管理员修改书签图标设置（图片内边距 iconPadding、图标背景色 iconBgColor） */
+    fun adminUpdateIcon(bookmarkId: String, params: BookmarkIconUpdateParams)
 
     /** 解析书签,然后保存到数据库,同时通过 WebSocket 通知用户（异步事件入口） */
     fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String)

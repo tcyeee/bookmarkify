@@ -170,6 +170,15 @@ class BookmarkServiceImpl(
     override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> =
         baseMapper.selectPage(params.toPage(), params.toWrapper()).convert { BookmarkAdminVO(it) }
 
+    override fun adminUpdateIcon(bookmarkId: String, params: BookmarkIconUpdateParams) {
+        baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        ktUpdate()
+            .eq(BookmarkEntity::id, bookmarkId)
+            .set(BookmarkEntity::iconPadding, params.iconPadding)
+            .set(BookmarkEntity::iconBgColor, params.iconBgColor)
+            .update()
+    }
+
     override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =
         ktQuery().`in`(BookmarkEntity::urlHost, defaultBookmarkify).list()
 

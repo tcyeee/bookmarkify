@@ -16,6 +16,16 @@ data class AnalyticsOverview(
     val browsers: List<NamedCount>,
     /** 操作系统 / 系统分布 */
     val systems: List<NamedCount>,
+    /** 访客地理分布（国家 / 地区） */
+    val locations: List<NamedCount>,
+    /** 设备 / 屏幕尺寸分布（手机 / 平板 / 桌面 / 高清桌面） */
+    val sizes: List<NamedCount>,
+    /** 热门页面：按访问量排序的页面路径 */
+    val topPages: List<PageCount>,
+    /** 自定义事件明细（如 添加书签 / 邮箱登录） */
+    val events: List<NamedCount>,
+    /** 24 小时活跃分布：固定 24 个元素，下标 0..23 对应小时 */
+    val hourly: List<Long>,
 )
 
 /** 统计卡片：[total] 为统计区间累计值，[recent] 为近 7 日值 */
@@ -43,5 +53,12 @@ data class MonthlySeries(
 /** 通用「名称 - 计数」条目，用于饼图 / 雷达图 */
 data class NamedCount(
     val name: String,
+    val count: Long,
+)
+
+/** 单个页面的访问统计，[title] 为页面标题，[path] 为路径 */
+data class PageCount(
+    val path: String,
+    val title: String,
     val count: Long,
 )

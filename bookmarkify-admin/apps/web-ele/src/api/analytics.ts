@@ -27,6 +27,13 @@ export interface NamedCount {
   count: number;
 }
 
+/** 单个页面的访问统计 */
+export interface PageCount {
+  path: string;
+  title: string;
+  count: number;
+}
+
 export interface AnalyticsOverview {
   cards: StatCard[];
   trend: TrendSeries;
@@ -34,6 +41,16 @@ export interface AnalyticsOverview {
   referrers: NamedCount[];
   browsers: NamedCount[];
   systems: NamedCount[];
+  /** 访客地理分布（国家 / 地区） */
+  locations: NamedCount[];
+  /** 设备 / 屏幕尺寸分布 */
+  sizes: NamedCount[];
+  /** 热门页面 */
+  topPages: PageCount[];
+  /** 自定义事件明细 */
+  events: NamedCount[];
+  /** 24 小时活跃分布，固定 24 个元素 */
+  hourly: number[];
 }
 
 /** 获取后台分析看板聚合数据（GoatCounter 真实埋点） */

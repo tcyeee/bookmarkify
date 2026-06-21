@@ -285,9 +285,13 @@ class OssUtils {
                 val expiration = java.util.Date(System.currentTimeMillis() + expirationMillis)
                 val request = GeneratePresignedUrlRequest(bucket, objectName).apply {
                     this.expiration = expiration
+                    // 阿里云 OSS 图片处理(IMG)不支持 SVG 缩放: 带 image/resize 会返回
+                    // "This image format is not supported" (EC 0040-00000005)。SVG 跳过缩放, 原图直出,
+                    // 由前端用 CSS 控制展示尺寸 (DiceBear 头像即为 SVG)。
+                    val isSvg = objectName.substringAfterLast('.', "").equals("svg", ignoreCase = true)
                     val hasWidth = width?.let { it > 0 } == true
                     val hasHeight = height?.let { it > 0 } == true
-                    if (hasWidth || hasHeight) {
+                    if (!isSvg && (hasWidth || hasHeight)) {
                         // 使用 m_fill 以填充方式裁剪，确保输出尺寸精确匹配期望的宽高
                         val style = StringBuilder("image/resize,m_fill")
                         width?.takeIf { it > 0 }?.let { style.append(",w_$it") }

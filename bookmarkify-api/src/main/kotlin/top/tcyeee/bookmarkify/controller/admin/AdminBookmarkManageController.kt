@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
+import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.server.IBookmarkService
 
@@ -32,6 +33,12 @@ class AdminBookmarkManageController(
         // 实现更新单个书签信息的逻辑
         return ResponseEntity.ok().build()
     }
+
+    // 修改单个书签的图标设置（图片内边距 iconPadding、图标背景色 iconBgColor）
+    @PostMapping("/{bookmarkId}/icon")
+    fun updateBookmarkIcon(
+        @PathVariable bookmarkId: String, @RequestBody params: BookmarkIconUpdateParams
+    ) = bookmarkService.adminUpdateIcon(bookmarkId, params)
 
     // 删除单个书签信息 (使用POST替换DELETE)
     @PostMapping("/{bookmarkId}/delete")
