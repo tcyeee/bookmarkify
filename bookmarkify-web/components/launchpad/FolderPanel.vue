@@ -77,7 +77,7 @@
 
 <script lang="ts" setup>
 import { computed, defineAsyncComponent, defineComponent, nextTick, ref, watch } from 'vue'
-import { useWindowSize } from '@vueuse/core'
+import { useWindowSize, useEventListener } from '@vueuse/core'
 import { BookmarkOpenMode, HomeItemType, type UserLayoutNodeVO } from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
 import { bookmarksRenameDir, bookmarksMoveNode, bookmarksSort } from '@api'
@@ -106,14 +106,14 @@ const PANEL_CONTENT_WIDTH = computed(() => windowWidth.value * 0.7 - 40) // 70vw
 
 const columnCount = computed(() => Math.max(1, Math.floor((PANEL_CONTENT_WIDTH.value + ITEM_GAP) / ITEM_WIDTH.value)))
 
-/** 卡片定位：以锚点图标为中心展开，超出视口则夹紧 */
+/** 卡片定位：以锚点图标为中心展开，超出视口则夹紧；底部可用空间不足时可滚动 */
 const cardStyle = computed(() => {
   const r = props.anchorRect
   const w = columnCount.value * ITEM_WIDTH.value + 40 // p-5*2 = 20+20 = 40px
-  if (!r) return { left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: `${w}px` }
+  if (!r) return { left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: `${w}px`, maxHeight: '90vh', overflowY: 'auto' as const }
   const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), windowWidth.value - w - 8)
   const top = Math.min(Math.max(8, r.top), windowHeight.value - 8)
-  return { left: `${left}px`, top: `${top}px`, width: `${w}px` }
+  return { left: `${left}px`, top: `${top}px`, width: `${w}px`, maxHeight: `${windowHeight.value - top - 8}px`, overflowY: 'auto' as const }
 })
 const vuuriStyle = computed(() => ({
   width: `${columnCount.value * ITEM_WIDTH.value}px`,
@@ -235,6 +235,14 @@ function onItemClick(child: UserLayoutNodeVO) {
 function close() {
   emit('close')
 }
+
+// ── 全局 Esc 关闭面板 ─────────────────────────────────────────────────────────
+// useEventListener 在组件卸载时自动解绑，无需 onUnmounted 手动清理
+useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+  if (e.key !== 'Escape' || !props.visible) return
+  if (editing.value) return // 重命名编辑中，交由输入框的 @keydown.esc 先取消编辑
+  close()
+})
 </script>
 
 <style scoped>
