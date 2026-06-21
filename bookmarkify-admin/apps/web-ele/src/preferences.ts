@@ -9,6 +9,8 @@ export const overridesPreferences = defineOverridesPreferences({
   // overrides
   app: {
     name: import.meta.env.VITE_APP_TITLE,
+    // 工作台路由已删除，默认首页指向分析页（核心包默认值仍是 /workspace）
+    defaultHomePath: '/analytics',
   },
   copyright: {
     companyName: '书签鸭',

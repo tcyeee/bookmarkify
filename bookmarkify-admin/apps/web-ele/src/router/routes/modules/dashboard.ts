@@ -21,15 +21,6 @@ const routes: RouteRecordRaw[] = [
           title: '分析页',
         },
       },
-      {
-        name: 'Workspace',
-        path: '/workspace',
-        component: () => import('#/views/dashboard/workspace/index.vue'),
-        meta: {
-          icon: 'carbon:workspace',
-          title: '工作台',
-        },
-      },
     ],
   },
   {
@@ -46,7 +37,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/bookmark/cleaning/index.vue'),
         meta: {
           icon: 'carbon:workspace',
-          title: '书签清洗',
+          title: '书签管理',
         },
       },
       {
@@ -55,7 +46,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/bookmark/liveness/index.vue'),
         meta: {
           icon: 'carbon:workspace',
-          title: '书签活性检测',
+          title: '书签图标管理',
         },
       },
     ],

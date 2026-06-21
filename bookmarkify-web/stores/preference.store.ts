@@ -28,8 +28,6 @@ export const usePreferenceStore = defineStore('preference', {
   state: () => ({
     // 用户偏好数据（若未拉取则为 undefined，拉取失败为 null）
     preference: undefined as UserPreference | null | undefined,
-    // 用户头像文件
-    avatar: undefined as UserFile | undefined,
     // 背景图片的 DataURL 缓存。初始为 null,避免 SSR/客户端 hydration 不一致;
     // 真正的值由持久化插件还原 / hydrateBackgroundCache() 从 localStorage 读取。
     backgroundImageDataUrl: null as string | null,
@@ -66,18 +64,6 @@ export const usePreferenceStore = defineStore('preference', {
         // 错误已由 http 层统一提示
         throw err
       }
-    },
-
-    refreshAvatar() {
-      const authStore = useAuthStore()
-      const user = authStore.account
-      if (!user) {
-        this.avatar = undefined
-        return
-      }
-      const raw: any = user
-      const avatarFromUser = raw.avatarFile ?? raw.avatarUrl ?? raw.avatar ?? null
-      this.avatar = avatarFromUser ?? undefined
     },
 
     upsertPreferenceBackground(setting: BacSettingVO | null | undefined) {

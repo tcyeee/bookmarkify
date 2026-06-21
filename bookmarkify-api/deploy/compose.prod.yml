@@ -36,7 +36,7 @@ services:
       BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
       BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
       BOOKMARKIFY_ALIYUN_OSS_BUCKET_NAME: ${OSS_BUCKET}
-      BOOKMARKIFY_ALIYUN_OSS_DOMAIN: https://file.tcyeee.top
+      BOOKMARKIFY_ALIYUN_OSS_DOMAIN: https://cdn.bookmarkify.cc
       # --- DeepSeek LLM (secret from .env) ---
       BOOKMARKIFY_DEEPSEEK_API_KEY: ${BOOKMARKIFY_DEEPSEEK_API_KEY}
       # --- Google 登录（Client ID 为公开值；国内服务器经同网络的 clash 容器代理访问 Google）---

@@ -100,7 +100,7 @@ const tableData = ref<BookmarkEntity[]>([]);
 
 const pagination = reactive({
   currentPage: 1,
-  pageSize: 10,
+  pageSize: 20,
   total: 0,
 });
 
@@ -112,12 +112,21 @@ const searchForm = reactive<Pick<BookmarkSearchParams, "name" | "status">>({
 const statusOptions: {
   label: string;
   value: BookmarkSearchParams["status"];
+  type: "danger" | "info" | "success" | "warning";
 }[] = [
-  { label: "Loading", value: "LOADING" },
-  { label: "Success", value: "SUCCESS" },
-  { label: "Closed", value: "CLOSED" },
-  { label: "Blocked", value: "BLOCKED" },
+  { label: "解析中", value: "LOADING", type: "info" },
+  { label: "成功", value: "SUCCESS", type: "success" },
+  { label: "已关闭", value: "CLOSED", type: "warning" },
+  { label: "已阻止", value: "BLOCKED", type: "danger" },
 ];
+
+function iconSrc(row: BookmarkEntity | null): string {
+  const v = row?.iconBase64;
+  if (!v) return "";
+  const trimmed = v.trim();
+  if (trimmed.startsWith("data:") || trimmed.startsWith("http")) return trimmed;
+  return `data:image/png;base64,${trimmed}`;
+}
 
 async function fetchData() {
   loading.value = true;
@@ -175,25 +184,38 @@ onMounted(() => {
     <ElCard shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
-          <span>书签清理列表</span>
+          <span>书签管理</span>
         </div>
       </template>
-      <div class="mb-4">
-        <ElForm :inline="true" :model="searchForm">
-          <ElFormItem label="搜索">
-            <ElInput v-model="searchForm.name" placeholder="名称/标题/描述/域名" clearable />
-          </ElFormItem>
-          <ElFormItem label="状态">
-            <ElSelectV2 v-model="searchForm.status" :options="statusOptions" placeholder="请选择状态" clearable style="width: 160px" />
-          </ElFormItem>
-          <ElFormItem>
-            <ElButton type="primary" @click="handleSearch">搜索</ElButton>
-            <ElButton class="ml-2" @click="handleReset">重置</ElButton>
-          </ElFormItem>
+      <div class="search-bar mb-4">
+        <ElForm :model="searchForm" label-position="left" @submit.prevent="handleSearch">
+          <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <ElFormItem label="搜索" class="!mb-0">
+              <ElInput v-model="searchForm.name" placeholder="名称 / 标题 / 描述 / 域名" clearable style="width: 240px" @keyup.enter="handleSearch" />
+            </ElFormItem>
+            <ElFormItem label="状态" class="!mb-0">
+              <ElSelectV2 v-model="searchForm.status" :options="statusOptions" placeholder="全部状态" clearable style="width: 160px">
+                <template #default="{ item }">
+                  <ElTag :type="item.type" size="small" disable-transitions>
+                    {{ item.label }}
+                  </ElTag>
+                </template>
+              </ElSelectV2>
+            </ElFormItem>
+            <ElFormItem class="!mb-0 ml-auto">
+              <ElButton type="primary" @click="handleSearch">搜索</ElButton>
+              <ElButton class="ml-2" @click="handleReset">重置</ElButton>
+            </ElFormItem>
+          </div>
         </ElForm>
       </div>
       <ElTable :data="tableData" border v-loading="loading" style="width: 100%" @row-click="handleRowClick">
-        <ElTableColumn type="index" label="#" width="50" />
+        <ElTableColumn label="头像" width="80" align="center">
+          <template #default="{ row }">
+            <img v-if="iconSrc(row)" :src="iconSrc(row)" class="mx-auto h-8 w-8 rounded object-contain" :alt="row.title" />
+            <span v-else class="text-gray-300">-</span>
+          </template>
+        </ElTableColumn>
         <ElTableColumn prop="appName" label="App Name" min-width="120" />
         <ElTableColumn prop="title" label="标题" min-width="220" />
         <ElTableColumn prop="urlHost" label="域名" min-width="180" />
@@ -214,14 +236,6 @@ onMounted(() => {
             <ElTag v-else size="small"> 未知 </ElTag>
           </template>
         </ElTableColumn>
-        <ElTableColumn label="活跃" width="120">
-          <template #default="{ row }">
-            <div class="flex items-center gap-2">
-              <ElSwitch :model-value="row.isActivity" active-color="#13ce66" inactive-color="#ff4949" disabled />
-              <span>{{ row.isActivity ? "活跃" : "不活跃" }}</span>
-            </div>
-          </template>
-        </ElTableColumn>
         <ElTableColumn prop="updateTime" label="更新时间" width="200">
           <template #default="{ row }">
             {{ formatDateTime(row.updateTime) }}
@@ -233,6 +247,11 @@ onMounted(() => {
       </div>
       <ElDialog v-model="detailVisible" title="书签详情" width="600px">
         <div v-if="currentRow" class="space-y-3 text-sm">
+          <div class="flex items-center">
+            <span class="w-24 text-gray-500">头像</span>
+            <img v-if="iconSrc(currentRow)" :src="iconSrc(currentRow)" class="h-12 w-12 rounded object-contain" :alt="currentRow.title" />
+            <span v-else class="text-gray-400">-</span>
+          </div>
           <div class="flex">
             <span class="w-24 text-gray-500">App Name</span>
             <span class="flex-1 font-medium break-all">{{ currentRow.appName || "-" }}</span>
@@ -301,3 +320,12 @@ onMounted(() => {
     </ElCard>
   </Page>
 </template>
+
+<style scoped>
+.search-bar :deep(.el-form-item__label) {
+  height: 32px;
+  font-weight: 400 !important;
+  line-height: 32px;
+  color: var(--el-text-color-regular);
+}
+</style>

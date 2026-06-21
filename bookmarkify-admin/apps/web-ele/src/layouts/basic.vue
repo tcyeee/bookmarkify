@@ -47,15 +47,6 @@ const notifications = ref<NotificationItem[]>([
     title: "用户反馈",
   },
   {
-    id: 5,
-    avatar: "https://avatar.vercel.sh/workspace",
-    date: "1天前",
-    isRead: false,
-    message: "点击查看后台工作台概览。",
-    title: "前往工作台",
-    link: "/workspace",
-  },
-  {
     id: 6,
     avatar: "https://avatar.vercel.sh/site",
     date: "1天前",

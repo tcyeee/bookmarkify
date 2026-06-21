@@ -63,12 +63,6 @@ export const useAuthStore = defineStore('auth', {
         const result = await queryUserInfo()
 
         this.account = { ...this.account, ...result }
-
-        // 同步用户头像（仅客户端，服务端无 Pinia 活跃上下文）
-        if (import.meta.client) {
-          const preferenceStore = usePreferenceStore()
-          preferenceStore.refreshAvatar()
-        }
         return result
       } catch (err: any) {
         if (err.code == 202) {
@@ -84,7 +78,7 @@ export const useAuthStore = defineStore('auth', {
     async ensureDefaultAvatar() {
       // 仅客户端执行（依赖 File / fetch）
       if (!import.meta.client) return
-      const account = this.account as (UserInfo & { avatarUrl?: string | null }) | undefined
+      const account = this.account
       if (!account?.uid) return
       // 已有头像则不覆盖，仅在为空时生成
       if (account.avatarUrl) return

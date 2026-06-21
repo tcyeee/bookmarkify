@@ -154,7 +154,8 @@ data class BookmarkAdminVO(
 
     @field:Schema(description = "小图标base64") var iconBase64: String? = null,
     @field:Schema(description = "最大LOGO尺寸") var maximalLogoSize: Int = 0,
-    @field:Schema(description = "图片内边距") var iconPadding: Int = 0,
+    @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
+    @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
 
     /* 状态信息 */
     @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.LOADING,

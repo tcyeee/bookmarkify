@@ -11,6 +11,23 @@ packages:
   - apps/*
   - scripts/*
 
+peerDependencyRules:
+  allowedVersions:
+    eslint: '*'
+
+overrides:
+  '@ast-grep/napi': 'catalog:'
+  '@ctrl/tinycolor': 'catalog:'
+  clsx: 'catalog:'
+  esbuild: 0.25.3
+  jiti: 'catalog:'
+  pinia: 'catalog:'
+  vue: 'catalog:'
+
+neverBuiltDependencies:
+  - canvas
+  - node-gyp
+
 catalog:
   '@ast-grep/napi': ^0.39.9
   '@changesets/changelog-github': ^0.5.1

@@ -10,6 +10,8 @@ export interface BookmarkEntity {
   description?: string;
   iconBase64?: string;
   maximalLogoSize: number;
+  iconPadding: number;
+  iconBgColor?: string;
   parseStatus: 'LOADING' | 'SUCCESS' | 'CLOSED' | 'BLOCKED'; // Add other statuses as needed
   isActivity: boolean;
   parseErrMsg?: string;
@@ -37,4 +39,14 @@ export interface PageResult<T> {
  */
 export async function getBookmarkListApi(params: BookmarkSearchParams) {
   return requestClient.post<PageResult<BookmarkEntity>>('/admin/bookmark/all', params);
+}
+
+/**
+ * 修改书签图标设置（图片内边距 iconPadding、图标背景色 iconBgColor）
+ */
+export async function updateBookmarkIconApi(
+  bookmarkId: string,
+  data: { iconBgColor?: null | string; iconPadding: number },
+) {
+  return requestClient.post<void>(`/admin/bookmark/${bookmarkId}/icon`, data);
 }

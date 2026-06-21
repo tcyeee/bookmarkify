@@ -97,21 +97,16 @@ import { randomNickName } from '@utils'
 import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useAuthStore } from '@stores/auth.store'
-import { usePreferenceStore } from '@stores/preference.store'
 import AccountDelete from './AccountDelete.vue'
 import BindEmailModal from './BindEmailModal.vue'
 import AccountLogout from './AccountLogout.vue'
 import ActionInput from '../../common/ActionInput.vue'
 
 const authStore = useAuthStore()
-const preferenceStore = usePreferenceStore()
 const account = computed<UserInfo | undefined>(() => authStore.account)
-const avatarUrl = computed(() => {
-  const avatar = preferenceStore.avatar as any
-  if (!avatar) return undefined
-  if (typeof avatar === 'string') return avatar
-  return avatar.currentName || avatar.url || avatar.avatarUrl || avatar.fullName || undefined
-})
+// 直接读取 account.avatarUrl（持久化在 auth store），不再经 preferenceStore 中转；
+// 这样即使 /user/info 偶发失败，已持久化的头像仍能显示，不会被静默清空。
+const avatarUrl = computed(() => account.value?.avatarUrl ?? undefined)
 const maskedUid = computed(() => {
   const uid = account.value?.uid
   if (!uid) return '——'

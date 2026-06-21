@@ -36,6 +36,10 @@ data class GoogleLoginParams(val idToken: String)  // Google Identity Services �
 data class UserDelParams(val password: String)
 data class UserInfoUpdateParams(var nickName: String)
 data class BookmarkUpdatePrams(var linkId: String, var title: String, var description: String)
+data class BookmarkIconUpdateParams(
+    @field:Schema(description = "图片内边距") var iconPadding: Int = 0,
+    @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
+)
 data class AdminLoginParams(val account: String, val password: String)
 data class AccountLoginParams(val account: String, val password: String)
 data class ChangePasswordParams(val oldPassword: String, val newPassword: String)
