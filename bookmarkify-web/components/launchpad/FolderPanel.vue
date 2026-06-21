@@ -116,6 +116,9 @@ const cardStyle = computed(() => {
 const vuuriStyle = computed(() => ({
   width: `${columnCount.value * ITEM_WIDTH.value}px`,
 }))
+// 滞回边距：进入文件夹用整张卡片（易进）；移出要求中心超出卡片 + 该边距（进去就粘住，抖动不弹出）
+const EJECT_MARGIN = 40
+
 const vuuriOptions = {
   layout: { fillGaps: true, rounding: false },
   layoutDuration: 200,
@@ -123,6 +126,50 @@ const vuuriOptions = {
   hideDuration: 100,
   dragReleaseDuration: 0,
   dragStartPredicate: { distance: 8, delay: 0 },
+  /**
+   * 自定义排序：被拖项中心离开卡片范围（任意方向，含下方空白）→ 移到主网格末尾；
+   * 仍在卡片内 → 按重叠面积在文件夹内重排。不依赖"与主网格图标重叠"，解决向下拖不出的问题。
+   */
+  dragSortPredicate: (item: any) => {
+    const dragEl = item.getElement?.() as HTMLElement | undefined
+    if (!dragEl) return false
+    const dr = dragEl.getBoundingClientRect()
+    const cx = dr.left + dr.width / 2
+    const cy = dr.top + dr.height / 2
+
+    const cardEl = cardRef.value
+    if (cardEl) {
+      const cr = cardEl.getBoundingClientRect()
+      const outside =
+        cx < cr.left - EJECT_MARGIN || cx > cr.right + EJECT_MARGIN || cy < cr.top - EJECT_MARGIN || cy > cr.bottom + EJECT_MARGIN
+      if (outside) {
+        const grids: any[] = item.getGrid?.()?._settings?.dragSort?.() ?? []
+        const mainGrid = grids.find((g) => g !== item.getGrid?.() && g?.getElement?.()?.classList?.contains('demo-grid'))
+        if (mainGrid) return { grid: mainGrid, index: mainGrid.getItems().length, action: 'move' }
+        return false
+      }
+    }
+
+    // 卡片内：与重叠面积最大的同网格项交换
+    const items: any[] = item.getGrid?.()?.getItems?.() ?? []
+    let bestArea = 0
+    let bestIndex = -1
+    items.forEach((t: any, idx: number) => {
+      if (t === item || !t.isActive?.()) return
+      const el = t.getElement?.() as HTMLElement | undefined
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const ox = Math.min(dr.right, r.right) - Math.max(dr.left, r.left)
+      const oy = Math.min(dr.bottom, r.bottom) - Math.max(dr.top, r.top)
+      if (ox <= 0 || oy <= 0) return
+      const area = ox * oy
+      if (area > bestArea) {
+        bestArea = area
+        bestIndex = idx
+      }
+    })
+    return bestIndex >= 0 ? { index: bestIndex, action: 'move' } : false
+  },
 }
 
 const cardRef = ref<HTMLElement | null>(null)
