@@ -1,5 +1,8 @@
 import type { FunctionType, HomeItemType } from './enum'
 
+// 根层在归一化 order 中的固定键
+export const ROOT_KEY = '__root__'
+
 // 书签节点
 export interface UserLayoutNodeVO {
   id: string

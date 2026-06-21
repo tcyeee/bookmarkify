@@ -227,9 +227,9 @@ function selectBookmark(item: any) {
 function handleSuccess(res: UserLayoutNodeVO) {
   emit('success', res)
   if (res?.typeApp) {
-    bookmarkStore.layoutNode.push(res)
+    bookmarkStore.addNode(res)
   } else {
-    bookmarkStore.addEmpty(res)
+    bookmarkStore.addLoading(res)
   }
 }
 
