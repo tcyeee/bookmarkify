@@ -57,6 +57,9 @@ function onShowDetail(bookmark: BookmarkShow) {
 const folderPanelVisible = ref(false)
 const folderPanelId = ref<string | null>(null)
 const folderAnchorRect = ref<DOMRect | null>(null)
+// 跨网格拖出：记录本次从文件夹移入主网格的节点 id 及其来源文件夹 id，供释放时持久化
+const receivedFromFolderId = ref<string | null>(null)
+const receivedFromFolderSrcId = ref<string | null>(null)
 // computed 保证 folderPanelItem 始终指向 store 中的最新节点，而非点击时的快照
 const folderPanelItem = computed(() => (folderPanelId.value ? nodeById.value.get(folderPanelId.value) ?? null : null))
 
@@ -295,12 +298,29 @@ function onDragEnd() {
   }
 }
 
-/** 释放动画完成后：处理排序和拖拽状态重置（合并逻辑已在 onDragEnd 处理） */
-function onDragReleaseEnd() {
+/** 释放动画完成后：处理排序、跨网格拖出持久化和拖拽状态重置（合并逻辑已在 onDragEnd 处理） */
+async function onDragReleaseEnd() {
   dragState.dragging = false
   dragState.justDropped = true
 
-  if (dragState.dirty) {
+  const movedInId = receivedFromFolderId.value
+  const srcFolderId = receivedFromFolderSrcId.value
+  receivedFromFolderId.value = null
+  receivedFromFolderSrcId.value = null
+
+  // 跨网格拖出：改归属到根，并从来源文件夹本地 children 移除（避免与根列表重复）
+  if (movedInId) {
+    const dir = bookmarkStore.layoutNode?.find((n) => n.id === srcFolderId)
+    if (dir?.children) dir.children = dir.children.filter((c) => c.id !== movedInId)
+    try {
+      await bookmarksMoveNode(movedInId, null)
+    } catch {
+      // 错误已由 http 层统一提示
+    }
+  }
+
+  // 普通排序 dirty 或 跨网格移入都需重排根列表落地位置
+  if (dragState.dirty || movedInId) {
     const params: Record<string, number> = {}
     bookmarkStore.layoutNode?.forEach((node, index) => {
       params[node.id] = index
@@ -324,7 +344,9 @@ function onGridInput(list: UserLayoutNodeVO[]) {
  * 主网格收到来自文件夹的跨网格图标（vuuri group 的 receive）：立即关闭文件夹浮层。
  * 此刻迁移已完成（图标已并入主网格），再卸载文件夹是安全的；拖拽继续在主网格进行。
  */
-function onMainReceive() {
+function onMainReceive(e: any) {
+  receivedFromFolderId.value = (e?.item?.getElement?.() as HTMLElement | undefined)?.dataset?.itemKey ?? null
+  receivedFromFolderSrcId.value = folderPanelId.value
   if (folderPanelVisible.value) folderPanelVisible.value = false
 }
 
