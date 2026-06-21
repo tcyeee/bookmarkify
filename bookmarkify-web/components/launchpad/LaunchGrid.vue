@@ -1,20 +1,20 @@
 <template>
-  <div
-    ref="containerRef"
-    class="relative mx-auto"
-    :style="{ width: `${layout.gridWidth.value}px`, height: `${layout.gridHeight(items.length)}px` }">
+  <div ref="wrapperRef" class="flex w-full justify-center">
     <div
-      v-for="(item, i) in orderedItems"
-      :key="`${item.id}-${item.type}`"
-      class="absolute select-none"
-      :class="[
-        item.id === drag.draggingId.value ? 'launch-cell-dragging' : 'transition-transform duration-200 ease-out',
-      ]"
-      :data-folder-anchor="item.id"
-      :style="cellStyle(item, i)"
-      @pointerdown="drag.onPointerDown($event, item.id)">
-      <div class="h-full w-full" :class="{ 'merge-glow-host': drag.mergeReady.value && drag.mergeTargetId.value === item.id }">
-        <LaunchCell :item="item" :dragging="cellDragging" @open-dir="emit('open-dir', $event)" @show-detail="emit('show-detail', $event)" />
+      ref="containerRef"
+      class="relative"
+      :style="{ width: `${layout.gridWidth.value}px`, height: `${layout.gridHeight(items.length)}px` }">
+      <div
+        v-for="(item, i) in orderedItems"
+        :key="`${item.id}-${item.type}`"
+        class="absolute select-none"
+        :class="[item.id === drag.draggingId.value ? 'launch-cell-dragging' : 'transition-transform duration-200 ease-out']"
+        :data-folder-anchor="item.id"
+        :style="cellStyle(item, i)"
+        @pointerdown="drag.onPointerDown($event, item.id)">
+        <div class="h-full w-full" :class="{ 'merge-glow-host': drag.mergeReady.value && drag.mergeTargetId.value === item.id }">
+          <LaunchCell :item="item" :dragging="cellDragging" @open-dir="emit('open-dir', $event)" @show-detail="emit('show-detail', $event)" />
+        </div>
       </div>
     </div>
   </div>
@@ -34,8 +34,9 @@ const emit = defineEmits<{
   (e: 'show-detail', b: BookmarkShow): void
 }>()
 
-const containerRef = ref<HTMLElement | null>(null)
-const layout = useGridLayout(containerRef)
+const wrapperRef = ref<HTMLElement | null>(null) // 全宽，用于测量可用宽度算列数
+const containerRef = ref<HTMLElement | null>(null) // 定位网格，宽度 = 列数×列宽
+const layout = useGridLayout(wrapperRef)
 const itemsRef = toRef(props, 'items')
 
 // 真实拖拽刚结束后短暂置位，吞掉松手后浏览器补发的 click，避免误触发打开书签
