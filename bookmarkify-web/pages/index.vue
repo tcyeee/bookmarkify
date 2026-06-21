@@ -5,7 +5,7 @@
     <div class="w-full flex justify-center">
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
-        <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}-${gridKey}`" group-id="launchpad" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @receive="onMainReceive" @drag-start="onDragStart" @drag-end="onDragEnd" @drag-release-end="onDragReleaseEnd">
+        <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}-${gridKey}`" group-id="launchpad" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @receive="onMainReceive" @send="onMainSend" @drag-start="onDragStart" @drag-end="onDragEnd" @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
             <LaunchItem :key="`${item.id}-${item.type}`" :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" @show-detail="onShowDetail" @open-dir="onOpenDir" />
           </template>
@@ -188,6 +188,27 @@ function computeNormalSort(item: any): OverlapResult | null {
   return { targetId: '', targetEl: bestItem.getElement(), index: bestIndex, grid, targetType: null }
 }
 
+/**
+ * 取同 group 中打开着的文件夹网格（class 含 folder-grid）。
+ * vuuri group 把 dragSort 设为「() => 同组所有网格」，故经被拖项所属网格的 _settings.dragSort 取到组内网格。
+ */
+function findOpenFolderGrid(item: any): any | null {
+  const grids: any[] = item.getGrid?.()?._settings?.dragSort?.() ?? []
+  return grids.find((g) => g !== item.getGrid?.() && g?.getElement?.()?.classList?.contains('folder-grid')) ?? null
+}
+
+/** 拖动图标中心是否落在目标网格容器范围内 */
+function isCenterOverGrid(item: any, grid: any): boolean {
+  const dragEl = item.getElement?.() as HTMLElement | undefined
+  const gridEl = grid?.getElement?.() as HTMLElement | undefined
+  if (!dragEl || !gridEl) return false
+  const dr = dragEl.getBoundingClientRect()
+  const cx = dr.left + dr.width / 2
+  const cy = dr.top + dr.height / 2
+  const gr = gridEl.getBoundingClientRect()
+  return cx >= gr.left && cx <= gr.right && cy >= gr.top && cy <= gr.bottom
+}
+
 /** Vuuri 布局与拖拽配置，dragSortPredicate 兼管合并意图检测 */
 const vuuriOptions = {
   layout: { fillGaps: true, rounding: false },
@@ -199,8 +220,16 @@ const vuuriOptions = {
   dragSortPredicate: (item: any) => {
     currentDraggedId = (item.getElement?.() as HTMLElement | undefined)?.dataset?.itemKey ?? ''
 
-    // 仅 BOOKMARK 类型可触发合并
+    // 仅 BOOKMARK 类型可触发合并/移入
     const draggedNode = nodeById.value.get(currentDraggedId)
+
+    // ⓪ 反向拖入：文件夹打开时，BOOKMARK 图标中心落入文件夹网格范围 → 移入该文件夹（禁止文件夹套文件夹）
+    if (folderPanelVisible.value && draggedNode?.type === HomeItemType.BOOKMARK) {
+      const folderGrid = findOpenFolderGrid(item)
+      if (folderGrid && isCenterOverGrid(item, folderGrid)) {
+        return { grid: folderGrid, index: folderGrid.getItems().length, action: 'move' }
+      }
+    }
     const canMerge = draggedNode?.type === HomeItemType.BOOKMARK
 
     // ① 优先检测合并意图（中心点命中目标内圈）
@@ -348,6 +377,19 @@ function onMainReceive(e: any) {
   receivedFromFolderId.value = (e?.item?.getElement?.() as HTMLElement | undefined)?.dataset?.itemKey ?? null
   receivedFromFolderSrcId.value = folderPanelId.value
   if (folderPanelVisible.value) folderPanelVisible.value = false
+}
+
+/**
+ * 主网格图标被拖入文件夹（vuuri group 的 send）：该项已离开主网格，
+ * 主网格不会再收到 drag-end/release-end，在此复位拖拽状态避免 toggle-drag 卡死。
+ * 持久化由 FolderPanel 的 drag-release-end 处理。
+ */
+function onMainSend() {
+  dragState.dragging = false
+  dragState.dirty = false
+  requestAnimationFrame(() => {
+    dragState.justDropped = false
+  })
 }
 
 // ── 移入文件夹 ────────────────────────────────────────────────────────────────
