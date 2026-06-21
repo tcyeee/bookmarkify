@@ -7,11 +7,12 @@
       <div
         v-for="(item, i) in orderedItems"
         :key="`${item.id}-${item.type}`"
-        class="absolute select-none"
+        class="launch-cell absolute select-none"
         :class="[item.id === drag.draggingId.value ? 'launch-cell-dragging' : 'transition-transform duration-200 ease-out']"
         :data-folder-anchor="item.id"
         :style="cellStyle(item, i)"
-        @pointerdown="drag.onPointerDown($event, item.id)">
+        @pointerdown="drag.onPointerDown($event, item.id)"
+        @dragstart.prevent>
         <div class="h-full w-full" :class="{ 'merge-glow-host': drag.mergeReady.value && drag.mergeTargetId.value === item.id }">
           <LaunchCell :item="item" :dragging="cellDragging" @open-dir="emit('open-dir', $event)" @show-detail="emit('show-detail', $event)" />
         </div>
@@ -82,6 +83,16 @@ function cellStyle(item: UserLayoutNodeVO, i: number) {
 </script>
 
 <style scoped>
+/* 抑制原生 HTML 拖放/触摸滚动，否则会劫持 pointer 事件导致拖不动 */
+.launch-cell {
+  touch-action: none;
+  -webkit-user-drag: none;
+}
+.launch-cell :deep(img) {
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: none;
+}
 .launch-cell-dragging {
   transition: none;
   opacity: 0.92;

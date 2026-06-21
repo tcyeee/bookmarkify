@@ -16,7 +16,17 @@ export function useGridLayout(containerRef: Ref<HTMLElement | null>, opts?: { ti
   const cols = ref(1)
   const recalc = () => {
     const w = containerRef.value?.clientWidth ?? 0
-    cols.value = Math.max(1, Math.floor((w + gap.value) / colWidth.value))
+    const next = Math.max(1, Math.floor((w + gap.value) / colWidth.value))
+    if (next !== cols.value) {
+      console.log('%c[grid]', 'color:#2563eb;font-weight:bold', '列数重算', {
+        measureWidth: w,
+        colWidth: colWidth.value,
+        cellW: cellW.value,
+        gap: gap.value,
+        cols: next,
+      })
+    }
+    cols.value = next
   }
 
   let ro: ResizeObserver | null = null
