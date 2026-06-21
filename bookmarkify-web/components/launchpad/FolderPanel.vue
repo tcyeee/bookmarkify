@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <Transition name="folder-panel">
-      <!-- 整层不拦截指针（dim 层纯视觉），以便把图标拖拽到背后主网格；关闭交由 onClickOutside + Esc -->
+      <!-- 整层不拦截指针（dim 层纯视觉），以便把图标拖拽到背后主网格；关闭交由捕获阶段 click 拦截 + Esc -->
       <div v-if="visible" class="fixed inset-0 z-50 pointer-events-none">
         <!-- dim/blur 视觉层：不拦截指针、不做位移变换（避免 transform 破坏 backdrop-filter）-->
         <div class="absolute inset-0 bg-black/30 backdrop-blur-md" />
@@ -70,7 +70,7 @@
 
 <script lang="ts" setup>
 import { computed, defineAsyncComponent, defineComponent, nextTick, ref, watch } from 'vue'
-import { useWindowSize, useEventListener, onClickOutside } from '@vueuse/core'
+import { useWindowSize, useEventListener } from '@vueuse/core'
 import { BookmarkOpenMode, HomeItemType, type UserLayoutNodeVO } from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
 import { bookmarksRenameDir, bookmarksSort } from '@api'
@@ -96,14 +96,14 @@ const ITEM_WIDTH = computed(() => iconSize.value + ITEM_GAP)
 const ITEM_HEIGHT = computed(() => iconSize.value + ITEM_GAP + (showTitle.value ? 28 : 0))
 const { width: windowWidth, height: windowHeight } = useWindowSize()
 
-// 卡片列数：贴合文件夹实际图标数量，上限为视口 70% 可容纳的列数；随窗口尺寸响应
-const maxColumns = computed(() => Math.max(1, Math.floor((windowWidth.value * 0.7 + ITEM_GAP) / ITEM_WIDTH.value)))
-const columnCount = computed(() => Math.max(1, Math.min(localChildren.value.length || 1, maxColumns.value)))
+// 卡片宽度固定为视口 55%（随窗口等比缩放）；列数 = 该宽度（扣除 p-5 内边距）内能容纳的格子数
+const CARD_WIDTH = computed(() => Math.min(windowWidth.value * 0.55, windowWidth.value - 16))
+const columnCount = computed(() => Math.max(1, Math.floor((CARD_WIDTH.value - 40 + ITEM_GAP) / ITEM_WIDTH.value)))
 
 /** 卡片定位：以锚点图标为中心展开，超出视口则夹紧；底部可用空间不足时可滚动 */
 const cardStyle = computed(() => {
   const r = props.anchorRect
-  const w = columnCount.value * ITEM_WIDTH.value + 40 // p-5*2 = 20+20 = 40px
+  const w = CARD_WIDTH.value
   if (!r) return { left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: `${w}px`, maxHeight: '90vh', overflowY: 'auto' as const }
   const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), windowWidth.value - w - 8)
   const top = Math.min(Math.max(8, r.top), windowHeight.value - 8)
@@ -119,6 +119,8 @@ const vuuriOptions = {
   hideDuration: 100,
   dragReleaseDuration: 0,
   dragStartPredicate: { distance: 8, delay: 0 },
+  // 被拖元素挂到 body，逃出卡片的 overflow 裁剪（也是后续跨网格拖出的前提）
+  dragContainer: import.meta.client ? document.body : null,
 }
 
 const cardRef = ref<HTMLElement | null>(null)
@@ -202,12 +204,22 @@ function close() {
   emit('close')
 }
 
-// ── 关闭面板：点击卡片外 + 全局 Esc ───────────────────────────────────────────
-// 卡片外点击关闭（dim 层 pointer-events-none，点击会落到文档上，由此监听捕获）
-onClickOutside(cardRef, () => {
-  if (!props.visible || dragging.value) return // 拖拽中不关闭
-  close()
-})
+// ── 关闭面板：卡片外点击（捕获阶段拦截，阻止穿透到主网格）+ 全局 Esc ──────────
+// dim 层为 pointer-events-none 以放行拖拽，故用捕获阶段 click 拦截卡片外点击：
+// 既关闭文件夹，又阻止该点击落到主网格触发打开书签等；拖拽以 mousedown 触发，不受 click 拦截影响
+useEventListener(
+  document,
+  'click',
+  (e: MouseEvent) => {
+    if (!props.visible || dragging.value) return
+    const target = e.target as Node | null
+    if (cardRef.value && target && cardRef.value.contains(target)) return // 卡片内点击放行
+    e.stopPropagation()
+    e.preventDefault()
+    close()
+  },
+  { capture: true },
+)
 // useEventListener 在组件卸载时自动解绑，无需 onUnmounted 手动清理
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   if (e.key !== 'Escape' || !props.visible) return
