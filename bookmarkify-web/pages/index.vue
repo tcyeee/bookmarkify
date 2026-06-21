@@ -63,34 +63,43 @@ function persistOrder(parentKey: string) {
   bookmarksSort(params)
 }
 
+const clog = (...a: unknown[]) => console.log('%c[commit]', 'color:#9333ea;font-weight:bold', ...a)
+
 /** 拖拽提交的唯一入口：根据动作类型本地更新 + 持久化 */
 async function handleCommit(parentKey: string, c: DragCommit) {
+  clog('收到提交', { parentKey, commit: c, orderBefore: { ...bookmarkStore.order } })
   if (c.kind === 'none') return
 
   if (c.kind === 'reorder') {
     bookmarkStore.reorderLocal(parentKey, c.ids) // 乐观本地
     persistOrder(parentKey)
+    clog('reorder 完成', { parentKey, order: bookmarkStore.order[parentKey] })
     return
   }
 
   if (c.kind === 'merge') {
     try {
+      clog('merge → 调 createDir', { ids: [c.draggedId, c.targetId], index: c.index })
       const folder = await bookmarksCreateDir([c.draggedId, c.targetId], '新建文件夹', c.index)
+      clog('createDir 返回', folder)
       bookmarkStore.createFolderLocal(folder, c.draggedId, c.targetId, c.index)
       ElNotification.success({ message: '已创建文件夹' })
-    } catch {
-      // http 层已统一提示
+      clog('merge 完成', { rootOrder: bookmarkStore.order[ROOT_KEY], folderOrder: bookmarkStore.order[folder.id] })
+    } catch (e) {
+      clog('merge 失败', e)
     }
     return
   }
 
   if (c.kind === 'moveInto') {
     try {
+      clog('moveInto → 调 moveNode', { draggedId: c.draggedId, folderId: c.folderId })
       await bookmarksMoveNode(c.draggedId, c.folderId)
       bookmarkStore.moveLocal(c.draggedId, c.folderId, bookmarkStore.childrenOf(c.folderId).length)
       ElNotification.success({ message: '已移入文件夹' })
-    } catch {
-      // http 层已统一提示
+      clog('moveInto 完成', { folderOrder: bookmarkStore.order[c.folderId], rootOrder: bookmarkStore.order[ROOT_KEY] })
+    } catch (e) {
+      clog('moveInto 失败', e)
     }
     return
   }
@@ -98,13 +107,16 @@ async function handleCommit(parentKey: string, c: DragCommit) {
   if (c.kind === 'eject') {
     // parentKey 为来源文件夹 id；拖出到根
     try {
+      clog('eject → 调 moveNode(null)', { draggedId: c.draggedId, srcFolder: parentKey })
       const result = await bookmarksMoveNode(c.draggedId, null)
+      clog('moveNode(null) 返回', result)
       bookmarkStore.moveLocal(c.draggedId, ROOT_KEY, (bookmarkStore.order[ROOT_KEY] ?? []).length)
       const dissolved = bookmarkStore.applyMoveResult(result, parentKey)
       persistOrder(ROOT_KEY)
+      clog('eject 完成', { dissolved, rootOrder: bookmarkStore.order[ROOT_KEY], srcFolderLeft: bookmarkStore.childrenOf(parentKey) })
       if (dissolved || bookmarkStore.childrenOf(parentKey).length === 0) folderVisible.value = false
-    } catch {
-      // http 层已统一提示
+    } catch (e) {
+      clog('eject 失败', e)
     }
     return
   }
