@@ -48,6 +48,11 @@ bookmarkify:
       domain-name: ${BOOKMARKIFY_ALIYUN_OSS_DOMAIN} # 自定义域名 https://i.tcyeee.top
   scrapper:
     base-url: ${BOOKMARKIFY_SCRAPPER_BASE_URL:http://bookmarkify-scraper:3000}  # 自部署 scrapper 服务地址（接替 iframely）
+  goatcounter:
+    # 自托管 GoatCounter 站点地址（dev/prod 同走公网域名，prod 经 nginx 回环命中 site3）
+    base-url: ${BOOKMARKIFY_GOATCOUNTER_BASE_URL:https://bookmarkify.stats.viii.me}
+    # 只读统计 Token（perm=64 stats-read，sites:[-1]）
+    token: ${BOOKMARKIFY_GOATCOUNTER_TOKEN:vvw0ggxoxwmppfxmzvomroeddflxq5ynlzi5r2hd3rvtn024}
   deepseek:
     api-key: ${BOOKMARKIFY_DEEPSEEK_API_KEY}
   admin:

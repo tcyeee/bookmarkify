@@ -6,13 +6,25 @@
         :fallback-text="fallbackInitial"
         :show-icon-fallback="showAccountIcon"
         class="transition duration-200 group-hover:brightness-[0.7]" />
-      <button
-        type="button"
-        class="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-        @click.stop.prevent="triggerSelect"
-        :disabled="uploading">
-        <Icon icon="memory:upload" class="size-8" />
-      </button>
+      <div
+        class="absolute inset-0 flex items-center justify-center gap-4 rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-500 group-hover:opacity-100">
+        <button
+          type="button"
+          class="flex items-center justify-center transition-transform hover:scale-110 disabled:opacity-50"
+          title="上传自定义头像"
+          @click.stop.prevent="triggerSelect"
+          :disabled="uploading">
+          <Icon icon="memory:upload" class="size-7" />
+        </button>
+        <button
+          type="button"
+          class="flex items-center justify-center transition-transform hover:scale-110 disabled:opacity-50"
+          title="随机生成头像"
+          @click.stop.prevent="handleRandom"
+          :disabled="uploading">
+          <Icon icon="memory:rotate-clockwise" class="size-7" />
+        </button>
+      </div>
       <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleFileChange" />
     </div>
 
@@ -30,6 +42,7 @@
 import { uploadAvatar } from '@api'
 import { useAuthStore } from '@stores/auth.store'
 import { imageConfig } from '@config/image.config'
+import { createDicebearAvatar, randomId } from '@utils'
 import AvatarPreview from './AvatarPreview.vue'
 
 interface Props {
@@ -113,6 +126,13 @@ async function handleUpload() {
 
 function triggerSelect() {
   fileInputRef.value?.click()
+}
+
+// 掷骰子：用随机种子生成 DiceBear 头像并进入预览，可重复点击重新生成，满意后“确认上传”
+function handleRandom() {
+  const { file, dataUri } = createDicebearAvatar(randomId())
+  selectedFile.value = file
+  previewUrl.value = dataUri
 }
 
 // 取消上传

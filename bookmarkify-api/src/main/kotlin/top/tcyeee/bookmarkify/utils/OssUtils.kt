@@ -167,7 +167,15 @@ class OssUtils {
 
             // F-05 (DNS rebinding): pin the connection to the already-validated IP so the JVM
             // cannot re-resolve the hostname and get a different (private) address on the second lookup.
-            val safeUrl = URI(parsedUrl.protocol, null, addr.hostAddress, parsedUrl.port, parsedUrl.file, null, null).toURL()
+            // HTTPS 例外: TLS 证书是按 URL 主机名校验的, 换成 IP 字面量会导致 SAN 不匹配而握手失败
+            // (No subject alternative names matching IP address)。HTTPS 因此改用原主机名直连——
+            // TLS 本身要求证书匹配该公网域名, rebinding 到内网主机会因拿不出合法证书而握手失败, 已足够防护。
+            val pinByIp = scheme == "http"
+            val safeUrl = if (pinByIp) {
+                URI(parsedUrl.protocol, null, addr.hostAddress, parsedUrl.port, parsedUrl.file, null, null).toURL()
+            } else {
+                parsedUrl
+            }
             val connection = runCatching { safeUrl.openConnection() }
                 .getOrElse { throw CommonException(ErrorType.E223, it.message) }
                 .apply {
@@ -177,8 +185,9 @@ class OssUtils {
                     // Without this a 301/302 from the validated public server could redirect
                     // to a private/internal address, bypassing the SSRF guard entirely.
                     (this as? java.net.HttpURLConnection)?.instanceFollowRedirects = false
-                    // Restore the original Host header so virtual-hosted sites resolve correctly.
-                    setRequestProperty("Host", host)
+                    // 仅在以 IP 字面量连接 (HTTP) 时回填 Host 头, 让虚拟主机正确解析;
+                    // HTTPS 直接用主机名连接, 无需覆盖 Host。
+                    if (pinByIp) setRequestProperty("Host", host)
                 }
 
             // 限制文件大小

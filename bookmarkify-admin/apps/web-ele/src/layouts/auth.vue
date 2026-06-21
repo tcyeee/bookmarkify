@@ -10,7 +10,7 @@ const logoDark = computed(() => preferences.logo.sourceDark);
 </script>
 
 <template>
-  <AuthPageLayout :app-name="appName" :logo="logo" :logo-dark="logoDark" :page-description="'工程化、高性能、跨组件库的前端模版'" :page-title="'开箱即用的大型中后台管理系统'">
+  <AuthPageLayout :app-name="appName" :logo="logo" :logo-dark="logoDark" :page-description="'高效管理书签、书签集与用户数据'" :page-title="'书签鸭 · 后台管理系统'" :toolbar="false">
     <!-- 自定义工具栏 -->
     <!-- <template #toolbar></template> -->
   </AuthPageLayout>
