@@ -55,3 +55,15 @@ export default defineNuxtPlugin(() => {
     provide: { track },
   }
 })
+
+// 显式声明 $track，便于业务代码 useNuxtApp().$track(...) 获得类型提示
+declare module 'nuxt/app' {
+  interface NuxtApp {
+    $track: (name: string, title?: string) => void
+  }
+}
+declare module 'vue' {
+  interface ComponentCustomProperties {
+    $track: (name: string, title?: string) => void
+  }
+}

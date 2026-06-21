@@ -7,6 +7,7 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
@@ -38,9 +39,11 @@
     "@element-plus/nuxt": "^1.1.4",
     "@imengyu/vue3-context-menu": "^1.5.2",
     "@types/node": "^24.10.1",
+    "baseline-browser-mapping": "^2.10.38",
     "element-plus": "^2.11.8",
     "sass": "^1.94.2",
     "typescript": "^5.9.3",
+    "vue-tsc": "^2.2.0",
     "vuedraggable": "4.1.0"
   }
 }

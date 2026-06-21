@@ -158,8 +158,8 @@ async function saveProfile() {
     })
     await authStore.refreshUserInfo()
     ElNotification.success({ message: '个人资料修改成功' })
-  } catch (error: any) {
-    ElMessage.error(error?.message || '保存失败，请稍后重试')
+  } catch {
+    // 错误已由 http 层统一提示
   } finally {
     saving.value = false
   }

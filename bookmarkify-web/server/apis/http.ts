@@ -3,7 +3,7 @@ import { useAuthStore } from '@stores/auth.store'
 
 export default class http {
   private static PENDING_DEBOUNCE_MS = 600
-  private static pendingRequests = new Map<string, { promise: Promise<any>; timestamp: number }>()
+  private static pendingRequests = new Map<string, { promise: Promise<unknown>; timestamp: number }>()
   private static withDebounce<T>(key: string, runner: () => Promise<T>): Promise<T> {
     const now = Date.now()
     const cached = this.pendingRequests.get(key)
@@ -11,24 +11,24 @@ export default class http {
 
     const promise = runner().finally(() => {
       setTimeout(() => this.pendingRequests.delete(key), this.PENDING_DEBOUNCE_MS)
-    }) as Promise<T>
+    })
     this.pendingRequests.set(key, { promise, timestamp: now })
     return promise
   }
 
-  static get(path: string, params?: any): any {
-    return this.start(path, 'GET', params)
+  static get<T = unknown>(path: string, params?: any): Promise<T> {
+    return this.start<T>(path, 'GET', params)
   }
 
-  static post(path: string, params?: any): any {
-    return this.start(path, 'POST', params)
+  static post<T = unknown>(path: string, params?: any): Promise<T> {
+    return this.start<T>(path, 'POST', params)
   }
 
-  static async upload(path: string, file: File): Promise<any> {
-    return this.uploadFile(path, file)
+  static upload<T = unknown>(path: string, file: File): Promise<T> {
+    return this.uploadFile<T>(path, file)
   }
 
-  static async uploadFile(path: string, file: File): Promise<any> {
+  static async uploadFile<T = unknown>(path: string, file: File): Promise<T> {
     const authStore = useAuthStore()
 
     // 上传是受保护操作,未登录直接登出并跳转欢迎页
@@ -43,7 +43,7 @@ export default class http {
     const url = useRuntimeConfig().public.apiBase + path
     console.log(`[API] UPLOAD::${path}`)
 
-    const exec = async (): Promise<any> => {
+    const exec = async (): Promise<T> => {
       const token = authStore.account?.token ?? ''
       try {
         const response = await fetch(url, {
@@ -51,18 +51,18 @@ export default class http {
           headers: { satoken: token },
           body: formData,
         })
-        const data = (await response.json()) as Result<object>
-        return await handleResult(data)
+        const data = (await response.json()) as Result<T>
+        return (await handleResult(data)) as T
       } catch (error) {
         if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
         return Promise.reject(error)
       }
     }
 
-    return this.withDebounce(`UPLOAD:${url}`, () => exec())
+    return this.withDebounce(`UPLOAD:${url}`, exec)
   }
 
-  static async start(path: string, method: string, params?: any): Promise<any> {
+  static async start<T = unknown>(path: string, method: string, params?: any): Promise<T> {
     const authStore = useAuthStore()
 
     // 除 /auth/** 外的写操作都需要登录;未登录则登出并跳转欢迎页
@@ -77,7 +77,7 @@ export default class http {
     const url = useRuntimeConfig().public.apiBase + path
 
     // 每次请求都构造新的 fetch 调用,使用最新 token
-    const exec = async (): Promise<any> => {
+    const exec = async (): Promise<T> => {
       const token = authStore.account?.token ?? ''
       try {
         const response = await fetch(url, {
@@ -86,21 +86,21 @@ export default class http {
           body,
         })
         const text = await response.text()
-        if (!text) return null
-        const data = JSON.parse(text) as Result<object>
-        return await handleResult(data)
+        if (!text) return null as T
+        const data = JSON.parse(text) as Result<T>
+        return (await handleResult(data)) as T
       } catch (error) {
         if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
         return Promise.reject(error)
       }
     }
 
-    return this.withDebounce(`${method}:${url}:${body ?? ''}`, () => exec())
+    return this.withDebounce(`${method}:${url}:${body ?? ''}`, exec)
   }
 }
 
 // 对返回结果进行检查
-async function handleResult(result: Result<object>): Promise<any> {
+async function handleResult<T>(result: Result<T>): Promise<T> {
   if (result.ok) return result.data
 
   // token 失效(101):登出并跳转欢迎页,不再静默重新登录

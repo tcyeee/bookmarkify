@@ -62,8 +62,8 @@ export const usePreferenceStore = defineStore('preference', {
         this.preference = result ?? null
         this.handleBackgroundCache(this.preference?.imgBacShow)
         return this.preference
-      } catch (err: any) {
-        if (import.meta.client) ElMessage.error(err?.message || '获取偏好设置失败')
+      } catch (err) {
+        // 错误已由 http 层统一提示
         throw err
       }
     },
@@ -92,8 +92,8 @@ export const usePreferenceStore = defineStore('preference', {
         const ok = await updateUserPreference(preference)
         if (ok) this.preference = { ...preference }
         return ok
-      } catch (err: any) {
-        if (import.meta.client) ElMessage.error(err?.message || '保存偏好设置失败')
+      } catch (err) {
+        // 错误已由 http 层统一提示
         throw err
       }
     },

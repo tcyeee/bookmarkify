@@ -104,8 +104,8 @@ async function handleUpload() {
 
     // 刷新用户信息
     await authStore.refreshUserInfo()
-  } catch (error: any) {
-    ElMessage.error(error.message || '头像上传失败，请重试')
+  } catch {
+    // 错误已由 http 层统一提示
   } finally {
     uploading.value = false
   }

@@ -148,8 +148,8 @@ async function applyPresetBackground(preset: GradientPreset) {
 
     preferenceStore.upsertPreferenceBackground(updatedSetting)
     ElNotification.success({ message: '已应用预设背景' })
-  } catch (error: any) {
-    ElMessage.error(error.message || '应用预设失败')
+  } catch {
+    // 错误已由 http 层统一提示
   } finally {
     applyingPreset.value = false
   }
@@ -212,8 +212,8 @@ async function handleDeletePreset(preset: GradientPreset) {
     }
 
     ElNotification.success({ message: '已删除自定义渐变' })
-  } catch (error: any) {
-    ElMessage.error(error.message || '删除失败')
+  } catch {
+    // 错误已由 http 层统一提示
   }
 }
 
@@ -267,8 +267,8 @@ async function handleCustomSave() {
     })
     await preferenceStore.refreshBackgroundConfig()
     closeCustomDialog()
-  } catch (error: any) {
-    ElMessage.error(error.message || '保存失败')
+  } catch {
+    // 错误已由 http 层统一提示
   } finally {
     customSaving.value = false
     editingPreset.value = null
@@ -296,8 +296,8 @@ async function handleCustomReset() {
 
     preferenceStore.upsertPreferenceBackground(setting ?? null)
     ElNotification.success({ message: '已恢复默认背景' })
-  } catch (error: any) {
-    ElMessage.error(error.message || '重置失败，请重试')
+  } catch {
+    // 错误已由 http 层统一提示
   } finally {
     customSaving.value = false
   }
