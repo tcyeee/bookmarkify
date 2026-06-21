@@ -10,4 +10,9 @@ export const overridesPreferences = defineOverridesPreferences({
   app: {
     name: import.meta.env.VITE_APP_TITLE,
   },
+  copyright: {
+    companyName: '书签鸭',
+    companySiteLink: 'https://bookmarkify.cc',
+    date: '2026',
+  },
 });

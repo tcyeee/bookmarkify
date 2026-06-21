@@ -24,13 +24,15 @@
 <script lang="ts" setup>
 import { bookmarksSort, bookmarksCreateDir, bookmarksMoveNode } from '@api'
 import { HomeItemType, type BookmarkShow, type UserLayoutNodeVO } from '@typing'
-import { computed, defineAsyncComponent, defineComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 definePageMeta({ middleware: 'auth', layout: 'launch' })
 
 const bookmarkStore = useBookmarkStore()
 const preferenceStore = usePreferenceStore()
 
 const pageData = computed<Array<UserLayoutNodeVO>>(() => bookmarkStore.layoutNode || [])
+
+/** id → 节点 的查找表，供拖拽热路径 O(1) 查询，随 layoutNode 变化自动重建 */
+const nodeById = computed(() => new Map((bookmarkStore.layoutNode ?? []).map((n) => [n.id, n] as const)))
 
 /** 单元格尺寸与间距，跟随用户偏好 */
 const CELL_SIZE = computed(() => preferenceStore.bookmarkCellSizePx)
@@ -55,7 +57,7 @@ function onShowDetail(bookmark: BookmarkShow) {
 const folderPanelVisible = ref(false)
 const folderPanelId = ref<string | null>(null)
 // computed 保证 folderPanelItem 始终指向 store 中的最新节点，而非点击时的快照
-const folderPanelItem = computed(() => bookmarkStore.layoutNode?.find((n) => n.id === folderPanelId.value) ?? null)
+const folderPanelItem = computed(() => (folderPanelId.value ? nodeById.value.get(folderPanelId.value) ?? null : null))
 
 function onOpenDir(item: UserLayoutNodeVO) {
   folderPanelId.value = item.id
@@ -64,10 +66,10 @@ function onOpenDir(item: UserLayoutNodeVO) {
 
 const gridKey = ref(0)
 
-const dragState = reactive<{ dragging: boolean; justDropped: boolean; pendingOrder: string[] | null }>({
+const dragState = reactive<{ dragging: boolean; justDropped: boolean; dirty: boolean }>({
   dragging: false,
   justDropped: false,
-  pendingOrder: null,
+  dirty: false,
 })
 const outerRef = ref<HTMLElement | null>(null)
 const columnCount = ref(1)
@@ -100,7 +102,7 @@ function clearMergeState() {
   mergeReady.value = false
 }
 
-type OverlapResult = { targetId: string; targetEl: HTMLElement; index: number; grid: any }
+type OverlapResult = { targetId: string; targetEl: HTMLElement; index: number; grid: any; targetType: HomeItemType | null }
 
 /**
  * 合并/移入意图检测：当拖动图标的中心点落在目标图标的中心 50% 区域内时触发。
@@ -132,9 +134,9 @@ function findMergeTarget(item: any): OverlapResult | null {
 
     const targetId = el.dataset.itemKey
     if (!targetId) continue
-    const targetNode = bookmarkStore.layoutNode?.find((n) => n.id === targetId)
+    const targetNode = nodeById.value.get(targetId)
     if (targetNode?.type !== HomeItemType.BOOKMARK && targetNode?.type !== HomeItemType.BOOKMARK_DIR) continue
-    return { targetId, targetEl: el, index: i, grid }
+    return { targetId, targetEl: el, index: i, grid, targetType: targetNode.type }
   }
   return null
 }
@@ -177,7 +179,7 @@ function computeNormalSort(item: any): OverlapResult | null {
   })
 
   if (bestScore < 50 || bestIndex === -1 || !bestItem) return null
-  return { targetId: '', targetEl: bestItem.getElement(), index: bestIndex, grid }
+  return { targetId: '', targetEl: bestItem.getElement(), index: bestIndex, grid, targetType: null }
 }
 
 /** Vuuri 布局与拖拽配置，dragSortPredicate 兼管合并意图检测 */
@@ -192,7 +194,7 @@ const vuuriOptions = {
     currentDraggedId = (item.getElement?.() as HTMLElement | undefined)?.dataset?.itemKey ?? ''
 
     // 仅 BOOKMARK 类型可触发合并
-    const draggedNode = bookmarkStore.layoutNode?.find((n) => n.id === currentDraggedId)
+    const draggedNode = nodeById.value.get(currentDraggedId)
     const canMerge = draggedNode?.type === HomeItemType.BOOKMARK
 
     // ① 优先检测合并意图（中心点命中目标内圈）
@@ -204,7 +206,7 @@ const vuuriOptions = {
         clearMergeState()
         mergeTargetId.value = mergeTarget.targetId
         mergeTargetEl = mergeTarget.targetEl
-        mergeTargetType = bookmarkStore.layoutNode?.find((n) => n.id === mergeTarget.targetId)?.type ?? null
+        mergeTargetType = mergeTarget.targetType
         mergeTimer = setTimeout(() => {
           mergeReady.value = true
           // 书签用 div.overflow-hidden，文件夹用 div.folder-icon
@@ -265,13 +267,13 @@ onBeforeUnmount(() => {
 function onDragStart(item: any) {
   dragState.dragging = true
   dragState.justDropped = false
-  dragState.pendingOrder = null
+  dragState.dirty = false
   currentDraggedId = (item?.getElement?.() as HTMLElement | undefined)?.dataset?.itemKey ?? ''
 }
 
 /**
  * dragEnd 先于 dragReleaseEnd 触发，在此处理合并逻辑。
- * 若是合并操作，清除 pendingOrder 避免 onDragReleaseEnd 再走排序。
+ * 若是合并操作，清除 dirty 标志避免 onDragReleaseEnd 再走排序。
  */
 function onDragEnd() {
   if (mergeReady.value && mergeTargetId.value && currentDraggedId) {
@@ -279,7 +281,7 @@ function onDragEnd() {
     const targetId = mergeTargetId.value
     const targetType = mergeTargetType
     clearMergeState()
-    dragState.pendingOrder = null
+    dragState.dirty = false
     if (targetType === HomeItemType.BOOKMARK_DIR) {
       moveToFolder(draggedId, targetId)
     } else {
@@ -295,13 +297,13 @@ function onDragReleaseEnd() {
   dragState.dragging = false
   dragState.justDropped = true
 
-  if (dragState.pendingOrder) {
+  if (dragState.dirty) {
     const params: Record<string, number> = {}
     bookmarkStore.layoutNode?.forEach((node, index) => {
       params[node.id] = index
     })
     bookmarksSort(params)
-    dragState.pendingOrder = null
+    dragState.dirty = false
   }
 
   requestAnimationFrame(() => {
@@ -312,7 +314,7 @@ function onDragReleaseEnd() {
 /** Vuuri input 事件：排序数据更新 */
 function onGridInput(list: UserLayoutNodeVO[]) {
   bookmarkStore.layoutNode = list
-  if (dragState.dragging) dragState.pendingOrder = list.map((it, index) => `${it.id},${index + 1}`)
+  if (dragState.dragging) dragState.dirty = true
 }
 
 // ── 移入文件夹 ────────────────────────────────────────────────────────────────

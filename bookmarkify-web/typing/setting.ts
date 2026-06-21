@@ -52,6 +52,7 @@ export interface UserInfo {
   email?: string // 用户邮箱
   verified: boolean // 用户是否验证
   token: string // 用户TOKEN
+  avatarUrl?: string | null // 用户头像签名URL（后端 /user/info 返回，1 小时有效）
 }
 
 export interface UserPreference {

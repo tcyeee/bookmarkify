@@ -97,10 +97,7 @@ const imagePresets = computed<ImagePreset[]>(() => {
     presets.push(preset)
   }
 
-  // 系统预设 + 用户自定义预设，保持原有顺序
-  ;(preferenceStore.defaultImageBackgroundsList ?? []).forEach((img) =>
-    addPreset(mapImageToPreset(img, true)),
-  )
+  // 仅展示用户自定义预设（不再显示系统默认背景）
   ;(preferenceStore.userImageBackgroundsList ?? []).forEach((img) =>
     addPreset(mapImageToPreset(img, false)),
   )

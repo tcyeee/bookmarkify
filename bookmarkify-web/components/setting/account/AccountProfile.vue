@@ -28,11 +28,13 @@
           :max-length="20"
           :dirty="isDirty"
           :busy="saving"
+          randomable
           primary-text="保存"
           primary-loading-text="保存中..."
           secondary-text="取消"
           @primary="saveProfile"
-          @secondary="resetForm" />
+          @secondary="resetForm"
+          @random="randomizeNickName" />
       </div>
 
       <div class="space-y-3 mt-20">
@@ -91,6 +93,7 @@
 <script lang="ts" setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { updateUserInfo } from '@api'
+import { randomNickName } from '@utils'
 import type { UserInfo } from '@typing'
 import AvatarUpload from './AvatarUpload.vue'
 import { useAuthStore } from '@stores/auth.store'
@@ -168,6 +171,13 @@ async function saveProfile() {
 function resetForm() {
   form.nickName = account.value?.nickName || ''
   form.email = account.value?.email || ''
+}
+
+// 随机昵称：生成一个新昵称填入表单，与当前不同，触发 dirty 后由用户“保存”
+function randomizeNickName() {
+  let next = randomNickName()
+  while (next === form.nickName) next = randomNickName()
+  form.nickName = next
 }
 
 async function handleAvatarUpdate(avatarPath: string) {
