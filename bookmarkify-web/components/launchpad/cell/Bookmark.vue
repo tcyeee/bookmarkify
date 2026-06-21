@@ -53,7 +53,7 @@ async function onDelete() {
   const bookmarkStore = useBookmarkStore()
   try {
     await bookmarksDel([props.nodeId])
-    bookmarkStore.deleteOneBookmarkCell(props.nodeId)
+    bookmarkStore.removeNode(props.nodeId)
   } catch (error) {
     console.error('[Bookmark] 删除加载中书签失败', error)
   }

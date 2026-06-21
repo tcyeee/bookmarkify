@@ -1,121 +1,137 @@
 import { defineStore } from 'pinia'
-import { HomeItemType, type UserLayoutNodeVO } from '@typing'
+import { HomeItemType, ROOT_KEY, type UserLayoutNodeVO } from '@typing'
 import { bookmarksShowAll } from '@api'
+
+/** 后端树 → 扁平 { nodes, order }。nodes 不保留 children（归属/顺序唯一来源是 order）。 */
+function normalize(root?: UserLayoutNodeVO | null) {
+  const nodes: Record<string, UserLayoutNodeVO> = {}
+  const order: Record<string, string[]> = { [ROOT_KEY]: [] }
+  const walk = (list: Array<UserLayoutNodeVO> | undefined, parentKey: string) => {
+    order[parentKey] = []
+    const sorted = (list ?? []).slice().sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+    for (const n of sorted) {
+      if (!n?.id) continue
+      nodes[n.id] = { ...n, parentId: parentKey === ROOT_KEY ? null : parentKey, children: undefined }
+      order[parentKey].push(n.id)
+      if (n.type === HomeItemType.BOOKMARK_DIR) walk(n.children, n.id)
+    }
+  }
+  walk(root?.children, ROOT_KEY)
+  return { nodes, order }
+}
 
 export const useBookmarkStore = defineStore('homeItems', {
   state: () => ({
-    layoutNode: [] as Array<UserLayoutNodeVO>, // 用户桌面布局信息
-    // 单元格内容被「就地替换」时自增（如 LOADING→BOOKMARK）。
-    // Vuuri 仅按 id 做增删 diff，无法感知同 id 节点的内容变化，
-    // 页面 watch 此值后 bump gridKey 强制 Vuuri 重新同步。
-    cellRevision: 0,
+    nodes: {} as Record<string, UserLayoutNodeVO>,
+    order: { [ROOT_KEY]: [] } as Record<string, string[]>,
   }),
 
-  actions: {
-    // 对书签列表按 sort 字段排序，保持原数组不被修改，并递归处理子节点
-    sortData(res?: Array<UserLayoutNodeVO>): Array<UserLayoutNodeVO> {
-      if (!res || res.length === 0) return []
-      return res
-        .map((item) => ({
-          ...item,
-          sort: item.sort ?? Number.MAX_SAFE_INTEGER,
-          children: item.children ? this.sortData(item.children) : [],
-        }))
-        .sort((a, b) => a.sort - b.sort)
-    },
-
-    // 从后端拉取全部桌面布局信息并更新本地缓存（后端返回根节点，前端取 children 展示）
-    async update(): Promise<Array<UserLayoutNodeVO>> {
-      const res = await bookmarksShowAll()
-      const children = res?.children ?? []
-      this.layoutNode = this.sortData(children)
-      console.log(`[DEBUG]桌面布局全部信息更新:${this.layoutNode?.length}`)
-      return this.layoutNode
-    },
-
-    /**
-     * 去重：同一 id 不应同时出现在根与某文件夹 children（跨网格移动中断时可能产生）。
-     * 重复 key 会让 Vuuri 渲染异常甚至死循环（持久化后刷新即卡死），故保留首次出现、移除后续重复。
-     * 后端 update() 会再以权威数据校正，本方法只为保证可渲染、防卡死。
-     */
-    dedupeLayout() {
-      const seen = new Set<string>()
-      const walk = (nodes: Array<UserLayoutNodeVO>): Array<UserLayoutNodeVO> => {
-        const out: Array<UserLayoutNodeVO> = []
-        for (const n of nodes) {
-          if (!n?.id || seen.has(n.id)) continue
-          seen.add(n.id)
-          out.push(n.children && n.children.length > 0 ? { ...n, children: walk(n.children) } : n)
-        }
-        return out
-      }
-      this.layoutNode = walk(this.layoutNode ?? [])
-    },
-
-    // 在书签列表中临时插入一个“加载中”的占位项
-    addEmpty(item: UserLayoutNodeVO) {
-      const placeholder: UserLayoutNodeVO = {
-        ...item,
-        children: item.children ?? [],
-        type: HomeItemType.BOOKMARK_LOADING,
-      }
-      this.layoutNode?.push(placeholder)
-    },
-
-    // 递归删除一个节点(可能位于根或文件夹内),并保持响应式引用更新
-    deleteOneBookmarkCell(id: string) {
-      const removeRecursive = (nodes: Array<UserLayoutNodeVO>): Array<UserLayoutNodeVO> =>
-        nodes
-          .filter((n) => n.id !== id)
-          .map((n) =>
-            n.children && n.children.length > 0 ? { ...n, children: removeRecursive(n.children) } : n,
-          )
-      this.layoutNode = removeRecursive(this.layoutNode ?? [])
-    },
-
-    // 局部更新某一个桌面布局Item（通常由 WebSocket 推送触发），包含子节点
-    updateOneBookmarkCell(item: UserLayoutNodeVO) {
-      // 仅仅只更新书签类型
-      if (item.type !== HomeItemType.BOOKMARK || item.typeApp == null) return
-
-      if (!this.layoutNode || this.layoutNode.length === 0) return
-
-      // 递归更新节点，创建全新的对象引用以确保 Vue 响应式系统能够检测到变化
-      const updateNodeRecursive = (nodes: Array<UserLayoutNodeVO>): Array<UserLayoutNodeVO> => {
-        return nodes.map((currentNode) => {
-          if (currentNode.id === item.id) {
-            // 找到匹配的节点，创建全新的对象引用（包括 typeApp 等嵌套对象）
-            console.log(`[DEBUG]更新桌面节点:${item.id}`, item)
-            return {
-              ...item,
-              // 确保 typeApp 也是新引用（如果存在）
-              typeApp: item.typeApp ? { ...item.typeApp } : item.typeApp,
-              // 保留原有的 children 结构，如果存在则递归更新
-              children: currentNode.children && currentNode.children.length > 0
-                ? updateNodeRecursive(currentNode.children)
-                : item.children ?? []
-            }
+  getters: {
+    // 文件夹节点即时填充 children，供 cell/Folder.vue 预览图与 FolderOverlay 使用
+    rootNodes(state): Array<UserLayoutNodeVO> {
+      return (state.order[ROOT_KEY] ?? [])
+        .map((id) => {
+          const n = state.nodes[id]
+          if (!n) return null
+          if (n.type === HomeItemType.BOOKMARK_DIR) {
+            const children = (state.order[id] ?? []).map((cid) => state.nodes[cid]).filter(Boolean) as UserLayoutNodeVO[]
+            return { ...n, children }
           }
-          // 递归处理子节点
-          if (currentNode.children && currentNode.children.length > 0) {
-            return {
-              ...currentNode,
-              children: updateNodeRecursive(currentNode.children)
-            }
-          }
-          return currentNode
+          return n
         })
+        .filter(Boolean) as Array<UserLayoutNodeVO>
+    },
+    childrenOf(state) {
+      return (folderId: string): Array<UserLayoutNodeVO> =>
+        (state.order[folderId] ?? []).map((id) => state.nodes[id]).filter(Boolean) as Array<UserLayoutNodeVO>
+    },
+    parentKeyOf(state) {
+      return (id: string): string | null => {
+        for (const [k, ids] of Object.entries(state.order)) if (ids.includes(id)) return k
+        return null
       }
-
-      // 创建全新的数组引用，确保 Vue 响应式系统能够检测到变化
-      this.layoutNode = updateNodeRecursive(this.layoutNode)
-      // 通知页面：节点为「就地内容替换」，需强制 Vuuri 重新同步
-      this.cellRevision++
     },
   },
+
+  actions: {
+    async update(): Promise<void> {
+      const res = await bookmarksShowAll()
+      this.setLayout(res)
+      console.log(`[DEBUG]桌面布局更新: 根 ${this.order[ROOT_KEY]?.length ?? 0} 项`)
+    },
+
+    setLayout(root?: UserLayoutNodeVO | null) {
+      const { nodes, order } = normalize(root)
+      this.nodes = nodes
+      this.order = order
+    },
+
+    // 插入加载占位项到根
+    addLoading(node: UserLayoutNodeVO) {
+      this.nodes[node.id] = { ...node, type: HomeItemType.BOOKMARK_LOADING, parentId: null, children: undefined }
+      this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []), node.id]
+    },
+
+    // 新增已就绪书签到根（AddOneDialog 关联/添加成功且已带 typeApp）
+    addNode(node: UserLayoutNodeVO) {
+      this.nodes[node.id] = { ...node, parentId: null, children: undefined }
+      this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []), node.id]
+    },
+
+    // WebSocket 就地内容替换（LOADING→BOOKMARK）；仅改内容，保留归属，靠响应式重渲染
+    replaceContent(node: UserLayoutNodeVO) {
+      if (node.type !== HomeItemType.BOOKMARK || node.typeApp == null) return
+      const cur = this.nodes[node.id]
+      if (!cur) return
+      this.nodes[node.id] = { ...node, parentId: cur.parentId, children: undefined }
+    },
+
+    removeNode(id: string) {
+      delete this.nodes[id]
+      for (const k of Object.keys(this.order)) this.order[k] = this.order[k].filter((x) => x !== id)
+      delete this.order[id]
+    },
+
+    reorderLocal(parentKey: string, ids: Array<string>) {
+      this.order[parentKey] = [...ids]
+    },
+
+    moveLocal(id: string, toParentKey: string, index: number) {
+      const from = this.parentKeyOf(id)
+      if (from) this.order[from] = this.order[from].filter((x) => x !== id)
+      const next = [...(this.order[toParentKey] ?? [])]
+      next.splice(Math.max(0, Math.min(index, next.length)), 0, id)
+      this.order[toParentKey] = next
+      if (this.nodes[id]) this.nodes[id] = { ...this.nodes[id], parentId: toParentKey === ROOT_KEY ? null : toParentKey }
+    },
+
+    // 本地建夹：folderNode 为后端返回的真实文件夹节点；从根移除两子、文件夹落在 index、子顺序 [target, dragged]
+    createFolderLocal(folderNode: UserLayoutNodeVO, draggedId: string, targetId: string, index: number) {
+      this.nodes[folderNode.id] = { ...folderNode, parentId: null, children: undefined }
+      this.nodes[draggedId] = { ...this.nodes[draggedId], parentId: folderNode.id, children: undefined }
+      this.nodes[targetId] = { ...this.nodes[targetId], parentId: folderNode.id, children: undefined }
+      const root = (this.order[ROOT_KEY] ?? []).filter((x) => x !== draggedId && x !== targetId)
+      root.splice(Math.max(0, Math.min(index, root.length)), 0, folderNode.id)
+      this.order[ROOT_KEY] = root
+      this.order[folderNode.id] = [targetId, draggedId]
+    },
+
+    // moveNode 返回值 reconcile：后端把剩 ≤1 项的文件夹自动解散时，result 是剩余的非文件夹节点。
+    // 此处把该文件夹从 order 移除、剩余节点并入根。返回是否发生了解散。
+    applyMoveResult(result: UserLayoutNodeVO | null | undefined, srcParentKey: string): boolean {
+      if (!result || srcParentKey === ROOT_KEY) return false
+      if (result.type === HomeItemType.BOOKMARK_DIR) return false
+      // srcParentKey 是被解散的文件夹 id
+      const remainingId = result.id
+      delete this.order[srcParentKey]
+      if (this.nodes[srcParentKey]) delete this.nodes[srcParentKey]
+      this.nodes[remainingId] = { ...result, parentId: null, children: undefined }
+      this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []).filter((x) => x !== srcParentKey && x !== remainingId), remainingId]
+      return true
+    },
+  },
+
   persist: {
     storage: piniaPluginPersistedstate.localStorage(),
-    // 水合后立即去重，避免历史坏数据（重复 id）导致刷新卡死
-    afterHydrate: (ctx) => ctx.store.dedupeLayout(),
   },
 })
