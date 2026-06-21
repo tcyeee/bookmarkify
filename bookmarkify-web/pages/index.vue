@@ -358,6 +358,8 @@ async function onDragReleaseEnd() {
       // 错误已由 http 层统一提示
     }
     bookmarkStore.dedupeLayout()
+    // 强制主网格按（已去重的）layoutNode 重建，消除 vuuri 跨网格迁移残留的重复 DOM 项
+    gridKey.value++
   }
 
   // 普通排序 dirty 或 跨网格移入都需重排根列表落地位置
