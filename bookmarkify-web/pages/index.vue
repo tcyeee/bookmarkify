@@ -5,7 +5,7 @@
     <div class="w-full flex justify-center">
       <!-- Vuuri 仅在客户端渲染，避免 SSR 阶段访问 DOM -->
       <ClientOnly>
-        <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}-${gridKey}`" group-id="launchpad" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @drag-start="onDragStart" @drag-end="onDragEnd" @drag-release-end="onDragReleaseEnd">
+        <Vuuri :key="`${CELL_SIZE}-${CELL_GAP}-${TITLE_HEIGHT}-${gridKey}`" group-id="launchpad" class="demo-grid" :style="vuuriStyle" :model-value="pageData" item-key="id" :options="vuuriOptions" :drag-enabled="true" :get-item-width="() => `${CELL_SIZE + CELL_GAP}px`" :get-item-height="() => `${CELL_SIZE + CELL_GAP + TITLE_HEIGHT}px`" @input="onGridInput" @receive="onMainReceive" @drag-start="onDragStart" @drag-end="onDragEnd" @drag-release-end="onDragReleaseEnd">
           <template #item="{ item }">
             <LaunchItem :key="`${item.id}-${item.type}`" :item="item" :toggle-drag="dragState.dragging || dragState.justDropped" @show-detail="onShowDetail" @open-dir="onOpenDir" />
           </template>
@@ -318,6 +318,14 @@ function onDragReleaseEnd() {
 function onGridInput(list: UserLayoutNodeVO[]) {
   bookmarkStore.layoutNode = list
   if (dragState.dragging) dragState.dirty = true
+}
+
+/**
+ * 主网格收到来自文件夹的跨网格图标（vuuri group 的 receive）：立即关闭文件夹浮层。
+ * 此刻迁移已完成（图标已并入主网格），再卸载文件夹是安全的；拖拽继续在主网格进行。
+ */
+function onMainReceive() {
+  if (folderPanelVisible.value) folderPanelVisible.value = false
 }
 
 // ── 移入文件夹 ────────────────────────────────────────────────────────────────

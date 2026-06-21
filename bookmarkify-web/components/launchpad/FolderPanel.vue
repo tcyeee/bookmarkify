@@ -44,7 +44,6 @@
                 :get-item-height="() => `${ITEM_HEIGHT}px`"
                 @input="onGridInput"
                 @drag-start="dragging = true"
-                @send="onSendOut"
                 @drag-release-end="onDragReleaseEnd">
                 <template #item="{ item }">
                   <div
@@ -148,13 +147,6 @@ watch(
 function onGridInput(list: UserLayoutNodeVO[]) {
   localChildren.value = list
   if (dragging.value) pendingSort = true
-}
-
-// 图标被拖出文件夹进入主网格（vuuri group 的 send）：立即关闭弹窗。
-// 此刻被拖元素已迁移到主网格 DOM，拖拽继续；同时复位 dragging，避免遗留状态。
-function onSendOut() {
-  dragging.value = false
-  close()
 }
 
 async function onDragReleaseEnd() {
