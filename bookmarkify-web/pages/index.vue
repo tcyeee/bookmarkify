@@ -29,10 +29,11 @@ definePageMeta({ middleware: 'auth', layout: 'launch' })
 const bookmarkStore = useBookmarkStore()
 const preferenceStore = usePreferenceStore()
 
-const pageData = computed<Array<UserLayoutNodeVO>>(() => bookmarkStore.layoutNode || [])
+// filter(Boolean)：跨网格拖拽迁移瞬间 layoutNode 可能短暂混入 undefined，过滤掉以防整页崩
+const pageData = computed<Array<UserLayoutNodeVO>>(() => (bookmarkStore.layoutNode ?? []).filter(Boolean))
 
 /** id → 节点 的查找表，供拖拽热路径 O(1) 查询，随 layoutNode 变化自动重建 */
-const nodeById = computed(() => new Map((bookmarkStore.layoutNode ?? []).map((n) => [n.id, n] as const)))
+const nodeById = computed(() => new Map(pageData.value.map((n) => [n.id, n] as const)))
 
 /** 单元格尺寸与间距，跟随用户偏好 */
 const CELL_SIZE = computed(() => preferenceStore.bookmarkCellSizePx)
@@ -387,7 +388,9 @@ function onGridInput(list: UserLayoutNodeVO[]) {
 function onMainReceive(e: any) {
   receivedFromFolderId.value = (e?.item?.getElement?.() as HTMLElement | undefined)?.dataset?.itemKey ?? null
   receivedFromFolderSrcId.value = folderPanelId.value
-  if (folderPanelVisible.value) folderPanelVisible.value = false
+  // 延后关闭：我们的 @receive 处理器在 vuuri 内部 _onItemReceive 之前触发，
+  // 同步卸载文件夹会打断迁移、导致接收方 push undefined。放到 nextTick 让迁移先完成。
+  if (folderPanelVisible.value) nextTick(() => (folderPanelVisible.value = false))
 }
 
 /**
