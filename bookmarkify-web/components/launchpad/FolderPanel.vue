@@ -1,12 +1,13 @@
 <template>
   <Teleport to="body">
     <Transition name="folder-panel">
-      <div v-if="visible" class="fixed inset-0 z-50">
-        <!-- 遮罩：承载 dim/blur，点击收起；与卡片同级，不是卡片祖先 -->
-        <div class="absolute inset-0 bg-black/30 backdrop-blur-md" @click="close" />
+      <!-- 整层不拦截指针（dim 层纯视觉），以便把图标拖拽到背后主网格；关闭交由 onClickOutside + Esc -->
+      <div v-if="visible" class="fixed inset-0 z-50 pointer-events-none">
+        <!-- dim/blur 视觉层：不拦截指针、不做位移变换（避免 transform 破坏 backdrop-filter）-->
+        <div class="absolute inset-0 bg-black/30 backdrop-blur-md" />
 
-        <!-- 卡片：原位定位，无 backdrop-filter -->
-        <div class="absolute z-10 rounded-3xl bg-white/20 border border-white/30 shadow-2xl p-5" :style="cardStyle">
+        <!-- 卡片：原位定位，可交互 -->
+        <div ref="cardRef" class="absolute z-10 pointer-events-auto rounded-3xl bg-white/20 border border-white/30 shadow-2xl p-5" :style="cardStyle">
           <!-- 文件夹名称（点击进入编辑）-->
           <div class="mb-4 flex justify-center">
             <input
@@ -48,14 +49,6 @@
                     class="group relative flex flex-col items-center cursor-pointer"
                     :style="{ width: `${iconSize}px` }"
                     @click="onItemClick(item)">
-                    <!-- 移出按钮（hover 显示，拖拽中隐藏） -->
-                    <button
-                      v-show="!dragging"
-                      class="absolute -top-1.5 -right-1.5 z-10 size-5 rounded-full bg-black/50 text-white/80 text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
-                      title="移出到桌面"
-                      @click.stop="moveOut(item)">
-                      ↩
-                    </button>
                     <BookmarkLogo v-if="item.typeApp" :value="item.typeApp" :size="iconSize" />
                     <div v-else class="rounded-2xl bg-gray-300" :style="{ width: `${iconSize}px`, height: `${iconSize}px` }" />
                     <span
@@ -77,10 +70,10 @@
 
 <script lang="ts" setup>
 import { computed, defineAsyncComponent, defineComponent, nextTick, ref, watch } from 'vue'
-import { useWindowSize, useEventListener } from '@vueuse/core'
+import { useWindowSize, useEventListener, onClickOutside } from '@vueuse/core'
 import { BookmarkOpenMode, HomeItemType, type UserLayoutNodeVO } from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
-import { bookmarksRenameDir, bookmarksMoveNode, bookmarksSort } from '@api'
+import { bookmarksRenameDir, bookmarksSort } from '@api'
 import BookmarkLogo from './cell/BookmarkLogo.vue'
 
 const props = defineProps<{ visible: boolean; folder: UserLayoutNodeVO | null; anchorRect?: DOMRect | null }>()
@@ -102,9 +95,10 @@ const ITEM_GAP = 16
 const ITEM_WIDTH = computed(() => iconSize.value + ITEM_GAP)
 const ITEM_HEIGHT = computed(() => iconSize.value + ITEM_GAP + (showTitle.value ? 28 : 0))
 const { width: windowWidth, height: windowHeight } = useWindowSize()
-const PANEL_CONTENT_WIDTH = computed(() => windowWidth.value * 0.7 - 40) // 70vw - p-5*2
 
-const columnCount = computed(() => Math.max(1, Math.floor((PANEL_CONTENT_WIDTH.value + ITEM_GAP) / ITEM_WIDTH.value)))
+// 卡片列数：贴合文件夹实际图标数量，上限为视口 70% 可容纳的列数；随窗口尺寸响应
+const maxColumns = computed(() => Math.max(1, Math.floor((windowWidth.value * 0.7 + ITEM_GAP) / ITEM_WIDTH.value)))
+const columnCount = computed(() => Math.max(1, Math.min(localChildren.value.length || 1, maxColumns.value)))
 
 /** 卡片定位：以锚点图标为中心展开，超出视口则夹紧；底部可用空间不足时可滚动 */
 const cardStyle = computed(() => {
@@ -127,6 +121,7 @@ const vuuriOptions = {
   dragStartPredicate: { distance: 8, delay: 0 },
 }
 
+const cardRef = ref<HTMLElement | null>(null)
 const localChildren = ref<UserLayoutNodeVO[]>([])
 const vuuriKey = ref(0)
 const dragging = ref(false)
@@ -195,35 +190,6 @@ async function submitRename() {
   }
 }
 
-// ── 移出到桌面 ────────────────────────────────────────────────────────────────
-async function moveOut(child: UserLayoutNodeVO) {
-  if (!props.folder) return
-  const folderId = props.folder.id
-  try {
-    const result = await bookmarksMoveNode(child.id, null)
-    const movedNode = { ...child, parentId: null }
-
-    if (result.type === HomeItemType.BOOKMARK_DIR) {
-      // 文件夹仍存在：从本地列表移除，刷新 store children
-      localChildren.value = localChildren.value.filter((c) => c.id !== child.id)
-      bookmarkStore.layoutNode = [...(bookmarkStore.layoutNode ?? []), movedNode]
-      const dirNode = bookmarkStore.layoutNode.find((n) => n.id === result.id)
-      if (dirNode) dirNode.children = result.children
-    } else {
-      // 文件夹已被自动解散
-      bookmarkStore.layoutNode = [
-        ...(bookmarkStore.layoutNode ?? []).filter((n) => n.id !== folderId),
-        movedNode,
-        { ...result, parentId: null },
-      ]
-      emit('close')
-    }
-    ElNotification.success({ message: '已移出到桌面' })
-  } catch {
-    // 错误已由 http 层统一提示
-  }
-}
-
 // ── 打开书签 ──────────────────────────────────────────────────────────────────
 function onItemClick(child: UserLayoutNodeVO) {
   if (dragging.value) return
@@ -236,7 +202,12 @@ function close() {
   emit('close')
 }
 
-// ── 全局 Esc 关闭面板 ─────────────────────────────────────────────────────────
+// ── 关闭面板：点击卡片外 + 全局 Esc ───────────────────────────────────────────
+// 卡片外点击关闭（dim 层 pointer-events-none，点击会落到文档上，由此监听捕获）
+onClickOutside(cardRef, () => {
+  if (!props.visible || dragging.value) return // 拖拽中不关闭
+  close()
+})
 // useEventListener 在组件卸载时自动解绑，无需 onUnmounted 手动清理
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   if (e.key !== 'Escape' || !props.visible) return
@@ -246,24 +217,22 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
 </script>
 
 <style scoped>
+/* 仅淡入淡出：避免 transform 作用于 backdrop-filter 的 dim 层导致渲染异常 */
 .folder-panel-enter-active,
 .folder-panel-leave-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 .folder-panel-enter-from,
 .folder-panel-leave-to {
   opacity: 0;
-  transform: scale(0.85);
-  transform-origin: center;
 }
 
-.folder-grid .muuri-item {
+/* Muuri 动态创建的节点无组件 scope 属性，必须用 :deep() 才能命中 */
+.folder-grid :deep(.muuri-item) {
   margin: 0;
 }
 
-.folder-grid .muuri-item-content {
+.folder-grid :deep(.muuri-item-content) {
   width: 100%;
   height: 100%;
   display: flex;
