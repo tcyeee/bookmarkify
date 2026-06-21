@@ -197,16 +197,18 @@ function findOpenFolderGrid(item: any): any | null {
   return grids.find((g) => g !== item.getGrid?.() && g?.getElement?.()?.classList?.contains('folder-grid')) ?? null
 }
 
-/** 拖动图标中心是否落在目标网格容器范围内 */
+/** 拖动图标中心是否落在文件夹卡片范围内（用整张卡片做命中区，比网格本身大得多，便于拖入） */
 function isCenterOverGrid(item: any, grid: any): boolean {
   const dragEl = item.getElement?.() as HTMLElement | undefined
   const gridEl = grid?.getElement?.() as HTMLElement | undefined
   if (!dragEl || !gridEl) return false
+  // 文件夹卡片是 .folder-grid 最近的 pointer-events-auto 祖先；取不到则退回网格本身
+  const hitEl = (gridEl.closest('.pointer-events-auto') as HTMLElement | null) ?? gridEl
   const dr = dragEl.getBoundingClientRect()
   const cx = dr.left + dr.width / 2
   const cy = dr.top + dr.height / 2
-  const gr = gridEl.getBoundingClientRect()
-  return cx >= gr.left && cx <= gr.right && cy >= gr.top && cy <= gr.bottom
+  const r = hitEl.getBoundingClientRect()
+  return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom
 }
 
 /** Vuuri 布局与拖拽配置，dragSortPredicate 兼管合并意图检测 */
@@ -342,10 +344,19 @@ async function onDragReleaseEnd() {
     const dir = bookmarkStore.layoutNode?.find((n) => n.id === srcFolderId)
     if (dir?.children) dir.children = dir.children.filter((c) => c.id !== movedInId)
     try {
-      await bookmarksMoveNode(movedInId, null)
+      const result = await bookmarksMoveNode(movedInId, null)
+      // 文件夹被后端自动解散（剩 ≤1 项）：result 为剩余的那个节点（非 BOOKMARK_DIR）。
+      // 移除文件夹节点，把剩余节点并入根。
+      if (result && result.type !== HomeItemType.BOOKMARK_DIR && srcFolderId) {
+        bookmarkStore.layoutNode = [
+          ...(bookmarkStore.layoutNode ?? []).filter((n) => n.id !== srcFolderId && n.id !== result.id),
+          { ...result, parentId: null },
+        ]
+      }
     } catch {
       // 错误已由 http 层统一提示
     }
+    bookmarkStore.dedupeLayout()
   }
 
   // 普通排序 dirty 或 跨网格移入都需重排根列表落地位置

@@ -33,6 +33,25 @@ export const useBookmarkStore = defineStore('homeItems', {
       return this.layoutNode
     },
 
+    /**
+     * 去重：同一 id 不应同时出现在根与某文件夹 children（跨网格移动中断时可能产生）。
+     * 重复 key 会让 Vuuri 渲染异常甚至死循环（持久化后刷新即卡死），故保留首次出现、移除后续重复。
+     * 后端 update() 会再以权威数据校正，本方法只为保证可渲染、防卡死。
+     */
+    dedupeLayout() {
+      const seen = new Set<string>()
+      const walk = (nodes: Array<UserLayoutNodeVO>): Array<UserLayoutNodeVO> => {
+        const out: Array<UserLayoutNodeVO> = []
+        for (const n of nodes) {
+          if (!n?.id || seen.has(n.id)) continue
+          seen.add(n.id)
+          out.push(n.children && n.children.length > 0 ? { ...n, children: walk(n.children) } : n)
+        }
+        return out
+      }
+      this.layoutNode = walk(this.layoutNode ?? [])
+    },
+
     // 在书签列表中临时插入一个“加载中”的占位项
     addEmpty(item: UserLayoutNodeVO) {
       const placeholder: UserLayoutNodeVO = {
@@ -94,5 +113,9 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.cellRevision++
     },
   },
-  persist: { storage: piniaPluginPersistedstate.localStorage() },
+  persist: {
+    storage: piniaPluginPersistedstate.localStorage(),
+    // 水合后立即去重，避免历史坏数据（重复 id）导致刷新卡死
+    afterHydrate: (ctx) => ctx.store.dedupeLayout(),
+  },
 })
