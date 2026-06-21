@@ -33,6 +33,7 @@
             <ClientOnly>
               <Vuuri
                 :key="vuuriKey"
+                group-id="launchpad"
                 class="folder-grid"
                 :style="vuuriStyle"
                 :model-value="localChildren"
@@ -100,14 +101,16 @@ const { width: windowWidth, height: windowHeight } = useWindowSize()
 const CARD_WIDTH = computed(() => Math.min(windowWidth.value * 0.55, windowWidth.value - 16))
 const columnCount = computed(() => Math.max(1, Math.floor((CARD_WIDTH.value - 40 + ITEM_GAP) / ITEM_WIDTH.value)))
 
-/** 卡片定位：以锚点图标为中心展开，超出视口则夹紧；底部可用空间不足时可滚动 */
+/**
+ * 卡片定位：大卡片（55vw）水平居中，垂直跟随点击行并夹紧到视口上半部。
+ * 关键：不能加 overflow/maxHeight —— 否则会裁剪"拖出卡片"的图标（见 自定义拖拽踩坑合集.md #4 #5）。
+ */
 const cardStyle = computed(() => {
-  const r = props.anchorRect
   const w = CARD_WIDTH.value
-  if (!r) return { left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: `${w}px`, maxHeight: '90vh', overflowY: 'auto' as const }
-  const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), windowWidth.value - w - 8)
-  const top = Math.min(Math.max(8, r.top), windowHeight.value - 8)
-  return { left: `${left}px`, top: `${top}px`, width: `${w}px`, maxHeight: `${windowHeight.value - top - 8}px`, overflowY: 'auto' as const }
+  const left = Math.max(8, (windowWidth.value - w) / 2)
+  const r = props.anchorRect
+  const top = r ? Math.min(Math.max(8, r.top - 12), Math.max(8, windowHeight.value * 0.4)) : 80
+  return { left: `${left}px`, top: `${top}px`, width: `${w}px` }
 })
 const vuuriStyle = computed(() => ({
   width: `${columnCount.value * ITEM_WIDTH.value}px`,
@@ -119,8 +122,6 @@ const vuuriOptions = {
   hideDuration: 100,
   dragReleaseDuration: 0,
   dragStartPredicate: { distance: 8, delay: 0 },
-  // 被拖元素挂到 body，逃出卡片的 overflow 裁剪（也是后续跨网格拖出的前提）
-  dragContainer: import.meta.client ? document.body : null,
 }
 
 const cardRef = ref<HTMLElement | null>(null)
