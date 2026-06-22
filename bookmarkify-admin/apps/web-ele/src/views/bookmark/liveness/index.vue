@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { BookmarkEntity } from "#/api/bookmark";
+import type { BookmarkEntity, BookmarkRefetchResult } from "#/api/bookmark";
 
 import { computed, defineAsyncComponent, onMounted, ref } from "vue";
 
@@ -7,7 +7,12 @@ import { Page } from "@vben/common-ui";
 
 import { ElMessage } from "element-plus";
 
-import { getBookmarkListApi, updateBookmarkIconApi } from "#/api/bookmark";
+import {
+  applyRefetchBookmarkApi,
+  getBookmarkListApi,
+  refetchBookmarkApi,
+  updateBookmarkIconApi,
+} from "#/api/bookmark";
 
 import BookmarkIcon from "./BookmarkIcon.vue";
 
@@ -140,6 +145,25 @@ const iconDirty = computed(() => {
   );
 });
 
+// ── 重新获取（重新解析标题/图标，预览对比后选择旧/新）──────────────────────────
+const refetching = ref(false);
+const refetchResult = ref<BookmarkRefetchResult | null>(null);
+const chooseTitle = ref<"new" | "old">("new");
+const chooseIcon = ref<"new" | "old">("new");
+
+// 左侧大预览随「图标选择」联动：选新图标时用新 base64，否则用书签当前图标
+const previewValue = computed<BookmarkEntity | null>(() => {
+  const item = detailItem.value;
+  if (!item) return null;
+  if (refetchResult.value && chooseIcon.value === "new") {
+    return { ...item, iconBase64: refetchResult.value.iconBase64 };
+  }
+  return item;
+});
+
+// 有「重新获取」结果待应用，或图标设置有改动，均可保存
+const canSave = computed(() => iconDirty.value || refetchResult.value !== null);
+
 function openDetail(row: BookmarkEntity) {
   detailItem.value = row;
   // 图标内边距范围 0~35，缺省值 25
@@ -149,7 +173,25 @@ function openDetail(row: BookmarkEntity) {
   );
   editBgColor.value = row.iconBgColor ?? null;
   previewSize.value = 120;
+  // 每次打开重置「重新获取」状态
+  refetchResult.value = null;
+  chooseTitle.value = "new";
+  chooseIcon.value = "new";
   detailVisible.value = true;
+}
+
+/** 重新获取：调用后端重新解析，拿到新标题/新图标用于对比 */
+async function refetch() {
+  const item = detailItem.value;
+  if (!item) return;
+  refetching.value = true;
+  try {
+    refetchResult.value = await refetchBookmarkApi(item.id);
+    chooseTitle.value = "new";
+    chooseIcon.value = "new";
+  } finally {
+    refetching.value = false;
+  }
 }
 
 /** 从屏幕吸取颜色（需浏览器支持 EyeDropper API，Chrome/Edge 可用） */
@@ -167,19 +209,35 @@ async function pickScreenColor() {
   }
 }
 
-/** 保存图标设置（图片内边距 iconPadding、图标背景色 iconBgColor） */
+/**
+ * 保存：先应用「重新获取」的选择（新标题/新图标），再保存图标设置（内边距/背景色）
+ */
 async function saveIcon() {
   const item = detailItem.value;
   if (!item) return;
   savingIcon.value = true;
   try {
-    await updateBookmarkIconApi(item.id, {
-      iconPadding: editPadding.value,
-      iconBgColor: editBgColor.value || null,
-    });
-    item.iconPadding = editPadding.value;
-    item.iconBgColor = editBgColor.value || undefined;
-    ElMessage.success("图标设置已保存");
+    // 1. 应用重新获取结果（按用户对旧/新的选择）
+    if (refetchResult.value) {
+      const updated = await applyRefetchBookmarkApi(item.id, {
+        useNewTitle: chooseTitle.value === "new",
+        useNewIcon: chooseIcon.value === "new",
+      });
+      item.title = updated.title;
+      item.iconBase64 = updated.iconBase64;
+      item.maximalLogoSize = updated.maximalLogoSize;
+      refetchResult.value = null;
+    }
+    // 2. 保存图标设置（内边距 / 背景色）
+    if (iconDirty.value) {
+      await updateBookmarkIconApi(item.id, {
+        iconPadding: editPadding.value,
+        iconBgColor: editBgColor.value || null,
+      });
+      item.iconPadding = editPadding.value;
+      item.iconBgColor = editBgColor.value || undefined;
+    }
+    ElMessage.success("已保存");
   } finally {
     savingIcon.value = false;
   }
@@ -258,13 +316,25 @@ onMounted(() => {
       class="icon-dialog"
     >
       <div v-if="detailItem" class="detail-body">
+        <!-- 标题下方：网站域名小字 -->
+        <div class="domain-text">
+          <ElLink
+            type="info"
+            :href="fullUrl(detailItem)"
+            target="_blank"
+            :underline="false"
+          >
+            {{ detailItem.urlHost }}
+          </ElLink>
+        </div>
+
         <!-- 左右结构：左侧预览 / 右侧编辑 -->
         <div class="detail-main">
           <!-- 左侧：预览（随内边距 / 背景色实时更新；大小仅影响预览） -->
           <div class="preview-pane">
             <div class="preview-area">
               <BookmarkIcon
-                :value="detailItem"
+                :value="previewValue ?? detailItem"
                 :size="previewSize"
                 :padding="editPadding"
                 :bg-color="editBgColor ?? undefined"
@@ -313,24 +383,69 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- 最下方：网站域名小字 -->
-        <div class="domain-text">
-          <ElLink
-            type="info"
-            :href="fullUrl(detailItem)"
-            target="_blank"
-            :underline="false"
-          >
-            {{ detailItem.urlHost }}
-          </ElLink>
+        <!-- 重新获取结果：标题 / 图标 的旧-新对比选择 -->
+        <div v-if="refetchResult" class="refetch-compare">
+          <!-- 标题对比 -->
+          <div class="compare-group">
+            <span class="compare-label">标题</span>
+            <div class="compare-options">
+              <div
+                :class="['compare-option', { active: chooseTitle === 'old' }]"
+                @click="chooseTitle = 'old'"
+              >
+                <span class="compare-tag">旧</span>
+                <span class="compare-text">{{ detailItem.title || "（空）" }}</span>
+              </div>
+              <div
+                :class="['compare-option', { active: chooseTitle === 'new' }]"
+                @click="chooseTitle = 'new'"
+              >
+                <span class="compare-tag is-new">新</span>
+                <span class="compare-text">{{
+                  refetchResult.title || "（空）"
+                }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 图标对比 -->
+          <div class="compare-group">
+            <span class="compare-label">图标</span>
+            <div class="compare-options">
+              <div
+                :class="[
+                  'compare-option icon-option',
+                  { active: chooseIcon === 'old' },
+                ]"
+                @click="chooseIcon = 'old'"
+              >
+                <BookmarkIcon :value="detailItem" :size="52" />
+                <span class="compare-tag">旧</span>
+              </div>
+              <div
+                :class="[
+                  'compare-option icon-option',
+                  { active: chooseIcon === 'new' },
+                ]"
+                @click="chooseIcon = 'new'"
+              >
+                <BookmarkIcon
+                  :value="{ ...detailItem, iconBase64: refetchResult.iconBase64 }"
+                  :size="52"
+                />
+                <span class="compare-tag is-new">新</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       <template #footer>
+        <ElButton :loading="refetching" @click="refetch">重新获取</ElButton>
         <ElButton
           type="primary"
           :loading="savingIcon"
-          :disabled="!iconDirty"
+          :disabled="!canSave"
           @click="saveIcon"
         >
           保存
@@ -376,13 +491,17 @@ onMounted(() => {
   align-items: stretch;
 }
 
-/* 左侧：预览面板 */
+/* 左侧：预览面板（灰底卡片，与右侧编辑区明显区分） */
 .preview-pane {
   display: flex;
   flex: 0 0 220px;
   flex-direction: column;
   gap: 12px;
   align-items: center;
+  padding: 16px;
+  background: var(--el-fill-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
 }
 
 .preview-area {
@@ -391,12 +510,12 @@ onMounted(() => {
   flex: 1;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
-  background: var(--el-fill-color-lighter);
-  border-radius: 10px;
+  min-height: 180px;
+  background: var(--el-bg-color);
+  border-radius: 8px;
 }
 
-/* 右侧：编辑面板 */
+/* 右侧：编辑面板（白底卡片） */
 .edit-pane {
   display: flex;
   flex: 1;
@@ -404,6 +523,10 @@ onMounted(() => {
   justify-content: center;
   gap: 18px;
   min-width: 0;
+  padding: 16px 18px;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
 }
 
 .edit-row {
@@ -437,11 +560,94 @@ onMounted(() => {
   flex: none;
 }
 
-/* 最下方：网站域名小字 */
+/* 重新获取：旧-新对比选择区 */
+.refetch-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+}
+
+.compare-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compare-label {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+
+.compare-options {
+  display: flex;
+  gap: 12px;
+}
+
+.compare-option {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.compare-option:hover {
+  border-color: var(--el-color-primary-light-5);
+}
+
+.compare-option.active {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+}
+
+/* 图标对比项：纵向排列，居中且不撑满 */
+.compare-option.icon-option {
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compare-tag {
+  flex: none;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color);
+  border-radius: 4px;
+}
+
+.compare-tag.is-new {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.compare-text {
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 标题下方：网站域名小字 */
 .domain-text {
+  padding-bottom: 12px;
+  margin-top: -2px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
-  text-align: center;
+  text-align: left;
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
 /* 图标卡片样式由 BookmarkIcon 组件自身负责，此处仅补 hover 放大 */

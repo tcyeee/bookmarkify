@@ -171,27 +171,86 @@ class UserServiceImpl(
     }
 
     /**
-     * 校验 Google ID Token 并登录:
-     * - Google 邮箱已存在 => 登录该账户
-     * - 邮箱不存在 => 注册一个新的正式用户并登录
+     * 校验 Google ID Token 并登录,按以下优先级匹配账户:
+     * 1. google_id 命中 => 登录该账户
+     * 2. 未命中 => 按 Google 邮箱查现有账户,命中则自动回填 google_id/google_email 完成关联(兼容老用户)
+     * 3. 都没有 => 注册一个新的正式用户并写入 google_id/google_email
      *
      * ID Token 的签名校验交由 Google 的 tokeninfo 端点完成(服务器需能访问 Google)。
      */
     @Transactional
     override fun loginByGoogle(params: GoogleLoginParams): UserSessionInfo {
-        val email = verifyGoogleIdToken(params.idToken)
+        val identity = verifyGoogleIdToken(params.idToken)
 
-        val userEntity = ktQuery().eq(UserEntity::email, email).one() ?: createVerifiedUser(email)
+        // 1. 先按稳定唯一标识 google_id 查找已关联账户
+        val userEntity = ktQuery().eq(UserEntity::googleId, identity.googleId).one()
+        // 2. 未命中则按 Google 邮箱兑现现有账户并自动回填关联
+            ?: ktQuery().eq(UserEntity::email, identity.email).one()?.also {
+                it.googleId = identity.googleId
+                it.googleEmail = identity.email
+                updateById(it)
+            }
+            // 3. 都没有则注册新用户
+            ?: createVerifiedUser(identity.email).also {
+                it.googleId = identity.googleId
+                it.googleEmail = identity.email
+                updateById(it)
+            }
+
         if (StpKit.USER.isLogin) StpKit.USER.logout()
         StpKit.USER.login(userEntity.id, true)
         return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
     }
 
     /**
-     * 调用 Google tokeninfo 端点校验 ID Token,返回归一化后的已验证邮箱。
+     * 关联 Google 到当前已登录账户(严格一对一):
+     * - 该 Google 已被其他账户关联 => E113
+     * - 当前账户已关联其他 Google => E114
+     */
+    @Transactional
+    override fun bindGoogle(uid: String, params: GoogleLoginParams): UserInfoShow {
+        val identity = verifyGoogleIdToken(params.idToken)
+        val user = getById(uid) ?: throw CommonException(ErrorType.E215)
+
+        if (!user.googleId.isNullOrBlank()) throw CommonException(ErrorType.E114)
+
+        val occupied = ktQuery().eq(UserEntity::googleId, identity.googleId).one()
+        if (occupied != null) throw CommonException(ErrorType.E113)
+
+        user.googleId = identity.googleId
+        user.googleEmail = identity.email
+        updateById(user)
+        return UserInfoShow(user, user.avatarUrlWithSign())
+    }
+
+    /**
+     * 解绑当前账户的 Google 关联。
+     * 安全检查: 解绑后若账户既无密码又无可登录邮箱,则无任何登录凭证,拒绝解绑(E115)。
+     */
+    @Transactional
+    override fun unbindGoogle(uid: String): UserInfoShow {
+        val user = getById(uid) ?: throw CommonException(ErrorType.E215)
+        if (user.googleId.isNullOrBlank()) return UserInfoShow(user, user.avatarUrlWithSign())
+
+        val hasOtherCredential = !user.password.isNullOrBlank() || !user.email.isNullOrBlank()
+        if (!hasOtherCredential) throw CommonException(ErrorType.E115)
+
+        user.googleId = null
+        user.googleEmail = null
+        // MyBatis-Plus updateById 默认忽略 null 字段,需用 UpdateWrapper 显式置空
+        ktUpdate()
+            .set(UserEntity::googleId, null)
+            .set(UserEntity::googleEmail, null)
+            .eq(UserEntity::id, uid)
+            .update()
+        return UserInfoShow(user, user.avatarUrlWithSign())
+    }
+
+    /**
+     * 调用 Google tokeninfo 端点校验 ID Token,返回归一化后的 Google 身份(sub + 已验证邮箱)。
      * 校验项: 签名(由 Google 完成) + aud(必须等于本站 ClientId) + iss + email_verified。
      */
-    private fun verifyGoogleIdToken(idToken: String): String {
+    private fun verifyGoogleIdToken(idToken: String): GoogleIdentity {
         val clientId = projectConfig.googleClientId
         if (clientId.isBlank()) throw CommonException(ErrorType.E111, "服务端未配置 Google ClientId")
         if (idToken.isBlank()) throw CommonException(ErrorType.E111)
@@ -222,13 +281,19 @@ class UserServiceImpl(
         if (iss != "accounts.google.com" && iss != "https://accounts.google.com") {
             throw CommonException(ErrorType.E111, "非法的令牌签发方")
         }
+        // sub 是 Google 账号的稳定唯一标识(邮箱可变 sub 不变),作为关联主键
+        val sub = claims.getStr("sub")?.trim()
+        if (sub.isNullOrBlank()) throw CommonException(ErrorType.E111, "未获取到 Google 标识")
         // 邮箱必须存在且已被 Google 验证
         val email = claims.getStr("email")?.trim()?.lowercase()
         if (email.isNullOrBlank()) throw CommonException(ErrorType.E111, "未获取到邮箱")
         if (claims.getStr("email_verified") != "true") throw CommonException(ErrorType.E111, "邮箱未通过 Google 验证")
 
-        return email
+        return GoogleIdentity(googleId = sub, email = email)
     }
+
+    /** Google ID Token 校验后归一化得到的身份信息 */
+    private data class GoogleIdentity(val googleId: String, val email: String)
 
     override fun queryUserBacSetting(uid: String): BacSettingVO {
         return backSettingService.queryShowByUid(uid)

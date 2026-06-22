@@ -53,6 +53,7 @@ export interface UserInfo {
   verified: boolean // 用户是否验证
   token: string // 用户TOKEN
   avatarUrl?: string | null // 用户头像签名URL（后端 /user/info 返回，1 小时有效）
+  googleEmail?: string | null // 已关联的 Google 邮箱（未关联为 null）
 }
 
 export interface UserPreference {

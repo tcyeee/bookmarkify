@@ -6,6 +6,8 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
+import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
+import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.server.IBookmarkService
 
@@ -39,6 +41,17 @@ class AdminBookmarkManageController(
     fun updateBookmarkIcon(
         @PathVariable bookmarkId: String, @RequestBody params: BookmarkIconUpdateParams
     ) = bookmarkService.adminUpdateIcon(bookmarkId, params)
+
+    // 重新获取：重新解析网站标题与图标（不落库），返回预览数据供前端对比选择
+    @PostMapping("/{bookmarkId}/refetch")
+    fun refetchBookmark(@PathVariable bookmarkId: String): BookmarkRefetchVO =
+        bookmarkService.adminRefetch(bookmarkId)
+
+    // 应用重新获取的结果：按选择采用新标题/新图标并持久化
+    @PostMapping("/{bookmarkId}/refetch/apply")
+    fun applyRefetchBookmark(
+        @PathVariable bookmarkId: String, @RequestBody params: BookmarkRefetchApplyParams
+    ): BookmarkAdminVO = bookmarkService.adminApplyRefetch(bookmarkId, params)
 
     // 删除单个书签信息 (使用POST替换DELETE)
     @PostMapping("/{bookmarkId}/delete")

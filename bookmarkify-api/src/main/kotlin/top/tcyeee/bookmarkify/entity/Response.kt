@@ -66,10 +66,11 @@ data class UserInfoShow(
     @field:Schema(description = "用户头像文件") var avatarUrl: String? = null,
     @field:Schema(description = "角色列表") var roles: List<String>? = null,
     @field:Schema(description = "首页路径") var homePath: String? = null,
+    @field:Schema(description = "已关联的 Google 邮箱(未关联为 null)") var googleEmail: String? = null,
 ) {
     constructor(entity: UserEntity, avatarUrl: String?) : this(
         uid = entity.id, nickName = entity.nickName, avatarUrl = avatarUrl,
-        roles = listOf(entity.role.name)
+        roles = listOf(entity.role.name), googleEmail = entity.googleEmail
     )
 }
 
@@ -173,6 +174,12 @@ data class BookmarkAdminVO(
         BeanUtil.copyProperties(entity, this)
     }
 }
+
+/** 管理后台「重新获取」的预览结果：重新解析得到的标题与小图标（不落库，仅供前端对比选择） */
+data class BookmarkRefetchVO(
+    @field:Schema(description = "新解析的网站标题") var title: String? = null,
+    @field:Schema(description = "新解析的小图标base64") var iconBase64: String? = null,
+)
 
 data class UserAdminVO(
     @field:Schema(description = "用户ID") var id: String,

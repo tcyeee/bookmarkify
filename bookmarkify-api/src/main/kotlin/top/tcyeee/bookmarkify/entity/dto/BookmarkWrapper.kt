@@ -1,5 +1,7 @@
 package top.tcyeee.bookmarkify.entity.dto
 
+import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
+
 /* 书签地址 */
 data class BookmarkUrlWrapper(
     var urlRaw: String, // https://tool.chinaz.com/linksTesting/list?url=bilibili.com&type=1
@@ -74,3 +76,10 @@ data class PreloadResource(val url: String, val asType: String? = null)
 
 // 图片文件
 data class ImgInfo(val url: String, val size: Long, val width: Int, val height: Int)
+
+/**
+ * 网站 LOGO 存储结果。
+ * @param logo 最大 LOGO 的 website_logo 记录（无合适 LOGO 时为 null）
+ * @param logoUrl 高清 LOGO 上传 OSS 后的永久地址（无 LOGO 时为 null）
+ */
+data class LogoResult(val logo: WebsiteLogoEntity?, val logoUrl: String?)

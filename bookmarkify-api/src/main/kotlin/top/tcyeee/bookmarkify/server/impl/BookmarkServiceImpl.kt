@@ -10,12 +10,14 @@ import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.multipart.MultipartFile
+import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
+import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.mapper.*
@@ -179,6 +181,40 @@ class BookmarkServiceImpl(
             .update()
     }
 
+    override fun adminRefetch(bookmarkId: String): BookmarkRefetchVO {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        log.debug("[adminRefetch] 管理员重新获取书签元信息: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
+        // 仅预览，不落库：重新抓取一次，拿到新的标题与小图标
+        val vo = apiService.queryWebsiteInfo(bookmark.rawUrl)
+        val iconBase64 = vo.favicon?.takeIf { it.isNotBlank() }
+            ?: ChromeBookmarkParser.icoBase64(vo.toManifestIcons(bookmark.rawUrl), bookmark.rawUrl)
+        // 预览与应用之间用 Redis 暂存完整抓取结果，确保「所见即所存」且避免应用时再抓一次造成漂移
+        RedisUtils.set(RedisType.BOOKMARK_REFETCH, bookmarkId, vo)
+        log.debug("[adminRefetch] 重新获取完成并已暂存: bookmarkId=$bookmarkId, newTitle=${vo.title}")
+        return BookmarkRefetchVO(title = vo.title, iconBase64 = iconBase64)
+    }
+
+    override fun adminApplyRefetch(bookmarkId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        val vo = RedisUtils.get<ScrapeResponse>(RedisType.BOOKMARK_REFETCH, bookmarkId)
+            ?: throw CommonException(ErrorType.E112)
+        log.debug("[adminApplyRefetch] 应用重新获取结果: bookmarkId=$bookmarkId, useNewTitle=${params.useNewTitle}, useNewIcon=${params.useNewIcon}")
+
+        if (params.useNewTitle) bookmark.title = vo.title
+        if (params.useNewIcon) {
+            val icons = vo.toManifestIcons(bookmark.rawUrl)
+            bookmark.iconBase64 = vo.favicon?.takeIf { it.isNotBlank() }
+                ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
+            // 采用新图标时，重抓高清 LOGO/OG 上传 OSS（saveLogoToOss 内部会回写 logoUrl / maximalLogoSize）
+            saveLogoToOss(icons, bookmark)
+        }
+        bookmark.updateTime = LocalDateTime.now()
+        baseMapper.insertOrUpdate(bookmark)
+        RedisUtils.del(RedisType.BOOKMARK_REFETCH, bookmarkId)
+        log.debug("[adminApplyRefetch] 应用完成: bookmarkId=$bookmarkId, title=${bookmark.title}")
+        return BookmarkAdminVO(bookmark)
+    }
+
     override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =
         ktQuery().`in`(BookmarkEntity::urlHost, defaultBookmarkify).list()
 
@@ -334,11 +370,14 @@ class BookmarkServiceImpl(
             return
         }
         log.debug("[saveLogoToOss] 开始上传 LOGO/OG 到 OSS: bookmarkId=${bookmark.id}, iconCount=${icons.size}")
-        OssUtils.restoreWebsiteLogoAndOg(icons, bookmark.id)
-            ?.also {
-                websiteLogoMapper.insertOrUpdate(it)
-                log.debug("[saveLogoToOss] OSS 上传完成，已更新 website_logo: bookmarkId=${bookmark.id}, width=${it.width}")
-            }
+        val result = OssUtils.restoreWebsiteLogoAndOg(icons, bookmark.id)
+        // 高清 LOGO 的 OSS 地址落库到 bookmark 主表（无 LOGO 时为 null）
+        bookmark.logoUrl = result.logoUrl
+        result.logo?.also {
+            websiteLogoMapper.insertOrUpdate(it)
+            log.debug("[saveLogoToOss] OSS 上传完成，已更新 website_logo: bookmarkId=${bookmark.id}, width=${it.width}")
+        }
+            // setMaximalLogoSize 会 insertOrUpdate 回写书签，连带持久化 logoUrl
             ?.also { bookmark.setMaximalLogoSize(it.width) }
     }
 

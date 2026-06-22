@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.ImgInfo
+import top.tcyeee.bookmarkify.entity.dto.LogoResult
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
 import top.tcyeee.bookmarkify.entity.enums.FileType
@@ -101,11 +102,11 @@ class OssUtils {
          * @param bookmarkId 书签ID(用于添加文件夹)
          * @return 返回最大的LOGO信息
          */
-        fun restoreWebsiteLogoAndOg(list: List<ManifestIcon>?, bookmarkId: String): WebsiteLogoEntity? {
+        fun restoreWebsiteLogoAndOg(list: List<ManifestIcon>?, bookmarkId: String): LogoResult {
             log.debug("[restoreWebsiteLogoAndOg] bookmarkId={}, iconCount={}", bookmarkId, list?.size)
             if (list.isNullOrEmpty()) throw CommonException(ErrorType.E999)
 
-            // 存储OG
+            // 存储OG（og:image 宽屏分享图，与 LOGO 是两类图）：仅上传 OSS，地址不落库
             val ogs = list.filter { it.isOg() }.filterNot { it.src.isNullOrBlank() }
             log.debug("[restoreWebsiteLogoAndOg] 找到OG图片数={}", ogs.size)
             if (ogs.isNotEmpty()) runCatching {
@@ -119,23 +120,26 @@ class OssUtils {
                 .filterNot { it.src.isNullOrBlank() }
                 .filterNot { it.src!!.endsWith(".ico") }
                 .maxByOrNull { it.size() } ?: run {
-                log.debug("[restoreWebsiteLogoAndOg] 未找到合适的LOGO图标, 返回null")
-                return null
+                log.debug("[restoreWebsiteLogoAndOg] 未找到合适的LOGO图标, 返回空结果")
+                return LogoResult(logo = null, logoUrl = null)
             }
             log.debug("[restoreWebsiteLogoAndOg] 选中最大LOGO: src={}, size={}", maximalIcon.src, maximalIcon.size())
 
-            // 存储LOGO并返回
+            // 存储高清 LOGO 并捕获其 OSS 永久地址
             return runCatching { restoreImg(FileType.WEBSITE_LOGO, maximalIcon.src!!, bookmarkId) }
                 .getOrElse { throw CommonException(ErrorType.E218, it.message) }
                 .let { logoInfo ->
                     log.debug("[restoreWebsiteLogoAndOg] LOGO存储成功: url={}, width={}, height={}", logoInfo.url, logoInfo.width, logoInfo.height)
-                    WebsiteLogoEntity(
-                        bookmarkId = bookmarkId,
-                        size = logoInfo.size,
-                        width = logoInfo.width,
-                        height = logoInfo.height,
-                        suffix = FileUtil.extName(logoInfo.url) ?: "png",
-                        isOgImg = false
+                    LogoResult(
+                        logo = WebsiteLogoEntity(
+                            bookmarkId = bookmarkId,
+                            size = logoInfo.size,
+                            width = logoInfo.width,
+                            height = logoInfo.height,
+                            suffix = FileUtil.extName(logoInfo.url) ?: "png",
+                            isOgImg = false
+                        ),
+                        logoUrl = logoInfo.url
                     )
                 }
         }

@@ -123,6 +123,21 @@ interface IUserService : IService<UserEntity> {
      */
     fun loginByGoogle(params: GoogleLoginParams): UserSessionInfo
 
+    /**
+     * 关联 Google 到当前已登录账户(严格一对一)
+     * @param uid 当前用户ID
+     * @param params 含 Google ID Token
+     * @return 关联后的用户信息(含 googleEmail)
+     */
+    fun bindGoogle(uid: String, params: GoogleLoginParams): UserInfoShow
+
+    /**
+     * 解绑当前账户的 Google 关联(带安全检查,无其他登录凭证则拒绝)
+     * @param uid 当前用户ID
+     * @return 解绑后的用户信息
+     */
+    fun unbindGoogle(uid: String): UserInfoShow
+
     fun findByNameAndPwd(account: String, password: String): UserEntity?
 
     fun loginByAccount(params: AccountLoginParams): UserSessionInfo

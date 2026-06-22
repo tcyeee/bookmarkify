@@ -15,6 +15,8 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
  */
 import com.baomidou.mybatisplus.core.metadata.IPage
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
+import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
+import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 
 interface IBookmarkService : IService<BookmarkEntity> {
     /** 每天检查数据库所有书签活性 */
@@ -46,6 +48,12 @@ interface IBookmarkService : IService<BookmarkEntity> {
 
     /** 管理员修改书签图标设置（图片内边距 iconPadding、图标背景色 iconBgColor） */
     fun adminUpdateIcon(bookmarkId: String, params: BookmarkIconUpdateParams)
+
+    /** 管理员「重新获取」：重新解析网站标题与图标但不落库，暂存抓取结果供后续应用，返回预览数据 */
+    fun adminRefetch(bookmarkId: String): BookmarkRefetchVO
+
+    /** 管理员应用「重新获取」的结果：按选择采用新标题/新图标并持久化（采用新图标会重抓高清 LOGO 到 OSS） */
+    fun adminApplyRefetch(bookmarkId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO
 
     /** 解析书签,然后保存到数据库,同时通过 WebSocket 通知用户（异步事件入口） */
     fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String)
