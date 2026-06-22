@@ -7,6 +7,10 @@ use crate::scraper::{
     MAX_IMAGE_BYTES,
 };
 
+/// Common OSS key prefix for all scrapper-produced assets. A single bucket
+/// lifecycle rule on this prefix can later be used to auto-expire temporary images.
+const OSS_PREFIX: &str = "bookmarkify/scrapper";
+
 fn url_origin(url: &str) -> String {
     reqwest::Url::parse(url)
         .ok()
@@ -29,7 +33,13 @@ impl OssClient {
         let bucket = std::env::var("OSS_BUCKET").ok()?;
         let endpoint = std::env::var("OSS_ENDPOINT").ok()?;
         let base_url = std::env::var("OSS_BASE_URL").ok()?;
-        Some(Self { key_id, key_secret, endpoint, bucket, base_url })
+        Some(Self {
+            key_id,
+            key_secret,
+            endpoint,
+            bucket,
+            base_url,
+        })
     }
 
     fn oss(&self) -> oss_rust_sdk::oss::OSS<'_> {
@@ -45,13 +55,14 @@ impl OssClient {
 
     pub fn screenshot_key(page_url: &str) -> String {
         let hash = hex::encode(Sha256::digest(page_url.as_bytes()));
-        format!("screenshots/{hash}.png")
+        format!("{OSS_PREFIX}/screenshots/{hash}.png")
     }
 
-    pub fn asset_key(asset_url: &str, content_type: Option<&str>) -> String {
+    /// `folder` is the sub-directory under the scrapper prefix, e.g. `"og"` or `"logo"`.
+    pub fn asset_key(asset_url: &str, folder: &str, content_type: Option<&str>) -> String {
         let hash = hex::encode(Sha256::digest(asset_url.as_bytes()));
         let ext = ext_from_content_type(content_type.unwrap_or(""));
-        format!("images/{hash}.{ext}")
+        format!("{OSS_PREFIX}/{folder}/{hash}.{ext}")
     }
 
     /// Uploads bytes to OSS at `key`. Keys are derived from the source URL (SHA-256),
@@ -105,7 +116,8 @@ impl OssClient {
             }
         }
 
-        Err(last_err.unwrap_or_else(|| ScrapeError::OssFailed("upload retry exhausted".to_string())))
+        Err(last_err
+            .unwrap_or_else(|| ScrapeError::OssFailed("upload retry exhausted".to_string())))
     }
 
     async fn upload_bytes_once(
@@ -135,7 +147,9 @@ impl OssClient {
         if !response_body.is_empty() {
             let body_str = String::from_utf8_lossy(&response_body);
             if body_str.contains("<Error") || body_str.contains("<error") {
-                return Err(ScrapeError::OssFailed(format!("OSS PUT failed: {body_str}")));
+                return Err(ScrapeError::OssFailed(format!(
+                    "OSS PUT failed: {body_str}"
+                )));
             }
             // Log unexpected non-empty, non-error responses for visibility
             if body_str.trim_start().starts_with('<') {
@@ -167,33 +181,48 @@ impl OssClient {
         let screenshot_key = Self::screenshot_key(page_url);
         let screenshot_fut = async {
             match screenshot_bytes {
-                Some(bytes) => self.upload_bytes(&screenshot_key, &bytes, "image/png").await.map(Some),
+                Some(bytes) => self
+                    .upload_bytes(&screenshot_key, &bytes, "image/png")
+                    .await
+                    .map(Some),
                 None => Ok(None),
             }
         };
 
         let (screenshot_result, image_result, logo_result, favicon_result) = tokio::join!(
             screenshot_fut,
-            self.upload_url_asset(image_url.as_deref(), http),
-            self.upload_url_asset(logo_url.as_deref(), http),
+            self.upload_url_asset(image_url.as_deref(), "og", http),
+            self.upload_url_asset(logo_url.as_deref(), "logo", http),
             Self::fetch_as_base64(favicon_url.as_deref(), http),
         );
 
         result.screenshot_url = match screenshot_result {
             Ok(v) => v,
-            Err(e) => { tracing::warn!("screenshot upload failed for {page_url}: {e:?}"); None }
+            Err(e) => {
+                tracing::warn!("screenshot upload failed for {page_url}: {e:?}");
+                None
+            }
         };
         result.image = match image_result {
             Ok(v) => v,
-            Err(e) => { tracing::warn!("image upload failed for {page_url}: {e:?}"); None }
+            Err(e) => {
+                tracing::warn!("image upload failed for {page_url}: {e:?}");
+                None
+            }
         };
         result.logo = match logo_result {
             Ok(v) => v,
-            Err(e) => { tracing::warn!("logo upload failed for {page_url}: {e:?}"); None }
+            Err(e) => {
+                tracing::warn!("logo upload failed for {page_url}: {e:?}");
+                None
+            }
         };
         result.favicon = match favicon_result {
             Ok(v) => v,
-            Err(e) => { tracing::warn!("favicon download failed for {page_url}: {e:?}"); None }
+            Err(e) => {
+                tracing::warn!("favicon download failed for {page_url}: {e:?}");
+                None
+            }
         };
 
         result
@@ -214,9 +243,11 @@ impl OssClient {
         // The shared client's SsrfSafeResolver enforces this at the DNS level too.
         let parsed = reqwest::Url::parse(url)
             .map_err(|_| ScrapeError::OssFailed(format!("invalid favicon URL: {url}")))?;
-        validate_url_scheme(&parsed)
-            .map_err(|_| ScrapeError::OssFailed(format!("unsupported favicon URL scheme: {url}")))?;
-        validate_target_host(&parsed).await
+        validate_url_scheme(&parsed).map_err(|_| {
+            ScrapeError::OssFailed(format!("unsupported favicon URL scheme: {url}"))
+        })?;
+        validate_target_host(&parsed)
+            .await
             .map_err(|e| ScrapeError::OssFailed(format!("SSRF check failed for favicon: {e:?}")))?;
 
         let referer = url_origin(url);
@@ -235,7 +266,11 @@ impl OssClient {
             .get(reqwest::header::CONTENT_TYPE)
             .and_then(|v| v.to_str().ok())
             // Strip control characters (e.g. \t) to prevent data-URI injection
-            .map(|s| s.chars().take_while(|c| !c.is_ascii_control()).collect::<String>())
+            .map(|s| {
+                s.chars()
+                    .take_while(|c| !c.is_ascii_control())
+                    .collect::<String>()
+            })
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| "image/png".to_string());
 
@@ -253,6 +288,7 @@ impl OssClient {
     pub(crate) async fn upload_url_asset(
         &self,
         url: Option<&str>,
+        folder: &str,
         http: &reqwest::Client,
     ) -> Result<Option<String>, ScrapeError> {
         let url = match url {
@@ -266,7 +302,8 @@ impl OssClient {
             .map_err(|_| ScrapeError::OssFailed(format!("invalid asset URL: {url}")))?;
         validate_url_scheme(&parsed)
             .map_err(|_| ScrapeError::OssFailed(format!("unsupported asset URL scheme: {url}")))?;
-        validate_target_host(&parsed).await
+        validate_target_host(&parsed)
+            .await
             .map_err(|e| ScrapeError::OssFailed(format!("SSRF check failed for asset: {e:?}")))?;
 
         let referer = url_origin(url);
@@ -298,7 +335,7 @@ impl OssClient {
             .await
             .map_err(|e| ScrapeError::OssFailed(format!("image read failed: {e}")))?;
 
-        let key = Self::asset_key(url, Some(&content_type));
+        let key = Self::asset_key(url, folder, Some(&content_type));
         let oss_url = self.upload_bytes(&key, &bytes, &content_type).await?;
         Ok(Some(oss_url))
     }
@@ -323,14 +360,20 @@ mod tests {
     fn screenshot_key_is_sha256_of_page_url() {
         let url = "https://example.com/page";
         let hash = hex::encode(Sha256::digest(url.as_bytes()));
-        assert_eq!(OssClient::screenshot_key(url), format!("screenshots/{hash}.png"));
+        assert_eq!(
+            OssClient::screenshot_key(url),
+            format!("bookmarkify/scrapper/screenshots/{hash}.png")
+        );
     }
 
     #[test]
     fn asset_key_defaults_to_png() {
         let url = "https://example.com/logo";
         let hash = hex::encode(Sha256::digest(url.as_bytes()));
-        assert_eq!(OssClient::asset_key(url, None), format!("images/{hash}.png"));
+        assert_eq!(
+            OssClient::asset_key(url, "logo", None),
+            format!("bookmarkify/scrapper/logo/{hash}.png")
+        );
     }
 
     #[test]
@@ -338,8 +381,8 @@ mod tests {
         let url = "https://example.com/photo";
         let hash = hex::encode(Sha256::digest(url.as_bytes()));
         assert_eq!(
-            OssClient::asset_key(url, Some("image/jpeg")),
-            format!("images/{hash}.jpg")
+            OssClient::asset_key(url, "og", Some("image/jpeg")),
+            format!("bookmarkify/scrapper/og/{hash}.jpg")
         );
     }
 
@@ -348,8 +391,8 @@ mod tests {
         let url = "https://cdn.example.com/img";
         let hash = hex::encode(Sha256::digest(url.as_bytes()));
         assert_eq!(
-            OssClient::asset_key(url, Some("image/webp")),
-            format!("images/{hash}.webp")
+            OssClient::asset_key(url, "og", Some("image/webp")),
+            format!("bookmarkify/scrapper/og/{hash}.webp")
         );
     }
 
