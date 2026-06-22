@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { AuthStatusEnum, type EmailVerifyParams, type LoginParams, type UserInfo } from '@typing'
-import { authLoginByAccount, authLoginByGoogle, authLogout, captchaVerifyEmail, queryUserInfo, uploadAvatar } from '@api'
+import { authLoginByAccount, authLoginByGithub, authLoginByGoogle, authLogout, captchaVerifyEmail, queryUserInfo, uploadAvatar } from '@api'
 import { generateDefaultAvatarFile, md5 } from '@utils'
 import { usePreferenceStore } from './preference.store'
 
@@ -51,6 +51,18 @@ export const useAuthStore = defineStore('auth', {
         const result = await authLoginByGoogle({ idToken })
         this.account = { ...this.account, ...result }
         if (import.meta.client) useNuxtApp().$track('login-google')
+        return result
+      } catch (err: any) {
+        return Promise.reject(err)
+      }
+    },
+
+    async loginWithGithub(code: string, redirectUri: string): Promise<UserInfo> {
+      try {
+        // GitHub 授权码登录/注册，成功后合并到当前账号信息
+        const result = await authLoginByGithub({ code, redirectUri })
+        this.account = { ...this.account, ...result }
+        if (import.meta.client) useNuxtApp().$track('login-github')
         return result
       } catch (err: any) {
         return Promise.reject(err)
