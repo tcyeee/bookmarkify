@@ -14,46 +14,76 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-push:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Login to Tencent TCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.TCR_REGISTRY }}
-          username: ${{ secrets.TCR_USERNAME }}
-          password: ${{ secrets.TCR_PASSWORD }}
-
-      - name: Compute image base
-        run: echo "IMAGE_BASE=${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/scrapper" >> "$GITHUB_ENV"
-
-      - name: Build and push
+      # Compile the Rust binary here on the RAM-rich runner. We build the Dockerfile's
+      # `export` stage and emit just the binary to ./out — no image is pushed anywhere.
+      # This deliberately avoids the cross-border `docker push` to Tencent TCR, which
+      # hangs for ~30 min from GitHub runners (the API deploy was moved off TCR for the
+      # same reason). The heavy dep compile is cached via the GitHub Actions cache.
+      - name: Build scraper binary
         uses: docker/build-push-action@v6
         with:
           context: bookmarkify-scrapper
           file: bookmarkify-scrapper/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ env.IMAGE_BASE }}:latest
-            ${{ env.IMAGE_BASE }}:${{ github.sha }}
+          target: export
+          outputs: type=local,dest=./out
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
 
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      # Relay the binary through Aliyun OSS instead of a direct cross-border push/scp:
+      # runner → OSS upload, then the server pulls it intra-China (fast).
+      - name: Upload binary to OSS
+        id: oss
+        env:
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+          # Match the bucket region used by the app. To speed the runner→OSS leg further,
+          # enable Transfer Acceleration on the bucket and switch to oss-accelerate.aliyuncs.com.
+          OSS_ENDPOINT: oss-cn-hangzhou.aliyuncs.com
+          # ossutil v2 signs with v4 by default, which requires an explicit region.
+          OSS_REGION: cn-hangzhou
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -s ./out/scraper-service
 
-      - name: Encode compose file
+          curl -fsSL -o ossutil.zip https://gosspublic.alicdn.com/ossutil/v2/2.1.1/ossutil-2.1.1-linux-amd64.zip
+          unzip -q ossutil.zip
+          OSSUTIL="$PWD/ossutil-2.1.1-linux-amd64/ossutil"
+          chmod +x "$OSSUTIL"
+
+          # Own prefix (deploy/scrapper/) so this never collides with the API's deploy/ relay.
+          KEY="deploy/scrapper/scraper-service-${GIT_SHA}"
+
+          # OSS is only a transfer relay — clear binaries left by previous deploys so the
+          # prefix keeps just this run's artifact. (Concurrency guard prevents overlap.)
+          "$OSSUTIL" rm "oss://${OSS_BUCKET}/deploy/scrapper/" -r -f \
+            -e "$OSS_ENDPOINT" --region "$OSS_REGION" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET" || true
+
+          "$OSSUTIL" cp ./out/scraper-service "oss://${OSS_BUCKET}/${KEY}" \
+            -f -e "$OSS_ENDPOINT" --region "$OSS_REGION" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"
+
+          # Pre-signed GET URL (1h) so the server fetches without needing OSS creds.
+          URL=$("$OSSUTIL" presign "oss://${OSS_BUCKET}/${KEY}" --expires-duration 1h \
+            -e "$OSS_ENDPOINT" --region "$OSS_REGION" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET" \
+            | grep -Eo 'https?://[^[:space:]]+' | head -1)
+          test -n "$URL"
+          echo "::add-mask::$URL"
+          echo "bin_url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Encode files
         id: prep
         run: |
           echo "compose_b64=$(base64 -w0 bookmarkify-scrapper/deploy/compose.prod.yml)" >> "$GITHUB_OUTPUT"
+          echo "dockerfile_b64=$(base64 -w0 bookmarkify-scrapper/deploy/Dockerfile.runtime)" >> "$GITHUB_OUTPUT"
 
       - name: Deploy on server
         uses: appleboy/ssh-action@v1.2.0
@@ -62,15 +92,21 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_SSH_PORT || 22 }}
-          envs: COMPOSE_B64,SCRAPPER_IMAGE,TCR_REGISTRY,TCR_USERNAME,TCR_PASSWORD,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET,OSS_ENDPOINT,OSS_BASE_URL
+          envs: COMPOSE_B64,DOCKERFILE_B64,BIN_URL,SCRAPPER_IMAGE,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET,OSS_ENDPOINT,OSS_BASE_URL
           script: |
             set -euo pipefail
 
             APP_DIR="$HOME/bookmarkify-scrapper"
-            mkdir -p "$APP_DIR"
+            STAGE_DIR="$APP_DIR/stage"
+            mkdir -p "$STAGE_DIR"
 
-            # Compose file (single source of truth from the repo)
+            # Compose file + thin runtime Dockerfile (single source of truth from the repo)
             echo "$COMPOSE_B64" | base64 -d > "$APP_DIR/compose.yml"
+            echo "$DOCKERFILE_B64" | base64 -d > "$STAGE_DIR/Dockerfile"
+
+            # Pull the binary from OSS over the intra-China network (fast).
+            curl -fsSL "$BIN_URL" -o "$STAGE_DIR/scraper-service"
+            test -s "$STAGE_DIR/scraper-service"
 
             # Runtime env consumed by compose interpolation
             umask 077
@@ -83,20 +119,24 @@ jobs:
             OSS_BASE_URL=$OSS_BASE_URL
             EOF
 
-            echo "$TCR_PASSWORD" | docker login "$TCR_REGISTRY" -u "$TCR_USERNAME" --password-stdin
+            # Assemble the runtime image locally: apt + COPY the binary. The chromium
+            # layer is cached across deploys, so this is light on the small prod box.
+            docker build --build-arg USE_CN_MIRROR=1 -t "$SCRAPPER_IMAGE" -f "$STAGE_DIR/Dockerfile" "$STAGE_DIR"
 
             cd "$APP_DIR"
-            docker compose pull
             docker compose up -d
 
-            # Health check: poll /health on the localhost-bound port
+            # Health check: poll /health on the host-mapped port.
             ok=0
             for i in $(seq 1 20); do
               if curl -fsS http://127.0.0.1:3001/health >/dev/null 2>&1; then ok=1; break; fi
               sleep 3
             done
 
+            # Reclaim disk: drop dangling layers and older bookmarkify-scrapper image tags.
             docker image prune -f || true
+            docker images 'bookmarkify-scrapper' --format '{{.Repository}}:{{.Tag}}' \
+              | grep -vF "$SCRAPPER_IMAGE" | xargs -r docker rmi -f 2>/dev/null || true
 
             if [ "$ok" != "1" ]; then
               echo "::error::Health check failed for $SCRAPPER_IMAGE"
@@ -106,10 +146,9 @@ jobs:
             echo "Deploy OK: $SCRAPPER_IMAGE"
         env:
           COMPOSE_B64: ${{ steps.prep.outputs.compose_b64 }}
-          SCRAPPER_IMAGE: ${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/scrapper:${{ github.sha }}
-          TCR_REGISTRY: ${{ secrets.TCR_REGISTRY }}
-          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
-          TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
+          DOCKERFILE_B64: ${{ steps.prep.outputs.dockerfile_b64 }}
+          BIN_URL: ${{ steps.oss.outputs.bin_url }}
+          SCRAPPER_IMAGE: bookmarkify-scrapper:${{ github.sha }}
           OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
           OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
