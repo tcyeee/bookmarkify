@@ -223,9 +223,13 @@ class UserServiceImpl(
             ?: createVerifiedUser(identity.email ?: "github_${identity.githubId}@users.noreply.github.com").also {
                 it.githubId = identity.githubId
                 it.githubLogin = identity.login
-                // 占位邮箱不作为真实可登录邮箱:无真实邮箱时清空 email,仅以 github 身份标识
-                if (identity.email == null) it.email = null
                 updateById(it)
+                // 占位邮箱不作为真实可登录邮箱:无真实邮箱时显式置空 email
+                // (updateById 默认忽略 null 字段,需用 ktUpdate 显式写 NULL,同 unbindGoogle/unbindGithub)
+                if (identity.email == null) {
+                    it.email = null
+                    ktUpdate().set(UserEntity::email, null).eq(UserEntity::id, it.id).update()
+                }
             }
 
         if (StpKit.USER.isLogin) StpKit.USER.logout()
