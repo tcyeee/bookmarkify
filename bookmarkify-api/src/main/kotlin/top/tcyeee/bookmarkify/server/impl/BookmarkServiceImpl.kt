@@ -178,6 +178,8 @@ class BookmarkServiceImpl(
             .eq(BookmarkEntity::id, bookmarkId)
             .set(BookmarkEntity::iconPadding, params.iconPadding)
             .set(BookmarkEntity::iconBgColor, params.iconBgColor)
+            .set(BookmarkEntity::useHdLogo, params.useHdLogo)
+            .set(BookmarkEntity::appName, params.appName)
             .update()
     }
 
