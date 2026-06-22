@@ -67,10 +67,11 @@ data class UserInfoShow(
     @field:Schema(description = "角色列表") var roles: List<String>? = null,
     @field:Schema(description = "首页路径") var homePath: String? = null,
     @field:Schema(description = "已关联的 Google 邮箱(未关联为 null)") var googleEmail: String? = null,
+    @field:Schema(description = "已关联的 GitHub 用户名(未关联为 null)") var githubLogin: String? = null,
 ) {
     constructor(entity: UserEntity, avatarUrl: String?) : this(
         uid = entity.id, nickName = entity.nickName, avatarUrl = avatarUrl,
-        roles = listOf(entity.role.name), googleEmail = entity.googleEmail
+        roles = listOf(entity.role.name), googleEmail = entity.googleEmail, githubLogin = entity.githubLogin
     )
 }
 
