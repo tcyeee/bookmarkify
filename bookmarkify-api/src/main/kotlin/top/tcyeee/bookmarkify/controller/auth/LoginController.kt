@@ -14,6 +14,7 @@ import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AccountLoginParams
 import top.tcyeee.bookmarkify.entity.EmailVerifyParams
+import top.tcyeee.bookmarkify.entity.GithubLoginParams
 import top.tcyeee.bookmarkify.entity.GoogleLoginParams
 import top.tcyeee.bookmarkify.entity.SendEmailParams
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
@@ -57,4 +58,10 @@ class LoginController(private val userService: UserServiceImpl) {
     @PostMapping("/google")
     @Operation(summary = "校验 Google ID Token 并登录（Google 邮箱不存在则注册）")
     fun loginByGoogle(@RequestBody params: GoogleLoginParams): UserSessionInfo = userService.loginByGoogle(params)
+
+    @Throttle(byIp = true)
+    @SaIgnore
+    @PostMapping("/github")
+    @Operation(summary = "用 GitHub 授权码登录（GitHub 账号不存在则注册）")
+    fun loginByGithub(@RequestBody params: GithubLoginParams): UserSessionInfo = userService.loginByGithub(params)
 }

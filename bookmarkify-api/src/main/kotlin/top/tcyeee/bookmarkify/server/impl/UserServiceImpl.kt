@@ -112,7 +112,7 @@ class UserServiceImpl(
         val account = String(Base64.getDecoder().decode(params.account)).trim().lowercase()
         // 客户端传来的是 Base64(md5(明文))，解码后即规范凭据（md5 串），不再用它做整列等值查询
         val credential = String(Base64.getDecoder().decode(params.password))
-        val user = ktQuery().eq(UserEntity::email, account).one()
+        val user = ktQuery().eq(UserEntity::email, account).eq(UserEntity::deleted, false).one()
             ?: throw CommonException(ErrorType.E110)
         if (user.disabled) throw CommonException(ErrorType.E110)
         if (!PasswordUtils.matches(credential, user.password)) throw CommonException(ErrorType.E110)
@@ -135,7 +135,7 @@ class UserServiceImpl(
         val credential = SecureUtil.md5(password)
         // 账号(邮箱)归一化,与其他登录路径同口径
         val normalized = account.trim().lowercase()
-        val user = ktQuery().eq(UserEntity::email, normalized).one()
+        val user = ktQuery().eq(UserEntity::email, normalized).eq(UserEntity::deleted, false).one()
             ?: return null
         if (!PasswordUtils.matches(credential, user.password)) return null
         upgradePasswordIfLegacy(user, credential)
@@ -163,7 +163,7 @@ class UserServiceImpl(
         if (cacheCode != params.code.trim()) throw CommonException(ErrorType.E301)
         RedisUtils.del(RedisType.CODE_EMAIL, email)
 
-        val userEntity = ktQuery().eq(UserEntity::email, email).one() ?: createVerifiedUser(email)
+        val userEntity = ktQuery().eq(UserEntity::email, email).eq(UserEntity::deleted, false).one() ?: createVerifiedUser(email)
         // 该接口为公开端点,正常调用时无登录态;若携带了有效旧 token 则先登出再切换账户
         if (StpKit.USER.isLogin) StpKit.USER.logout()
         StpKit.USER.login(userEntity.id, true)
@@ -183,9 +183,9 @@ class UserServiceImpl(
         val identity = verifyGoogleIdToken(params.idToken)
 
         // 1. 先按稳定唯一标识 google_id 查找已关联账户
-        val userEntity = ktQuery().eq(UserEntity::googleId, identity.googleId).one()
+        val userEntity = ktQuery().eq(UserEntity::googleId, identity.googleId).eq(UserEntity::deleted, false).one()
         // 2. 未命中则按 Google 邮箱兑现现有账户并自动回填关联
-            ?: ktQuery().eq(UserEntity::email, identity.email).one()?.also {
+            ?: ktQuery().eq(UserEntity::email, identity.email).eq(UserEntity::deleted, false).one()?.also {
                 it.googleId = identity.googleId
                 it.googleEmail = identity.email
                 updateById(it)
@@ -194,6 +194,34 @@ class UserServiceImpl(
             ?: createVerifiedUser(identity.email).also {
                 it.googleId = identity.googleId
                 it.googleEmail = identity.email
+                updateById(it)
+            }
+
+        if (StpKit.USER.isLogin) StpKit.USER.logout()
+        StpKit.USER.login(userEntity.id, true)
+        return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
+    }
+
+    /**
+     * 用 GitHub 授权码登录,匹配优先级(与 loginByGoogle 结构对称):
+     * 1. github_id 命中 => 登录该账户
+     * 2. 未命中 => 按已验证主邮箱查现有账户,命中则回填 github_id/github_login
+     * 3. 都没有 => 注册新用户并写入 github_id/github_login
+     * GitHub 必须提供已验证主邮箱(verifyGithubCode 保证);无邮箱路径已移除。
+     */
+    @Transactional
+    override fun loginByGithub(params: GithubLoginParams): UserSessionInfo {
+        val identity = verifyGithubCode(params)
+
+        val userEntity = ktQuery().eq(UserEntity::githubId, identity.githubId).eq(UserEntity::deleted, false).one()
+            ?: ktQuery().eq(UserEntity::email, identity.email).eq(UserEntity::deleted, false).one()?.also {
+                it.githubId = identity.githubId
+                it.githubLogin = identity.login
+                updateById(it)
+            }
+            ?: createVerifiedUser(identity.email).also {
+                it.githubId = identity.githubId
+                it.githubLogin = identity.login
                 updateById(it)
             }
 
@@ -214,7 +242,7 @@ class UserServiceImpl(
 
         if (!user.googleId.isNullOrBlank()) throw CommonException(ErrorType.E114)
 
-        val occupied = ktQuery().eq(UserEntity::googleId, identity.googleId).one()
+        val occupied = ktQuery().eq(UserEntity::googleId, identity.googleId).eq(UserEntity::deleted, false).one()
         if (occupied != null) throw CommonException(ErrorType.E113)
 
         user.googleId = identity.googleId
@@ -241,6 +269,47 @@ class UserServiceImpl(
         ktUpdate()
             .set(UserEntity::googleId, null)
             .set(UserEntity::googleEmail, null)
+            .eq(UserEntity::id, uid)
+            .update()
+        return UserInfoShow(user, user.avatarUrlWithSign())
+    }
+
+    /**
+     * 关联 GitHub 到当前已登录账户(严格一对一):
+     * - 当前账户已关联其他 GitHub => E119
+     * - 该 GitHub 已被其他账户关联 => E118
+     */
+    @Transactional
+    override fun bindGithub(uid: String, params: GithubLoginParams): UserInfoShow {
+        val identity = verifyGithubCode(params)
+        val user = getById(uid) ?: throw CommonException(ErrorType.E215)
+
+        if (!user.githubId.isNullOrBlank()) throw CommonException(ErrorType.E119)
+
+        val occupied = ktQuery().eq(UserEntity::githubId, identity.githubId).eq(UserEntity::deleted, false).one()
+        if (occupied != null) throw CommonException(ErrorType.E118)
+
+        user.githubId = identity.githubId
+        user.githubLogin = identity.login
+        updateById(user)
+        return UserInfoShow(user, user.avatarUrlWithSign())
+    }
+
+    /** 解绑当前账户的 GitHub 关联。解绑后若无密码且无可登录邮箱 => E115。 */
+    @Transactional
+    override fun unbindGithub(uid: String): UserInfoShow {
+        val user = getById(uid) ?: throw CommonException(ErrorType.E215)
+        if (user.githubId.isNullOrBlank()) return UserInfoShow(user, user.avatarUrlWithSign())
+
+        val hasOtherCredential = !user.password.isNullOrBlank() || !user.email.isNullOrBlank()
+        if (!hasOtherCredential) throw CommonException(ErrorType.E115)
+
+        user.githubId = null
+        user.githubLogin = null
+        // MyBatis-Plus updateById 默认忽略 null 字段,需用 UpdateWrapper 显式置空
+        ktUpdate()
+            .set(UserEntity::githubId, null)
+            .set(UserEntity::githubLogin, null)
             .eq(UserEntity::id, uid)
             .update()
         return UserInfoShow(user, user.avatarUrlWithSign())
@@ -294,6 +363,84 @@ class UserServiceImpl(
 
     /** Google ID Token 校验后归一化得到的身份信息 */
     private data class GoogleIdentity(val googleId: String, val email: String)
+
+    /**
+     * 用授权码换 access_token,再拉取 GitHub 用户身份(数字 id + login + 已验证主邮箱)。
+     * 出站经配置的 HTTP 代理(复用 google 代理),与 Google 校验同一出口。
+     */
+    private fun verifyGithubCode(params: GithubLoginParams): GithubIdentity {
+        val clientId = projectConfig.githubClientId
+        val clientSecret = projectConfig.githubClientSecret
+        if (clientId.isBlank() || clientSecret.isBlank()) throw CommonException(ErrorType.E117, "服务端未配置 GitHub OAuth")
+        if (params.code.isBlank()) throw CommonException(ErrorType.E117)
+
+        // 1. code -> access_token
+        val tokenResp = runCatching {
+            HttpUtil.createPost("https://github.com/login/oauth/access_token")
+                .header("Accept", "application/json")
+                .form("client_id", clientId)
+                .form("client_secret", clientSecret)
+                .form("code", params.code)
+                .form("redirect_uri", params.redirectUri)
+                .timeout(8000)
+                .apply {
+                    if (projectConfig.googleProxyHost.isNotBlank() && projectConfig.googleProxyPort > 0) {
+                        setHttpProxy(projectConfig.googleProxyHost, projectConfig.googleProxyPort)
+                    }
+                }
+                .execute()
+        }.getOrElse { throw CommonException(ErrorType.E117, "无法连接 GitHub") }
+        if (!tokenResp.isOk) throw CommonException(ErrorType.E117)
+        val accessToken = JSONUtil.parseObj(tokenResp.body()).getStr("access_token")
+        if (accessToken.isNullOrBlank()) throw CommonException(ErrorType.E117, "未获取到 GitHub 令牌")
+
+        // 2. access_token -> 用户信息
+        val userResp = runCatching {
+            HttpUtil.createGet("https://api.github.com/user")
+                .header("Authorization", "Bearer $accessToken")
+                .header("Accept", "application/vnd.github+json")
+                .timeout(8000)
+                .apply {
+                    if (projectConfig.googleProxyHost.isNotBlank() && projectConfig.googleProxyPort > 0) {
+                        setHttpProxy(projectConfig.googleProxyHost, projectConfig.googleProxyPort)
+                    }
+                }
+                .execute()
+        }.getOrElse { throw CommonException(ErrorType.E117, "无法获取 GitHub 用户信息") }
+        if (!userResp.isOk) throw CommonException(ErrorType.E117)
+        val userObj = JSONUtil.parseObj(userResp.body())
+        val githubId = userObj.getLong("id")?.toString()
+        val login = userObj.getStr("login")?.trim()
+        if (githubId.isNullOrBlank() || login.isNullOrBlank()) throw CommonException(ErrorType.E117, "未获取到 GitHub 标识")
+
+        // 3. 主邮箱(可能私密),取已验证的 primary;失败则视为无邮箱
+        var email = userObj.getStr("email")?.trim()?.lowercase()
+        if (email.isNullOrBlank()) {
+            email = runCatching {
+                val emailsResp = HttpUtil.createGet("https://api.github.com/user/emails")
+                    .header("Authorization", "Bearer $accessToken")
+                    .header("Accept", "application/vnd.github+json")
+                    .timeout(8000)
+                    .apply {
+                        if (projectConfig.googleProxyHost.isNotBlank() && projectConfig.googleProxyPort > 0) {
+                            setHttpProxy(projectConfig.googleProxyHost, projectConfig.googleProxyPort)
+                        }
+                    }
+                    .execute()
+                if (!emailsResp.isOk) null
+                else JSONUtil.parseArray(emailsResp.body())
+                    .map { JSONUtil.parseObj(it) }
+                    .firstOrNull { it.getBool("primary", false) && it.getBool("verified", false) }
+                    ?.getStr("email")?.trim()?.lowercase()
+            }.getOrNull()
+        }
+
+        if (email.isNullOrBlank()) throw CommonException(ErrorType.E117, "未获取到 GitHub 验证邮箱")
+        return GithubIdentity(githubId = githubId, login = login, email = email)
+    }
+
+    /** GitHub 身份(email 已验证,非空,与 GoogleIdentity 结构对称) */
+    private data class GithubIdentity(val githubId: String, val login: String, val email: String)
 
     override fun queryUserBacSetting(uid: String): BacSettingVO {
         return backSettingService.queryShowByUid(uid)
@@ -375,7 +522,20 @@ class UserServiceImpl(
                 throw CommonException(ErrorType.E116)
             }
         }
-        val deleted = ktUpdate().eq(UserEntity::id, uid).set(UserEntity::deleted, true).update()
+        // 软删除并释放全部登录身份(邮箱/密码/Google/GitHub)。
+        // 仅置 deleted=true 不够:登录入口按 email/google_id/github_id 查用户且不过滤 deleted,
+        // 用同一身份重新登录会命中这条已注销记录,把旧数据"复活"。置空身份列后,
+        // 重新登录无法命中旧记录、只会新建账户;同时释放 google_id 唯一索引,避免同一第三方账号重新注册时唯一约束冲突。
+        val deleted = ktUpdate()
+            .eq(UserEntity::id, uid)
+            .set(UserEntity::deleted, true)
+            .set(UserEntity::email, null)
+            .set(UserEntity::password, null)
+            .set(UserEntity::googleId, null)
+            .set(UserEntity::googleEmail, null)
+            .set(UserEntity::githubId, null)
+            .set(UserEntity::githubLogin, null)
+            .update()
         if (deleted) {
             // 注销成功后立即失效服务端会话，satoken 即时作废
             StpKit.USER.session.clear()

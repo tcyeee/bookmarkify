@@ -18,6 +18,11 @@ export interface GoogleLoginParams {
   idToken: string
 }
 
+export interface GithubLoginParams {
+  code: string
+  redirectUri: string
+}
+
 export interface UserFile {
   environment: CurrentEnvironment
   currentName: string

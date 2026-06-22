@@ -22,6 +22,8 @@ data class UserEntity(
     @field:Size(max = 200) @field:Schema(description = "邮箱") var email: String? = null,
     @field:Size(max = 100) @field:Schema(description = "Google 唯一标识(sub claim)") var googleId: String? = null,
     @field:Size(max = 200) @field:Schema(description = "Google 邮箱(仅展示)") var googleEmail: String? = null,
+    @field:Size(max = 100) @field:Schema(description = "GitHub 唯一标识(数字 id)") var githubId: String? = null,
+    @field:Size(max = 100) @field:Schema(description = "GitHub 用户名(仅展示)") var githubLogin: String? = null,
     @field:Size(max = 200) @field:Schema(description = "用户密码MD5") var password: String? = null,
     @field:Schema(description = "头像文件地址") var avatarFileId: String? = null,
     @field:Schema(description = "用户角色 默认'USER'") var role: RoleEnum = RoleEnum.USER,

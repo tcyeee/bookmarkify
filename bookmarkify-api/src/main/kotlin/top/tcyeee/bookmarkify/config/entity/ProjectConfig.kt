@@ -27,4 +27,6 @@ class ProjectConfig(
     var googleClientId: String = "",           // Google 登录 OAuth Client ID（用于校验 ID Token 的 aud）
     var googleProxyHost: String = "",          // 校验 Google ID Token 时的 HTTP 代理主机（国内服务器需经 VPN 代理访问 Google），空则直连
     var googleProxyPort: Int = 0,              // 代理端口，配合 googleProxyHost 使用
+    var githubClientId: String = "",          // GitHub 登录 OAuth App Client ID
+    var githubClientSecret: String = "",      // GitHub 登录 OAuth App Client Secret（用 code 换 access_token）
 )

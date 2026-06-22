@@ -4,6 +4,9 @@ server:
 logging:
   level:
     root: INFO
+    # 异常已被 GlobalExceptionHandler 接管并打出更有信息量的日志，
+    # 屏蔽框架级 "Resolved [...异常...]" 的重复 WARN（如未登录、参数校验等）
+    org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver: ERROR
 
 mybatis-plus:
   global-config:
@@ -64,6 +67,8 @@ bookmarkify:
     google-client-id: ${BOOKMARKIFY_GOOGLE_CLIENT_ID:}  # Google 登录 OAuth Client ID（用于校验 ID Token 的 aud），未配置则关闭谷歌登录
     google-proxy-host: ${BOOKMARKIFY_GOOGLE_PROXY_HOST:}  # 校验 Google ID Token 走的 HTTP 代理主机（国内服务器经 VPN 代理访问 Google），空则直连
     google-proxy-port: ${BOOKMARKIFY_GOOGLE_PROXY_PORT:0}  # 代理端口
+    github-client-id: ${BOOKMARKIFY_GITHUB_CLIENT_ID:}  # GitHub 登录 OAuth App Client ID，未配置则关闭 GitHub 登录
+    github-client-secret: ${BOOKMARKIFY_GITHUB_CLIENT_SECRET:}  # GitHub 登录 OAuth App Client Secret
     uid-cookie-name: 'deviceUid'    # 匿名用户 cookie 名称
     uid-cookie-path: "/"            # 匿名用户 cookie 路径
     uid-cookie-max-age: 315360000   # 10 年（秒）
