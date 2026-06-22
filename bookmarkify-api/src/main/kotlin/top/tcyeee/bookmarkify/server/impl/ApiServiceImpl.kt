@@ -14,6 +14,7 @@ import top.tcyeee.bookmarkify.entity.dto.DeepSeekRequest
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekResponse
 import top.tcyeee.bookmarkify.entity.dto.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
+import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.server.IApiService
 
 @Service
@@ -133,6 +134,43 @@ class ApiServiceImpl(
             .map { it.trim().lowercase() }
             .filter { it.isNotBlank() && it in allowed }
             .distinct()
+    }
+
+    override fun inferSimilarSites(title: String?, description: String?, host: String): List<SimilarSite> {
+        val systemPrompt = """
+            你是一个网站推荐助手。根据用户给出的网站信息，推荐 5~8 个功能或定位相似的其它网站。
+            严格只返回 JSON 数组，每个元素形如 {"name":"网站名","domain":"example.com","reason":"一句话理由"}。
+            不要 markdown 代码块，不要任何额外解释文字。domain 只填主域名，不带 http 前缀。
+        """.trimIndent()
+        val userContent = "host: $host\ntitle: ${title ?: ""}\ndescription: ${description ?: ""}"
+        val request = DeepSeekRequest(
+            messages = listOf(
+                DeepSeekMessage(role = "system", content = systemPrompt),
+                DeepSeekMessage(role = "user", content = userContent),
+            ),
+            maxTokens = 600,
+        )
+        val responseBody = runCatching {
+            HttpUtil.createPost("https://api.deepseek.com/chat/completions")
+                .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
+                .header("Content-Type", "application/json")
+                .body(objectMapper.writeValueAsString(request))
+                .timeout(20000)
+                .execute()
+                .body()
+        }.getOrNull() ?: return emptyList()
+        val content = runCatching {
+            objectMapper.readValue<DeepSeekResponse>(responseBody)
+                .choices?.firstOrNull()?.message?.content
+        }.getOrNull() ?: return emptyList()
+        return parseSimilarSites(content)
+    }
+
+    /** 解析 DeepSeek 返回的文本为相似网站列表：剥离 ```json 围栏后按 JSON 数组解析，失败返回空。 */
+    internal fun parseSimilarSites(content: String): List<SimilarSite> {
+        val json = content.trim()
+            .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+        return runCatching { objectMapper.readValue<List<SimilarSite>>(json) }.getOrElse { emptyList() }
     }
 
     private fun buildUrl(domain: String): String {

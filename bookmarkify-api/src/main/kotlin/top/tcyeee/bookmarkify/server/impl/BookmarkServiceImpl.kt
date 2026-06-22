@@ -18,6 +18,7 @@ import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
+import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.mapper.*
@@ -240,6 +241,11 @@ class BookmarkServiceImpl(
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         bookmarkCategoryService.categorize(bookmark)
         return loadCategoryVOs(bookmarkId)
+    }
+
+    override fun adminSimilarSites(bookmarkId: String): List<SimilarSite> {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        return apiService.inferSimilarSites(bookmark.title, bookmark.description, bookmark.urlHost)
     }
 
     private fun loadCategoryVOs(bookmarkId: String): List<CategoryVO> =

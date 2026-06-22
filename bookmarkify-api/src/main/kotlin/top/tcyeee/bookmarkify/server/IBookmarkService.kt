@@ -18,6 +18,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.CategoryVO
+import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 
 interface IBookmarkService : IService<BookmarkEntity> {
     /** 每天检查数据库所有书签活性 */
@@ -61,6 +62,9 @@ interface IBookmarkService : IService<BookmarkEntity> {
 
     /** 管理员对某书签重新跑一次 DeepSeek 自动归类，返回更新后的分类列表 */
     fun adminRecategorize(bookmarkId: String): List<CategoryVO>
+
+    /** 管理员：AI 推荐与该书签相似的网站（仅展示） */
+    fun adminSimilarSites(bookmarkId: String): List<SimilarSite>
 
     /** 解析书签,然后保存到数据库,同时通过 WebSocket 通知用户（异步事件入口） */
     fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String)

@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server
 
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
+import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 
 /**
  * @author tcyeee
@@ -28,4 +29,10 @@ interface IApiService {
         host: String,
         candidates: List<CategoryCandidate>,
     ): List<String>
+
+    /**
+     * 通过 DeepSeek（纯知识，不联网）推荐若干功能/定位相似的网站。
+     * @return 相似网站列表；失败或无结果返回空列表。
+     */
+    fun inferSimilarSites(title: String?, description: String?, host: String): List<SimilarSite>
 }
