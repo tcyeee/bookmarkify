@@ -33,7 +33,7 @@ data class GradientConfigParams(
 data class EmailVerifyParams(val email: String, val code: String)
 data class SendEmailParams(val email: String)
 data class GoogleLoginParams(val idToken: String)  // Google Identity Services 返回的 ID Token (JWT)
-data class UserDelParams(val password: String)
+data class UserDelParams(val email: String? = null)
 data class UserInfoUpdateParams(var nickName: String)
 data class BookmarkUpdatePrams(var linkId: String, var title: String, var description: String)
 data class BookmarkIconUpdateParams(
