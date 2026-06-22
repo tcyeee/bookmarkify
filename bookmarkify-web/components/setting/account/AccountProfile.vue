@@ -112,6 +112,11 @@
           </div>
           <AccountLogout />
         </div>
+      </div>
+
+      <!-- 危险操作 -->
+      <div class="space-y-3 mt-20">
+        <div class="text-lg font-semibold text-rose-600 dark:text-rose-300">危险操作</div>
 
         <!-- 注销账户 -->
         <div
