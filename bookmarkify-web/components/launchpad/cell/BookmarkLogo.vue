@@ -73,9 +73,12 @@ const logoStyle = computed(() => {
     : undefined
 })
 // base64 尺寸：随外部 size 同步，保持原有比例
-const base64PixelSize = computed(() =>
-  Math.max(4, Math.round(logoSize.value * (shouldUpscale.value ? 0.6 : 0.4) - 2 * effectivePadding.value)),
-)
+const base64PixelSize = computed(() => {
+  const base = logoSize.value * (shouldUpscale.value ? 0.6 : 0.4)
+  // 内边距按比例收缩(相对图标尺寸),避免小格子下被绝对像素减成负值而塌成 4px
+  const shrink = 1 - Math.min(Math.max(effectivePadding.value, 0), 35) / 100
+  return Math.max(4, Math.round(base * shrink))
+})
 const base64Style = computed(() => ({
   width: `${base64PixelSize.value}px`,
   height: `${base64PixelSize.value}px`,
