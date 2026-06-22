@@ -38,6 +38,7 @@ data class BookmarkEntity(
     @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
 
     @field:Schema(description = "小图标base64") var iconBase64: String? = null,
+    @field:Max(500) @field:Schema(description = "高清LOGO的OSS地址") var logoUrl: String? = null,
     @field:Schema(description = "最大LOGO尺寸") var maximalLogoSize: Int = 0,
     @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
     @field:Max(32) @field:Schema(description = "图标背景色") var iconBgColor: String? = null,

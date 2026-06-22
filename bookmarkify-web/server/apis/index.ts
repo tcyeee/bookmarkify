@@ -31,6 +31,8 @@ export const updateUserInfo = (param: t.UserInfoUpdate) => http.post<boolean>('/
 export const queryUserInfo = () => http.get<t.UserInfo>('/user/info')
 export const accountDelete = (pwd: string) => http.post<boolean>('/user/del', { password: btoa(pwd) })
 export const uploadAvatar = (file: File) => http.upload<string>('/user/uploadAvatar', file)
+export const bindGoogle = (idToken: string) => http.post<t.UserInfo>('/user/google/bind', { idToken })
+export const unbindGoogle = () => http.post<t.UserInfo>('/user/google/unbind')
 
 /* =========[ /setting ]========= */
 export const uploadBacPic = (file: File) => http.upload<string>('/background/uploadBacPic', file)

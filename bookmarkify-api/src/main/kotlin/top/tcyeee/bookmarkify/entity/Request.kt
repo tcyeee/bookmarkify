@@ -40,6 +40,12 @@ data class BookmarkIconUpdateParams(
     @field:Schema(description = "图片内边距") var iconPadding: Int = 0,
     @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
 )
+
+/** 管理后台「重新获取」后，应用预览结果：分别决定标题/图标是否采用新值 */
+data class BookmarkRefetchApplyParams(
+    @field:Schema(description = "是否采用新标题") var useNewTitle: Boolean = false,
+    @field:Schema(description = "是否采用新图标") var useNewIcon: Boolean = false,
+)
 data class AdminLoginParams(val account: String, val password: String)
 data class AccountLoginParams(val account: String, val password: String)
 data class ChangePasswordParams(val oldPassword: String, val newPassword: String)

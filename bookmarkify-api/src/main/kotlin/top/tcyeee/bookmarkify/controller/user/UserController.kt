@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.ChangePasswordParams
+import top.tcyeee.bookmarkify.entity.GoogleLoginParams
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
 import top.tcyeee.bookmarkify.entity.UserInfoUpdateParams
@@ -37,6 +38,15 @@ class UserController(private val userService: IUserService) {
     @Operation(summary = "修改密码，旧密码和新密码均为Base64编码的MD5字符串")
     fun changePassword(@RequestBody params: ChangePasswordParams): Boolean =
         userService.changePassword(BaseUtils.uid(), params)
+
+    @PostMapping("google/bind")
+    @Operation(summary = "关联 Google 账号到当前账户")
+    fun bindGoogle(@RequestBody params: GoogleLoginParams): UserInfoShow =
+        userService.bindGoogle(BaseUtils.uid(), params)
+
+    @PostMapping("google/unbind")
+    @Operation(summary = "解绑当前账户的 Google 关联")
+    fun unbindGoogle(): UserInfoShow = userService.unbindGoogle(BaseUtils.uid())
 
     @PostMapping("del")
     @Operation(summary = "账户注销")
