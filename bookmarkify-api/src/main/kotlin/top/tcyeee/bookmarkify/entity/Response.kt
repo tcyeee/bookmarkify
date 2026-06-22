@@ -155,6 +155,7 @@ data class BookmarkAdminVO(
     @field:Schema(description = "书签备注") var description: String? = null,
 
     @field:Schema(description = "小图标base64") var iconBase64: String? = null,
+    @field:Schema(description = "高清LOGO的签名OSS地址(私有桶,带访问签名)") var logoUrl: String? = null,
     @field:Schema(description = "最大LOGO尺寸") var maximalLogoSize: Int = 0,
     @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
     @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
@@ -173,6 +174,11 @@ data class BookmarkAdminVO(
         urlScheme = entity.urlScheme,
     ) {
         BeanUtil.copyProperties(entity, this)
+        // 高清 LOGO 存放在私有读 OSS 桶，库里的 logoUrl 是未签名地址(直接访问会 403)。
+        // 这里换成限时签名地址(原图不缩放,便于后台审阅)，签名失败则置空交由前端说明。
+        logoUrl = entity.logoUrl?.takeIf { it.isNotBlank() }?.let {
+            runCatching { OssUtils.resizeAndSignImg(it, 0, 0) }.getOrNull()
+        }
     }
 }
 
@@ -180,6 +186,7 @@ data class BookmarkAdminVO(
 data class BookmarkRefetchVO(
     @field:Schema(description = "新解析的网站标题") var title: String? = null,
     @field:Schema(description = "新解析的小图标base64") var iconBase64: String? = null,
+    @field:Schema(description = "新解析的高清LOGO签名地址(私有桶,未抓到为 null)") var logoUrl: String? = null,
 )
 
 data class UserAdminVO(

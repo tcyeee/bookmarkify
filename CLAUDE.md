@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | Directory | What it is | Port | Tech |
 |---|---|---|---|
-| `bookmarkify-api/` | Backend REST API + WebSocket server | 7001 | Kotlin 2.1 + Spring Boot 3.5 |
+| `bookmarkify-api/` | Backend REST API + WebSocket server | 8001 (local) / 7001 (prod) | Kotlin 2.1 + Spring Boot 3.5 |
 | `bookmarkify-web/` | User-facing frontend | 3000 | Nuxt 4 + Vue 3 + TypeScript |
 | `bookmarkify-scrapper/` | Headless page-scraping microservice | 3000 | Rust (axum + spider-rs) |
 | `bookmarkify-admin/` | Admin panel (Vben Admin monorepo) | 5173 | Vue 3 + Turborepo |
@@ -29,7 +29,7 @@ cd bookmarkify-api
 ```bash
 cd bookmarkify-web
 pnpm install
-pnpm dev        # http://localhost:3000 — needs API on :7001
+pnpm dev        # http://localhost:3000 — needs API on :8001
 pnpm build
 ```
 
@@ -58,7 +58,7 @@ pnpm lint       # ESLint
 `bookmarkify-admin/` has no per-service `CLAUDE.md`. Key points:
 
 - **Framework:** Vben Admin monorepo (Turborepo + pnpm workspaces). The production app is `apps/web-ele/`.
-- **API proxy:** In dev, Vite proxies `/api/admin` → strips the `/api` prefix → forwards to `http://localhost:7001`. So admin endpoints are `/admin/**` on the API.
+- **API proxy:** In dev, Vite proxies `/api/admin` → strips the `/api` prefix → forwards to `http://localhost:8001`. So admin endpoints are `/admin/**` on the API.
 - **Auth:** Uses Sa-Token `ADMIN` realm (separate from the `USER` realm used by the web frontend). Default credentials: `tcyeee@outlook.com` / `admin`.
 - **No `src/test/` in the monorepo root.** Only `pnpm test:unit` runs Vitest inside `apps/web-ele/`.
 
@@ -69,7 +69,7 @@ Browser ────────────────────────
   │                                                                │
   ▼ HTTP/WS                                                        │ Admin Panel (bookmarkify-admin)
 bookmarkify-web ──── REST+WS ────► bookmarkify-api ◄── REST+WS ───┘
-(Nuxt, port 3000)    satoken       (Spring Boot, port 7001)
+(Nuxt, port 3000)    satoken       (Spring Boot, :8001 local / :7001 prod)
                      header         │
                                     ├── PostgreSQL (schema: bookmarkify)
                                     ├── Redis (session/cache)

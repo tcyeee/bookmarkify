@@ -9,6 +9,7 @@ export interface BookmarkEntity {
   title?: string;
   description?: string;
   iconBase64?: string;
+  logoUrl?: string;
   maximalLogoSize: number;
   iconPadding: number;
   iconBgColor?: string;
@@ -51,9 +52,11 @@ export async function updateBookmarkIconApi(
   return requestClient.post<void>(`/admin/bookmark/${bookmarkId}/icon`, data);
 }
 
-/** 重新获取预览结果：重新解析得到的网站标题与小图标（不落库） */
+/** 重新获取预览结果：重新解析得到的网站标题、小图标与高清 LOGO（不落库） */
 export interface BookmarkRefetchResult {
   iconBase64?: string;
+  /** scrapper 新解析的高清 LOGO 地址，未抓到为空 */
+  logoUrl?: string;
   title?: string;
 }
 
@@ -71,7 +74,7 @@ export async function refetchBookmarkApi(bookmarkId: string) {
  */
 export async function applyRefetchBookmarkApi(
   bookmarkId: string,
-  data: { useNewIcon: boolean; useNewTitle: boolean },
+  data: { useNewIcon: boolean; useNewLogo: boolean; useNewTitle: boolean },
 ) {
   return requestClient.post<BookmarkEntity>(
     `/admin/bookmark/${bookmarkId}/refetch/apply`,

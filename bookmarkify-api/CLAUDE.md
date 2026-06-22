@@ -65,7 +65,7 @@ src/main/kotlin/top/tcyeee/bookmarkify/
 ```
 src/main/resources/
 ├── application.yml                   # Base config (port 7001, Sa-Token)
-├── application-dev.yml               # Dev profile (local DB/Redis)
+├── application-dev.yml               # Dev profile (local DB/Redis, overrides port → 8001)
 ├── application-online.yml            # Prod profile (all env vars)
 └── banner.txt                        # ASCII banner
 ```
@@ -101,7 +101,7 @@ runner compiles the jar, uploads it to Aliyun OSS, and the server pulls it intra
 assembles the thin runtime image locally (no Kotlin compile on the small prod host). Each run
 clears the previous deploy's jar from OSS. TCR is no longer involved.
 
-**Server port:** 7001
+**Server port:** 7001 (prod). Local dev runs on **8001** — the `dev` profile (`application-dev.yml`) overrides the base `application.yml` port.
 
 ## Environment Variables
 
