@@ -112,7 +112,7 @@ class UserServiceImpl(
         val account = String(Base64.getDecoder().decode(params.account)).trim().lowercase()
         // 客户端传来的是 Base64(md5(明文))，解码后即规范凭据（md5 串），不再用它做整列等值查询
         val credential = String(Base64.getDecoder().decode(params.password))
-        val user = ktQuery().eq(UserEntity::email, account).one()
+        val user = ktQuery().eq(UserEntity::email, account).eq(UserEntity::deleted, false).one()
             ?: throw CommonException(ErrorType.E110)
         if (user.disabled) throw CommonException(ErrorType.E110)
         if (!PasswordUtils.matches(credential, user.password)) throw CommonException(ErrorType.E110)
@@ -135,7 +135,7 @@ class UserServiceImpl(
         val credential = SecureUtil.md5(password)
         // 账号(邮箱)归一化,与其他登录路径同口径
         val normalized = account.trim().lowercase()
-        val user = ktQuery().eq(UserEntity::email, normalized).one()
+        val user = ktQuery().eq(UserEntity::email, normalized).eq(UserEntity::deleted, false).one()
             ?: return null
         if (!PasswordUtils.matches(credential, user.password)) return null
         upgradePasswordIfLegacy(user, credential)
@@ -163,7 +163,7 @@ class UserServiceImpl(
         if (cacheCode != params.code.trim()) throw CommonException(ErrorType.E301)
         RedisUtils.del(RedisType.CODE_EMAIL, email)
 
-        val userEntity = ktQuery().eq(UserEntity::email, email).one() ?: createVerifiedUser(email)
+        val userEntity = ktQuery().eq(UserEntity::email, email).eq(UserEntity::deleted, false).one() ?: createVerifiedUser(email)
         // 该接口为公开端点,正常调用时无登录态;若携带了有效旧 token 则先登出再切换账户
         if (StpKit.USER.isLogin) StpKit.USER.logout()
         StpKit.USER.login(userEntity.id, true)
@@ -183,9 +183,9 @@ class UserServiceImpl(
         val identity = verifyGoogleIdToken(params.idToken)
 
         // 1. 先按稳定唯一标识 google_id 查找已关联账户
-        val userEntity = ktQuery().eq(UserEntity::googleId, identity.googleId).one()
+        val userEntity = ktQuery().eq(UserEntity::googleId, identity.googleId).eq(UserEntity::deleted, false).one()
         // 2. 未命中则按 Google 邮箱兑现现有账户并自动回填关联
-            ?: ktQuery().eq(UserEntity::email, identity.email).one()?.also {
+            ?: ktQuery().eq(UserEntity::email, identity.email).eq(UserEntity::deleted, false).one()?.also {
                 it.googleId = identity.googleId
                 it.googleEmail = identity.email
                 updateById(it)
@@ -213,8 +213,8 @@ class UserServiceImpl(
     override fun loginByGithub(params: GithubLoginParams): UserSessionInfo {
         val identity = verifyGithubCode(params)
 
-        val userEntity = ktQuery().eq(UserEntity::githubId, identity.githubId).one()
-            ?: ktQuery().eq(UserEntity::email, identity.email).one()?.also {
+        val userEntity = ktQuery().eq(UserEntity::githubId, identity.githubId).eq(UserEntity::deleted, false).one()
+            ?: ktQuery().eq(UserEntity::email, identity.email).eq(UserEntity::deleted, false).one()?.also {
                 it.githubId = identity.githubId
                 it.githubLogin = identity.login
                 updateById(it)
@@ -242,7 +242,7 @@ class UserServiceImpl(
 
         if (!user.googleId.isNullOrBlank()) throw CommonException(ErrorType.E114)
 
-        val occupied = ktQuery().eq(UserEntity::googleId, identity.googleId).one()
+        val occupied = ktQuery().eq(UserEntity::googleId, identity.googleId).eq(UserEntity::deleted, false).one()
         if (occupied != null) throw CommonException(ErrorType.E113)
 
         user.googleId = identity.googleId
@@ -286,7 +286,7 @@ class UserServiceImpl(
 
         if (!user.githubId.isNullOrBlank()) throw CommonException(ErrorType.E119)
 
-        val occupied = ktQuery().eq(UserEntity::githubId, identity.githubId).one()
+        val occupied = ktQuery().eq(UserEntity::githubId, identity.githubId).eq(UserEntity::deleted, false).one()
         if (occupied != null) throw CommonException(ErrorType.E118)
 
         user.githubId = identity.githubId
@@ -522,7 +522,20 @@ class UserServiceImpl(
                 throw CommonException(ErrorType.E116)
             }
         }
-        val deleted = ktUpdate().eq(UserEntity::id, uid).set(UserEntity::deleted, true).update()
+        // 软删除并释放全部登录身份(邮箱/密码/Google/GitHub)。
+        // 仅置 deleted=true 不够:登录入口按 email/google_id/github_id 查用户且不过滤 deleted,
+        // 用同一身份重新登录会命中这条已注销记录,把旧数据"复活"。置空身份列后,
+        // 重新登录无法命中旧记录、只会新建账户;同时释放 google_id 唯一索引,避免同一第三方账号重新注册时唯一约束冲突。
+        val deleted = ktUpdate()
+            .eq(UserEntity::id, uid)
+            .set(UserEntity::deleted, true)
+            .set(UserEntity::email, null)
+            .set(UserEntity::password, null)
+            .set(UserEntity::googleId, null)
+            .set(UserEntity::googleEmail, null)
+            .set(UserEntity::githubId, null)
+            .set(UserEntity::githubLogin, null)
+            .update()
         if (deleted) {
             // 注销成功后立即失效服务端会话，satoken 即时作废
             StpKit.USER.session.clear()

@@ -1,6 +1,7 @@
+<!-- components/setting/account/BindGoogleModal.vue -->
 <template>
-  <div class="flex items-center gap-2">
-    <!-- 已关联：解绑按钮；未关联：打开关联弹窗 -->
+  <div class="flex flex-col items-end gap-1">
+    <!-- 已关联：解绑按钮 -->
     <button
       v-if="props.googleEmail"
       class="cy-btn cy-btn-ghost h-10 px-4 min-w-[104px]"
@@ -9,32 +10,23 @@
       <span v-if="loading">处理中...</span>
       <span v-else>解绑</span>
     </button>
-    <button
-      v-else
-      class="cy-btn cy-btn-ghost h-10 px-4 min-w-[104px]"
-      :disabled="loading || disabled || !clientId"
-      @click="openDialog">
-      <span>关联谷歌</span>
-    </button>
 
-    <dialog ref="dialogRef" class="cy-modal">
-      <div class="cy-modal-box max-w-md">
-        <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">关联 Google 账号</h3>
-        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          关联后可用此 Google 账号直接登录当前账户。
-        </p>
+    <!-- 未关联：可见按钮 + 透明覆盖的 Google 官方按钮（GIS 为跨域 iframe，无法编程触发，故直接覆盖承接点击） -->
+    <div v-else class="relative h-10 min-w-[104px]">
+      <button
+        type="button"
+        class="cy-btn cy-btn-ghost pointer-events-none h-10 w-full px-4"
+        :disabled="loading || disabled || !clientId">
+        <span>{{ loading ? '关联中...' : '关联谷歌' }}</span>
+      </button>
+      <!-- 官方按钮透明覆盖在上层，宽度贴合自定义按钮并裁剪溢出 -->
+      <div
+        ref="btnRef"
+        class="absolute inset-0 flex items-center justify-center overflow-hidden opacity-0"
+        :class="{ 'pointer-events-none': loading || disabled }" />
+    </div>
 
-        <div class="mt-6 flex flex-col items-center gap-3">
-          <!-- Google 官方按钮挂载点（GIS 会把 iframe 按钮渲染进来） -->
-          <div ref="btnRef" class="min-h-[40px]" />
-          <p v-if="errorMsg" class="text-center text-xs text-red-400">{{ errorMsg }}</p>
-        </div>
-
-        <div class="cy-modal-action mt-10">
-          <button class="cy-btn cy-btn-ghost" @click="closeDialog" :disabled="loading">取消</button>
-        </div>
-      </div>
-    </dialog>
+    <p v-if="errorMsg" class="text-right text-xs text-red-400">{{ errorMsg }}</p>
   </div>
 </template>
 
@@ -45,12 +37,10 @@ import { useAuthStore } from '@stores/auth.store'
 const props = defineProps<{ googleEmail?: string | null; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'success'): void }>()
 
-const sysStore = useSysStore()
 const authStore = useAuthStore()
 const config = useRuntimeConfig()
 const clientId = (config.public.googleClientId as string | undefined) || ''
 
-const dialogRef = ref<HTMLDialogElement>()
 const btnRef = ref<HTMLElement>()
 const loading = ref(false)
 const errorMsg = ref('')
@@ -91,7 +81,6 @@ async function handleCredential(response: { credential?: string }) {
     authStore.account = { ...authStore.account, ...result } as any
     ElNotification.success({ message: 'Google 关联成功' })
     emit('success')
-    closeDialog()
   } catch (err: any) {
     // http 客户端已对 1xx 业务码统一弹窗，这里仅做兜底提示
     errorMsg.value = err?.msg || 'Google 关联失败，请重试'
@@ -110,7 +99,7 @@ async function renderGoogleButton() {
       gisInited.value = true
     }
     btnRef.value.innerHTML = ''
-    const width = Math.min(Math.max(btnRef.value.clientWidth || 320, 200), 400)
+    const width = Math.min(Math.max(btnRef.value.clientWidth || 200, 200), 400)
     google.accounts.id.renderButton(btnRef.value, {
       type: 'standard',
       theme: 'filled_black',
@@ -125,26 +114,6 @@ async function renderGoogleButton() {
     errorMsg.value = '无法连接 Google，请检查网络'
     console.warn('[BindGoogle] 初始化失败：', err?.message || err)
   }
-}
-
-async function openDialog() {
-  if (!import.meta.client || !dialogRef.value) return
-  errorMsg.value = ''
-  dialogRef.value.showModal()
-  sysStore.togglePreventKeyEventsFlag(true)
-  await nextTick()
-  renderGoogleButton()
-}
-
-function closeDialog() {
-  if (!import.meta.client || !dialogRef.value) return
-  handleDialogClose()
-  dialogRef.value.close()
-}
-
-function handleDialogClose() {
-  sysStore.togglePreventKeyEventsFlag(false)
-  errorMsg.value = ''
 }
 
 async function handleUnbind() {
@@ -171,14 +140,18 @@ async function handleUnbind() {
 }
 
 onMounted(() => {
-  if (!import.meta.client || !dialogRef.value) return
-  dialogRef.value.addEventListener('close', handleDialogClose)
-  dialogRef.value.addEventListener('cancel', handleDialogClose)
+  if (!import.meta.client) return
+  // 未关联时渲染官方按钮承接点击；已关联时无需渲染
+  if (!props.googleEmail) renderGoogleButton()
 })
 
-onBeforeUnmount(() => {
-  if (!import.meta.client || !dialogRef.value) return
-  dialogRef.value.removeEventListener('close', handleDialogClose)
-  dialogRef.value.removeEventListener('cancel', handleDialogClose)
-})
+// 解绑成功后切回未关联态，需要补渲染官方按钮
+watch(
+  () => props.googleEmail,
+  async (val) => {
+    if (val) return
+    await nextTick()
+    renderGoogleButton()
+  },
+)
 </script>
