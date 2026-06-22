@@ -5,10 +5,12 @@ import com.baomidou.mybatisplus.core.metadata.IPage
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
+import top.tcyeee.bookmarkify.entity.BookmarkCategoriesParams
 import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
+import top.tcyeee.bookmarkify.entity.CategoryVO
 import top.tcyeee.bookmarkify.server.IBookmarkService
 
 /**
@@ -52,6 +54,17 @@ class AdminBookmarkManageController(
     fun applyRefetchBookmark(
         @PathVariable bookmarkId: String, @RequestBody params: BookmarkRefetchApplyParams
     ): BookmarkAdminVO = bookmarkService.adminApplyRefetch(bookmarkId, params)
+
+    // 手动覆盖式设置某书签的分类
+    @PostMapping("/{bookmarkId}/categories")
+    fun updateCategories(
+        @PathVariable bookmarkId: String, @RequestBody params: BookmarkCategoriesParams
+    ): List<CategoryVO> = bookmarkService.adminUpdateCategories(bookmarkId, params.categoryIds)
+
+    // 对某书签重新执行 DeepSeek 自动归类
+    @PostMapping("/{bookmarkId}/categorize")
+    fun recategorize(@PathVariable bookmarkId: String): List<CategoryVO> =
+        bookmarkService.adminRecategorize(bookmarkId)
 
     // 删除单个书签信息 (使用POST替换DELETE)
     @PostMapping("/{bookmarkId}/delete")
