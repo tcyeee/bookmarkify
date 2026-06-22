@@ -49,8 +49,9 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useWindowSize, useEventListener } from '@vueuse/core'
+import { monitorForElements, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { bookmarksSort, bookmarksMoveNode, bookmarksCreateDir, bookmarksRenameDir } from '@api'
 import { ROOT_KEY, type BookmarkShow, type UserLayoutNodeVO } from '@typing'
 import LaunchBoard, { type DragCommit } from '@/components/launchpad/LaunchBoard.vue'
@@ -134,6 +135,48 @@ async function submitRename() {
     // http 层已提示
   }
 }
+
+// ── 跨容器拖入/拖出（阶段2）──────────────────────────────────────────────────
+// 把卡片整体设为 drop 区；页面级 monitor 据「源所在父级 + 是否落在卡片内」判定移入/弹出。
+// 各 board 自身的 monitor 仅处理容器内（源在自己 items），跨容器交给这里，互不冲突。
+let cardDropCleanup: (() => void) | null = null
+let monitorCleanup: (() => void) | null = null
+
+function registerCardDrop() {
+  cardDropCleanup?.()
+  if (!cardRef.value) return
+  cardDropCleanup = dropTargetForElements({
+    element: cardRef.value,
+    getData: () => ({ zone: 'folder-card', folderId: folderId.value }),
+  })
+}
+
+watch(folderVisible, (open) => {
+  if (open) nextTick(registerCardDrop)
+  else cardDropCleanup?.()
+})
+
+onMounted(() => {
+  monitorCleanup = monitorForElements({
+    onDrop: ({ source, location }) => {
+      if (!folderVisible.value || !folderId.value) return
+      const src = String(source.data.id)
+      const srcParent = bookmarkStore.parentKeyOf(src)
+      const overCard = location.current.dropTargets.some((t) => t.data.zone === 'folder-card')
+      if (srcParent === ROOT_KEY && overCard) {
+        // 反向拖入：根图标落入打开的浮层
+        handleCommit(folderId.value, { kind: 'moveInto', draggedId: src, folderId: folderId.value })
+      } else if (srcParent === folderId.value && !overCard) {
+        // 拖出：子项落在卡片外 → 回到根
+        handleCommit(folderId.value, { kind: 'eject', draggedId: src })
+      }
+    },
+  })
+})
+onBeforeUnmount(() => {
+  monitorCleanup?.()
+  cardDropCleanup?.()
+})
 
 // ── 持久化某父级顺序 ──
 function persistOrder(parentKey: string) {
