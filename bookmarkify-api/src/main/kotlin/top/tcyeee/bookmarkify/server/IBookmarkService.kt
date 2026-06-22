@@ -17,6 +17,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
+import top.tcyeee.bookmarkify.entity.CategoryVO
 
 interface IBookmarkService : IService<BookmarkEntity> {
     /** 每天检查数据库所有书签活性 */
@@ -54,6 +55,12 @@ interface IBookmarkService : IService<BookmarkEntity> {
 
     /** 管理员应用「重新获取」的结果：按选择采用新标题/新图标并持久化（采用新图标会重抓高清 LOGO 到 OSS） */
     fun adminApplyRefetch(bookmarkId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO
+
+    /** 管理员手动设置某书签的分类（覆盖式），返回更新后的分类列表 */
+    fun adminUpdateCategories(bookmarkId: String, categoryIds: List<String>): List<CategoryVO>
+
+    /** 管理员对某书签重新跑一次 DeepSeek 自动归类，返回更新后的分类列表 */
+    fun adminRecategorize(bookmarkId: String): List<CategoryVO>
 
     /** 解析书签,然后保存到数据库,同时通过 WebSocket 通知用户（异步事件入口） */
     fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String)

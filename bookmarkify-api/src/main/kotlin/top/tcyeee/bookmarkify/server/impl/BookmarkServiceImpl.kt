@@ -230,6 +230,22 @@ class BookmarkServiceImpl(
         return BookmarkAdminVO(bookmark)
     }
 
+    override fun adminUpdateCategories(bookmarkId: String, categoryIds: List<String>): List<CategoryVO> {
+        baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        bookmarkCategoryService.replaceLinks(bookmarkId, categoryIds, "MANUAL")
+        return loadCategoryVOs(bookmarkId)
+    }
+
+    override fun adminRecategorize(bookmarkId: String): List<CategoryVO> {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        bookmarkCategoryService.categorize(bookmark)
+        return loadCategoryVOs(bookmarkId)
+    }
+
+    private fun loadCategoryVOs(bookmarkId: String): List<CategoryVO> =
+        bookmarkCategoryService.categoriesOf(listOf(bookmarkId))[bookmarkId].orEmpty()
+            .map { CategoryVO(it.id, it.slug, it.name, it.color) }
+
     override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =
         ktQuery().`in`(BookmarkEntity::urlHost, defaultBookmarkify).list()
 
