@@ -7,6 +7,7 @@ import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.entity.BacSettingVO
 import top.tcyeee.bookmarkify.entity.BackSettingParams
 import top.tcyeee.bookmarkify.entity.EmailVerifyParams
+import top.tcyeee.bookmarkify.entity.GithubLoginParams
 import top.tcyeee.bookmarkify.entity.GoogleLoginParams
 import top.tcyeee.bookmarkify.entity.GradientConfigParams
 import top.tcyeee.bookmarkify.entity.AccountLoginParams
@@ -137,6 +138,18 @@ interface IUserService : IService<UserEntity> {
      * @return 解绑后的用户信息
      */
     fun unbindGoogle(uid: String): UserInfoShow
+
+    /**
+     * 用 GitHub OAuth 授权码登录(GitHub 账号不存在则注册)
+     * @param params 含 GitHub 授权码 code 与回调地址 redirectUri
+     */
+    fun loginByGithub(params: GithubLoginParams): UserSessionInfo
+
+    /** 关联 GitHub 到当前已登录账户(严格一对一) */
+    fun bindGithub(uid: String, params: GithubLoginParams): UserInfoShow
+
+    /** 解绑当前账户的 GitHub 关联(带安全检查,无其他登录凭证则拒绝) */
+    fun unbindGithub(uid: String): UserInfoShow
 
     fun findByNameAndPwd(account: String, password: String): UserEntity?
 
