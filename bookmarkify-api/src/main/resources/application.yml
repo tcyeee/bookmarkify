@@ -4,6 +4,9 @@ server:
 logging:
   level:
     root: INFO
+    # 异常已被 GlobalExceptionHandler 接管并打出更有信息量的日志，
+    # 屏蔽框架级 "Resolved [...异常...]" 的重复 WARN（如未登录、参数校验等）
+    org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver: ERROR
 
 mybatis-plus:
   global-config:

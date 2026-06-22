@@ -51,9 +51,9 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
                 error(e.errorType, e.customMessage ?: e.errorType.msg)
             }
 
-            // 未登录是常规情况，无需栈
+            // 未登录是常规情况，无需栈；但打出足够定位「是前端哪个请求」的细节
             is NotLoginException -> {
-                log.debug("[未登录] {}", request.requestURI)
+                log.warn("[未登录] {}", notLoginDetail(e, request))
                 error(ErrorType.E101)
             }
 
@@ -87,6 +87,29 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
         log.error("Σ(oﾟдﾟoﾉ)  {} | [{}] {}", request.requestURI, type.name, e.message, e)
         return error(type)
     }
+
+    /**
+     * 未登录异常的可定位详情：方法 + 完整路径(含 query) + 来源页面(Referer) +
+     * satoken 来源(header/cookie 是否带了 token) + sa-token 失败原因(type) + UA。
+     * 目的：仅凭一行日志即可判断是前端哪个请求、从哪个页面发起、token 为何无效。
+     */
+    private fun notLoginDetail(e: NotLoginException, request: HttpServletRequest): String {
+        val uri = request.requestURI + (request.queryString?.let { "?$it" } ?: "")
+        val headerToken = request.getHeader("satoken")
+        val cookieToken = request.cookies?.firstOrNull { it.name == "satoken" }?.value
+        val tokenSource = when {
+            !headerToken.isNullOrBlank() -> "header(${mask(headerToken)})"
+            !cookieToken.isNullOrBlank() -> "cookie(${mask(cookieToken)})"
+            else -> "无token"
+        }
+        // sa-token 的 type 解释失败原因：not_token/invalid_token/token_timeout/be_replaced/kicked_out...
+        return "${request.method} $uri | reason=${e.type} loginType=${e.loginType} | token=$tokenSource | " +
+            "referer=${request.getHeader("Referer") ?: "-"} | ua=${request.getHeader("User-Agent") ?: "-"}"
+    }
+
+    /** token 仅保留首尾，避免整串泄漏到日志 */
+    private fun mask(token: String): String =
+        if (token.length <= 8) "***" else "${token.take(4)}…${token.takeLast(4)}"
 
     private fun isSwagger(request: ServerHttpRequest): Boolean {
         val path = request.uri.path

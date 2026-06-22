@@ -76,9 +76,9 @@ async function accountDel() {
   try {
     await accountDelete(boundEmail.value || undefined)
     closeDelDialog()
-    // 复用退出登录的清理流程：重置各 store、清缓存、跳转 /welcome
-    await authStore.logout()
     ElMessage.success('账号已注销')
+    // 账号已销毁，服务端会话失效：跳过 /auth/logout，仅做本地状态同步并跳转 /welcome
+    await authStore.logout(true)
   } catch {
     // 错误已由 http 层统一提示（如邮箱不匹配 E116）
   } finally {
