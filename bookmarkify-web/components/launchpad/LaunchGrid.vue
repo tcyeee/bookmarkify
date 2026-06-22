@@ -1,89 +1,85 @@
 <template>
-  <div ref="wrapperRef" class="flex w-full justify-center">
+  <TransitionGroup
+    ref="gridRef"
+    name="cell"
+    tag="div"
+    class="flex flex-wrap content-start justify-center"
+    :style="{ gap: `${gap}px`, maxWidth: maxWidth ? `${maxWidth}px` : undefined }">
     <div
-      ref="containerRef"
-      class="relative"
-      :style="{ width: `${layout.gridWidth.value}px`, height: `${layout.gridHeight(items.length)}px` }">
+      v-for="item in items"
+      :key="`${item.id}-${item.type}`"
+      :data-cell-id="item.id"
+      class="launch-cell relative"
+      :class="{ 'opacity-40': drag.draggingId.value === item.id }"
+      :style="{ width: `${cellW}px`, height: `${cellH}px` }"
+      @dragstart.prevent>
       <div
-        v-for="(item, i) in orderedItems"
-        :key="`${item.id}-${item.type}`"
-        class="launch-cell absolute select-none"
-        :class="[item.id === drag.draggingId.value ? 'launch-cell-dragging' : 'transition-transform duration-200 ease-out']"
-        :data-folder-anchor="item.id"
-        :style="cellStyle(item, i)"
-        @pointerdown="drag.onPointerDown($event, item.id)"
-        @dragstart.prevent>
-        <div class="h-full w-full" :class="{ 'merge-glow-host': drag.mergeReady.value && drag.mergeTargetId.value === item.id }">
-          <LaunchCell :item="item" :dragging="cellDragging" @open-dir="emit('open-dir', $event)" @show-detail="emit('show-detail', $event)" />
-        </div>
+        class="flex h-full w-full items-start justify-center"
+        :class="{ 'merge-glow-host': drag.dropMode.value === 'folder' && drag.dropTargetId.value === item.id }">
+        <LaunchCell :item="item" :dragging="drag.draggingId.value !== null" @open-dir="emit('open-dir', $event)" @show-detail="emit('show-detail', $event)" />
       </div>
+      <!-- 排序插入指示线 -->
+      <span v-if="drag.dropTargetId.value === item.id && drag.dropMode.value === 'left'" class="insert-bar -left-1" />
+      <span v-if="drag.dropTargetId.value === item.id && drag.dropMode.value === 'right'" class="insert-bar -right-1" />
     </div>
-  </div>
+  </TransitionGroup>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, toRef } from 'vue'
+import { computed, ref } from 'vue'
 import type { BookmarkShow, UserLayoutNodeVO } from '@typing'
-import { useGridLayout } from '@/composables/useGridLayout'
+import { usePreferenceStore } from '@stores/preference.store'
 import { useLaunchpadDrag, type DragCommit } from '@/composables/useLaunchpadDrag'
 import LaunchCell from './LaunchCell.vue'
 
-const props = defineProps<{ items: UserLayoutNodeVO[]; parentKey: string; isFolder?: boolean; folderBoundsRef?: HTMLElement | null }>()
+const props = defineProps<{
+  items: UserLayoutNodeVO[]
+  parentKey: string
+  /** 文件夹内为 true：禁套娃，folder 命中退化为排序 */
+  isFolder?: boolean
+  /** 可选最大宽度（文件夹浮层内用卡片宽约束列数） */
+  maxWidth?: number
+}>()
 const emit = defineEmits<{
   (e: 'commit', c: DragCommit): void
   (e: 'open-dir', item: UserLayoutNodeVO): void
   (e: 'show-detail', b: BookmarkShow): void
 }>()
 
-const wrapperRef = ref<HTMLElement | null>(null) // 全宽，用于测量可用宽度算列数
-const containerRef = ref<HTMLElement | null>(null) // 定位网格，宽度 = 列数×列宽
-const layout = useGridLayout(wrapperRef)
-const itemsRef = toRef(props, 'items')
+const pref = usePreferenceStore()
+const cellW = computed(() => pref.bookmarkCellSizePx)
+const cellH = computed(() => pref.bookmarkCellSizePx + (pref.preference?.showTitle ? 28 : 0))
+const gap = computed(() => pref.bookmarkGapPx)
 
-// 真实拖拽刚结束后短暂置位，吞掉松手后浏览器补发的 click，避免误触发打开书签
-const justDropped = ref(false)
+const gridRef = ref<any>(null)
+const itemsRef = computed(() => props.items)
 
 const drag = useLaunchpadDrag({
-  containerRef,
+  gridEl: () => (gridRef.value?.$el as HTMLElement) ?? null,
   items: itemsRef,
-  layout,
-  isFolder: props.isFolder ?? false,
-  folderBoundsRef: computed(() => props.folderBoundsRef ?? null),
-  onCommit: (c) => {
-    if (c.kind !== 'none') {
-      justDropped.value = true
-      requestAnimationFrame(() => (justDropped.value = false))
-    }
-    emit('commit', c)
-  },
+  allowFolder: !props.isFolder,
+  onCommit: (c) => emit('commit', c),
 })
-
-const cellDragging = computed(() => drag.isDragging.value || justDropped.value)
-
-// 拖拽中用 previewIds 顺序定位（非拖拽项让位动画），静止用真实 items
-const orderedItems = computed<UserLayoutNodeVO[]>(() => {
-  if (!drag.isDragging.value) return props.items
-  const map = new Map(props.items.map((n) => [n.id, n]))
-  return drag.previewIds.value.map((id) => map.get(id)).filter(Boolean) as UserLayoutNodeVO[]
-})
-
-function cellStyle(item: UserLayoutNodeVO, i: number) {
-  const base = { width: `${layout.cellW.value}px`, height: `${layout.cellH.value}px` }
-  if (item.id === drag.draggingId.value && drag.isDragging.value) {
-    return {
-      ...base,
-      transform: `translate(${drag.pointer.value.x}px, ${drag.pointer.value.y}px) scale(1.08)`,
-      zIndex: 50,
-      pointerEvents: 'none' as const,
-    }
-  }
-  const p = layout.posOf(i)
-  return { ...base, transform: `translate(${p.x}px, ${p.y}px)` }
-}
 </script>
 
 <style scoped>
-/* 抑制原生 HTML 拖放/触摸滚动，否则会劫持 pointer 事件导致拖不动 */
+/* 重排位移动画（FLIP，TransitionGroup 自动加 transform 过渡）*/
+.cell-move {
+  transition: transform 0.26s cubic-bezier(0.2, 0, 0, 1);
+}
+.cell-enter-active,
+.cell-leave-active {
+  transition: all 0.2s ease;
+}
+.cell-enter-from,
+.cell-leave-to {
+  opacity: 0;
+  transform: scale(0.6);
+}
+.cell-leave-active {
+  position: absolute;
+}
+
 .launch-cell {
   touch-action: none;
   -webkit-user-drag: none;
@@ -93,8 +89,14 @@ function cellStyle(item: UserLayoutNodeVO, i: number) {
   user-select: none;
   pointer-events: none;
 }
-.launch-cell-dragging {
-  transition: none;
-  opacity: 0.92;
+
+.insert-bar {
+  position: absolute;
+  top: 6%;
+  height: 70%;
+  width: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.9);
+  pointer-events: none;
 }
 </style>
