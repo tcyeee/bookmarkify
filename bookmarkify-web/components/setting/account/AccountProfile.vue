@@ -80,6 +80,20 @@
             <BindGoogleModal :google-email="googleEmail" :disabled="saving" />
           </div>
         </div>
+
+        <div
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
+          <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+            <Icon icon="mdi:github" class="size-8 text-slate-800 dark:text-slate-100" />
+            <div>
+              <div class="font-medium">GitHub 账号</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ githubLogin || '未关联' }}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <BindGithubModal :github-login="githubLogin" :disabled="saving" />
+          </div>
+        </div>
       </div>
 
       <!-- 帐户操作 -->
@@ -126,6 +140,7 @@ import { useAuthStore } from '@stores/auth.store'
 import AccountDelete from './AccountDelete.vue'
 import BindEmailModal from './BindEmailModal.vue'
 import BindGoogleModal from './BindGoogleModal.vue'
+import BindGithubModal from './BindGithubModal.vue'
 import AccountLogout from './AccountLogout.vue'
 import ActionInput from '../../common/ActionInput.vue'
 
@@ -154,6 +169,7 @@ const maskedEmail = computed(() => {
   return `${start}${middle}${end}@${domain}`
 })
 const googleEmail = computed(() => account.value?.googleEmail ?? null)
+const githubLogin = computed(() => account.value?.githubLogin ?? null)
 const displayNickName = computed(() => account.value?.nickName || '未命名用户')
 const isDirty = computed(() => {
   const nicknameChanged = form.nickName !== (account.value?.nickName || '')
