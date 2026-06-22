@@ -56,14 +56,28 @@ export function useLaunchpadDrag(cfg: Cfg) {
   function register() {
     cleanup?.()
     const root = cfg.gridEl()
-    const cells = Array.from(root?.querySelectorAll<HTMLElement>('[data-cell-id]') ?? [])
-    log('注册 cell', { count: cells.length, allowFolder: cfg.allowFolder })
+    if (!root) {
+      log('⚠ register: gridEl() 返回 null（网格根 DOM 还没就绪）')
+      return
+    }
+    const cells = Array.from(root.querySelectorAll<HTMLElement>('[data-cell-id]'))
+    log('注册 cell', {
+      count: cells.length,
+      allowFolder: cfg.allowFolder,
+      rootTag: root.tagName,
+      rootClass: root.className?.slice(0, 40),
+      firstCellId: cells[0]?.dataset.cellId,
+    })
+    if (cells.length === 0) {
+      log('⚠ register: 找到 0 个 [data-cell-id]，拖拽不会生效。root.children=', root.children.length)
+    }
     const disposers = cells.map((el) => {
       const id = el.dataset.cellId!
       return combine(
         draggable({
           element: el,
           getInitialData: () => ({ id }),
+          onGenerateDragPreview: () => log('⊹ generateDragPreview', { id }),
           onDragStart: () => {
             draggingId.value = id
             log('↓ dragStart', { id })
@@ -90,6 +104,16 @@ export function useLaunchpadDrag(cfg: Cfg) {
         }),
       )
     })
+    // 注册后抽样确认元素是否真的被设为可拖（Pragmatic 应已置 draggable）
+    if (cells[0]) {
+      log('注册后抽样', {
+        id: cells[0].dataset.cellId,
+        draggableAttr: cells[0].getAttribute('draggable'),
+        draggableProp: (cells[0] as HTMLElement).draggable,
+        disposers: disposers.length,
+      })
+    }
+
     cleanup = combine(
       ...disposers,
       monitorForElements({
@@ -140,10 +164,38 @@ export function useLaunchpadDrag(cfg: Cfg) {
   // items 变化（增删/换序）→ 重挂（新元素需注册）
   watch(
     () => cfg.items.value.map((n) => n.id).join(','),
-    () => nextTick(register),
+    (ids) => {
+      log('watch items 变化 → 重新注册', { count: ids ? ids.split(',').filter(Boolean).length : 0 })
+      nextTick(register)
+    },
   )
-  onMounted(() => nextTick(register))
-  onBeforeUnmount(() => cleanup?.())
+
+  // 诊断探针：浏览器原生 dragstart / 首个 pointerdown，确认事件是否到达 cell
+  let probe: (() => void) | null = null
+  onMounted(() => {
+    log('onMounted → 等 nextTick 注册', { itemsNow: cfg.items.value.length })
+    nextTick(register)
+    const onNativeDragStart = (e: DragEvent) => {
+      const t = e.target as HTMLElement | null
+      const cell = t?.closest?.('[data-cell-id]') as HTMLElement | null
+      log('🌐 原生 dragstart', { onCell: !!cell, cellId: cell?.dataset.cellId, target: t?.tagName, defaultPrevented: e.defaultPrevented })
+    }
+    const onFirstPointerDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null
+      const cell = t?.closest?.('[data-cell-id]') as HTMLElement | null
+      log('🖱 pointerdown', { onCell: !!cell, cellId: cell?.dataset.cellId, target: t?.tagName })
+    }
+    window.addEventListener('dragstart', onNativeDragStart, { capture: true })
+    window.addEventListener('pointerdown', onFirstPointerDown, { capture: true })
+    probe = () => {
+      window.removeEventListener('dragstart', onNativeDragStart, { capture: true } as any)
+      window.removeEventListener('pointerdown', onFirstPointerDown, { capture: true } as any)
+    }
+  })
+  onBeforeUnmount(() => {
+    cleanup?.()
+    probe?.()
+  })
 
   return { draggingId, dropTargetId, dropMode }
 }
