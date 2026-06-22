@@ -81,7 +81,6 @@ const drag = useLaunchpadDrag({
 
 .launch-cell {
   touch-action: none;
-  -webkit-user-drag: none;
 }
 .launch-cell :deep(img) {
   -webkit-user-drag: none;
