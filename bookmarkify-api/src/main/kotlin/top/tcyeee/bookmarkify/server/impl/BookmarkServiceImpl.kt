@@ -169,8 +169,16 @@ class BookmarkServiceImpl(
         return bookmarkUserLinkMapper.findShowById(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
     }
 
-    override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> =
-        baseMapper.selectPage(params.toPage(), params.toWrapper()).convert { BookmarkAdminVO(it) }
+    override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> {
+        val page = baseMapper.selectPage(params.toPage(), params.toWrapper())
+            .convert { BookmarkAdminVO(it) }
+        val catMap = bookmarkCategoryService.categoriesOf(page.records.map { it.id })
+        page.records.forEach { vo ->
+            vo.categories = catMap[vo.id].orEmpty()
+                .map { CategoryVO(it.id, it.slug, it.name, it.color) }
+        }
+        return page
+    }
 
     override fun adminUpdateIcon(bookmarkId: String, params: BookmarkIconUpdateParams) {
         baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)

@@ -167,6 +167,7 @@ data class BookmarkAdminVO(
     @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
+    @field:Schema(description = "命中的分类") var categories: List<CategoryVO> = emptyList(),
 ) {
     constructor(entity: BookmarkEntity) : this(
         id = entity.id,
