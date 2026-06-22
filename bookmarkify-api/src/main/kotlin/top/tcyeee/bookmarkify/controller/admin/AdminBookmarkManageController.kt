@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckRole
 import com.baomidou.mybatisplus.core.metadata.IPage
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import top.tcyeee.bookmarkify.entity.AppNameSuggestVO
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
@@ -52,6 +53,11 @@ class AdminBookmarkManageController(
     fun applyRefetchBookmark(
         @PathVariable bookmarkId: String, @RequestBody params: BookmarkRefetchApplyParams
     ): BookmarkAdminVO = bookmarkService.adminApplyRefetch(bookmarkId, params)
+
+    // DeepSeek 生成书签简称建议（不落库，供前端填入编辑框）
+    @PostMapping("/{bookmarkId}/appname/generate")
+    fun generateAppName(@PathVariable bookmarkId: String): AppNameSuggestVO =
+        AppNameSuggestVO(bookmarkService.adminGenerateAppName(bookmarkId))
 
     // 删除单个书签信息 (使用POST替换DELETE)
     @PostMapping("/{bookmarkId}/delete")

@@ -55,6 +55,8 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 管理员应用「重新获取」的结果：按选择采用新标题/新图标并持久化（采用新图标会重抓高清 LOGO 到 OSS） */
     fun adminApplyRefetch(bookmarkId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO
 
+    fun adminGenerateAppName(bookmarkId: String): String?
+
     /** 解析书签,然后保存到数据库,同时通过 WebSocket 通知用户（异步事件入口） */
     fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String)
 
