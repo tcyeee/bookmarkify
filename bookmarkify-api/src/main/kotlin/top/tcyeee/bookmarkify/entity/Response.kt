@@ -215,3 +215,11 @@ data class BookmarkFunctionVO(
     @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
     @field:Schema(description = "功能类型") val type: FunctionType,
 )
+
+/** 书签命中的分类（精简视图，用于后台列表/详情展示） */
+data class CategoryVO(
+    var id: String,
+    var slug: String,
+    var name: String,
+    var color: String? = null,
+)
