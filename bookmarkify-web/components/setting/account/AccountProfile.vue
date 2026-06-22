@@ -53,6 +53,33 @@
             <BindEmailModal :email="form.email" :disabled="saving" @success="handleEmailBindSuccess" />
           </div>
         </div>
+
+        <div
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
+          <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+            <svg class="size-5 shrink-0" viewBox="0 0 48 48" aria-hidden="true">
+              <path
+                fill="#FFC107"
+                d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C12.955 4 4 12.955 4 24s8.955 20 20 20s20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
+              <path
+                fill="#FF3D00"
+                d="m6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C16.318 4 9.656 8.337 6.306 14.691z" />
+              <path
+                fill="#4CAF50"
+                d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
+              <path
+                fill="#1976D2"
+                d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
+            </svg>
+            <div>
+              <div class="font-medium">Google 账号</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ googleEmail || '未关联' }}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <BindGoogleModal :google-email="googleEmail" :disabled="saving" />
+          </div>
+        </div>
       </div>
 
       <!-- 帐户操作 -->
@@ -99,6 +126,7 @@ import AvatarUpload from './AvatarUpload.vue'
 import { useAuthStore } from '@stores/auth.store'
 import AccountDelete from './AccountDelete.vue'
 import BindEmailModal from './BindEmailModal.vue'
+import BindGoogleModal from './BindGoogleModal.vue'
 import AccountLogout from './AccountLogout.vue'
 import ActionInput from '../../common/ActionInput.vue'
 
@@ -126,6 +154,7 @@ const maskedEmail = computed(() => {
   const middle = '*'.repeat(local.length - 2)
   return `${start}${middle}${end}@${domain}`
 })
+const googleEmail = computed(() => account.value?.googleEmail ?? null)
 const displayNickName = computed(() => account.value?.nickName || '未命名用户')
 const isDirty = computed(() => {
   const nicknameChanged = form.nickName !== (account.value?.nickName || '')
