@@ -194,6 +194,11 @@ data class BookmarkRefetchVO(
     @field:Schema(description = "新解析的高清LOGO签名地址(私有桶,未抓到为 null)") var logoUrl: String? = null,
 )
 
+/** 管理后台 DeepSeek 生成 appName 建议（不落库，供前端填入编辑框） */
+data class AppNameSuggestVO(
+    @field:Schema(description = "DeepSeek 推断的书签简称(可能为空)") var appName: String? = null,
+)
+
 data class UserAdminVO(
     @field:Schema(description = "用户ID") var id: String,
     @field:Schema(description = "用户昵称") var nickName: String,

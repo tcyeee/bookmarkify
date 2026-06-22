@@ -224,6 +224,16 @@ class BookmarkServiceImpl(
         return BookmarkAdminVO(bookmark)
     }
 
+    override fun adminGenerateAppName(bookmarkId: String): String? {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        val title = bookmark.title?.takeIf { it.isNotBlank() } ?: run {
+            log.debug("[adminGenerateAppName] title 为空，跳过生成: bookmarkId=$bookmarkId")
+            return null
+        }
+        log.debug("[adminGenerateAppName] 调用 DeepSeek 生成 appName: bookmarkId=$bookmarkId, title=$title")
+        return apiService.inferAppName(title)?.takeIf { it.isNotBlank() }
+    }
+
     override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =
         ktQuery().`in`(BookmarkEntity::urlHost, defaultBookmarkify).list()
 
