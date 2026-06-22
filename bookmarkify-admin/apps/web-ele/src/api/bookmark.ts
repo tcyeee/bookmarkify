@@ -13,6 +13,7 @@ export interface BookmarkEntity {
   maximalLogoSize: number;
   iconPadding: number;
   iconBgColor?: string;
+  useHdLogo?: boolean;
   parseStatus: 'LOADING' | 'SUCCESS' | 'CLOSED' | 'BLOCKED'; // Add other statuses as needed
   isActivity: boolean;
   parseErrMsg?: string;
@@ -43,11 +44,16 @@ export async function getBookmarkListApi(params: BookmarkSearchParams) {
 }
 
 /**
- * 修改书签图标设置（图片内边距 iconPadding、图标背景色 iconBgColor）
+ * 修改书签编辑设置（内边距、背景色、是否高清、AppName），单一保存端点
  */
 export async function updateBookmarkIconApi(
   bookmarkId: string,
-  data: { iconBgColor?: null | string; iconPadding: number },
+  data: {
+    appName?: null | string;
+    iconBgColor?: null | string;
+    iconPadding: number;
+    useHdLogo: boolean;
+  },
 ) {
   return requestClient.post<void>(`/admin/bookmark/${bookmarkId}/icon`, data);
 }
@@ -79,5 +85,12 @@ export async function applyRefetchBookmarkApi(
   return requestClient.post<BookmarkEntity>(
     `/admin/bookmark/${bookmarkId}/refetch/apply`,
     data,
+  );
+}
+
+/** DeepSeek 生成书签简称建议（不落库） */
+export async function generateAppNameApi(bookmarkId: string) {
+  return requestClient.post<{ appName?: string }>(
+    `/admin/bookmark/${bookmarkId}/appname/generate`,
   );
 }
