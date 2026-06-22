@@ -65,13 +65,6 @@ const ElInputNumber = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElInputNumber),
 );
 
-const ElSegmented = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/segmented/index"),
-    import("element-plus/es/components/segmented/style/css"),
-  ]).then(([res]) => res.ElSegmented),
-);
-
 const ElColorPicker = defineAsyncComponent(() =>
   Promise.all([
     import("element-plus/es/components/color-picker/index"),
@@ -132,7 +125,6 @@ const PREVIEW_SIZES = [
   { label: "中", value: 120 },
   { label: "大", value: 160 },
 ];
-const previewSize = ref(120);
 
 const normColor = (c?: null | string) => c || "";
 
@@ -182,7 +174,6 @@ function openDetail(row: BookmarkEntity) {
     Math.max(PADDING_MIN, row.iconPadding ?? PADDING_DEFAULT),
   );
   editBgColor.value = row.iconBgColor ?? null;
-  previewSize.value = 120;
   logoError.value = false;
   oldLogoError.value = false;
   newLogoError.value = false;
@@ -335,7 +326,7 @@ onMounted(() => {
     <ElDialog
       v-model="detailVisible"
       :title="detailItem ? detailItem.title || displayName(detailItem) : ''"
-      width="900px"
+      width="980px"
       append-to-body
       class="icon-dialog"
     >
@@ -358,15 +349,24 @@ onMounted(() => {
           <div class="preview-pane">
             <div class="pane-title">预览</div>
             <div class="preview-area">
-              <!-- 小图标：随内边距 / 背景色实时更新；大小仅受下方分段控制 -->
+              <!-- 小图标：大中小三尺寸同显，均实时套用内边距 / 背景色 -->
               <div class="preview-block">
                 <span class="preview-block-label">小图标</span>
-                <BookmarkIcon
-                  :value="previewValue ?? detailItem"
-                  :size="previewSize"
-                  :padding="editPadding"
-                  :bg-color="editBgColor ?? undefined"
-                />
+                <div class="preview-sizes">
+                  <div
+                    v-for="s in PREVIEW_SIZES"
+                    :key="s.value"
+                    class="preview-size-item"
+                  >
+                    <BookmarkIcon
+                      :value="previewValue ?? detailItem"
+                      :size="s.value"
+                      :padding="editPadding"
+                      :bg-color="editBgColor ?? undefined"
+                    />
+                    <span class="preview-size-tag">{{ s.label }}</span>
+                  </div>
+                </div>
               </div>
 
               <!-- 高清 LOGO：来自 scrapper 的原始大图，未获取到时给出说明 -->
@@ -387,11 +387,6 @@ onMounted(() => {
                 </div>
               </div>
             </div>
-            <ElSegmented
-              v-model="previewSize"
-              :options="PREVIEW_SIZES"
-              size="small"
-            />
           </div>
 
           <!-- 右侧：编辑区域 -->
@@ -590,7 +585,7 @@ onMounted(() => {
 /* 左侧：预览面板（灰底卡片，与右侧编辑区明显区分） */
 .preview-pane {
   display: flex;
-  flex: 0 0 220px;
+  flex: 0 0 430px;
   flex-direction: column;
   gap: 12px;
   align-items: center;
@@ -624,6 +619,26 @@ onMounted(() => {
 
 .preview-block-label {
   font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+/* 三尺寸并排：底部对齐，大图最高 */
+.preview-sizes {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.preview-size-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.preview-size-tag {
+  font-size: 11px;
   color: var(--el-text-color-secondary);
 }
 
