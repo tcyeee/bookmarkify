@@ -131,7 +131,7 @@ export const useBookmarkStore = defineStore('homeItems', {
     },
   },
 
-  persist: {
-    storage: piniaPluginPersistedstate.localStorage(),
-  },
+  // persist: true 默认即 localStorage，且不依赖自动注入的 piniaPluginPersistedstate 全局
+  // （后者在某些求值时机会报 "not defined"）。与 auth.store 写法一致。
+  persist: true,
 })
