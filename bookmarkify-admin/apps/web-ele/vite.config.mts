@@ -16,7 +16,7 @@ export default defineConfig(async () => {
           '/api/admin': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/api/, ''),
-            target: 'http://localhost:7001',
+            target: 'http://localhost:8001',
             ws: true,
           },
           '/api': {

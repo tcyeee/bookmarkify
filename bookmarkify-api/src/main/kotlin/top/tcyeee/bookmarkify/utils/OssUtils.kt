@@ -152,9 +152,20 @@ class OssUtils {
          */
         fun restoreImg(fileType: FileType, url: String, bookmarkId: String): ImgInfo {
             log.debug("[restoreImg] 开始拉取远程图片: fileType={}, url={}, bookmarkId={}", fileType, url, bookmarkId)
-            // SSRF 防护：仅允许 http/https，且解析后的 IP 不能是回环/链路本地/任意地址/RFC1918 内网
             val parsedUrl = runCatching { URI.create(url).toURL() }
                 .getOrElse { throw CommonException(ErrorType.E223, it.message) }
+
+            // 来源本就是本服务自己的 OSS（scrapper 与 API 共用同一桶，logo 形如 cdn.bookmarkify.cc/...）：
+            // 直接用 OSS SDK 读取对象，绕开自定义域名公网 HTTPS 可能的 TLS 证书 SAN 不匹配
+            // （No subject alternative DNS name matching cdn.bookmarkify.cc found），同时免去一次外网往返。
+            ownOssObjectKey(parsedUrl)?.let { key ->
+                log.debug("[restoreImg] 源自本服务 OSS，改用 SDK 直读: key={}", key)
+                val obj = runCatching { ossClient.getObject(bucket, key) }
+                    .getOrElse { throw CommonException(ErrorType.E218, it.message) }
+                return obj.objectContent.use { uploadImg(it, fileType, url, bookmarkId) }
+            }
+
+            // SSRF 防护：仅允许 http/https，且解析后的 IP 不能是回环/链路本地/任意地址/RFC1918 内网
             val scheme = parsedUrl.protocol?.lowercase()
             if (scheme != "http" && scheme != "https") {
                 throw CommonException(ErrorType.E223, "scheme:$scheme")
@@ -203,6 +214,18 @@ class OssUtils {
                 log.debug("[restoreImg] 开始上传图片到OSS")
                 this.uploadImg(it, fileType, url, bookmarkId)
             }
+        }
+
+        /**
+         * 若 [parsedUrl] 指向本服务自己的 OSS（自定义域名或默认 OSS 域名），返回其对象 key；否则返回 null。
+         * 命中时可直接用 SDK 读取，绕开自定义域名公网 HTTPS 的证书校验问题。
+         */
+        private fun ownOssObjectKey(parsedUrl: java.net.URL): String? {
+            val host = parsedUrl.host?.lowercase()?.takeIf { it.isNotBlank() } ?: return null
+            val ownHosts = listOfNotNull(customDomain.takeIf { it.isNotBlank() }, domain)
+                .mapNotNull { runCatching { URI(it).host?.lowercase() }.getOrNull() }
+            if (host !in ownHosts) return null
+            return parsedUrl.path.removePrefix("/").substringBefore("?").takeIf { it.isNotBlank() }
         }
 
 

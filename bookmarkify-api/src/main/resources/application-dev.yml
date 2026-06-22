@@ -1,3 +1,6 @@
+server:
+  port: 8001   # 本地开发端口（覆盖 application.yml 的 7001，生产仍走 7001）
+
 spring:
   datasource:
     url: jdbc:postgresql://${BOOKMARKIFY_POSTGRES_HOST}:5432/bookmarkify?stringtype=unspecified

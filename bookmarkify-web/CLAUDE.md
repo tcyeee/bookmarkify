@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Bookmarkify Web** (书签鸭) is the Nuxt 4 + Vue 3 frontend for a bookmark management platform. It presents a browser-style launchpad where users save, organize, and browse bookmarks with drag-and-drop, real-time updates via WebSocket, and customizable backgrounds. UI text, comments, and debug logs are in Chinese (Simplified) — the app targets Chinese users.
 
-The backend (Kotlin/Spring Boot) lives at `../bookmarkify-api/` on port 7001. See `api.md` for the REST contract.
+The backend (Kotlin/Spring Boot) lives at `../bookmarkify-api/` on port 8001 (local dev; prod is 7001). See `api.md` for the REST contract.
 
 ## Tech Stack
 
@@ -20,7 +20,7 @@ The backend (Kotlin/Spring Boot) lives at `../bookmarkify-api/` on port 7001. Se
 
 ```bash
 pnpm install              # also runs `nuxt prepare` via postinstall
-pnpm dev                  # http://localhost:3000 (needs backend at 127.0.0.1:7001)
+pnpm dev                  # http://localhost:3000 (needs backend at 127.0.0.1:8001)
 pnpm build
 pnpm preview
 pnpm generate             # static site generation → .output/public
@@ -38,8 +38,8 @@ Copy `.env.example` to `.env`:
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `NUXT_API_BASE` | Backend REST URL | `http://127.0.0.1:7001` |
-| `NUXT_WS_BASE` | Backend WebSocket URL | `ws://localhost:7001` |
+| `NUXT_API_BASE` | Backend REST URL | `http://127.0.0.1:8001` |
+| `NUXT_WS_BASE` | Backend WebSocket URL | `ws://localhost:8001` |
 | `NUXT_PUBLIC_SITE_URL` | Public site URL (SEO/canonical) | `https://bookmarkify.cc` |
 
 ## Architecture (the parts that span files)

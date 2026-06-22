@@ -1,6 +1,6 @@
 # Bookmarkify API
 
-Base URL: `http://localhost:7001`
+Base URL: `http://localhost:8001`
 
 All responses are wrapped in a unified envelope:
 

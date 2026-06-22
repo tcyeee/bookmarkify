@@ -190,23 +190,30 @@ class BookmarkServiceImpl(
             ?: ChromeBookmarkParser.icoBase64(vo.toManifestIcons(bookmark.rawUrl), bookmark.rawUrl)
         // 预览与应用之间用 Redis 暂存完整抓取结果，确保「所见即所存」且避免应用时再抓一次造成漂移
         RedisUtils.set(RedisType.BOOKMARK_REFETCH, bookmarkId, vo)
-        log.debug("[adminRefetch] 重新获取完成并已暂存: bookmarkId=$bookmarkId, newTitle=${vo.title}")
-        return BookmarkRefetchVO(title = vo.title, iconBase64 = iconBase64)
+        // 高清 LOGO：scrapper 与 API 共用同一私有读 OSS 桶，vo.logo 是未签名地址(浏览器直连会 403)，
+        // 用 API 的 OSS 客户端换成限时签名地址(同桶同密钥，签名有效)。未抓到/签名失败则为 null，交由前端说明。
+        val logoUrl = vo.logo?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { OssUtils.resizeAndSignImg(it, 0, 0) }.getOrNull() }
+        log.debug("[adminRefetch] 重新获取完成并已暂存: bookmarkId=$bookmarkId, newTitle=${vo.title}, hasLogo=${logoUrl != null}")
+        return BookmarkRefetchVO(title = vo.title, iconBase64 = iconBase64, logoUrl = logoUrl)
     }
 
     override fun adminApplyRefetch(bookmarkId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         val vo = RedisUtils.get<ScrapeResponse>(RedisType.BOOKMARK_REFETCH, bookmarkId)
             ?: throw CommonException(ErrorType.E112)
-        log.debug("[adminApplyRefetch] 应用重新获取结果: bookmarkId=$bookmarkId, useNewTitle=${params.useNewTitle}, useNewIcon=${params.useNewIcon}")
+        log.debug("[adminApplyRefetch] 应用重新获取结果: bookmarkId=$bookmarkId, useNewTitle=${params.useNewTitle}, useNewIcon=${params.useNewIcon}, useNewLogo=${params.useNewLogo}")
 
         if (params.useNewTitle) bookmark.title = vo.title
+        // 小图标与大图标(高清 LOGO)分开应用，可单独采用其中之一
         if (params.useNewIcon) {
             val icons = vo.toManifestIcons(bookmark.rawUrl)
             bookmark.iconBase64 = vo.favicon?.takeIf { it.isNotBlank() }
                 ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
-            // 采用新图标时，重抓高清 LOGO/OG 上传 OSS（saveLogoToOss 内部会回写 logoUrl / maximalLogoSize）
-            saveLogoToOss(icons, bookmark)
+        }
+        if (params.useNewLogo) {
+            // 采用新大图标时，重抓高清 LOGO/OG 上传 OSS（saveLogoToOss 内部会回写 logoUrl / maximalLogoSize）
+            saveLogoToOss(vo.toManifestIcons(bookmark.rawUrl), bookmark)
         }
         bookmark.updateTime = LocalDateTime.now()
         baseMapper.insertOrUpdate(bookmark)
