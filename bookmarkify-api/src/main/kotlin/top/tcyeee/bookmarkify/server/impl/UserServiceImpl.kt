@@ -203,33 +203,26 @@ class UserServiceImpl(
     }
 
     /**
-     * 用 GitHub 授权码登录,匹配优先级:
+     * 用 GitHub 授权码登录,匹配优先级(与 loginByGoogle 结构对称):
      * 1. github_id 命中 => 登录该账户
-     * 2. 未命中且 GitHub 有已验证主邮箱 => 按邮箱查现有账户,命中则回填 github_id/github_login
-     * 3. 都没有 => 注册新用户(有邮箱则用之,无邮箱则用占位邮箱)并写入 github_id/github_login
+     * 2. 未命中 => 按已验证主邮箱查现有账户,命中则回填 github_id/github_login
+     * 3. 都没有 => 注册新用户并写入 github_id/github_login
+     * GitHub 必须提供已验证主邮箱(verifyGithubCode 保证);无邮箱路径已移除。
      */
     @Transactional
     override fun loginByGithub(params: GithubLoginParams): UserSessionInfo {
         val identity = verifyGithubCode(params)
 
         val userEntity = ktQuery().eq(UserEntity::githubId, identity.githubId).one()
-            ?: identity.email?.let { mail ->
-                ktQuery().eq(UserEntity::email, mail).one()?.also {
-                    it.githubId = identity.githubId
-                    it.githubLogin = identity.login
-                    updateById(it)
-                }
-            }
-            ?: createVerifiedUser(identity.email ?: "github_${identity.githubId}@users.noreply.github.com").also {
+            ?: ktQuery().eq(UserEntity::email, identity.email).one()?.also {
                 it.githubId = identity.githubId
                 it.githubLogin = identity.login
                 updateById(it)
-                // 占位邮箱不作为真实可登录邮箱:无真实邮箱时显式置空 email
-                // (updateById 默认忽略 null 字段,需用 ktUpdate 显式写 NULL,同 unbindGoogle/unbindGithub)
-                if (identity.email == null) {
-                    it.email = null
-                    ktUpdate().set(UserEntity::email, null).eq(UserEntity::id, it.id).update()
-                }
+            }
+            ?: createVerifiedUser(identity.email).also {
+                it.githubId = identity.githubId
+                it.githubLogin = identity.login
+                updateById(it)
             }
 
         if (StpKit.USER.isLogin) StpKit.USER.logout()
@@ -442,11 +435,12 @@ class UserServiceImpl(
             }.getOrNull()
         }
 
-        return GithubIdentity(githubId = githubId, login = login, email = email?.ifBlank { null })
+        if (email.isNullOrBlank()) throw CommonException(ErrorType.E117, "未获取到 GitHub 验证邮箱")
+        return GithubIdentity(githubId = githubId, login = login, email = email)
     }
 
-    /** GitHub 身份(email 可能为 null) */
-    private data class GithubIdentity(val githubId: String, val login: String, val email: String?)
+    /** GitHub 身份(email 已验证,非空,与 GoogleIdentity 结构对称) */
+    private data class GithubIdentity(val githubId: String, val login: String, val email: String)
 
     override fun queryUserBacSetting(uid: String): BacSettingVO {
         return backSettingService.queryShowByUid(uid)
