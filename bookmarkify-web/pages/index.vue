@@ -158,17 +158,25 @@ watch(folderVisible, (open) => {
 
 onMounted(() => {
   monitorCleanup = monitorForElements({
-    onDrop: ({ source, location }) => {
+    onDrag: ({ source, location }) => {
+      // 仿 macOS：文件夹内图标一旦被拖出卡片范围，立即关闭浮层（drop 仍会完成 eject）
       if (!folderVisible.value || !folderId.value) return
+      if (bookmarkStore.parentKeyOf(String(source.data.id)) !== folderId.value) return
+      const overCard = location.current.dropTargets.some((t) => t.data.zone === 'folder-card')
+      if (!overCard) folderVisible.value = false
+    },
+    onDrop: ({ source, location }) => {
+      const fid = folderId.value
+      if (!fid) return
       const src = String(source.data.id)
       const srcParent = bookmarkStore.parentKeyOf(src)
       const overCard = location.current.dropTargets.some((t) => t.data.zone === 'folder-card')
-      if (srcParent === ROOT_KEY && overCard) {
+      if (srcParent === ROOT_KEY && overCard && folderVisible.value) {
         // 反向拖入：根图标落入打开的浮层
-        handleCommit(folderId.value, { kind: 'moveInto', draggedId: src, folderId: folderId.value })
-      } else if (srcParent === folderId.value && !overCard) {
-        // 拖出：子项落在卡片外 → 回到根
-        handleCommit(folderId.value, { kind: 'eject', draggedId: src })
+        handleCommit(fid, { kind: 'moveInto', draggedId: src, folderId: fid })
+      } else if (srcParent === fid && !overCard) {
+        // 拖出：子项落在卡片外 → 回到根（即使浮层已因拖出而提前关闭）
+        handleCommit(fid, { kind: 'eject', draggedId: src })
       }
     },
   })
