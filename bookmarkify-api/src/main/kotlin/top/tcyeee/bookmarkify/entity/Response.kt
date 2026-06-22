@@ -19,6 +19,9 @@ data class BookmarkShow(
     @field:Schema(description = "完整url") var urlFull: String? = null,
     @field:Schema(description = "基础url") var urlBase: String? = null,
     @field:Schema(description = "小图标") var iconBase64: String? = null,
+    @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
+    @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
+    @JsonIgnore @field:Schema(description = "是否使用高清图") var useHdLogo: Boolean = false,
     @field:Schema(description = "网站活性") var isActivity: Boolean? = null,
     @JsonIgnore @field:Schema(description = "用户ID") var uid: String? = null,
     @JsonIgnore @field:Schema(description = "大图尺寸") var hdSize: Int = 0,
@@ -27,7 +30,8 @@ data class BookmarkShow(
     @JsonIgnore @field:Schema(description = "用户桌面排布ID") var layoutNodeId: String? = null,
     @field:Schema(description = "大图标OSS地址,带权限") var iconHdUrl: String? = null,
 ) {
-    val isHd: Boolean get() = hdSize > 50
+    // 高清渲染改由用户开关控制：开关开启且存在达标高清图时才用高清
+    val isHd: Boolean get() = useHdLogo && hdSize > 0
 
     constructor(userlink: BookmarkUserLink, bookmark: BookmarkEntity?) : this() {
         bookmark?.let { BeanUtil.copyProperties(it, this) }
