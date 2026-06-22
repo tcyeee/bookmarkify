@@ -7,9 +7,11 @@ import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
 
 import {
+  findSimilarSitesApi,
   getBookmarkListApi,
   recategorizeBookmarkApi,
   updateBookmarkCategoriesApi,
+  type SimilarSite,
 } from "#/api/bookmark";
 import { getCategoryListApi, type CategoryEntity } from "#/api/category";
 import { ElMessage } from "element-plus";
@@ -105,6 +107,21 @@ const categoryDict = ref<CategoryEntity[]>([]);
 const editingCategoryIds = ref<string[]>([]);
 const savingCategories = ref(false);
 const recategorizing = ref(false);
+
+const similarSites = ref<SimilarSite[]>([]);
+const loadingSimilar = ref(false);
+const similarLoaded = ref(false);
+
+async function findSimilar() {
+  if (!currentRow.value) return;
+  loadingSimilar.value = true;
+  try {
+    similarSites.value = await findSimilarSitesApi(currentRow.value.id);
+    similarLoaded.value = true;
+  } finally {
+    loadingSimilar.value = false;
+  }
+}
 
 async function loadCategoryDict() {
   if (categoryDict.value.length === 0) {
@@ -207,6 +224,8 @@ async function handleRowClick(row: BookmarkEntity) {
   currentRow.value = row;
   detailVisible.value = true;
   editingCategoryIds.value = (row.categories ?? []).map((c) => c.id);
+  similarSites.value = [];
+  similarLoaded.value = false;
   await loadCategoryDict();
 }
 
@@ -420,6 +439,44 @@ onMounted(() => {
           <div class="flex">
             <span class="w-24 text-gray-500">更新时间</span>
             <span class="flex-1">{{ formatDateTime(currentRow.updateTime) }}</span>
+          </div>
+          <div class="flex items-start">
+            <span class="w-24 text-gray-500">相似网站</span>
+            <div class="flex-1">
+              <ElButton
+                size="small"
+                :loading="loadingSimilar"
+                @click="findSimilar"
+              >
+                查找相似网站
+              </ElButton>
+              <ul v-if="similarSites.length > 0" class="mt-2 space-y-2">
+                <li
+                  v-for="s in similarSites"
+                  :key="s.domain"
+                  class="rounded border border-gray-100 p-2"
+                >
+                  <div class="font-medium">
+                    {{ s.name }}
+                    <a
+                      :href="`https://${s.domain}`"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="ml-1 text-blue-500"
+                    >
+                      {{ s.domain }}
+                    </a>
+                  </div>
+                  <div class="text-gray-500">{{ s.reason }}</div>
+                </li>
+              </ul>
+              <div
+                v-else-if="similarLoaded"
+                class="mt-2 text-gray-400"
+              >
+                未找到相似网站
+              </div>
+            </div>
           </div>
         </div>
       </ElDialog>
