@@ -1,9 +1,16 @@
 <template>
   <!-- 未配置 ClientId 时不渲染，避免出现一个点不动的按钮 -->
-  <div v-if="clientId" class="flex flex-col items-center gap-2">
-    <!-- Google 官方按钮挂载点（GIS 会把 iframe 按钮渲染进来） -->
-    <div ref="btnRef" class="min-h-[40px]" />
-    <p v-if="errorMsg" class="text-center text-xs text-red-400">{{ errorMsg }}</p>
+  <div v-if="clientId" class="w-full max-w-[320px]">
+    <div class="relative">
+      <!-- 可见按钮：与 GitHub 登录保持一致的文案与样式 -->
+      <button type="button" class="cy-btn cy-btn-neutral pointer-events-none w-full gap-2">
+        <Icon icon="flat-color-icons:google" class="size-5" />
+        <span>使用 Google 登录</span>
+      </button>
+      <!-- Google 官方按钮：透明覆盖在上层，真正承接点击（GIS 渲染为跨域 iframe，无法直接编程触发） -->
+      <div ref="btnRef" class="absolute inset-0 flex items-center justify-center overflow-hidden opacity-0" />
+    </div>
+    <p v-if="errorMsg" class="mt-2 text-center text-xs text-red-400">{{ errorMsg }}</p>
   </div>
 </template>
 
@@ -66,7 +73,7 @@ onMounted(async () => {
       client_id: clientId,
       callback: handleCredential,
     })
-    // 渲染 Google 官方按钮：深色填充 + 胶囊形，宽度贴合弹窗内容区
+    // 渲染 Google 官方按钮并透明覆盖在自定义按钮之上，宽度贴合自定义按钮以保证整块可点
     const width = Math.min(Math.max(btnRef.value?.clientWidth || 320, 200), 400)
     google.accounts.id.renderButton(btnRef.value, {
       type: 'standard',

@@ -20,8 +20,9 @@
       <span>或</span>
       <span class="h-px flex-1 bg-white/8"></span>
     </div>
-    <div class="mt-4 flex justify-center">
+    <div class="mt-4 flex flex-col items-center gap-3">
       <GoogleLoginButton @success="onSuccess" />
+      <GithubLoginButton @success="onSuccess" />
     </div>
   </div>
 </template>
@@ -30,6 +31,7 @@
 import EmailLoginPanel from './EmailLoginPanel.vue'
 import PasswordLoginPanel from './PasswordLoginPanel.vue'
 import GoogleLoginButton from './GoogleLoginButton.vue'
+import GithubLoginButton from './GithubLoginButton.vue'
 import { useAuthStore } from '@stores/auth.store'
 
 const emit = defineEmits<{

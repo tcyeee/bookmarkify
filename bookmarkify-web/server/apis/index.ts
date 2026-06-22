@@ -33,6 +33,9 @@ export const accountDelete = (email?: string) => http.post<boolean>('/user/del',
 export const uploadAvatar = (file: File) => http.upload<string>('/user/uploadAvatar', file)
 export const bindGoogle = (idToken: string) => http.post<t.UserInfo>('/user/google/bind', { idToken })
 export const unbindGoogle = () => http.post<t.UserInfo>('/user/google/unbind')
+export const authLoginByGithub = (params: t.GithubLoginParams) => http.post<t.UserInfo>('/auth/github', params)
+export const bindGithub = (code: string, redirectUri: string) => http.post<t.UserInfo>('/user/github/bind', { code, redirectUri })
+export const unbindGithub = () => http.post<t.UserInfo>('/user/github/unbind')
 
 /* =========[ /setting ]========= */
 export const uploadBacPic = (file: File) => http.upload<string>('/background/uploadBacPic', file)

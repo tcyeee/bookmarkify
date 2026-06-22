@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { AuthStatusEnum, type EmailVerifyParams, type LoginParams, type UserInfo } from '@typing'
-import { authLoginByAccount, authLoginByGoogle, authLogout, captchaVerifyEmail, queryUserInfo, uploadAvatar } from '@api'
+import { authLoginByAccount, authLoginByGithub, authLoginByGoogle, authLogout, captchaVerifyEmail, queryUserInfo, uploadAvatar } from '@api'
 import { generateDefaultAvatarFile, md5 } from '@utils'
 import { usePreferenceStore } from './preference.store'
 
@@ -51,6 +51,18 @@ export const useAuthStore = defineStore('auth', {
         const result = await authLoginByGoogle({ idToken })
         this.account = { ...this.account, ...result }
         if (import.meta.client) useNuxtApp().$track('login-google')
+        return result
+      } catch (err: any) {
+        return Promise.reject(err)
+      }
+    },
+
+    async loginWithGithub(code: string, redirectUri: string): Promise<UserInfo> {
+      try {
+        // GitHub 授权码登录/注册，成功后合并到当前账号信息
+        const result = await authLoginByGithub({ code, redirectUri })
+        this.account = { ...this.account, ...result }
+        if (import.meta.client) useNuxtApp().$track('login-github')
         return result
       } catch (err: any) {
         return Promise.reject(err)
@@ -108,7 +120,9 @@ export const useAuthStore = defineStore('auth', {
       await this.ensureDefaultAvatar()
     },
 
-    async logout() {
+    // skipServerLogout：账号注销等场景下服务端会话已销毁，无需再请求 /auth/logout，
+    // 否则会触发 101 让 http 层递归调用本方法，仅需执行本地清理与跳转即可。
+    async logout(skipServerLogout = false) {
       console.log('DEBUG: 退出登陆')
       const webSocketStore = useWebSocketStore()
       const bookmarkStore = useBookmarkStore()
@@ -116,8 +130,8 @@ export const useAuthStore = defineStore('auth', {
       const preferenceStore = usePreferenceStore()
 
       try {
-        // 如果本地不存在登录信息，那么就不要请求后端了
-        if (this.authStatus === AuthStatusEnum.NONE) return
+        // 本地无登录信息 / 已显式跳过时，不请求后端，直接走 finally 清理
+        if (skipServerLogout || this.authStatus === AuthStatusEnum.NONE) return
         // 服务端登出失败也要继续清理本地态
         await authLogout()
       } catch (err) {

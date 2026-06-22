@@ -1,0 +1,57 @@
+// composables/useGithubOAuth.ts
+// 开 GitHub 授权弹窗，等回调页 postMessage 回 code，校验 state 与 origin 后 resolve。
+// 调用方（按钮/绑定弹窗）拿到 code 后自行决定走登录还是绑定 API。
+const MSG_SOURCE = 'bookmarkify-github-oauth'
+
+export function useGithubOAuth() {
+  const config = useRuntimeConfig()
+  const githubClientId = (config.public.githubClientId as string | undefined) || ''
+
+  function requestGithubCode(): Promise<{ code: string; redirectUri: string }> {
+    return new Promise((resolve, reject) => {
+      if (!import.meta.client) return reject(new Error('仅客户端可用'))
+      if (!githubClientId) return reject(new Error('未配置 GitHub ClientId'))
+
+      const redirectUri = `${location.origin}/auth/github/callback`
+      const state = Math.random().toString(36).slice(2) + Date.now().toString(36)
+      const url =
+        `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(githubClientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&scope=${encodeURIComponent('read:user user:email')}` +
+        `&state=${encodeURIComponent(state)}`
+
+      const popup = window.open(url, 'github-oauth', 'width=600,height=720')
+      if (!popup) return reject(new Error('弹窗被拦截，请允许弹出窗口'))
+
+      let settled = false
+      const cleanup = () => {
+        settled = true
+        window.removeEventListener('message', onMessage)
+        clearInterval(timer)
+      }
+
+      function onMessage(e: MessageEvent) {
+        if (e.origin !== location.origin) return
+        const d = e.data
+        if (!d || d.source !== MSG_SOURCE) return
+        cleanup()
+        if (d.error) return reject(new Error(d.error))
+        if (d.state !== state) return reject(new Error('state 校验失败'))
+        if (!d.code) return reject(new Error('未获取到授权码'))
+        resolve({ code: d.code, redirectUri })
+      }
+      window.addEventListener('message', onMessage)
+
+      // 用户手动关闭弹窗 => 视为取消
+      const timer = setInterval(() => {
+        if (settled) return
+        if (popup.closed) {
+          cleanup()
+          reject(new Error('已取消 GitHub 授权'))
+        }
+      }, 500)
+    })
+  }
+
+  return { githubClientId, requestGithubCode }
+}

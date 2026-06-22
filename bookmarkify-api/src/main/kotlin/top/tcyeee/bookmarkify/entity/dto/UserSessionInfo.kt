@@ -19,6 +19,7 @@ data class UserSessionInfo(
     @field:Schema(description = "用户名称") var nickName: String,
     @field:Schema(description = "用户绑定的邮箱") var email: String? = null,
     @field:Schema(description = "已关联的 Google 邮箱(未关联为 null)") var googleEmail: String? = null,
+    @field:Schema(description = "已关联的 GitHub 用户名(未关联为 null)") var githubLogin: String? = null,
 
     @field:Schema(description = "用户是否验证") var verified: Boolean = false,
     @field:Schema(description = "用户TOKEN") var token: String,
@@ -28,6 +29,7 @@ data class UserSessionInfo(
         nickName = user.nickName,
         email = user.email,
         googleEmail = user.googleEmail,
+        githubLogin = user.githubLogin,
         token = token,
     ) {
         this.verified = this.email != null
