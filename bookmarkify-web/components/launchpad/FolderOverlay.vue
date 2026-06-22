@@ -28,7 +28,6 @@
               :items="children"
               :parent-key="folder?.id ?? ''"
               :is-folder="true"
-              :folder-bounds-ref="cardRef"
               @commit="(c) => emit('commit', c)"
               @show-detail="emit('passShowDetail', $event)" />
           </ClientOnly>

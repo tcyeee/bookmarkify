@@ -48,7 +48,7 @@ const folderId = ref<string | null>(null)
 const folderAnchorRect = ref<DOMRect | null>(null)
 const folderNode = computed(() => (folderId.value ? bookmarkStore.rootNodes.find((n) => n.id === folderId.value) ?? null : null))
 function onOpenDir(item: UserLayoutNodeVO) {
-  const el = document.querySelector(`[data-folder-anchor="${item.id}"]`) as HTMLElement | null
+  const el = document.querySelector(`[data-cell-id="${item.id}"]`) as HTMLElement | null
   folderAnchorRect.value = el ? el.getBoundingClientRect() : null
   folderId.value = item.id
   folderVisible.value = true
