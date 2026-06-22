@@ -140,9 +140,13 @@ async function handleSave() {
 }
 
 async function handleDelete(row: CategoryEntity) {
-  await ElMessageBox.confirm(`确认删除分类「${row.name}」？`, "提示", {
-    type: "warning",
-  });
+  try {
+    await ElMessageBox.confirm(`确认删除分类「${row.name}」？`, "提示", {
+      type: "warning",
+    });
+  } catch {
+    return; // user cancelled or closed
+  }
   await deleteCategoryApi(row.id);
   ElMessage.success("已删除");
   await fetchData();
