@@ -367,11 +367,21 @@ class UserServiceImpl(
 
     override fun del(params: UserDelParams): Boolean {
         val uid = BaseUtils.uid()
-        val user = getById(uid) ?: throw CommonException(ErrorType.E110)
-        if (!PasswordUtils.matches(SecureUtil.md5(params.password), user.password)) {
-            throw CommonException(ErrorType.E110)
+        val user = getById(uid) ?: throw CommonException(ErrorType.E215)
+        // 已绑定邮箱的账号必须输入与绑定邮箱一致的邮箱才能注销；无邮箱账号(匿名/仅 Google)直接放行
+        val boundEmail = user.email?.trim()
+        if (!boundEmail.isNullOrEmpty()) {
+            if (!boundEmail.equals(params.email?.trim(), ignoreCase = true)) {
+                throw CommonException(ErrorType.E116)
+            }
         }
-        return ktUpdate().eq(UserEntity::id, uid).set(UserEntity::deleted, true).update()
+        val deleted = ktUpdate().eq(UserEntity::id, uid).set(UserEntity::deleted, true).update()
+        if (deleted) {
+            // 注销成功后立即失效服务端会话，satoken 即时作废
+            StpKit.USER.session.clear()
+            StpKit.USER.logout()
+        }
+        return deleted
     }
 
     override fun updateUsername(username: String): Boolean =
