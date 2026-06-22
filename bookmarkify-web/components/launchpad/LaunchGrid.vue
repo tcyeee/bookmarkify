@@ -11,8 +11,7 @@
       :data-cell-id="item.id"
       class="launch-cell relative"
       :class="{ 'opacity-40': drag.draggingId.value === item.id }"
-      :style="{ width: `${cellW}px`, height: `${cellH}px` }"
-      @dragstart.prevent>
+      :style="{ width: `${cellW}px`, height: `${cellH}px` }">
       <div
         class="flex h-full w-full items-start justify-center"
         :class="{ 'merge-glow-host': drag.dropMode.value === 'folder' && drag.dropTargetId.value === item.id }">
