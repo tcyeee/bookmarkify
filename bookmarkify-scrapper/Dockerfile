@@ -33,6 +33,14 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 RUN cargo build -p scraper-service --release
 
+# Stage 2b: export — lets CI extract just the compiled binary without pushing an
+# image anywhere (docker buildx --target export --output type=local). Placed BEFORE
+# the runtime stage so the default build target stays the runtime image (local dev /
+# docker-compose unaffected). The prod deploy relays this binary through OSS and
+# assembles the runtime image on the server (see deploy/Dockerfile.runtime).
+FROM scratch AS export
+COPY --from=builder /app/target/release/scraper-service /scraper-service
+
 # Stage 3: Runtime
 FROM debian:bookworm-slim
 

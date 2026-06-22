@@ -1,0 +1,32 @@
+# Thin runtime image assembled ON THE SERVER from a CI-built binary (relayed via OSS).
+# Mirrors the API deploy: the memory-hungry Rust compile stays on the GitHub runner;
+# the small prod box only does `apt + COPY`. The heavy `apt-get install chromium`
+# layer is cached by the Docker daemon across deploys (the instruction is stable),
+# so only the COPY binary layer changes per release — chromium is downloaded once.
+#
+# Kept byte-for-byte equivalent to the runtime stage of ../Dockerfile so local
+# (full) builds and prod (thin) builds produce the same runtime environment.
+FROM debian:bookworm-slim
+
+ARG USE_CN_MIRROR=0
+
+RUN if [ "$USE_CN_MIRROR" = "1" ]; then \
+    sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources; \
+fi && \
+    apt-get update && apt-get install -y \
+    ca-certificates \
+    chromium \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Binary is fetched from OSS into the build context by the deploy workflow.
+COPY scraper-service .
+RUN chmod +x ./scraper-service
+
+ENV CHROME_BIN=/usr/bin/chromium
+
+EXPOSE 3000
+
+CMD ["./scraper-service"]
