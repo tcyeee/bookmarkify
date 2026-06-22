@@ -11,6 +11,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.CategoryVO
+import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.server.IBookmarkService
 
 /**
@@ -65,6 +66,11 @@ class AdminBookmarkManageController(
     @PostMapping("/{bookmarkId}/categorize")
     fun recategorize(@PathVariable bookmarkId: String): List<CategoryVO> =
         bookmarkService.adminRecategorize(bookmarkId)
+
+    // AI 推荐相似网站（仅展示，不入库）
+    @PostMapping("/{bookmarkId}/similar")
+    fun similar(@PathVariable bookmarkId: String): List<SimilarSite> =
+        bookmarkService.adminSimilarSites(bookmarkId)
 
     // 删除单个书签信息 (使用POST替换DELETE)
     @PostMapping("/{bookmarkId}/delete")
