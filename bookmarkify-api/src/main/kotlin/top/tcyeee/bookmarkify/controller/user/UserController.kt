@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.entity.ChangePasswordParams
+import top.tcyeee.bookmarkify.entity.GithubLoginParams
 import top.tcyeee.bookmarkify.entity.GoogleLoginParams
 import top.tcyeee.bookmarkify.entity.UserDelParams
 import top.tcyeee.bookmarkify.entity.UserInfoShow
@@ -47,6 +48,15 @@ class UserController(private val userService: IUserService) {
     @PostMapping("google/unbind")
     @Operation(summary = "解绑当前账户的 Google 关联")
     fun unbindGoogle(): UserInfoShow = userService.unbindGoogle(BaseUtils.uid())
+
+    @PostMapping("github/bind")
+    @Operation(summary = "关联 GitHub 账号到当前账户")
+    fun bindGithub(@RequestBody params: GithubLoginParams): UserInfoShow =
+        userService.bindGithub(BaseUtils.uid(), params)
+
+    @PostMapping("github/unbind")
+    @Operation(summary = "解绑当前账户的 GitHub 关联")
+    fun unbindGithub(): UserInfoShow = userService.unbindGithub(BaseUtils.uid())
 
     @PostMapping("del")
     @Operation(summary = "账户注销")
