@@ -17,8 +17,9 @@
 
 - **URL 规范化缓存**：基于 `moka`，自动去除 fragment、排序查询参数，TTL 可配置
 - **截图能力**：无头模式下捕获全页 PNG 截图；配置 OSS 后自动上传并返回公网 URL，否则返回 base64 编码数据
-- **OSS 上传**：可选接入阿里云 OSS，自动将截图和封面图上传并替换为持久化 URL
+- **OSS 上传**：可选接入阿里云 OSS，自动将截图和封面图上传并替换为持久化 URL，对象统一归档于 `bookmarkify/scrapper/{og,logo,screenshots}/` 前缀下
 - **代理支持**：通过 `PROXY_URL` 配置 HTTP 代理，适用于受限网络环境
+- **SSRF 防护**：默认拦截解析到私有 / 回环 / 链路本地地址的目标，IP 字面量与 DNS 解析结果均校验；可信代理主机自动放行。设置 `SSRF_ALLOW_PRIVATE=1` 关闭（用于内网集成测试等可信场景）
 
 ## 项目结构
 
@@ -39,7 +40,7 @@ bookmarkify-scrapper/
 
 ### 前置条件
 
-- Rust 1.75+（`rustup` 安装）
+- Rust 1.88+（`rustup` 安装；Docker 镜像基于 `cargo-chef:latest-rust-1.88`）
 - Chrome 浏览器（无头模式所需）
 
 ### 构建
@@ -72,9 +73,11 @@ OSS_BASE_URL=https://my-bucket.oss-cn-hangzhou.aliyuncs.com \
 |---|---|---|---|
 | `PORT` | | `3000` | HTTP 监听端口 |
 | `REQUEST_TIMEOUT_SECS` | | `10` | Layer 1 HTTP 请求超时（秒） |
-| `HEADLESS_TIMEOUT_SECS` | | `30` | Layer 2 无头浏览器超时（秒） |
+| `HEADLESS_TIMEOUT_SECS` | | `30` | Layer 2 无头浏览器整体超时（秒） |
+| `HEADLESS_IDLE_WAIT_SECS` | | `10` | Layer 2 网络空闲等待时间（秒），用于等待 JS 渲染完成；须小于 `HEADLESS_TIMEOUT_SECS` |
 | `CACHE_TTL_SECS` | | `3600` | 缓存条目存活时间（秒） |
 | `PROXY_URL` | | — | HTTP 代理地址，例如 `http://127.0.0.1:7890`，不设则直连 |
+| `SSRF_ALLOW_PRIVATE` | | — | 设为 `1` 关闭 SSRF 防护，允许访问私有 / 回环地址；不设则默认拦截 |
 | `OSS_ACCESS_KEY_ID` | | — | 阿里云 Access Key ID，五个 OSS_* 变量须同时配置才生效 |
 | `OSS_ACCESS_KEY_SECRET` | | — | 阿里云 Access Key Secret |
 | `OSS_BUCKET` | | — | OSS Bucket 名称 |
@@ -84,94 +87,9 @@ OSS_BASE_URL=https://my-bucket.oss-cn-hangzhou.aliyuncs.com \
 
 ## API 文档
 
-### `GET /health`
+服务对外暴露两个端点（`GET /health`、`POST /scrape`），均无需鉴权（鉴权由上游 `bookmarkify-api` 负责）。
 
-健康检查，无需鉴权，供负载均衡器或容器编排探活使用。
-
-**响应**
-
-```json
-200 OK
-{"status": "ok"}
-```
-
----
-
-### `POST /scrape`
-
-抓取目标 URL 的页面元数据。
-
-**请求头**
-
-```
-Content-Type: application/json
-```
-
-**请求体**
-
-```json
-{
-  "url": "https://example.com",
-  "headless": false
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `url` | string | ✅ | 目标页面 URL |
-| `headless` | boolean | | `true` 强制使用 Layer 2；`false`（默认）先尝试 Layer 1，title 为空时自动回退 |
-
-**成功响应**
-
-```json
-200 OK
-{
-  "title": "示例页面标题",
-  "description": "页面描述文字",
-  "image": "https://example.com/og-image.jpg",
-  "favicon": "data:image/png;base64,iVBORw0KGgo...",
-  "logo": "https://example.com/logo-180x180.png",
-  "source": "og",
-  "cached": true,
-  "screenshot": "https://my-bucket.oss-cn-hangzhou.aliyuncs.com/screenshots/xxx.png"
-}
-```
-
-| 字段 | 说明 |
-|---|---|
-| `title` | 页面标题，可能为 `null` |
-| `description` | 页面描述，可能为 `null` |
-| `image` | 页面主图 URL，可能为 `null`；配置 OSS 时为 OSS URL |
-| `favicon` | 网站图标，始终以 base64 data URL 格式返回，可能为 `null` |
-| `logo` | 网站 Logo URL，可能为 `null`；来源优先级：JSON-LD logo → apple-touch-icon → 最大尺寸 icon；配置 OSS 时为 OSS URL |
-| `source` | 数据来源：`"og"` / `"twitter_card"` / `"json_ld"` / `"html"` / `"headless"` |
-| `cached` | 命中缓存时为 `true`，实时抓取时省略此字段 |
-| `screenshot` | 仅无头模式下存在。配置 OSS 时为公网 URL，否则为 base64 编码的 PNG 数据 |
-
-**错误响应**
-
-| 状态码 | 说明 | 响应体示例 |
-|---|---|---|
-| `422` | URL 格式非法 | `{"error": "invalid url"}` |
-| `502` | 网络请求失败 | `{"error": "fetch failed", "detail": "..."}` |
-| `502` | 无头浏览器失败 | `{"error": "headless failed", "detail": "..."}` |
-| `503` | OSS 上传失败 | `{"error": "oss upload failed", "detail": "..."}` |
-| `504` | 请求超时 | `{"error": "timeout"}` |
-
-**请求示例**
-
-```bash
-curl -X POST http://localhost:3000/scrape \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com"}'
-```
-
-```bash
-# 强制使用无头浏览器（适用于 JS 渲染页面）
-curl -X POST http://localhost:3000/scrape \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://huaban.com", "headless": true}'
-```
+完整的接口说明（请求 / 响应字段、错误码、缓存语义、调用示例）见 **[api.md](./api.md)**。
 
 ## 运行测试
 
