@@ -1,5 +1,18 @@
 import { requestClient } from '#/api/request';
 
+export interface CategoryVO {
+  id: string;
+  slug: string;
+  name: string;
+  color?: string;
+}
+
+export interface SimilarSite {
+  name: string;
+  domain: string;
+  reason: string;
+}
+
 export interface BookmarkEntity {
   id: string;
   urlHost: string;
@@ -19,6 +32,7 @@ export interface BookmarkEntity {
   parseErrMsg?: string;
   createTime: string;
   updateTime?: string;
+  categories?: CategoryVO[];
 }
 
 export interface BookmarkSearchParams {
@@ -85,6 +99,31 @@ export async function applyRefetchBookmarkApi(
   return requestClient.post<BookmarkEntity>(
     `/admin/bookmark/${bookmarkId}/refetch/apply`,
     data,
+  );
+}
+
+/** 手动覆盖式设置某书签的分类，返回更新后的分类列表 */
+export async function updateBookmarkCategoriesApi(
+  bookmarkId: string,
+  categoryIds: string[],
+) {
+  return requestClient.post<CategoryVO[]>(
+    `/admin/bookmark/${bookmarkId}/categories`,
+    { categoryIds },
+  );
+}
+
+/** 对某书签重新执行 DeepSeek 自动归类，返回更新后的分类列表 */
+export async function recategorizeBookmarkApi(bookmarkId: string) {
+  return requestClient.post<CategoryVO[]>(
+    `/admin/bookmark/${bookmarkId}/categorize`,
+  );
+}
+
+/** AI 推荐相似网站（仅展示，不入库） */
+export async function findSimilarSitesApi(bookmarkId: string) {
+  return requestClient.post<SimilarSite[]>(
+    `/admin/bookmark/${bookmarkId}/similar`,
   );
 }
 

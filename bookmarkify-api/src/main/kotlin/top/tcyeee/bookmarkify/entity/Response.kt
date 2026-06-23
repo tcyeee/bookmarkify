@@ -172,6 +172,7 @@ data class BookmarkAdminVO(
     @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
+    @field:Schema(description = "命中的分类") var categories: List<CategoryVO> = emptyList(),
 ) {
     constructor(entity: BookmarkEntity) : this(
         id = entity.id,
@@ -224,4 +225,12 @@ data class BookmarkFunctionVO(
     @field:Schema(description = "功能ID") val id: String = IdUtil.fastUUID(),
     @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
     @field:Schema(description = "功能类型") val type: FunctionType,
+)
+
+/** 书签命中的分类（精简视图，用于后台列表/详情展示） */
+data class CategoryVO(
+    var id: String,
+    var slug: String,
+    var name: String,
+    var color: String? = null,
 )

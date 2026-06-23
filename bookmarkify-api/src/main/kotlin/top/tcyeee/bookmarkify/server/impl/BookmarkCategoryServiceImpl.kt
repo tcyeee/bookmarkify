@@ -8,6 +8,7 @@ import org.springframework.transaction.support.TransactionTemplate
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.entity.BookmarkCategory
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
+import top.tcyeee.bookmarkify.entity.entity.WebsiteCategory
 import top.tcyeee.bookmarkify.mapper.BookmarkCategoryMapper
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkCategoryService
@@ -41,19 +42,35 @@ class BookmarkCategoryServiceImpl(
             val slugToId = categories.associate { it.slug to it.id }
             val categoryIds = slugs.mapNotNull { slugToId[it] }
             if (categoryIds.isEmpty()) return
-            replaceLinks(bookmark.id, categoryIds)
+            replaceLinks(bookmark.id, categoryIds, "DEEPSEEK")
             logger.debug("[categorize] 分类完成: bookmarkId=${bookmark.id}, slugs=$slugs")
         }.onFailure {
             logger.warn("[categorize] 分类失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}")
         }
     }
 
+    override fun categoriesOf(bookmarkIds: Collection<String>): Map<String, List<WebsiteCategory>> {
+        if (bookmarkIds.isEmpty()) return emptyMap()
+        val links = ktQuery()
+            .`in`(BookmarkCategory::bookmarkId, bookmarkIds)
+            .eq(BookmarkCategory::deleted, false)
+            .list()
+        if (links.isEmpty()) return emptyMap()
+        val catById = websiteCategoryService
+            .listByIds(links.map { it.categoryId }.distinct())
+            .associateBy { it.id }
+        return links.groupBy { it.bookmarkId }
+            .mapValues { (_, ls) -> ls.mapNotNull { catById[it.categoryId] } }
+    }
+
     /** 幂等替换：物理删除旧关联，再插入新关联（避开 unique 约束与软删冲突）。
      *  用 TransactionTemplate 包住删除+插入，保证原子（@Transactional 在同 bean 自调用下会失效）。 */
-    fun replaceLinks(bookmarkId: String, categoryIds: List<String>) {
+    override fun replaceLinks(bookmarkId: String, categoryIds: List<String>, source: String) {
         txTemplate.execute {
             ktUpdate().eq(BookmarkCategory::bookmarkId, bookmarkId).remove()
-            saveBatch(categoryIds.map { BookmarkCategory(bookmarkId, it) })
+            saveBatch(categoryIds.map {
+                BookmarkCategory(bookmarkId = bookmarkId, categoryId = it, source = source)
+            })
         }
     }
 }

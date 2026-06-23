@@ -49,6 +49,15 @@ const routes: RouteRecordRaw[] = [
           title: '书签图标管理',
         },
       },
+      {
+        name: 'BookmarkCategory',
+        path: '/bookmark/category',
+        component: () => import('#/views/bookmark/category/index.vue'),
+        meta: {
+          icon: 'carbon:tag',
+          title: '分类管理',
+        },
+      },
     ],
   },
   {

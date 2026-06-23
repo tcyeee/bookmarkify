@@ -119,3 +119,18 @@ data class UserSearchParams(
         return query
     }
 }
+
+/** 管理后台新增/修改分类词条的入参（id 为空表示新增） */
+data class CategorySaveParams(
+    val id: String? = null,
+    val slug: String,
+    val name: String,
+    val description: String? = null,
+    val color: String? = null,
+    val sort: Int = 0,
+)
+
+/** 管理后台手动设置某书签分类的入参 */
+data class BookmarkCategoriesParams(
+    val categoryIds: List<String> = emptyList(),
+)
