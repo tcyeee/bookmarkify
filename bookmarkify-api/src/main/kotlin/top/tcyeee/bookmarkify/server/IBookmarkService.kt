@@ -66,6 +66,8 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 管理员：AI 推荐与该书签相似的网站（仅展示） */
     fun adminSimilarSites(bookmarkId: String): List<SimilarSite>
 
+    fun adminGenerateAppName(bookmarkId: String): String?
+
     /** 解析书签,然后保存到数据库,同时通过 WebSocket 通知用户（异步事件入口） */
     fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String)
 

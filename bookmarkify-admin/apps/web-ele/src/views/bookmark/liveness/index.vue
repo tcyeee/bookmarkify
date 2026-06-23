@@ -9,6 +9,7 @@ import { ElMessage } from "element-plus";
 
 import {
   applyRefetchBookmarkApi,
+  generateAppNameApi,
   getBookmarkListApi,
   refetchBookmarkApi,
   updateBookmarkIconApi,
@@ -65,13 +66,6 @@ const ElInputNumber = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElInputNumber),
 );
 
-const ElSegmented = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/segmented/index"),
-    import("element-plus/es/components/segmented/style/css"),
-  ]).then(([res]) => res.ElSegmented),
-);
-
 const ElColorPicker = defineAsyncComponent(() =>
   Promise.all([
     import("element-plus/es/components/color-picker/index"),
@@ -84,6 +78,13 @@ const ElSlider = defineAsyncComponent(() =>
     import("element-plus/es/components/slider/index"),
     import("element-plus/es/components/slider/style/css"),
   ]).then(([res]) => res.ElSlider),
+);
+
+const ElSwitch = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/switch/index"),
+    import("element-plus/es/components/switch/style/css"),
+  ]).then(([res]) => res.ElSwitch),
 );
 
 const PAGE_SIZE = 200;
@@ -125,6 +126,10 @@ const PADDING_DEFAULT = 25;
 const editPadding = ref(PADDING_DEFAULT);
 const editBgColor = ref<null | string>(null);
 const savingIcon = ref(false);
+// 是否使用高清图（落库）、书签简称（落库）、DeepSeek 生成中
+const editUseHdLogo = ref(false);
+const editAppName = ref("");
+const generatingAppName = ref(false);
 
 // 预览图标大小（仅影响预览，不入库）：小 / 中 / 大
 const PREVIEW_SIZES = [
@@ -132,7 +137,6 @@ const PREVIEW_SIZES = [
   { label: "中", value: 120 },
   { label: "大", value: 160 },
 ];
-const previewSize = ref(120);
 
 const normColor = (c?: null | string) => c || "";
 
@@ -141,7 +145,9 @@ const iconDirty = computed(() => {
   if (!item) return false;
   return (
     editPadding.value !== item.iconPadding ||
-    normColor(editBgColor.value) !== normColor(item.iconBgColor)
+    normColor(editBgColor.value) !== normColor(item.iconBgColor) ||
+    editUseHdLogo.value !== (item.useHdLogo ?? false) ||
+    (editAppName.value.trim() || "") !== (item.appName || "")
   );
 });
 
@@ -182,7 +188,8 @@ function openDetail(row: BookmarkEntity) {
     Math.max(PADDING_MIN, row.iconPadding ?? PADDING_DEFAULT),
   );
   editBgColor.value = row.iconBgColor ?? null;
-  previewSize.value = 120;
+  editUseHdLogo.value = row.useHdLogo ?? false;
+  editAppName.value = row.appName ?? "";
   logoError.value = false;
   oldLogoError.value = false;
   newLogoError.value = false;
@@ -231,6 +238,24 @@ async function pickScreenColor() {
   }
 }
 
+/** DeepSeek 生成书签简称，填入编辑框（仍可手改） */
+async function generateAppName() {
+  const item = detailItem.value;
+  if (!item) return;
+  generatingAppName.value = true;
+  try {
+    const res = await generateAppNameApi(item.id);
+    if (res.appName) {
+      editAppName.value = res.appName;
+      ElMessage.success("已生成");
+    } else {
+      ElMessage.warning("未能生成简称（标题为空或模型无结果）");
+    }
+  } finally {
+    generatingAppName.value = false;
+  }
+}
+
 /**
  * 保存：先应用「重新获取」的选择（新标题/新图标），再保存图标设置（内边距/背景色）
  */
@@ -252,14 +277,19 @@ async function saveIcon() {
       item.maximalLogoSize = updated.maximalLogoSize;
       refetchResult.value = null;
     }
-    // 2. 保存图标设置（内边距 / 背景色）
+    // 2. 保存图标设置（内边距 / 背景色 / 高清图开关 / 书签简称）
     if (iconDirty.value) {
+      const nextAppName = editAppName.value.trim() || null;
       await updateBookmarkIconApi(item.id, {
         iconPadding: editPadding.value,
         iconBgColor: editBgColor.value || null,
+        useHdLogo: editUseHdLogo.value,
+        appName: nextAppName,
       });
       item.iconPadding = editPadding.value;
       item.iconBgColor = editBgColor.value || undefined;
+      item.useHdLogo = editUseHdLogo.value;
+      item.appName = nextAppName || undefined;
     }
     ElMessage.success("已保存");
   } finally {
@@ -335,7 +365,7 @@ onMounted(() => {
     <ElDialog
       v-model="detailVisible"
       :title="detailItem ? detailItem.title || displayName(detailItem) : ''"
-      width="900px"
+      width="980px"
       append-to-body
       class="icon-dialog"
     >
@@ -358,15 +388,24 @@ onMounted(() => {
           <div class="preview-pane">
             <div class="pane-title">预览</div>
             <div class="preview-area">
-              <!-- 小图标：随内边距 / 背景色实时更新；大小仅受下方分段控制 -->
+              <!-- 小图标：大中小三尺寸同显，均实时套用内边距 / 背景色 -->
               <div class="preview-block">
                 <span class="preview-block-label">小图标</span>
-                <BookmarkIcon
-                  :value="previewValue ?? detailItem"
-                  :size="previewSize"
-                  :padding="editPadding"
-                  :bg-color="editBgColor ?? undefined"
-                />
+                <div class="preview-sizes">
+                  <div
+                    v-for="s in PREVIEW_SIZES"
+                    :key="s.value"
+                    class="preview-size-item"
+                  >
+                    <BookmarkIcon
+                      :value="previewValue ?? detailItem"
+                      :size="s.value"
+                      :padding="editPadding"
+                      :bg-color="editBgColor ?? undefined"
+                    />
+                    <span class="preview-size-tag">{{ s.label }}</span>
+                  </div>
+                </div>
               </div>
 
               <!-- 高清 LOGO：来自 scrapper 的原始大图，未获取到时给出说明 -->
@@ -387,16 +426,45 @@ onMounted(() => {
                 </div>
               </div>
             </div>
-            <ElSegmented
-              v-model="previewSize"
-              :options="PREVIEW_SIZES"
-              size="small"
-            />
           </div>
 
           <!-- 右侧：编辑区域 -->
           <div class="edit-pane">
             <div class="pane-title">编辑</div>
+            <!-- 书签简称：手填 + DeepSeek 生成 -->
+            <div class="edit-row">
+              <span class="edit-label">书签简称</span>
+              <div class="edit-control">
+                <ElInput
+                  v-model="editAppName"
+                  placeholder="书签简称"
+                  size="small"
+                  class="appname-input"
+                />
+                <ElButton
+                  size="small"
+                  :loading="generatingAppName"
+                  @click="generateAppName"
+                >
+                  DeepSeek 生成
+                </ElButton>
+              </div>
+            </div>
+
+            <!-- 使用高清图：无高清 LOGO 时禁用 -->
+            <div class="edit-row">
+              <span class="edit-label">使用高清图</span>
+              <div class="edit-control">
+                <ElSwitch
+                  v-model="editUseHdLogo"
+                  :disabled="!detailItem.logoUrl"
+                />
+                <span v-if="!detailItem.logoUrl" class="edit-hint">
+                  未获取到高清 LOGO
+                </span>
+              </div>
+            </div>
+
             <!-- 背景颜色 -->
             <div class="edit-row">
               <span class="edit-label">背景颜色</span>
@@ -590,7 +658,7 @@ onMounted(() => {
 /* 左侧：预览面板（灰底卡片，与右侧编辑区明显区分） */
 .preview-pane {
   display: flex;
-  flex: 0 0 220px;
+  flex: 0 0 430px;
   flex-direction: column;
   gap: 12px;
   align-items: center;
@@ -624,6 +692,26 @@ onMounted(() => {
 
 .preview-block-label {
   font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+/* 三尺寸并排：底部对齐，大图最高 */
+.preview-sizes {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.preview-size-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.preview-size-tag {
+  font-size: 11px;
   color: var(--el-text-color-secondary);
 }
 
@@ -681,19 +769,33 @@ onMounted(() => {
 
 .edit-row {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  gap: 12px;
+  align-items: center;
 }
 
 .edit-label {
+  flex: 0 0 72px;
   font-size: 13px;
   color: var(--el-text-color-regular);
 }
 
 .edit-control {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: 12px;
+}
+
+.appname-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .padding-control {
