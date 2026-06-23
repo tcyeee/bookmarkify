@@ -9,6 +9,8 @@ const props = withDefaults(
     size?: number;
     padding?: number;
     bgColor?: string;
+    // 高清直链：存在则优先渲染（纯 img 铺白底，不做平均色），对齐前台 iconHdUrl 行为
+    hdUrl?: string;
   }>(),
   { size: 72 },
 );
@@ -24,13 +26,18 @@ const FALLBACK_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`,
 )}`;
 
-// 状态：错误标记、动态背景色、是否放大
+// 状态：HD/base64 错误标记、动态背景色、是否放大
+const hdError = ref(false);
 const iconError = ref(false);
 const backgroundColor = ref("#ffffff");
 const shouldUpscale = ref(false);
 
 const logoSize = computed(() => props.size);
-const hasBase64 = computed(() => !iconError.value && !!props.value.iconBase64);
+// 取源优先级：HD 直链 → base64 → 兜底（与前台 BookmarkLogo 一致）
+const hasHd = computed(() => !hdError.value && !!props.hdUrl);
+const hasBase64 = computed(
+  () => !hasHd.value && !iconError.value && !!props.value.iconBase64,
+);
 const base64Src = computed(() => buildBase64DataUrl(props.value.iconBase64));
 
 // 外层卡片尺寸
@@ -53,23 +60,37 @@ const logoStyle = computed(() => {
     : { backgroundColor: "#ffffff" };
 });
 
-// base64 尺寸：源图 >= 64px 放大到 60%，否则 40%；再按内边距收缩（负值则放大）
+// base64 尺寸：源图 >= 64px 放大到 60%，否则 40%；再按内边距百分比收缩（与前台一致）
 const base64PixelSize = computed(() => {
   const base = logoSize.value * (shouldUpscale.value ? 0.6 : 0.4);
-  return Math.max(4, Math.round(base - 2 * effectivePadding.value));
+  // 内边距按比例收缩(相对图标尺寸),避免小格子下被绝对像素减成负值而塌成 4px
+  const shrink = 1 - Math.min(Math.max(effectivePadding.value, 0), 35) / 100;
+  return Math.max(4, Math.round(base * shrink));
 });
 const base64Style = computed(() => ({
   width: `${base64PixelSize.value}px`,
   height: `${base64PixelSize.value}px`,
 }));
 const fallbackStyle = computed(() => {
-  const px = Math.max(4, Math.round(logoSize.value * 0.4 - 2 * effectivePadding.value));
+  const px = Math.round(logoSize.value * 0.4);
   return { width: `${px}px`, height: `${px}px` };
 });
+
+function onHdError() {
+  hdError.value = true;
+}
 
 function onIconError() {
   iconError.value = true;
 }
+
+// 监听 hdUrl 变化：重置 HD 加载错误标记以便重新加载
+watch(
+  () => props.hdUrl,
+  () => {
+    hdError.value = false;
+  },
+);
 
 // 监听 iconBase64 变化：重置错误状态并重新计算主色
 watch(
@@ -197,10 +218,18 @@ function rgbToHex(r: number, g: number, b: number): string {
 <template>
   <!-- 外层卡片：圆角与阴影，与前台 BookmarkLogo 一致 -->
   <div class="icon-card" :style="cardStyle">
-    <!-- 内层 Logo：base64 时叠加主色与淡白蒙版 -->
+    <!-- 内层 Logo：HD 优先纯铺白底；base64 时叠加主色与淡白蒙版；否则兜底地球 -->
     <div class="icon-logo" :style="logoStyle">
+      <!-- 优先使用高清图 -->
       <img
-        v-if="hasBase64"
+        v-if="hasHd"
+        :src="hdUrl"
+        alt=""
+        draggable="false"
+        @error="onHdError"
+      />
+      <img
+        v-else-if="hasBase64"
         :style="base64Style"
         :src="base64Src"
         alt=""

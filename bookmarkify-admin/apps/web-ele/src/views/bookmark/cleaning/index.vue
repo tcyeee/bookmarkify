@@ -16,6 +16,8 @@ import {
 import { getCategoryListApi, type CategoryEntity } from "#/api/category";
 import { ElMessage } from "element-plus";
 
+import BookmarkIcon from "../liveness/BookmarkIcon.vue";
+
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
     import("element-plus/es/components/card/index"),
@@ -194,14 +196,6 @@ const statusOptions: {
   { label: "已阻止", value: "BLOCKED", type: "danger" },
 ];
 
-function iconSrc(row: BookmarkEntity | null): string {
-  const v = row?.iconBase64;
-  if (!v) return "";
-  const trimmed = v.trim();
-  if (trimmed.startsWith("data:") || trimmed.startsWith("http")) return trimmed;
-  return `data:image/png;base64,${trimmed}`;
-}
-
 async function fetchData() {
   loading.value = true;
   try {
@@ -290,8 +284,12 @@ onMounted(() => {
       <ElTable :data="tableData" border v-loading="loading" style="width: 100%" @row-click="handleRowClick">
         <ElTableColumn label="头像" width="80" align="center">
           <template #default="{ row }">
-            <img v-if="iconSrc(row)" :src="iconSrc(row)" class="mx-auto h-8 w-8 rounded object-contain" :alt="row.title" />
-            <span v-else class="text-gray-300">-</span>
+            <BookmarkIcon
+              :value="row"
+              :size="32"
+              :hd-url="row.useHdLogo ? row.logoUrl : undefined"
+              class="mx-auto"
+            />
           </template>
         </ElTableColumn>
         <ElTableColumn prop="appName" label="App Name" min-width="120" />
@@ -323,162 +321,159 @@ onMounted(() => {
       <div class="mt-4 flex justify-end">
         <ElPagination v-model:current-page="pagination.currentPage" v-model:page-size="pagination.pageSize" :page-sizes="[10, 20, 50, 100]" :total="pagination.total" layout="total, sizes, prev, pager, next, jumper" @current-change="handleCurrentChange" @size-change="handleSizeChange" />
       </div>
-      <ElDialog v-model="detailVisible" title="书签详情" width="600px">
-        <div v-if="currentRow" class="space-y-3 text-sm">
-          <div class="flex items-center">
-            <span class="w-24 text-gray-500">头像</span>
-            <img v-if="iconSrc(currentRow)" :src="iconSrc(currentRow)" class="h-12 w-12 rounded object-contain" :alt="currentRow.title" />
-            <span v-else class="text-gray-400">-</span>
-          </div>
-          <div class="flex">
-            <span class="w-24 text-gray-500">App Name</span>
-            <span class="flex-1 font-medium break-all">{{ currentRow.appName || "-" }}</span>
-          </div>
-          <div class="flex">
-            <span class="w-24 text-gray-500">标题</span>
-            <span class="flex-1 font-medium break-all">{{ currentRow.title || "-" }}</span>
-          </div>
-          <div class="flex">
-            <span class="w-24 text-gray-500">域名</span>
-            <span class="flex-1 break-all">{{ currentRow.urlHost }}</span>
-          </div>
-          <div class="flex">
-            <span class="w-24 text-gray-500">路径</span>
-            <span class="flex-1 break-all">{{ currentRow.urlPath || "-" }}</span>
-          </div>
-          <div class="flex">
-            <span class="w-24 text-gray-500">协议</span>
-            <span class="flex-1">{{ currentRow.urlScheme }}</span>
-          </div>
-          <div class="flex">
-            <span class="w-24 text-gray-500">描述</span>
-            <span class="flex-1 break-all">{{ currentRow.description || "-" }}</span>
-          </div>
-          <div class="flex items-start">
-            <span class="w-24 text-gray-500">分类</span>
-            <div class="flex-1">
-              <div class="mb-2 flex flex-wrap gap-1">
-                <ElTag
-                  v-for="c in currentRow.categories ?? []"
-                  :key="c.id"
-                  size="small"
-                  :color="c.color || undefined"
-                  :style="c.color ? { color: '#fff', borderColor: c.color } : {}"
-                >
-                  {{ c.name }}
-                </ElTag>
-                <span
-                  v-if="(currentRow.categories ?? []).length === 0"
-                  class="text-gray-400"
-                >
-                  暂无分类
-                </span>
+      <ElDialog v-model="detailVisible" title="书签详情" width="640px">
+        <div v-if="currentRow" class="space-y-4 text-sm">
+          <!-- 卡片一：基础信息 -->
+          <ElCard shadow="never" class="detail-card">
+            <template #header>
+              <span class="font-medium">基础信息</span>
+            </template>
+            <div class="flex gap-6">
+              <!-- 左：头像 + 状态 + 活跃 -->
+              <div class="flex w-32 flex-col items-center gap-3">
+                <BookmarkIcon
+                  :value="currentRow"
+                  :size="64"
+                  :hd-url="currentRow.useHdLogo ? currentRow.logoUrl : undefined"
+                />
+                <div>
+                  <ElTag v-if="currentRow.parseStatus === 'SUCCESS'" type="success" size="small">
+                    成功
+                  </ElTag>
+                  <ElTag v-else-if="currentRow.parseStatus === 'LOADING'" type="info" size="small">
+                    解析中
+                  </ElTag>
+                  <ElTag v-else-if="currentRow.parseStatus === 'CLOSED'" type="warning" size="small">
+                    已关闭
+                  </ElTag>
+                  <ElTag v-else-if="currentRow.parseStatus === 'BLOCKED'" type="danger" size="small">
+                    已阻止
+                  </ElTag>
+                  <ElTag v-else size="small">
+                    {{ currentRow.parseStatus || "未知" }}
+                  </ElTag>
+                </div>
+                <div class="flex items-center gap-2">
+                  <ElSwitch :model-value="currentRow.isActivity" active-color="#13ce66" inactive-color="#ff4949" disabled />
+                  <span class="text-gray-500">{{ currentRow.isActivity ? "活跃" : "不活跃" }}</span>
+                </div>
               </div>
-              <ElSelectV2
-                v-model="editingCategoryIds"
-                :options="categoryDict.map((c) => ({ label: c.name, value: c.id }))"
-                multiple
-                clearable
-                placeholder="选择分类"
-                style="width: 100%"
-              />
-              <div class="mt-2 flex gap-2">
-                <ElButton
-                  type="primary"
-                  size="small"
-                  :loading="savingCategories"
-                  @click="saveCategories"
-                >
-                  保存分类
-                </ElButton>
-                <ElButton
-                  size="small"
-                  :loading="recategorizing"
-                  @click="recategorize"
-                >
-                  重新 AI 归类
-                </ElButton>
+              <!-- 右：其余信息 -->
+              <div class="flex-1 space-y-2">
+                <div class="flex">
+                  <span class="w-20 text-gray-500">App Name</span>
+                  <span class="flex-1 font-medium break-all">{{ currentRow.appName || "-" }}</span>
+                </div>
+                <div class="flex">
+                  <span class="w-20 text-gray-500">标题</span>
+                  <span class="flex-1 font-medium break-all">{{ currentRow.title || "-" }}</span>
+                </div>
+                <div class="flex">
+                  <span class="w-20 text-gray-500">域名</span>
+                  <span class="flex-1 break-all">{{ currentRow.urlHost }}</span>
+                </div>
+                <div class="flex">
+                  <span class="w-20 text-gray-500">描述</span>
+                  <span class="flex-1 break-all">{{ currentRow.description || "-" }}</span>
+                </div>
+                <div class="flex">
+                  <span class="w-20 text-gray-500">创建时间</span>
+                  <span class="flex-1">{{ formatDateTime(currentRow.createTime) }}</span>
+                </div>
+                <div v-if="currentRow.parseErrMsg" class="flex">
+                  <span class="w-20 text-gray-500">错误信息</span>
+                  <span class="flex-1 break-all text-red-500">{{ currentRow.parseErrMsg }}</span>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="flex items-center">
-            <span class="w-24 text-gray-500">状态</span>
-            <div>
-              <ElTag v-if="currentRow.parseStatus === 'SUCCESS'" type="success" size="small">
-                成功
+          </ElCard>
+
+          <!-- 卡片二：分类 -->
+          <ElCard shadow="never" class="detail-card">
+            <template #header>
+              <span class="font-medium">分类</span>
+            </template>
+            <div class="mb-2 flex flex-wrap gap-1">
+              <ElTag
+                v-for="c in currentRow.categories ?? []"
+                :key="c.id"
+                size="small"
+                :color="c.color || undefined"
+                :style="c.color ? { color: '#fff', borderColor: c.color } : {}"
+              >
+                {{ c.name }}
               </ElTag>
-              <ElTag v-else-if="currentRow.parseStatus === 'LOADING'" type="info" size="small">
-                解析中
-              </ElTag>
-              <ElTag v-else-if="currentRow.parseStatus === 'CLOSED'" type="warning" size="small">
-                已关闭
-              </ElTag>
-              <ElTag v-else-if="currentRow.parseStatus === 'BLOCKED'" type="danger" size="small">
-                已阻止
-              </ElTag>
-              <ElTag v-else size="small">
-                {{ currentRow.parseStatus || "未知" }}
-              </ElTag>
+              <span
+                v-if="(currentRow.categories ?? []).length === 0"
+                class="text-gray-400"
+              >
+                暂无分类
+              </span>
             </div>
-          </div>
-          <div class="flex items-center">
-            <span class="w-24 text-gray-500">活跃</span>
-            <div class="flex items-center gap-2">
-              <ElSwitch :model-value="currentRow.isActivity" active-color="#13ce66" inactive-color="#ff4949" disabled />
-              <span>{{ currentRow.isActivity ? "活跃" : "不活跃" }}</span>
-            </div>
-          </div>
-          <div class="flex">
-            <span class="w-24 text-gray-500">错误信息</span>
-            <span class="flex-1 break-all">{{ currentRow.parseErrMsg || "-" }}</span>
-          </div>
-          <div class="flex">
-            <span class="w-24 text-gray-500">创建时间</span>
-            <span class="flex-1">{{ formatDateTime(currentRow.createTime) }}</span>
-          </div>
-          <div class="flex">
-            <span class="w-24 text-gray-500">更新时间</span>
-            <span class="flex-1">{{ formatDateTime(currentRow.updateTime) }}</span>
-          </div>
-          <div class="flex items-start">
-            <span class="w-24 text-gray-500">相似网站</span>
-            <div class="flex-1">
+            <ElSelectV2
+              v-model="editingCategoryIds"
+              :options="categoryDict.map((c) => ({ label: c.name, value: c.id }))"
+              multiple
+              clearable
+              placeholder="选择分类"
+              style="width: 100%"
+            />
+            <div class="mt-2 flex gap-2">
+              <ElButton
+                type="primary"
+                size="small"
+                :loading="savingCategories"
+                @click="saveCategories"
+              >
+                保存分类
+              </ElButton>
               <ElButton
                 size="small"
-                :loading="loadingSimilar"
-                @click="findSimilar"
+                :loading="recategorizing"
+                @click="recategorize"
               >
-                查找相似网站
+                重新 AI 归类
               </ElButton>
-              <ul v-if="similarSites.length > 0" class="mt-2 space-y-2">
-                <li
-                  v-for="s in similarSites"
-                  :key="s.domain"
-                  class="rounded border border-gray-100 p-2"
-                >
-                  <div class="font-medium">
-                    {{ s.name }}
-                    <a
-                      :href="`https://${s.domain}`"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="ml-1 text-blue-500"
-                    >
-                      {{ s.domain }}
-                    </a>
-                  </div>
-                  <div class="text-gray-500">{{ s.reason }}</div>
-                </li>
-              </ul>
-              <div
-                v-else-if="similarLoaded"
-                class="mt-2 text-gray-400"
-              >
-                未找到相似网站
-              </div>
             </div>
-          </div>
+          </ElCard>
+
+          <!-- 卡片三：相似网站（点击操作栏按钮后出现） -->
+          <ElCard v-if="similarLoaded" shadow="never" class="detail-card">
+            <template #header>
+              <span class="font-medium">相似网站</span>
+            </template>
+            <ul v-if="similarSites.length > 0" class="space-y-2">
+              <li
+                v-for="s in similarSites"
+                :key="s.domain"
+                class="rounded border border-gray-100 p-2"
+              >
+                <div class="font-medium">
+                  {{ s.name }}
+                  <a
+                    :href="`https://${s.domain}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="ml-1 text-blue-500"
+                  >
+                    {{ s.domain }}
+                  </a>
+                </div>
+                <div class="text-gray-500">{{ s.reason }}</div>
+              </li>
+            </ul>
+            <div v-else class="text-gray-400">未找到相似网站</div>
+          </ElCard>
         </div>
+        <template #footer>
+          <ElButton
+            :loading="loadingSimilar"
+            @click="findSimilar"
+          >
+            查找相似网站
+          </ElButton>
+          <ElButton @click="detailVisible = false">关闭</ElButton>
+        </template>
       </ElDialog>
     </ElCard>
   </Page>
@@ -490,5 +485,13 @@ onMounted(() => {
   font-weight: 400 !important;
   line-height: 32px;
   color: var(--el-text-color-regular);
+}
+
+.detail-card :deep(.el-card__header) {
+  padding: 10px 16px;
+}
+
+.detail-card :deep(.el-card__body) {
+  padding: 16px;
 }
 </style>
