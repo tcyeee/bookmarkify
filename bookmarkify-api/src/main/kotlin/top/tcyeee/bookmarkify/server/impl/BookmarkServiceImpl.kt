@@ -173,11 +173,14 @@ class BookmarkServiceImpl(
     override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> {
         val page = baseMapper.selectPage(params.toPage(), params.toWrapper())
             .convert { BookmarkAdminVO(it) }
-        val catMap = bookmarkCategoryService.categoriesOf(page.records.map { it.id })
-        page.records.forEach { vo ->
-            vo.categories = catMap[vo.id].orEmpty()
-                .map { CategoryVO(it.id, it.slug, it.name, it.color) }
-        }
+        // 分类回填失败(如分类表缺失/查询异常)不应拖垮整个书签列表，降级为空分类
+        runCatching {
+            val catMap = bookmarkCategoryService.categoriesOf(page.records.map { it.id })
+            page.records.forEach { vo ->
+                vo.categories = catMap[vo.id].orEmpty()
+                    .map { CategoryVO(it.id, it.slug, it.name, it.color) }
+            }
+        }.onFailure { log.warn("[adminListAll] 分类回填失败(忽略): ${it.message}") }
         return page
     }
 
