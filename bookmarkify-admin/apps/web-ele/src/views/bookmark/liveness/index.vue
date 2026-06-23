@@ -80,13 +80,6 @@ const ElSlider = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElSlider),
 );
 
-const ElSwitch = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/switch/index"),
-    import("element-plus/es/components/switch/style/css"),
-  ]).then(([res]) => res.ElSwitch),
-);
-
 const PAGE_SIZE = 200;
 const MAX_PAGES = 50; // 安全上限，避免异常分页导致死循环
 
@@ -451,14 +444,40 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- 使用高清图：无高清 LOGO 时禁用 -->
+            <!-- 选择图标源：小图 / 高清，各以图片展示；无高清 LOGO 时禁用高清 -->
             <div class="edit-row">
-              <span class="edit-label">使用高清图</span>
+              <span class="edit-label">选择图标源</span>
               <div class="edit-control">
-                <ElSwitch
-                  v-model="editUseHdLogo"
-                  :disabled="!detailItem.logoUrl"
-                />
+                <div class="source-options">
+                  <div
+                    :class="['source-option', { active: !editUseHdLogo }]"
+                    @click="editUseHdLogo = false"
+                  >
+                    <div class="source-thumb">
+                      <BookmarkIcon :value="detailItem" :size="48" />
+                    </div>
+                    <span class="source-tag">小图</span>
+                  </div>
+                  <div
+                    :class="[
+                      'source-option',
+                      { active: editUseHdLogo, disabled: !detailItem.logoUrl },
+                    ]"
+                    @click="detailItem.logoUrl && (editUseHdLogo = true)"
+                  >
+                    <div class="source-thumb">
+                      <img
+                        v-if="detailItem.logoUrl"
+                        :src="detailItem.logoUrl"
+                        class="source-thumb-img"
+                        alt="高清图标"
+                        draggable="false"
+                      />
+                      <span v-else class="source-thumb-empty">无</span>
+                    </div>
+                    <span class="source-tag">高清</span>
+                  </div>
+                </div>
                 <span v-if="!detailItem.logoUrl" class="edit-hint">
                   未获取到高清 LOGO
                 </span>
@@ -796,6 +815,75 @@ onMounted(() => {
 .edit-hint {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+/* 图标源选择：小图 / 高清，图片化两选一 */
+.source-options {
+  display: flex;
+  gap: 12px;
+}
+
+.source-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.source-option:hover {
+  border-color: var(--el-color-primary-light-5);
+}
+
+.source-option.active {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+}
+
+.source-option.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.source-option.disabled:hover {
+  border-color: var(--el-border-color);
+}
+
+.source-thumb {
+  display: flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+}
+
+.source-thumb-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.source-thumb-empty {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.source-tag {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+}
+
+.source-option.active .source-tag {
+  font-weight: 600;
+  color: var(--el-color-primary);
 }
 
 .padding-control {

@@ -210,3 +210,11 @@ catalog:
   zod: ^3.25.67
   zod-defaults: 0.1.3
   es-toolkit: ^1.41.0
+
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: true
+  lefthook: true
+  less: true
+  unrs-resolver: true
+  vue-demi: true
