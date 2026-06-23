@@ -42,6 +42,7 @@ data class BookmarkEntity(
     @field:Schema(description = "最大LOGO尺寸") var maximalLogoSize: Int = 0,
     @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
     @field:Max(32) @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
+    @field:Schema(description = "是否在前台用高清LOGO渲染") var useHdLogo: Boolean = false,
 
     /* 状态信息 */
     @JsonIgnore @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.LOADING,

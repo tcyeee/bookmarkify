@@ -40,6 +40,8 @@ data class BookmarkUpdatePrams(var linkId: String, var title: String, var descri
 data class BookmarkIconUpdateParams(
     @field:Schema(description = "图片内边距") var iconPadding: Int = 0,
     @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
+    @field:Schema(description = "是否使用高清图") var useHdLogo: Boolean = false,
+    @field:Schema(description = "书签简称") var appName: String? = null,
 )
 
 /** 管理后台「重新获取」后，应用预览结果：分别决定标题/小图标/大图标(高清 LOGO)是否采用新值 */

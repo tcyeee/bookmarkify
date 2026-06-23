@@ -31,6 +31,8 @@ export interface BookmarkShow {
   urlBase: string
   iconBase64: string
   iconHdUrl: string
+  iconPadding?: number
+  iconBgColor?: string
   isActivity: boolean
   createTime?: number
   paths?: Array<string>

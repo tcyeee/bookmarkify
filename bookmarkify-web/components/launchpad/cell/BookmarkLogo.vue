@@ -44,6 +44,11 @@ const backgroundColor = ref('#ffffff')
 const shouldUpscale = ref(false)
 const logoSize = computed(() => props.size ?? 80)
 
+// 自定义背景色（管理台设置）：存在则直接铺该色
+const customBgColor = computed(() => props.value.iconBgColor || '')
+// 图片内边距（管理台设置）：收缩 base64 图标
+const effectivePadding = computed(() => props.value.iconPadding ?? 0)
+
 // 开发环境标记
 const isDev = computed(() => isLocalhostOrIP(props.value.urlFull))
 // 判定是否需走 base64 分支
@@ -56,18 +61,24 @@ const logoSizeStyle = computed(() => ({
   width: `${logoSize.value}px`,
   height: `${logoSize.value}px`,
 }))
-const logoStyle = computed(() =>
-  shouldUseBase64.value
+const logoStyle = computed(() => {
+  if (customBgColor.value) {
+    return { backgroundColor: customBgColor.value }
+  }
+  return shouldUseBase64.value
     ? {
         backgroundColor: backgroundColor.value,
         backgroundImage: 'linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.58))',
       }
-    : undefined,
-)
+    : undefined
+})
 // base64 尺寸：随外部 size 同步，保持原有比例
-const base64PixelSize = computed(() =>
-  Math.round(logoSize.value * (shouldUpscale.value ? 0.6 : 0.4)),
-)
+const base64PixelSize = computed(() => {
+  const base = logoSize.value * (shouldUpscale.value ? 0.6 : 0.4)
+  // 内边距按比例收缩(相对图标尺寸),避免小格子下被绝对像素减成负值而塌成 4px
+  const shrink = 1 - Math.min(Math.max(effectivePadding.value, 0), 35) / 100
+  return Math.max(4, Math.round(base * shrink))
+})
 const base64Style = computed(() => ({
   width: `${base64PixelSize.value}px`,
   height: `${base64PixelSize.value}px`,

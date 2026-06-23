@@ -28,6 +28,9 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                b.icon_base64                                AS iconBase64,
                b.url_host                                   AS urlHost,
                b.app_name                                   AS appName,
+               b.icon_padding                               AS iconPadding,
+               b.icon_bg_color                              AS iconBgColor,
+               b.use_hd_logo                                AS useHdLogo,
                c.height                                     AS hdSize
             FROM bookmark_user_link a
                      LEFT JOIN bookmark b
@@ -61,6 +64,9 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                b.icon_base64                                AS iconBase64,
                b.url_host                                   AS urlHost,
                b.app_name                                   AS appName,
+               b.icon_padding                               AS iconPadding,
+               b.icon_bg_color                              AS iconBgColor,
+               b.use_hd_logo                                AS useHdLogo,
                c.height                                     AS hdSize
             FROM bookmark_user_link a
                      LEFT JOIN bookmark b
