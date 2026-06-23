@@ -44,6 +44,7 @@ docker-compose up -d
 | `OSS_BUCKET` | (optional) | OSS bucket name |
 | `OSS_ENDPOINT` | (optional) | OSS endpoint, e.g. `oss-cn-hangzhou.aliyuncs.com` |
 | `OSS_BASE_URL` | (optional) | Public URL prefix for returned OSS links, e.g. `https://<bucket>.oss-cn-hangzhou.aliyuncs.com` |
+| `SSRF_ALLOW_PRIVATE` | (optional) | Set to `1` to disable SSRF protection (allow targets resolving to private/loopback/link-local addresses). Unset → protection is **on** by default. |
 | `RUST_LOG` | info | Tracing filter |
 | `CHROME_BIN` | (auto) | Path to Chromium binary for headless mode; Docker sets this to `/usr/bin/chromium`. Required for local headless runs if `chromium` is not on PATH. |
 
@@ -75,7 +76,8 @@ POST /scrape
 **`scraper.rs`** — Layer 1 HTTP scraping and HTML parsing.
 - `parse_metadata()` extracts in priority order: Open Graph → Twitter Card → JSON-LD → raw HTML.
 - `ScrapeResult` and `ScrapeError` are the canonical types used throughout.
-- `ScrapeError` variants: `InvalidUrl`, `Timeout`, `FetchFailed`, `HeadlessFailed`, `OssFailed`.
+- `ScrapeError` variants: `InvalidUrl`, `ForbiddenTarget`, `Timeout`, `FetchFailed`, `HeadlessFailed`, `OssFailed`.
+- **SSRF protection:** `validate_target_host()` + a custom `SsrfSafeResolver` reject hosts resolving to private/loopback/link-local IPs (both IP literals and DNS results). The configured proxy host is exempt (trusted, lives on the docker private network). Bypass with `SSRF_ALLOW_PRIVATE=1`. A blocked target maps to `ForbiddenTarget` → HTTP `403`.
 
 **`headless.rs`** — Layer 2 headless Chrome via spider-rs.
 - Global `HEADLESS_LOCK: Mutex<()>` enforces serial Chrome execution (only one browser instance at a time).
@@ -91,7 +93,7 @@ POST /scrape
 - `OssClient::from_env()` returns `None` when any OSS_* var is missing; OSS is silently disabled.
 - `upload_assets()` concurrently uploads OG image, logo, and screenshot; replaces URLs in `ScrapeResult`.
 - Favicon is **never** uploaded to OSS — always fetched and returned as a base64 `data:` URL.
-- OSS object keys are SHA-256 of the source URL, so the same source always maps to the same key (no deduplication check, unconditional PUT).
+- OSS object keys are SHA-256 of the source URL, so the same source always maps to the same key (no deduplication check, unconditional PUT). All keys live under the `bookmarkify/scrapper/{og,logo,screenshots}/` prefix (`OSS_PREFIX` in `oss.rs`).
 - `PROXY_URL` / `REQUEST_TIMEOUT_SECS` do not apply to OSS operations.
 
 ## Deployment Notes
