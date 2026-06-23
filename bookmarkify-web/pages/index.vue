@@ -156,27 +156,32 @@ watch(folderVisible, (open) => {
   else cardDropCleanup?.()
 })
 
+// 本次拖拽是否已执行过「实时拖出」，避免 onDrag 高频重复触发
+let liveEjected = false
+
 onMounted(() => {
   monitorCleanup = monitorForElements({
+    onDragStart: () => (liveEjected = false),
     onDrag: ({ source, location }) => {
-      // 仿 macOS：文件夹内图标一旦被拖出卡片范围，立即关闭浮层（drop 仍会完成 eject）
-      if (!folderVisible.value || !folderId.value) return
-      if (bookmarkStore.parentKeyOf(String(source.data.id)) !== folderId.value) return
+      // 仿 macOS：文件夹内图标一旦被拖出卡片范围的那一瞬间，立即把它并入根（实时归属 + 占位），
+      // 而非等到松手。此后该项已属于根 board，由根 board 自己完成最终落点排序。
+      if (liveEjected || !folderVisible.value || !folderId.value) return
+      const src = String(source.data.id)
+      if (bookmarkStore.parentKeyOf(src) !== folderId.value) return
       const overCard = location.current.dropTargets.some((t) => t.data.zone === 'folder-card')
-      if (!overCard) folderVisible.value = false
+      if (overCard) return
+      liveEjected = true
+      folderVisible.value = false
+      handleEjectLive(src)
     },
     onDrop: ({ source, location }) => {
+      // 反向拖入：浮层仍打开、根图标落入卡片 → 移入文件夹（拖出已在 onDrag 处理，这里不再管）
       const fid = folderId.value
-      if (!fid) return
+      if (!fid || !folderVisible.value) return
       const src = String(source.data.id)
-      const srcParent = bookmarkStore.parentKeyOf(src)
       const overCard = location.current.dropTargets.some((t) => t.data.zone === 'folder-card')
-      if (srcParent === ROOT_KEY && overCard && folderVisible.value) {
-        // 反向拖入：根图标落入打开的浮层
+      if (bookmarkStore.parentKeyOf(src) === ROOT_KEY && overCard) {
         handleCommit(fid, { kind: 'moveInto', draggedId: src, folderId: fid })
-      } else if (srcParent === fid && !overCard) {
-        // 拖出：子项落在卡片外 → 回到根（即使浮层已因拖出而提前关闭）
-        handleCommit(fid, { kind: 'eject', draggedId: src })
       }
     },
   })
@@ -200,9 +205,7 @@ async function handleCommit(parentKey: string, c: DragCommit) {
   if (c.kind === 'reorder') {
     bookmarkStore.reorderLocal(parentKey, c.ids)
     persistOrder(parentKey)
-    return
-  }
-  if (c.kind === 'merge') {
+  } else if (c.kind === 'merge') {
     try {
       const folder = await bookmarksCreateDir([c.draggedId, c.targetId], '新建文件夹', c.index)
       bookmarkStore.createFolderLocal(folder, c.draggedId, c.targetId, c.index)
@@ -210,29 +213,31 @@ async function handleCommit(parentKey: string, c: DragCommit) {
     } catch (e) {
       clog('merge 失败', e)
     }
-    return
-  }
-  if (c.kind === 'moveInto') {
+  } else if (c.kind === 'moveInto') {
+    // 乐观更新：先本地移入（即时生效，无需等服务端往返），再后台提交
+    bookmarkStore.moveLocal(c.draggedId, c.folderId, bookmarkStore.childrenOf(c.folderId).length)
     try {
       await bookmarksMoveNode(c.draggedId, c.folderId)
-      bookmarkStore.moveLocal(c.draggedId, c.folderId, bookmarkStore.childrenOf(c.folderId).length)
       ElNotification.success({ message: '已移入文件夹' })
     } catch (e) {
       clog('moveInto 失败', e)
     }
-    return
   }
-  if (c.kind === 'eject') {
-    try {
-      const result = await bookmarksMoveNode(c.draggedId, null)
-      bookmarkStore.moveLocal(c.draggedId, ROOT_KEY, (bookmarkStore.order[ROOT_KEY] ?? []).length)
-      const dissolved = bookmarkStore.applyMoveResult(result, parentKey)
-      persistOrder(ROOT_KEY)
-      if (dissolved || bookmarkStore.childrenOf(parentKey).length === 0) folderVisible.value = false
-    } catch (e) {
-      clog('eject 失败', e)
-    }
-    return
+  // 兜底：任何一次提交后强制不变量（正常路径已自愈，此处命中即重大事故并已报警）
+  bookmarkStore.enforceFolderInvariant()
+}
+
+// 实时拖出：拖出卡片的那一刻即把图标并入根末尾（本地即时占位），源文件夹若 ≤1 由 moveLocal 自动解散。
+// 最终精确落点由根 board 的 reorder 在松手时决定；这里只负责「移出 + 持久化 + 服务端归属变更」。
+async function handleEjectLive(src: string) {
+  bookmarkStore.moveLocal(src, ROOT_KEY, (bookmarkStore.order[ROOT_KEY] ?? []).length)
+  bookmarkStore.enforceFolderInvariant()
+  persistOrder(ROOT_KEY)
+  try {
+    // 后端会在文件夹剩 ≤1 时自动解散并把残留项并入根，与本地一致，无需额外调用
+    await bookmarksMoveNode(src, null)
+  } catch (e) {
+    clog('live eject 失败', e)
   }
 }
 </script>

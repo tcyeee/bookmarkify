@@ -64,6 +64,8 @@ export const useBookmarkStore = defineStore('homeItems', {
       const { nodes, order } = normalize(root)
       this.nodes = nodes
       this.order = order
+      // 防御：后端不应返回 ≤1 项文件夹，若出现即重大事故 → 报警 + 强制自愈
+      this.enforceFolderInvariant()
     },
 
     // 插入加载占位项到根
@@ -87,9 +89,14 @@ export const useBookmarkStore = defineStore('homeItems', {
     },
 
     removeNode(id: string) {
+      const from = this.parentKeyOf(id)
       delete this.nodes[id]
       for (const k of Object.keys(this.order)) this.order[k] = this.order[k].filter((x) => x !== id)
       delete this.order[id]
+      // 删除后源文件夹若 ≤1 项 → 解散，杜绝单项文件夹残留
+      if (from && from !== ROOT_KEY && this.nodes[from]?.type === HomeItemType.BOOKMARK_DIR && (this.order[from]?.length ?? 0) <= 1) {
+        this.dissolveFolderLocal(from)
+      }
     },
 
     reorderLocal(parentKey: string, ids: Array<string>) {
@@ -103,6 +110,10 @@ export const useBookmarkStore = defineStore('homeItems', {
       next.splice(Math.max(0, Math.min(index, next.length)), 0, id)
       this.order[toParentKey] = next
       if (this.nodes[id]) this.nodes[id] = { ...this.nodes[id], parentId: toParentKey === ROOT_KEY ? null : toParentKey }
+      // 移出后源文件夹若 ≤1 项 → 正常解散（预期行为，不报警）。这是「绝不出现单项文件夹」的主路径。
+      if (from && from !== ROOT_KEY && this.nodes[from]?.type === HomeItemType.BOOKMARK_DIR && (this.order[from]?.length ?? 0) <= 1) {
+        this.dissolveFolderLocal(from)
+      }
     },
 
     // 本地建夹：folderNode 为后端返回的真实文件夹节点；从根移除两子、文件夹落在 index、子顺序 [target, dragged]
@@ -116,18 +127,37 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.order[folderNode.id] = [targetId, draggedId]
     },
 
-    // moveNode 返回值 reconcile：后端把剩 ≤1 项的文件夹自动解散时，result 是剩余的非文件夹节点。
-    // 此处把该文件夹从 order 移除、剩余节点并入根。返回是否发生了解散。
-    applyMoveResult(result: UserLayoutNodeVO | null | undefined, srcParentKey: string): boolean {
-      if (!result || srcParentKey === ROOT_KEY) return false
-      if (result.type === HomeItemType.BOOKMARK_DIR) return false
-      // srcParentKey 是被解散的文件夹 id
-      const remainingId = result.id
-      delete this.order[srcParentKey]
-      if (this.nodes[srcParentKey]) delete this.nodes[srcParentKey]
-      this.nodes[remainingId] = { ...result, parentId: null, children: undefined }
-      this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []).filter((x) => x !== srcParentKey && x !== remainingId), remainingId]
-      return true
+    // 解散一个文件夹：残留 0/1 子项并入根末尾、删除文件夹自身。安静执行（不报警）。
+    dissolveFolderLocal(folderId: string) {
+      const children = this.order[folderId] ?? []
+      for (const cid of children) {
+        if (this.nodes[cid]) this.nodes[cid] = { ...this.nodes[cid], parentId: null, children: undefined }
+      }
+      const rootIds = (this.order[ROOT_KEY] ?? []).filter((x) => x !== folderId && !children.includes(x))
+      this.order[ROOT_KEY] = [...rootIds, ...children]
+      delete this.order[folderId]
+      delete this.nodes[folderId]
+    },
+
+    // 不变量强制：扫描所有文件夹，任何 ≤1 项的存在都是「重大事故」→ 响亮报警 + 强制解散自愈。
+    // 正常操作（moveLocal 移出）已在主路径安静解散，故此处命中即代表出现了非预期的脏状态。
+    enforceFolderInvariant(): string[] {
+      const bad: string[] = []
+      for (const [fid, node] of Object.entries(this.nodes)) {
+        if (node?.type !== HomeItemType.BOOKMARK_DIR) continue
+        if ((this.order[fid]?.length ?? 0) > 1) continue
+        bad.push(fid)
+      }
+      for (const fid of bad) {
+        console.error(
+          '%c[重大事故]',
+          'color:#fff;background:#dc2626;font-weight:bold;padding:1px 6px;border-radius:3px',
+          '检测到 ≤1 项文件夹，已强制解散',
+          { folderId: fid, name: this.nodes[fid]?.name, remaining: [...(this.order[fid] ?? [])] },
+        )
+        this.dissolveFolderLocal(fid)
+      }
+      return bad
     },
   },
 
