@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { BookmarkEntity, BookmarkRefetchResult } from "#/api/bookmark";
 
-import { computed, defineAsyncComponent, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, onMounted, ref } from "vue";
 
 import { Page } from "@vben/common-ui";
 
@@ -114,8 +114,8 @@ const detailItem = ref<BookmarkEntity | null>(null);
 
 // 图标设置编辑：图片内边距、背景色
 const PADDING_MIN = 0;
-const PADDING_MAX = 35;
-const PADDING_DEFAULT = 25;
+const PADDING_MAX = 15;
+const PADDING_DEFAULT = 10;
 const editPadding = ref(PADDING_DEFAULT);
 const editBgColor = ref<null | string>(null);
 const savingIcon = ref(false);
@@ -152,19 +152,17 @@ const chooseTitle = ref<"new" | "old">("new");
 const chooseIcon = ref<"new" | "old">("new");
 const chooseLogo = ref<"new" | "old">("new");
 
-// 左侧预览始终展示书签「当前」状态（与「重新获取」结果解耦）：
-// 新解析得到的大/小图标只在下方「更新」区域对比展示，不应污染预览区。
-const previewValue = computed<BookmarkEntity | null>(() => detailItem.value);
-
-// 高清 LOGO 预览地址：同样只取书签当前 LOGO，不随「重新获取」联动
-const previewLogoUrl = computed<string>(() => detailItem.value?.logoUrl ?? "");
-
-// 高清 LOGO 加载失败标记；地址变化时重置
-const logoError = ref(false);
-watch(previewLogoUrl, () => {
-  logoError.value = false;
+// 预览图标值：随「编辑」区「选择图标源」实时切换小图 / 高清 LOGO。
+// 选高清时把 logoUrl 塞入 iconBase64（BookmarkIcon 支持 http 直链）。
+// 与「重新获取」结果解耦：新解析的图标只在下方「更新」区对比，不污染预览。
+const previewIconValue = computed<BookmarkEntity | null>(() => {
+  const item = detailItem.value;
+  if (!item) return null;
+  if (editUseHdLogo.value && item.logoUrl) {
+    return { ...item, iconBase64: item.logoUrl };
+  }
+  return item;
 });
-const showLogo = computed(() => !!previewLogoUrl.value && !logoError.value);
 
 // 「更新」区域大图标（高清 LOGO）加载失败标记：旧 / 新各一份
 const oldLogoError = ref(false);
@@ -175,7 +173,7 @@ const canSave = computed(() => iconDirty.value || refetchResult.value !== null);
 
 function openDetail(row: BookmarkEntity) {
   detailItem.value = row;
-  // 图标内边距范围 0~35，缺省值 25
+  // 图标内边距范围 0~15，缺省值 10
   editPadding.value = Math.min(
     PADDING_MAX,
     Math.max(PADDING_MIN, row.iconPadding ?? PADDING_DEFAULT),
@@ -183,7 +181,6 @@ function openDetail(row: BookmarkEntity) {
   editBgColor.value = row.iconBgColor ?? null;
   editUseHdLogo.value = row.useHdLogo ?? false;
   editAppName.value = row.appName ?? "";
-  logoError.value = false;
   oldLogoError.value = false;
   newLogoError.value = false;
   // 每次打开重置「重新获取」状态
@@ -209,11 +206,6 @@ async function refetch() {
   } finally {
     refetching.value = false;
   }
-}
-
-/** 高清 LOGO 加载失败时降级为「未获取到」说明 */
-function onLogoError() {
-  logoError.value = true;
 }
 
 /** 从屏幕吸取颜色（需浏览器支持 EyeDropper API，Chrome/Edge 可用） */
@@ -377,45 +369,23 @@ onMounted(() => {
 
         <!-- 左右结构：左侧预览 / 右侧编辑 -->
         <div class="detail-main">
-          <!-- 左侧：预览（同时展示小图标与高清 LOGO） -->
+          <!-- 预览：大中小三尺寸同显，随「编辑」区选择实时切换图标源 / 内边距 / 背景色 -->
           <div class="preview-pane">
             <div class="pane-title">预览</div>
             <div class="preview-area">
-              <!-- 小图标：大中小三尺寸同显，均实时套用内边距 / 背景色 -->
-              <div class="preview-block">
-                <span class="preview-block-label">小图标</span>
-                <div class="preview-sizes">
-                  <div
-                    v-for="s in PREVIEW_SIZES"
-                    :key="s.value"
-                    class="preview-size-item"
-                  >
-                    <BookmarkIcon
-                      :value="previewValue ?? detailItem"
-                      :size="s.value"
-                      :padding="editPadding"
-                      :bg-color="editBgColor ?? undefined"
-                    />
-                    <span class="preview-size-tag">{{ s.label }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 高清 LOGO：来自 scrapper 的原始大图，未获取到时给出说明 -->
-              <div class="preview-block">
-                <span class="preview-block-label">高清 LOGO</span>
-                <div class="hd-logo-box">
-                  <img
-                    v-if="showLogo"
-                    :src="previewLogoUrl"
-                    class="hd-logo-img"
-                    alt="高清 LOGO"
-                    draggable="false"
-                    @error="onLogoError"
+              <div class="preview-sizes">
+                <div
+                  v-for="s in PREVIEW_SIZES"
+                  :key="s.value"
+                  class="preview-size-item"
+                >
+                  <BookmarkIcon
+                    :value="previewIconValue ?? detailItem"
+                    :size="s.value"
+                    :padding="editPadding"
+                    :bg-color="editBgColor ?? undefined"
                   />
-                  <div v-else class="hd-logo-empty">
-                    {{ logoError ? "高清 LOGO 加载失败" : "未获取到高清 LOGO" }}
-                  </div>
+                  <span class="preview-size-tag">{{ s.label }}</span>
                 </div>
               </div>
             </div>
@@ -667,17 +637,18 @@ onMounted(() => {
   gap: 14px;
 }
 
-/* 左右结构 */
+/* 上下结构：预览在上、编辑在下 */
 .detail-main {
   display: flex;
+  flex-direction: column;
   gap: 16px;
   align-items: stretch;
 }
 
-/* 左侧：预览面板（灰底卡片，与右侧编辑区明显区分） */
+/* 预览面板（灰底卡片，与下方编辑区明显区分） */
 .preview-pane {
   display: flex;
-  flex: 0 0 430px;
+  flex: none;
   flex-direction: column;
   gap: 12px;
   align-items: center;
@@ -701,19 +672,6 @@ onMounted(() => {
   border-radius: 8px;
 }
 
-/* 预览块：小图标 / 高清 LOGO 各一组，带顶部小标签 */
-.preview-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: center;
-}
-
-.preview-block-label {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
 /* 三尺寸并排：底部对齐，大图最高 */
 .preview-sizes {
   display: flex;
@@ -734,39 +692,10 @@ onMounted(() => {
   color: var(--el-text-color-secondary);
 }
 
-/* 高清 LOGO 展示框：固定尺寸，原图等比内缩 */
-.hd-logo-box {
-  display: flex;
-  width: 120px;
-  height: 120px;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  background: var(--el-fill-color-light);
-  border: 1px dashed var(--el-border-color);
-  border-radius: 8px;
-}
-
-.hd-logo-img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-.hd-logo-empty {
-  padding: 0 8px;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--el-text-color-secondary);
-  text-align: center;
-}
-
-/* 右侧：编辑面板（白底卡片） */
+/* 编辑面板（白底卡片） */
 .edit-pane {
   display: flex;
-  flex: 1;
+  flex: none;
   flex-direction: column;
   justify-content: flex-start;
   gap: 18px;
