@@ -18,6 +18,7 @@ import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
+import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.mapper.*
@@ -169,8 +170,19 @@ class BookmarkServiceImpl(
         return bookmarkUserLinkMapper.findShowById(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
     }
 
-    override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> =
-        baseMapper.selectPage(params.toPage(), params.toWrapper()).convert { BookmarkAdminVO(it) }
+    override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> {
+        val page = baseMapper.selectPage(params.toPage(), params.toWrapper())
+            .convert { BookmarkAdminVO(it) }
+        // 分类回填失败(如分类表缺失/查询异常)不应拖垮整个书签列表，降级为空分类
+        runCatching {
+            val catMap = bookmarkCategoryService.categoriesOf(page.records.map { it.id })
+            page.records.forEach { vo ->
+                vo.categories = catMap[vo.id].orEmpty()
+                    .map { CategoryVO(it.id, it.slug, it.name, it.color) }
+            }
+        }.onFailure { log.warn("[adminListAll] 分类回填失败(忽略): ${it.message}") }
+        return page
+    }
 
     override fun adminUpdateIcon(bookmarkId: String, params: BookmarkIconUpdateParams) {
         baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
@@ -223,6 +235,27 @@ class BookmarkServiceImpl(
         log.debug("[adminApplyRefetch] 应用完成: bookmarkId=$bookmarkId, title=${bookmark.title}")
         return BookmarkAdminVO(bookmark)
     }
+
+    override fun adminUpdateCategories(bookmarkId: String, categoryIds: List<String>): List<CategoryVO> {
+        baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        bookmarkCategoryService.replaceLinks(bookmarkId, categoryIds, "MANUAL")
+        return loadCategoryVOs(bookmarkId)
+    }
+
+    override fun adminRecategorize(bookmarkId: String): List<CategoryVO> {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        bookmarkCategoryService.categorize(bookmark)
+        return loadCategoryVOs(bookmarkId)
+    }
+
+    override fun adminSimilarSites(bookmarkId: String): List<SimilarSite> {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        return apiService.inferSimilarSites(bookmark.title, bookmark.description, bookmark.urlHost)
+    }
+
+    private fun loadCategoryVOs(bookmarkId: String): List<CategoryVO> =
+        bookmarkCategoryService.categoriesOf(listOf(bookmarkId))[bookmarkId].orEmpty()
+            .map { CategoryVO(it.id, it.slug, it.name, it.color) }
 
     override fun adminGenerateAppName(bookmarkId: String): String? {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)

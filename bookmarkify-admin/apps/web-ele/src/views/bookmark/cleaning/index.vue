@@ -6,7 +6,15 @@ import { defineAsyncComponent, onMounted, reactive, ref } from "vue";
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
 
-import { getBookmarkListApi } from "#/api/bookmark";
+import {
+  findSimilarSitesApi,
+  getBookmarkListApi,
+  recategorizeBookmarkApi,
+  updateBookmarkCategoriesApi,
+  type SimilarSite,
+} from "#/api/bookmark";
+import { getCategoryListApi, type CategoryEntity } from "#/api/category";
+import { ElMessage } from "element-plus";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
@@ -95,6 +103,72 @@ const ElPagination = defineAsyncComponent(() =>
 const detailVisible = ref(false);
 const currentRow = ref<BookmarkEntity | null>(null);
 
+const categoryDict = ref<CategoryEntity[]>([]);
+const editingCategoryIds = ref<string[]>([]);
+const savingCategories = ref(false);
+const recategorizing = ref(false);
+
+const similarSites = ref<SimilarSite[]>([]);
+const loadingSimilar = ref(false);
+const similarLoaded = ref(false);
+
+async function findSimilar() {
+  if (!currentRow.value) return;
+  loadingSimilar.value = true;
+  try {
+    similarSites.value = await findSimilarSitesApi(currentRow.value.id);
+    similarLoaded.value = true;
+  } finally {
+    loadingSimilar.value = false;
+  }
+}
+
+async function loadCategoryDict() {
+  if (categoryDict.value.length === 0) {
+    categoryDict.value = await getCategoryListApi();
+  }
+}
+
+async function saveCategories() {
+  if (!currentRow.value) return;
+  savingCategories.value = true;
+  try {
+    const updated = await updateBookmarkCategoriesApi(
+      currentRow.value.id,
+      editingCategoryIds.value,
+    );
+    currentRow.value.categories = updated;
+    syncRowCategories(currentRow.value.id, updated);
+    ElMessage.success("分类已保存");
+  } finally {
+    savingCategories.value = false;
+  }
+}
+
+async function recategorize() {
+  if (!currentRow.value) return;
+  recategorizing.value = true;
+  try {
+    const updated = await recategorizeBookmarkApi(currentRow.value.id);
+    currentRow.value.categories = updated;
+    editingCategoryIds.value = updated.map((c) => c.id);
+    syncRowCategories(currentRow.value.id, updated);
+    ElMessage.success(
+      updated.length > 0 ? "AI 归类完成" : "AI 未返回分类（检查词表是否为空）",
+    );
+  } finally {
+    recategorizing.value = false;
+  }
+}
+
+function syncRowCategories(
+  id: string,
+  categories: BookmarkEntity["categories"],
+) {
+  const row = tableData.value.find((r) => r.id === id);
+  if (row) row.categories = categories;
+}
+
 const loading = ref(false);
 const tableData = ref<BookmarkEntity[]>([]);
 
@@ -146,9 +220,13 @@ async function fetchData() {
   }
 }
 
-function handleRowClick(row: BookmarkEntity) {
+async function handleRowClick(row: BookmarkEntity) {
   currentRow.value = row;
   detailVisible.value = true;
+  editingCategoryIds.value = (row.categories ?? []).map((c) => c.id);
+  similarSites.value = [];
+  similarLoaded.value = false;
+  await loadCategoryDict();
 }
 
 function handleSearch() {
@@ -276,6 +354,53 @@ onMounted(() => {
             <span class="w-24 text-gray-500">描述</span>
             <span class="flex-1 break-all">{{ currentRow.description || "-" }}</span>
           </div>
+          <div class="flex items-start">
+            <span class="w-24 text-gray-500">分类</span>
+            <div class="flex-1">
+              <div class="mb-2 flex flex-wrap gap-1">
+                <ElTag
+                  v-for="c in currentRow.categories ?? []"
+                  :key="c.id"
+                  size="small"
+                  :color="c.color || undefined"
+                  :style="c.color ? { color: '#fff', borderColor: c.color } : {}"
+                >
+                  {{ c.name }}
+                </ElTag>
+                <span
+                  v-if="(currentRow.categories ?? []).length === 0"
+                  class="text-gray-400"
+                >
+                  暂无分类
+                </span>
+              </div>
+              <ElSelectV2
+                v-model="editingCategoryIds"
+                :options="categoryDict.map((c) => ({ label: c.name, value: c.id }))"
+                multiple
+                clearable
+                placeholder="选择分类"
+                style="width: 100%"
+              />
+              <div class="mt-2 flex gap-2">
+                <ElButton
+                  type="primary"
+                  size="small"
+                  :loading="savingCategories"
+                  @click="saveCategories"
+                >
+                  保存分类
+                </ElButton>
+                <ElButton
+                  size="small"
+                  :loading="recategorizing"
+                  @click="recategorize"
+                >
+                  重新 AI 归类
+                </ElButton>
+              </div>
+            </div>
+          </div>
           <div class="flex items-center">
             <span class="w-24 text-gray-500">状态</span>
             <div>
@@ -314,6 +439,44 @@ onMounted(() => {
           <div class="flex">
             <span class="w-24 text-gray-500">更新时间</span>
             <span class="flex-1">{{ formatDateTime(currentRow.updateTime) }}</span>
+          </div>
+          <div class="flex items-start">
+            <span class="w-24 text-gray-500">相似网站</span>
+            <div class="flex-1">
+              <ElButton
+                size="small"
+                :loading="loadingSimilar"
+                @click="findSimilar"
+              >
+                查找相似网站
+              </ElButton>
+              <ul v-if="similarSites.length > 0" class="mt-2 space-y-2">
+                <li
+                  v-for="s in similarSites"
+                  :key="s.domain"
+                  class="rounded border border-gray-100 p-2"
+                >
+                  <div class="font-medium">
+                    {{ s.name }}
+                    <a
+                      :href="`https://${s.domain}`"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="ml-1 text-blue-500"
+                    >
+                      {{ s.domain }}
+                    </a>
+                  </div>
+                  <div class="text-gray-500">{{ s.reason }}</div>
+                </li>
+              </ul>
+              <div
+                v-else-if="similarLoaded"
+                class="mt-2 text-gray-400"
+              >
+                未找到相似网站
+              </div>
+            </div>
           </div>
         </div>
       </ElDialog>

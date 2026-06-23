@@ -6,10 +6,13 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.entity.AppNameSuggestVO
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
+import top.tcyeee.bookmarkify.entity.BookmarkCategoriesParams
 import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
+import top.tcyeee.bookmarkify.entity.CategoryVO
+import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.server.IBookmarkService
 
 /**
@@ -53,6 +56,22 @@ class AdminBookmarkManageController(
     fun applyRefetchBookmark(
         @PathVariable bookmarkId: String, @RequestBody params: BookmarkRefetchApplyParams
     ): BookmarkAdminVO = bookmarkService.adminApplyRefetch(bookmarkId, params)
+
+    // 手动覆盖式设置某书签的分类
+    @PostMapping("/{bookmarkId}/categories")
+    fun updateCategories(
+        @PathVariable bookmarkId: String, @RequestBody params: BookmarkCategoriesParams
+    ): List<CategoryVO> = bookmarkService.adminUpdateCategories(bookmarkId, params.categoryIds)
+
+    // 对某书签重新执行 DeepSeek 自动归类
+    @PostMapping("/{bookmarkId}/categorize")
+    fun recategorize(@PathVariable bookmarkId: String): List<CategoryVO> =
+        bookmarkService.adminRecategorize(bookmarkId)
+
+    // AI 推荐相似网站（仅展示，不入库）
+    @PostMapping("/{bookmarkId}/similar")
+    fun similar(@PathVariable bookmarkId: String): List<SimilarSite> =
+        bookmarkService.adminSimilarSites(bookmarkId)
 
     // DeepSeek 生成书签简称建议（不落库，供前端填入编辑框）
     @PostMapping("/{bookmarkId}/appname/generate")
