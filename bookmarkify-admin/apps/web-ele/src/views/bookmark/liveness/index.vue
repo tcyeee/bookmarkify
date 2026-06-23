@@ -152,18 +152,6 @@ const chooseTitle = ref<"new" | "old">("new");
 const chooseIcon = ref<"new" | "old">("new");
 const chooseLogo = ref<"new" | "old">("new");
 
-// 预览图标值：随「编辑」区「选择图标源」实时切换小图 / 高清 LOGO。
-// 选高清时把 logoUrl 塞入 iconBase64（BookmarkIcon 支持 http 直链）。
-// 与「重新获取」结果解耦：新解析的图标只在下方「更新」区对比，不污染预览。
-const previewIconValue = computed<BookmarkEntity | null>(() => {
-  const item = detailItem.value;
-  if (!item) return null;
-  if (editUseHdLogo.value && item.logoUrl) {
-    return { ...item, iconBase64: item.logoUrl };
-  }
-  return item;
-});
-
 // 「更新」区域大图标（高清 LOGO）加载失败标记：旧 / 新各一份
 const oldLogoError = ref(false);
 const newLogoError = ref(false);
@@ -339,7 +327,11 @@ onMounted(() => {
             @click="openDetail(item)"
             @dragstart.prevent
           >
-            <BookmarkIcon :value="item" :size="72" />
+            <BookmarkIcon
+              :value="item"
+              :size="72"
+              :hd-url="item.useHdLogo ? item.logoUrl : undefined"
+            />
             <div class="title">{{ displayName(item) }}</div>
           </div>
         </div>
@@ -380,10 +372,11 @@ onMounted(() => {
                   class="preview-size-item"
                 >
                   <BookmarkIcon
-                    :value="previewIconValue ?? detailItem"
+                    :value="detailItem"
                     :size="s.value"
                     :padding="editPadding"
                     :bg-color="editBgColor ?? undefined"
+                    :hd-url="editUseHdLogo ? detailItem.logoUrl : undefined"
                   />
                   <span class="preview-size-tag">{{ s.label }}</span>
                 </div>

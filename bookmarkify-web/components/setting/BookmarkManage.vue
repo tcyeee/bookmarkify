@@ -42,11 +42,9 @@
               <tr v-for="bookmark in bookmarks" :key="bookmark.bookmarkUserLinkId || bookmark.bookmarkId" class="hover:bg-slate-50 dark:hover:bg-slate-900/70 transition-colors">
                 <td class="px-4 py-2 align-middle">
                   <div class="flex items-center gap-2 min-w-0">
-                    <div class="relative h-7 w-7 shrink-0 rounded-md bg-white/70 dark:bg-slate-800 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-700">
-                      <span class="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-white dark:ring-slate-900" :class="bookmark.isActivity ? 'bg-emerald-500' : 'bg-rose-500'" aria-hidden="true" />
-                      <div class="h-7 w-7 overflow-hidden rounded-md">
-                        <img class="h-full w-full object-contain" :src="bookmark.iconBase64" :alt="bookmark.title" />
-                      </div>
+                    <div class="relative h-7 w-7 shrink-0">
+                      <BookmarkLogo :value="bookmark" :size="28" />
+                      <span class="absolute -top-0.5 -right-0.5 z-10 h-2 w-2 rounded-full ring-2 ring-white dark:ring-slate-900" :class="bookmark.isActivity ? 'bg-emerald-500' : 'bg-rose-500'" aria-hidden="true" />
                     </div>
                     <div class="min-w-0">
                       <a class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate hover:text-sky-600 dark:hover:text-sky-400" :title="bookmark.description || bookmark.urlFull || bookmark.title" :href="bookmark.urlFull" target="_blank" rel="noopener">
@@ -94,6 +92,7 @@
 <script lang="ts" setup>
 import { bookmarksList, bookmarksUpload } from '@api'
 import type { BookmarkShow } from '@typing'
+import BookmarkLogo from '../launchpad/cell/BookmarkLogo.vue'
 
 const bookmarkStore = useBookmarkStore()
 

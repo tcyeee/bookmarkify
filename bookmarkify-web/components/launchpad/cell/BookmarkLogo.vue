@@ -25,8 +25,8 @@
         alt=""
         @error="onIconError"
       />
-      <!-- 最终兜底头像 -->
-      <img v-else :style="fallbackStyle" src="/avatar/default.png" alt="" />
+      <!-- 最终兜底：灰色地球（内联 SVG，与管理台一致） -->
+      <img v-else :style="fallbackStyle" :src="FALLBACK_ICON" alt="" />
     </div>
   </div>
 </template>
@@ -36,6 +36,11 @@ import { computed, ref, watch } from 'vue'
 import type { BookmarkShow } from '@typing'
 
 const props = defineProps<{ value: BookmarkShow; size?: number }>()
+
+// 无图标 / 加载失败时的兜底图标（灰色地球，内联 SVG 避免依赖静态资源）
+const FALLBACK_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`,
+)}`
 
 // 状态：错误标记、动态背景色、是否放大
 const hdError = ref(false)
