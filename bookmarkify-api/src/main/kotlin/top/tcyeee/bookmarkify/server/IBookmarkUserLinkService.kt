@@ -16,4 +16,6 @@ interface IBookmarkUserLinkService : IService<BookmarkUserLink> {
     fun deleteOneByNodeId(layoutNodeId: String, uid: String)
     /** 通过查询Host,将用户自定义书签和元书签关联上 */
     fun resetBookmarkId(uid: String, userLinkId: String, bookmarkId: String): Boolean
+    /** 返回用户所有未删除书签的完整 URL 集合，用于导入时重复检测 */
+    fun urlsByUid(uid: String): Set<String>
 }

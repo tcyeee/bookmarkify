@@ -49,4 +49,12 @@ class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<Bookma
             .eq(BookmarkUserLink::id, userLinkId)
             .set(BookmarkUserLink::bookmarkId, bookmarkId)
             .update()
+
+    override fun urlsByUid(uid: String): Set<String> =
+        ktQuery()
+            .eq(BookmarkUserLink::uid, uid)
+            .eq(BookmarkUserLink::deleted, false)
+            .list()
+            .map { it.urlFull }
+            .toHashSet()
 }
