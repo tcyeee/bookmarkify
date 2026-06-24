@@ -150,7 +150,7 @@ class BookmarkServiceImpl(
         // production there may be a large backlog of unverified bookmarks. Without a limit,
         // the first post-fix run would flood the parse executor and delay newly-added bookmark parsing.
         ktQuery()
-            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -10, ChronoUnit.MINUTES))
+            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
             .eq(BookmarkEntity::verifyFlag, false)
             // 最旧的优先处理，配合 LIMIT 保证积压记录会被逐批消费，不会被新记录饿死。
             .orderByAsc(BookmarkEntity::updateTime)
