@@ -19,6 +19,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchVO
 import top.tcyeee.bookmarkify.entity.CategoryVO
+import top.tcyeee.bookmarkify.entity.BookmarkImportPreviewVO
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 
 interface IBookmarkService : IService<BookmarkEntity> {
@@ -42,6 +43,9 @@ interface IBookmarkService : IService<BookmarkEntity> {
 
     /** 查看我的全部书签 */
     fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): IPage<BookmarkShow>
+
+    /** 解析 Chrome 书签 HTML，返回含重复标记的预览列表（不写库） */
+    fun previewImport(file: MultipartFile, uid: String): BookmarkImportPreviewVO
 
     /** 导入 Chrome 书签 */
     fun importBookmarkFile(file: MultipartFile, uid: String)

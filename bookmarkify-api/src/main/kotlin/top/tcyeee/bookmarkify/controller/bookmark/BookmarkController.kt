@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
+import top.tcyeee.bookmarkify.entity.BookmarkImportPreviewVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchVO
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
@@ -46,6 +47,11 @@ class BookmarksController(
     @PostMapping("/query")
     @Operation(summary = "我的桌面布局")
     fun query(): UserLayoutNodeVO = layoutNodeService.layout(BaseUtils.uid())
+
+    @PostMapping("/upload/preview")
+    @Operation(summary = "书签导入预览（不写库）")
+    fun uploadPreview(@RequestParam file: MultipartFile): BookmarkImportPreviewVO =
+        bookmarkService.previewImport(file, BaseUtils.uid())
 
     @PostMapping("/upload")
     @Operation(summary = "书签上传")
