@@ -2,7 +2,7 @@
   <div class="avatar-upload-container">
     <div class="relative inline-flex items-center justify-center group">
       <AvatarPreview
-        :avatar-path="previewUrl || avatarPath"
+        :avatar-path="previewUrl || signedAvatarUrl"
         :fallback-text="fallbackInitial"
         :show-icon-fallback="showAccountIcon"
         class="transition duration-200 group-hover:brightness-[0.7]" />
@@ -39,7 +39,7 @@
 </template>
 
 <script lang="ts" setup>
-import { uploadAvatar } from '@api'
+import { uploadAvatar, queryAvatarUrl } from '@api'
 import { useAuthStore } from '@stores/auth.store'
 import { imageConfig } from '@config/image.config'
 import { createDicebearAvatar, randomId } from '@utils'
@@ -60,13 +60,34 @@ const fileInputRef = ref<HTMLInputElement>()
 const previewUrl = ref<string | null>(null)
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
+
+// 签名 URL 存在组件内存中（不持久化），每次挂载或路径变更时向后端重新请求
+const signedAvatarUrl = ref<string | null>(null)
+
 const fallbackInitial = computed(() => {
   const name = authStore.account?.nickName?.trim()
   if (!name) return '用'
   return name.slice(0, 1)
 })
 
-const showAccountIcon = computed(() => !previewUrl.value && !props.avatarPath)
+const showAccountIcon = computed(() => !previewUrl.value && !signedAvatarUrl.value)
+
+// avatarPath 变更（上传新头像后 store 更新路径）时重新拉取签名 URL
+watch(
+  () => props.avatarPath,
+  async (path) => {
+    if (!path) {
+      signedAvatarUrl.value = null
+      return
+    }
+    try {
+      signedAvatarUrl.value = await queryAvatarUrl()
+    } catch {
+      // 静默降级
+    }
+  },
+  { immediate: true },
+)
 
 // 预览选择的图片
 function handleFileChange(event: Event) {
@@ -115,7 +136,7 @@ async function handleUpload() {
       fileInputRef.value.value = ''
     }
 
-    // 刷新用户信息
+    // 刷新用户信息（更新 store 中的 avatarPath），watch 会自动拉取新签名 URL
     await authStore.refreshUserInfo()
   } catch {
     // 错误已由 http 层统一提示
@@ -128,7 +149,7 @@ function triggerSelect() {
   fileInputRef.value?.click()
 }
 
-// 掷骰子：用随机种子生成 DiceBear 头像并进入预览，可重复点击重新生成，满意后“确认上传”
+// 掷骰子：用随机种子生成 DiceBear 头像并进入预览，可重复点击重新生成，满意后"确认上传"
 function handleRandom() {
   const { file, dataUri } = createDicebearAvatar(randomId())
   selectedFile.value = file

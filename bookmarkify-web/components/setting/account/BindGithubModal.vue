@@ -3,7 +3,7 @@
   <div class="flex items-center gap-2">
     <button
       v-if="props.githubLogin"
-      class="cy-btn cy-btn-ghost h-10 px-4 min-w-[104px]"
+      class="cy-btn cy-btn-ghost h-10 px-4 min-w-[100px]"
       :disabled="loading || disabled"
       @click="handleUnbind">
       <span v-if="loading">处理中...</span>
@@ -11,7 +11,7 @@
     </button>
     <button
       v-else
-      class="cy-btn cy-btn-ghost h-10 px-4 min-w-[104px]"
+      class="cy-btn cy-btn-primary cy-btn-outline h-10 px-4 min-w-[100px]"
       :disabled="loading || disabled || !githubClientId"
       @click="handleBind">
       <span>{{ loading ? '授权中...' : '关联 GitHub' }}</span>

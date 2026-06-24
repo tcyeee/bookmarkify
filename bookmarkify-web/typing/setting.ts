@@ -52,7 +52,7 @@ export interface UserInfo {
   email?: string // 用户邮箱
   verified: boolean // 用户是否验证
   token: string // 用户TOKEN
-  avatarUrl?: string | null // 用户头像签名URL（后端 /user/info 返回，1 小时有效）
+  avatarUrl?: string | null // 用户头像 OSS 原始路径（如 avatar/xxx.svg），永久有效，可安全持久化；签名 URL 通过 /user/avatar-url 按需获取
   googleEmail?: string | null // 已关联的 Google 邮箱（未关联为 null）
   githubLogin?: string | null // 已关联的 GitHub 用户名（未关联为 null）
 }

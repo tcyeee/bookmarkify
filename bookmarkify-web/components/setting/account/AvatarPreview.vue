@@ -6,7 +6,7 @@
         :src="avatarUrl"
         alt="用户头像"
         class="h-full w-full rounded-full object-cover"
-        @error="loadError = true" />
+        @error="handleImageError" />
       <div
         v-else-if="showIconFallback"
         class="flex h-full w-full items-center justify-center rounded-full bg-slate-200 text-slate-700 text-2xl font-semibold select-none">
@@ -38,4 +38,14 @@ const loadError = ref(false)
 const showImage = computed(() => !!props.avatarPath && !loadError.value)
 const showIconFallback = computed(() => !showImage.value && !!props.showIconFallback)
 const fallbackInitial = computed(() => (props.fallbackText || '用').trim().slice(0, 1) || '用')
+
+// avatarPath 变更时重置错误态，触发重新渲染
+watch(
+  () => props.avatarPath,
+  () => { loadError.value = false },
+)
+
+function handleImageError() {
+  loadError.value = true
+}
 </script>
