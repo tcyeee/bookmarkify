@@ -28,7 +28,20 @@ export default class http {
     return this.uploadFile<T>(path, file)
   }
 
-  static async uploadFile<T = unknown>(path: string, file: File): Promise<T> {
+  static uploadWithForm<T = unknown>(path: string, file: File, extra: Record<string, string | string[]>): Promise<T> {
+    return this.uploadFormData<T>(path, (form) => {
+      form.append('file', file)
+      for (const [key, value] of Object.entries(extra)) {
+        if (Array.isArray(value)) {
+          value.forEach((v) => form.append(key, v))
+        } else {
+          form.append(key, value)
+        }
+      }
+    })
+  }
+
+  static async uploadFormData<T = unknown>(path: string, buildForm: (form: FormData) => void): Promise<T> {
     const authStore = useAuthStore()
 
     // 上传是受保护操作,未登录直接登出并跳转欢迎页
@@ -38,7 +51,7 @@ export default class http {
     }
 
     const formData = new FormData()
-    formData.append('file', file)
+    buildForm(formData)
 
     const url = useRuntimeConfig().public.apiBase + path
     console.log(`[API] UPLOAD::${path}`)
@@ -60,6 +73,10 @@ export default class http {
     }
 
     return this.withDebounce(`UPLOAD:${url}`, exec)
+  }
+
+  static async uploadFile<T = unknown>(path: string, file: File): Promise<T> {
+    return this.uploadFormData<T>(path, (form) => form.append('file', file))
   }
 
   static async start<T = unknown>(path: string, method: string, params?: any): Promise<T> {

@@ -16,7 +16,11 @@ export const bookmarksLinkOne = (bookmarkId: string) => http.get<t.UserLayoutNod
 export const bookmarksSort = (params: Record<string, number>) => http.post<boolean>('/bookmark/sort', params)
 export const bookmarksDel = (params: Array<string>) => http.post<boolean>('/bookmark/delete', params)
 export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post<t.BookmarkShow>('/bookmark/update', params)
-export const bookmarksUpload = (file: File) => http.upload<boolean>('/bookmark/upload', file)
+export const bookmarksUploadPreview = (file: File) =>
+  http.upload<t.BookmarkImportPreviewVO>('/bookmark/upload/preview', file)
+
+export const bookmarksUpload = (file: File, skipUrls: string[]) =>
+  http.uploadWithForm<t.UserLayoutNodeVO[]>('/bookmark/upload', file, { skipUrls })
 export const bookmarksList = (params?: t.BookmarkListParams) =>
   http.post<t.BookmarkPage<t.BookmarkShow>>('/bookmark/list', params ?? {})
 export const bookmarksCreateDir = (nodeIds: [string, string], name: string, sort: number) =>
