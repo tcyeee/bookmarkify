@@ -239,6 +239,7 @@ async function startImport() {
     bookmarkStore.addImportLoadingBatch(nodes)
     statusMessage.value = `导入已开始！共 ${nodes.length} 项正在后台解析，稍后会自动更新。`
     statusType.value = 'success'
+    phase.value = 'idle'
   } catch (error: any) {
     statusMessage.value = error?.msg || error?.message || '导入失败，请稍后重试。'
     statusType.value = 'error'
