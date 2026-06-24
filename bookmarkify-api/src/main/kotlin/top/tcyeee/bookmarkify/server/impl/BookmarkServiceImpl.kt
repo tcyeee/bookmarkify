@@ -125,23 +125,57 @@ class BookmarkServiceImpl(
      * 数据读取完成以后,立即返回占位信息
      * 等待书签解析完成以后,通过WebSocket逐个向前端返回解析完成后的数据
      */
-    override fun importBookmarkFile(file: MultipartFile, uid: String) {
-        // 1. 解析上传文件，获取扁平化后的书签结构
-        val structures: List<SystemBookmarkStructure> = ChromeBookmarkParser.trim(file)
-        // 2~3 的批量写入需原子提交：任一批失败都不应留下孤儿文件夹/节点。整段没有网络 IO，事务很短。
-        val pair = txTemplate.execute {
-            // 2. 保存所有的文件夹,同时保存 nodeId
-            structures.map { item -> UserLayoutNodeEntity(uid, item).also { item.nodeId = it.id } }
-                .also { layoutNodeMapper.insert(it) }
-            // 3. 批量保存布局节点和用户自定义书签（bookmarkId 暂置 LOADING，后续逐个绑定）
-            structures.flatMap { node -> node.bookmarks.map { it.pair(uid, node.nodeId) } }
-                .also { data -> layoutNodeMapper.insert(data.map { it.first }) }
-                .also { data -> bookmarkUserLinkMapper.insert(data.map { it.second }) }
-        } ?: emptyList()
-        // 4. 异步解析每个 URL，解析完成后重新绑定用户自定义书签（事务提交后再发布事件，避免回滚后仍触发解析）
-        pair.forEach {
-            eventPublisher.publishEvent(BookmarkParseAndResetUserItemEvent(uid, it.second.urlFull, it.second.id, it.first.id))
+    override fun importBookmarkFile(
+        file: MultipartFile,
+        uid: String,
+        skipUrls: Set<String>,
+    ): List<UserLayoutNodeVO> {
+        val structures = ChromeBookmarkParser.trim(file)
+
+        data class FolderSlice(val folderNode: UserLayoutNodeEntity?, val items: List<Pair<ChromeBookmarkRawData, UserLayoutNodeEntity>>)
+
+        val slices: List<FolderSlice> = structures.mapNotNull { s ->
+            val kept = s.bookmarks.filter { it.url !in skipUrls }
+            when (kept.size) {
+                0    -> null
+                1    -> {
+                    val node = UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING)
+                    FolderSlice(null, listOf(Pair(kept[0], node)))
+                }
+                else -> {
+                    val folder = UserLayoutNodeEntity(uid, s)
+                    val nodes = kept.map { raw -> Pair(raw, UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING, parentId = folder.id)) }
+                    FolderSlice(folder, nodes)
+                }
+            }
         }
+
+        val allBookmarkNodes: List<Pair<ChromeBookmarkRawData, UserLayoutNodeEntity>> = slices.flatMap { it.items }
+        val allLinks: List<BookmarkUserLink> = allBookmarkNodes.map { (raw, node) -> BookmarkUserLink(uid, node.id, raw) }
+
+        txTemplate.execute {
+            val folderNodes = slices.mapNotNull { it.folderNode }
+            if (folderNodes.isNotEmpty()) layoutNodeMapper.insert(folderNodes)
+            if (allBookmarkNodes.isNotEmpty()) layoutNodeMapper.insert(allBookmarkNodes.map { it.second })
+            if (allLinks.isNotEmpty()) bookmarkUserLinkMapper.insert(allLinks)
+        }
+
+        // 事务提交后发布解析事件，避免回滚后仍触发解析
+        allLinks.zip(allBookmarkNodes.map { it.second }).forEach { (link, node) ->
+            eventPublisher.publishEvent(BookmarkParseAndResetUserItemEvent(uid, link.urlFull, link.id, node.id))
+        }
+
+        // 构造返回的 VO 列表（文件夹节点 + LOADING 书签节点）
+        val result = mutableListOf<UserLayoutNodeVO>()
+        slices.forEach { slice ->
+            slice.folderNode?.let { f ->
+                result.add(UserLayoutNodeVO(id = f.id, type = NodeTypeEnum.BOOKMARK_DIR, name = f.name))
+            }
+            slice.items.forEach { (raw, node) ->
+                result.add(UserLayoutNodeVO(id = node.id, type = NodeTypeEnum.BOOKMARK_LOADING, name = raw.title, parentId = node.parentId))
+            }
+        }
+        return result
     }
 
     override fun checkAll() =

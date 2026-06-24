@@ -47,8 +47,8 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 解析 Chrome 书签 HTML，返回含重复标记的预览列表（不写库） */
     fun previewImport(file: MultipartFile, uid: String): BookmarkImportPreviewVO
 
-    /** 导入 Chrome 书签 */
-    fun importBookmarkFile(file: MultipartFile, uid: String)
+    /** 导入 Chrome 书签；skipUrls 为用户选择跳过的完整 URL 集合；返回创建好的 LOADING 占位节点列表 */
+    fun importBookmarkFile(file: MultipartFile, uid: String, skipUrls: Set<String> = emptySet()): List<UserLayoutNodeVO>
 
     /** 管理员查询全部书签 */
     fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO>

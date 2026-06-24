@@ -55,8 +55,11 @@ class BookmarksController(
 
     @PostMapping("/upload")
     @Operation(summary = "书签上传")
-    fun upload(@RequestParam file: MultipartFile): Boolean = true
-        .also { bookmarkService.importBookmarkFile(file, BaseUtils.uid()) }
+    fun upload(
+        @RequestParam file: MultipartFile,
+        @RequestParam(required = false) skipUrls: List<String>?,
+    ): List<UserLayoutNodeVO> =
+        bookmarkService.importBookmarkFile(file, BaseUtils.uid(), skipUrls?.toHashSet() ?: emptySet())
 
     /**
      * 这里的排序信息仅仅只更改用户配置中的排序数据库
