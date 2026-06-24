@@ -85,6 +85,26 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []), node.id]
     },
 
+    // 批量注入导入书签的 LOADING 节点（含文件夹）；避免全量 update()
+    addImportLoadingBatch(nodes: UserLayoutNodeVO[]) {
+      for (const node of nodes) {
+        this.nodes[node.id] = { ...node, parentId: node.parentId ?? null, children: undefined }
+        // 为文件夹节点初始化子顺序表
+        if (node.type === HomeItemType.BOOKMARK_DIR) {
+          this.order[node.id] ??= []
+        }
+      }
+      // 根节点（无 parentId）追加到根列表末尾
+      const rootIds = nodes.filter((n) => !n.parentId).map((n) => n.id)
+      this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []), ...rootIds]
+      // 有 parentId 的节点追加到对应文件夹的子顺序列表
+      for (const node of nodes) {
+        if (node.parentId) {
+          this.order[node.parentId] = [...(this.order[node.parentId] ?? []), node.id]
+        }
+      }
+    },
+
     // 新增已就绪书签到根（AddOneDialog 关联/添加成功且已带 typeApp）
     addNode(node: UserLayoutNodeVO) {
       this.nodes[node.id] = { ...node, parentId: null, children: undefined }
