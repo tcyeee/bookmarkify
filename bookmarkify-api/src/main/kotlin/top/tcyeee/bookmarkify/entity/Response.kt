@@ -286,3 +286,16 @@ data class CategoryVO(
     var name: String,
     var color: String? = null,
 )
+
+data class BookmarkImportItemVO(
+    val title: String,
+    val url: String,
+    val folder: String?,
+    val isDuplicate: Boolean,
+)
+
+data class BookmarkImportPreviewVO(
+    val total: Int,
+    val duplicateCount: Int,
+    val items: List<BookmarkImportItemVO>,
+)
