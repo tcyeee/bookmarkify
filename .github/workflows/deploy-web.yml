@@ -43,7 +43,8 @@ jobs:
           NUXT_PUBLIC_SITE_URL: https://bookmarkify.cc
           # Google 登录 ClientId（公开值，前端 JS 里本就可见，直接内联；如需更换可改此处或覆盖为 secret）
           NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NUXT_PUBLIC_GOOGLE_CLIENT_ID || '534119394768-5ed59pcgub9a1s45a9uvu69alvk1ddko.apps.googleusercontent.com' }}
-          NUXT_PUBLIC_GITHUB_CLIENT_ID: ${{ secrets.NUXT_PUBLIC_GITHUB_CLIENT_ID }}
+          # GitHub 登录 ClientId（公开值，前端 JS 里本就可见，直接内联；如需更换可改此处或覆盖为 secret）
+          NUXT_PUBLIC_GITHUB_CLIENT_ID: ${{ secrets.NUXT_PUBLIC_GITHUB_CLIENT_ID || 'Iv23liXTNklcSgqAa8rU' }}
         run: pnpm generate
 
       # rsync the static output to the dir nginx serves (/home/ubuntu/www →
