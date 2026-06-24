@@ -142,7 +142,10 @@ class BookmarkServiceImpl(
                     val node = UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING)
                     FolderSlice(null, listOf(Pair(kept[0], node)))
                 }
-                else -> {
+                else -> if (s.folderName == "ROOT") {
+                    val nodes = kept.map { raw -> Pair(raw, UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING)) }
+                    FolderSlice(null, nodes)
+                } else {
                     val folder = UserLayoutNodeEntity(uid, s)
                     val nodes = kept.map { raw -> Pair(raw, UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING, parentId = folder.id)) }
                     FolderSlice(folder, nodes)
