@@ -137,7 +137,6 @@ class OssUtils {
                             width = logoInfo.width,
                             height = logoInfo.height,
                             suffix = FileUtil.extName(logoInfo.url) ?: "png",
-                            isOgImg = false
                         ),
                         logoUrl = logoInfo.url
                     )

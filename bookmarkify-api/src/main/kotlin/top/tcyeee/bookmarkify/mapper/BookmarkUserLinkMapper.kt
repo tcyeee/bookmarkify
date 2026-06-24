@@ -25,25 +25,23 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                COALESCE(a.title, b.title)                   AS title,
                COALESCE(a.description, b.description)       AS description,
                b.is_activity                                AS isActivity,
-               b.icon_base64                                AS iconBase64,
                b.url_host                                   AS urlHost,
                b.app_name                                   AS appName,
-               b.icon_padding                               AS iconPadding,
-               b.icon_bg_color                              AS iconBgColor,
-               b.use_hd_logo                                AS useHdLogo,
-               c.height                                     AS hdSize
+               wl.icon_base64                               AS iconBase64,
+               COALESCE(wl.icon_padding, 25)                AS iconPadding,
+               wl.icon_bg_color                             AS iconBgColor,
+               COALESCE(wl.use_hd_logo, FALSE)              AS useHdLogo,
+               CASE WHEN wl.height >= 150 THEN wl.height ELSE 0 END AS hdSize
             FROM bookmark_user_link a
                      LEFT JOIN bookmark b
                                ON a.bookmark_id = b.id
                      LEFT JOIN LATERAL (
-                SELECT wl.height
-                FROM website_logo wl
-                WHERE wl.bookmark_id = a.bookmark_id
-                  AND wl.is_og_img IS FALSE
-                  AND wl.height >= 150
-                ORDER BY wl.height
+                SELECT w.icon_base64, w.icon_padding, w.icon_bg_color, w.use_hd_logo, w.height
+                FROM website_logo w
+                WHERE w.bookmark_id = a.bookmark_id
+                ORDER BY (w.icon_base64 IS NOT NULL) DESC, w.height DESC
                 LIMIT 1
-                ) c ON TRUE
+                ) wl ON TRUE
             where a.uid = #{uid}
             """
     )
@@ -61,25 +59,23 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                COALESCE(a.title, b.title)                   AS title,
                COALESCE(a.description, b.description)       AS description,
                b.is_activity                                AS isActivity,
-               b.icon_base64                                AS iconBase64,
                b.url_host                                   AS urlHost,
                b.app_name                                   AS appName,
-               b.icon_padding                               AS iconPadding,
-               b.icon_bg_color                              AS iconBgColor,
-               b.use_hd_logo                                AS useHdLogo,
-               c.height                                     AS hdSize
+               wl.icon_base64                               AS iconBase64,
+               COALESCE(wl.icon_padding, 25)                AS iconPadding,
+               wl.icon_bg_color                             AS iconBgColor,
+               COALESCE(wl.use_hd_logo, FALSE)              AS useHdLogo,
+               CASE WHEN wl.height >= 180 THEN wl.height ELSE 0 END AS hdSize
             FROM bookmark_user_link a
                      LEFT JOIN bookmark b
                                ON a.bookmark_id = b.id
                      LEFT JOIN LATERAL (
-                SELECT wl.height
-                FROM website_logo wl
-                WHERE wl.bookmark_id = a.bookmark_id
-                  AND wl.is_og_img IS FALSE
-                  AND wl.height >= 180
-                ORDER BY wl.height
+                SELECT w.icon_base64, w.icon_padding, w.icon_bg_color, w.use_hd_logo, w.height
+                FROM website_logo w
+                WHERE w.bookmark_id = a.bookmark_id
+                ORDER BY (w.icon_base64 IS NOT NULL) DESC, w.height DESC
                 LIMIT 1
-                ) c ON TRUE
+                ) wl ON TRUE
             where a.id = #{id}
             limit 1
             """

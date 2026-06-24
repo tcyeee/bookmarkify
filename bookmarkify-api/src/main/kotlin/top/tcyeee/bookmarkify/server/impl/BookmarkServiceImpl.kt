@@ -5,11 +5,13 @@ import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DuplicateKeyException
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.multipart.MultipartFile
+import top.tcyeee.bookmarkify.config.async.AsyncConfig
 import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
@@ -18,6 +20,7 @@ import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
+import top.tcyeee.bookmarkify.entity.dto.SimilarIngestUpdate
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
@@ -29,6 +32,7 @@ import top.tcyeee.bookmarkify.config.event.BookmarkParseAndResetUserItemEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseEvent
 import top.tcyeee.bookmarkify.server.IBookmarkCategoryService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
+import top.tcyeee.bookmarkify.server.IWebsiteLogoService
 import top.tcyeee.bookmarkify.utils.*
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
@@ -44,7 +48,7 @@ class BookmarkServiceImpl(
     private val eventPublisher: ApplicationEventPublisher,
     private val apiService: IApiService,
     private val layoutNodeMapper: UserLayoutNodeMapper,
-    private val websiteLogoMapper: WebsiteLogoMapper,
+    private val websiteLogoService: IWebsiteLogoService,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val bookmarkFunctionMapper: BookmarkFunctionMapper,
     private val bookmarkCategoryService: IBookmarkCategoryService,
@@ -72,10 +76,14 @@ class BookmarkServiceImpl(
         UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.FUNCTION).also { layoutNodeMapper.insert(it) }
             .let { BookmarkFunctionEntity(it, uid) }.also { bookmarkFunctionMapper.insert(it) }.run {}
 
-    override fun search(name: String): List<BookmarkEntity> =
-        ktQuery().eq(BookmarkEntity::isActivity, true).like(BookmarkEntity::appName, name).or()
+    override fun search(name: String): List<BookmarkSearchVO> {
+        val list = ktQuery().eq(BookmarkEntity::isActivity, true).like(BookmarkEntity::appName, name).or()
             .like(BookmarkEntity::title, name).or().like(BookmarkEntity::description, name).or()
             .like(BookmarkEntity::urlHost, name).last("limit 5").list()
+        // 小图标来自 website_logo，批量取后组装
+        val logoMap = logosByBookmarkIds(list.map { it.id })
+        return list.map { BookmarkSearchVO(it, logoMap[it.id]) }
+    }
 
     override fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO {
         val nodeEntity = UserLayoutNodeEntity(uid = uid).also { layoutNodeMapper.insert(it) }
@@ -89,7 +97,8 @@ class BookmarkServiceImpl(
         val bookmarkIds: List<String> = result.records.mapNotNull { it.bookmarkId }
         val bookmarkEntityMap =
             if (bookmarkIds.isEmpty()) emptyMap() else baseMapper.selectByIds(bookmarkIds).associateBy { it.id }
-        return result.convert { BookmarkShow(it, bookmarkEntityMap[it.bookmarkId]).initLogo() }
+        val logoMap = logosByBookmarkIds(bookmarkIds)
+        return result.convert { BookmarkShow(it, bookmarkEntityMap[it.bookmarkId], logoMap[it.bookmarkId]).initLogo() }
     }
 
     /**
@@ -171,8 +180,10 @@ class BookmarkServiceImpl(
     }
 
     override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> {
-        val page = baseMapper.selectPage(params.toPage(), params.toWrapper())
-            .convert { BookmarkAdminVO(it) }
+        val entityPage = baseMapper.selectPage(params.toPage(), params.toWrapper())
+        // 批量取每个书签的图标记录(website_logo)，与书签实体一起组装 VO
+        val logoMap = logosByBookmarkIds(entityPage.records.map { it.id })
+        val page = entityPage.convert { BookmarkAdminVO(it, logoMap[it.id]) }
         // 分类回填失败(如分类表缺失/查询异常)不应拖垮整个书签列表，降级为空分类
         runCatching {
             val catMap = bookmarkCategoryService.categoriesOf(page.records.map { it.id })
@@ -186,13 +197,16 @@ class BookmarkServiceImpl(
 
     override fun adminUpdateIcon(bookmarkId: String, params: BookmarkIconUpdateParams) {
         baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
-        ktUpdate()
-            .eq(BookmarkEntity::id, bookmarkId)
-            .set(BookmarkEntity::iconPadding, params.iconPadding)
-            .set(BookmarkEntity::iconBgColor, params.iconBgColor)
-            .set(BookmarkEntity::useHdLogo, params.useHdLogo)
-            .set(BookmarkEntity::appName, params.appName)
-            .update()
+        // appName 仍属于 bookmark 主表
+        ktUpdate().eq(BookmarkEntity::id, bookmarkId).set(BookmarkEntity::appName, params.appName).update()
+        // 图标显示设置(内边距/背景色/高清开关)落到 website_logo（与书签 1:1，upsert）
+        val logo = logoOf(bookmarkId).apply {
+            iconPadding = params.iconPadding
+            iconBgColor = params.iconBgColor
+            useHdLogo = params.useHdLogo
+            updateTime = LocalDateTime.now()
+        }
+        websiteLogoService.saveOrUpdate(logo)
     }
 
     override fun adminRefetch(bookmarkId: String): BookmarkRefetchVO {
@@ -219,21 +233,25 @@ class BookmarkServiceImpl(
         log.debug("[adminApplyRefetch] 应用重新获取结果: bookmarkId=$bookmarkId, useNewTitle=${params.useNewTitle}, useNewIcon=${params.useNewIcon}, useNewLogo=${params.useNewLogo}")
 
         if (params.useNewTitle) bookmark.title = vo.title
-        // 小图标与大图标(高清 LOGO)分开应用，可单独采用其中之一
-        if (params.useNewIcon) {
+        // 小图标与大图标(高清 LOGO)分开应用到图标记录(website_logo)，可单独采用其中之一
+        val logo = logoOf(bookmarkId)
+        val iconOrLogoChanged = params.useNewIcon || params.useNewLogo
+        if (iconOrLogoChanged) {
             val icons = vo.toManifestIcons(bookmark.rawUrl)
-            bookmark.iconBase64 = vo.favicon?.takeIf { it.isNotBlank() }
-                ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
-        }
-        if (params.useNewLogo) {
-            // 采用新大图标时，重抓高清 LOGO/OG 上传 OSS（saveLogoToOss 内部会回写 logoUrl / maximalLogoSize）
-            saveLogoToOss(vo.toManifestIcons(bookmark.rawUrl), bookmark)
+            if (params.useNewIcon) {
+                logo.iconBase64 = vo.favicon?.takeIf { it.isNotBlank() }
+                    ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
+            }
+            // 采用新大图标时，重抓高清 LOGO/OG 上传 OSS，并把元数据写回图标记录
+            if (params.useNewLogo) applyHdLogo(logo, icons, bookmarkId)
+            logo.updateTime = LocalDateTime.now()
+            websiteLogoService.saveOrUpdate(logo)
         }
         bookmark.updateTime = LocalDateTime.now()
         baseMapper.insertOrUpdate(bookmark)
         RedisUtils.del(RedisType.BOOKMARK_REFETCH, bookmarkId)
         log.debug("[adminApplyRefetch] 应用完成: bookmarkId=$bookmarkId, title=${bookmark.title}")
-        return BookmarkAdminVO(bookmark)
+        return BookmarkAdminVO(bookmark, logo)
     }
 
     override fun adminUpdateCategories(bookmarkId: String, categoryIds: List<String>): List<CategoryVO> {
@@ -250,7 +268,50 @@ class BookmarkServiceImpl(
 
     override fun adminSimilarSites(bookmarkId: String): List<SimilarSite> {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
-        return apiService.inferSimilarSites(bookmark.title, bookmark.description, bookmark.urlHost)
+        val sites = apiService.inferSimilarSites(bookmark.title, bookmark.description, bookmark.urlHost)
+        if (sites.isEmpty()) return sites
+        // 把推荐域名按与入库一致的方式归一化为 urlHost，再批量比对本地是否已收录
+        val hosts = sites.map { runCatching { WebsiteParser.urlWrapper("https://${it.domain}").urlHost }.getOrNull() }
+        val existingHosts = hosts.filterNotNull().distinct()
+            .takeIf { it.isNotEmpty() }
+            ?.let { findListByHost(it).map { b -> b.urlHost }.toSet() }
+            ?: emptySet()
+        sites.forEachIndexed { i, s -> s.exists = hosts[i]?.let { it in existingHosts } ?: false }
+        return sites
+    }
+
+    @Async(AsyncConfig.BOOKMARK_PARSE_EXECUTOR)
+    override fun adminIngestSimilar(adminUid: String, domains: List<String>) {
+        // 异步顺序收录（站点不多，顺序处理即可，避免并发打爆 scrapper）；逐站通过 WebSocket 回推状态。
+        // 关弹窗后管理端会断开 WS，此处推送命中不到 session 即静默丢弃，无需感知前端是否还在。
+        domains.distinct().forEach { domain ->
+            val status = runCatching { ingestOneSimilar(domain) }
+                .getOrElse {
+                    log.warn("[adminIngestSimilar] 收录异常 domain=$domain: ${it.message}")
+                    "SKIPPED"
+                }
+            SocketUtils.similarIngestUpdate(adminUid, SimilarIngestUpdate(domain, status))
+        }
+    }
+
+    /** 收录单个相似站点：本地已有→EXISTS；抓取失败(不可达=幻觉/失效)→删除记录并 SKIPPED；抓到(SUCCESS/BLOCKED)→INGESTED。 */
+    private fun ingestOneSimilar(domain: String): String {
+        val wrapper = WebsiteParser.urlWrapper("https://${domain.trim().substringAfter("://")}")
+        findByHost(wrapper.urlHost)?.let { return "EXISTS" }
+        val bookmark = getOrCreateByHost(wrapper)
+        // 抓取可能抛异常（本地解析器）或落 CLOSED（scrapper 不可达）；统一以「最终落库状态」判定，
+        // 抓到正文(SUCCESS/BLOCKED)才保留，其余一律删除——保证幻觉域名绝不留在库里。
+        runCatching { parseBookmark(bookmark) }
+            .onFailure { log.warn("[ingestOneSimilar] 解析异常 domain=$domain: ${it.message}") }
+        val saved = baseMapper.selectById(bookmark.id)
+        val ok = saved != null &&
+            (saved.parseStatus == ParseStatusEnum.SUCCESS || saved.parseStatus == ParseStatusEnum.BLOCKED)
+        return if (ok) {
+            "INGESTED"
+        } else {
+            removeById(bookmark.id)
+            "SKIPPED"
+        }
     }
 
     private fun loadCategoryVOs(bookmarkId: String): List<CategoryVO> =
@@ -371,8 +432,13 @@ class BookmarkServiceImpl(
         bookmark.successInit(wrapper)
         inferAndSetAppName(bookmark)
         baseMapper.insertOrUpdate(bookmark)
-        log.debug("[parseLocally] 元信息已保存, 开始存储 LOGO 到 OSS: bookmarkId=${bookmark.id}, iconCount=${wrapper.distinctIcons?.size ?: 0}")
-        saveLogoToOss(wrapper.distinctIcons ?: emptyList(), bookmark)
+        log.debug("[parseLocally] 元信息已保存, 开始存储图标记录(website_logo): bookmarkId=${bookmark.id}, iconCount=${wrapper.distinctIcons?.size ?: 0}")
+        // 小图标(favicon) + 高清 LOGO 一并 upsert 到 website_logo
+        saveIconAndLogo(
+            bookmark.id,
+            ChromeBookmarkParser.icoBase64(wrapper.distinctIcons, bookmark.rawUrl),
+            wrapper.distinctIcons ?: emptyList()
+        )
         log.debug("[parseLocally] 本地解析全部完成: bookmarkId=${bookmark.id}, parseStatus=${bookmark.parseStatus}, appName=${bookmark.appName}")
         return bookmark
     }
@@ -388,15 +454,15 @@ class BookmarkServiceImpl(
                 log.debug("[parseByApi] scrapper 返回成功: bookmarkId=${bookmark.id}, title=${vo.title}, source=${vo.source}, iconCount=${icons.size}")
                 // 填充基础信息 + iconBase64 + DeepSeek 简称推断，保存一次
                 vo.entity(bookmark).also {
-                    // scrapper 已返回 base64 data URL 的 favicon，优先直用；否则回退到本地下载
-                    it.iconBase64 = vo.favicon?.takeIf { f -> f.isNotBlank() }
-                        ?: ChromeBookmarkParser.icoBase64(icons, it.rawUrl)
                     inferAndSetAppName(it)
                     baseMapper.insertOrUpdate(it)
                     log.debug("[parseByApi] 元信息已保存: bookmarkId=${it.id}, appName=${it.appName}, parseStatus=${it.parseStatus}")
                 }
-                log.debug("[parseByApi] 开始存储 LOGO 到 OSS: bookmarkId=${bookmark.id}, iconCount=${icons.size}")
-                saveLogoToOss(icons, bookmark)
+                log.debug("[parseByApi] 开始存储图标记录(website_logo): bookmarkId=${bookmark.id}, iconCount=${icons.size}")
+                // scrapper 已返回 base64 data URL 的 favicon，优先直用；否则回退到本地下载
+                val iconBase64 = vo.favicon?.takeIf { f -> f.isNotBlank() }
+                    ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
+                saveIconAndLogo(bookmark.id, iconBase64, icons)
                 log.debug("[parseByApi] 第三方API解析全部完成: bookmarkId=${bookmark.id}")
                 bookmark
             },
@@ -413,24 +479,51 @@ class BookmarkServiceImpl(
         )
     }
 
+    // ────── 图标记录(website_logo, 与书签 1:1) ──────
+
+    /** 取该书签的图标记录；不存在则返回一个未持久化的新实例（带默认显示设置）。 */
+    private fun logoOf(bookmarkId: String): WebsiteLogoEntity =
+        websiteLogoService.ktQuery()
+            .eq(WebsiteLogoEntity::bookmarkId, bookmarkId)
+            .orderByDesc(WebsiteLogoEntity::height)
+            .last("limit 1")
+            .one()
+            ?: WebsiteLogoEntity(bookmarkId = bookmarkId)
+
+    /** 批量取一组书签的图标记录，按 bookmarkId 聚合（每书签取高度最大的一条，兼容历史多行）。 */
+    private fun logosByBookmarkIds(bookmarkIds: List<String>): Map<String, WebsiteLogoEntity> {
+        if (bookmarkIds.isEmpty()) return emptyMap()
+        return websiteLogoService.ktQuery().`in`(WebsiteLogoEntity::bookmarkId, bookmarkIds).list()
+            .groupBy { it.bookmarkId }
+            .mapValues { (_, list) -> list.maxByOrNull { it.height } ?: list.first() }
+    }
+
     /**
-     * 将网站 LOGO/OG 图片存入 OSS，并更新书签的最大 LOGO 尺寸
+     * 把小图标(favicon) + 高清 LOGO 一并 upsert 到该书签的图标记录(website_logo)。
+     * iconBase64 总会写入；高清 LOGO/OG 上传成功才回写其地址与文件元数据。
      */
-    private fun saveLogoToOss(icons: List<ManifestIcon>, bookmark: BookmarkEntity) {
-        if (icons.isEmpty()) {
-            log.debug("[saveLogoToOss] icon 列表为空，跳过 OSS 上传: bookmarkId=${bookmark.id}")
-            return
-        }
-        log.debug("[saveLogoToOss] 开始上传 LOGO/OG 到 OSS: bookmarkId=${bookmark.id}, iconCount=${icons.size}")
-        val result = OssUtils.restoreWebsiteLogoAndOg(icons, bookmark.id)
-        // 高清 LOGO 的 OSS 地址落库到 bookmark 主表（无 LOGO 时为 null）
-        bookmark.logoUrl = result.logoUrl
-        result.logo?.also {
-            websiteLogoMapper.insertOrUpdate(it)
-            log.debug("[saveLogoToOss] OSS 上传完成，已更新 website_logo: bookmarkId=${bookmark.id}, width=${it.width}")
-        }
-            // setMaximalLogoSize 会 insertOrUpdate 回写书签，连带持久化 logoUrl
-            ?.also { bookmark.setMaximalLogoSize(it.width) }
+    private fun saveIconAndLogo(bookmarkId: String, iconBase64: String?, icons: List<ManifestIcon>) {
+        val logo = logoOf(bookmarkId).apply { this.iconBase64 = iconBase64 }
+        applyHdLogo(logo, icons, bookmarkId)
+        logo.updateTime = LocalDateTime.now()
+        websiteLogoService.saveOrUpdate(logo)
+        log.debug("[saveIconAndLogo] 图标记录已保存: bookmarkId=$bookmarkId, hasIcon=${iconBase64 != null}, width=${logo.width}")
+    }
+
+    /** 把 LOGO/OG 上传 OSS，成功则把高清 LOGO 的地址与文件元数据写入图标记录（失败静默忽略，不影响小图标）。 */
+    private fun applyHdLogo(logo: WebsiteLogoEntity, icons: List<ManifestIcon>, bookmarkId: String) {
+        if (icons.isEmpty()) return
+        runCatching { OssUtils.restoreWebsiteLogoAndOg(icons, bookmarkId) }
+            .onSuccess { result ->
+                result.logo?.let { meta ->
+                    logo.logoUrl = result.logoUrl
+                    logo.width = meta.width
+                    logo.height = meta.height
+                    logo.size = meta.size
+                    logo.suffix = meta.suffix
+                }
+            }
+            .onFailure { log.warn("[applyHdLogo] 高清 LOGO 上传失败: bookmarkId=$bookmarkId, err=${it.message}") }
     }
 
     // ────── 私有工具 ──────
@@ -467,13 +560,6 @@ class BookmarkServiceImpl(
 
     private fun findById(bookmarkId: String): BookmarkEntity =
         requireNotNull(ktQuery().eq(BookmarkEntity::id, bookmarkId).one())
-
-    private fun BookmarkEntity.setMaximalLogoSize(maximal: Int) {
-        this.maximalLogoSize = maximal
-        this.isActivity = true
-        this.updateTime = LocalDateTime.now()
-        baseMapper.insertOrUpdate(this)
-    }
 
     companion object {
         // F-08: cap each checkAll() run to prevent flooding the parse executor when a large backlog

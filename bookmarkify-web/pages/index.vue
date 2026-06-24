@@ -4,9 +4,11 @@
       <LaunchBoard
         :items="bookmarkStore.rootNodes"
         :parent-key="ROOT_KEY"
+        show-add-button
         @commit="(c) => handleCommit(ROOT_KEY, c)"
         @open-dir="onOpenDir"
-        @show-detail="onShowDetail" />
+        @show-detail="onShowDetail"
+        @add="sysStore.addBookmarkDialogVisible = true" />
     </ClientOnly>
   </div>
 
@@ -58,6 +60,7 @@ import LaunchBoard, { type DragCommit } from '@/components/launchpad/LaunchBoard
 definePageMeta({ middleware: 'auth', layout: 'launch' })
 
 const bookmarkStore = useBookmarkStore()
+const sysStore = useSysStore()
 const clog = (...a: unknown[]) => console.log('%c[commit]', 'color:#9333ea;font-weight:bold', ...a)
 
 // ── 详情弹窗 ──

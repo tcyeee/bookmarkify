@@ -17,6 +17,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
+import top.tcyeee.bookmarkify.entity.BookmarkSearchVO
 import top.tcyeee.bookmarkify.entity.CategoryVO
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 
@@ -33,8 +34,8 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 为新用户设置默认功能 */
     fun setDefaultFunction(uid: String)
 
-    /** 搜索书签 */
-    fun search(name: String): List<BookmarkEntity>
+    /** 搜索书签（用户端「添加」搜索，返回含小图标的精简结果） */
+    fun search(name: String): List<BookmarkSearchVO>
 
     /** 关联一个已验证通过的书签 */
     fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO
@@ -63,8 +64,11 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 管理员对某书签重新跑一次 DeepSeek 自动归类，返回更新后的分类列表 */
     fun adminRecategorize(bookmarkId: String): List<CategoryVO>
 
-    /** 管理员：AI 推荐与该书签相似的网站（仅展示） */
+    /** 管理员：AI 推荐与该书签相似的网站（仅展示，回填 exists 标记本地是否已收录） */
     fun adminSimilarSites(bookmarkId: String): List<SimilarSite>
+
+    /** 管理员「一键收录」：异步顺序收录相似网站域名，逐站通过 WebSocket 回推进度（抓取失败=幻觉，删除并跳过） */
+    fun adminIngestSimilar(adminUid: String, domains: List<String>)
 
     fun adminGenerateAppName(bookmarkId: String): String?
 

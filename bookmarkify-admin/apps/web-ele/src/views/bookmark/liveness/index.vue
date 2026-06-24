@@ -137,9 +137,9 @@ const iconDirty = computed(() => {
   const item = detailItem.value;
   if (!item) return false;
   return (
-    editPadding.value !== item.iconPadding ||
-    normColor(editBgColor.value) !== normColor(item.iconBgColor) ||
-    editUseHdLogo.value !== (item.useHdLogo ?? false) ||
+    editPadding.value !== item.logo.iconPadding ||
+    normColor(editBgColor.value) !== normColor(item.logo.iconBgColor) ||
+    editUseHdLogo.value !== (item.logo.useHdLogo ?? false) ||
     (editAppName.value.trim() || "") !== (item.appName || "")
   );
 });
@@ -164,10 +164,10 @@ function openDetail(row: BookmarkEntity) {
   // 图标内边距范围 0~15，缺省值 10
   editPadding.value = Math.min(
     PADDING_MAX,
-    Math.max(PADDING_MIN, row.iconPadding ?? PADDING_DEFAULT),
+    Math.max(PADDING_MIN, row.logo.iconPadding ?? PADDING_DEFAULT),
   );
-  editBgColor.value = row.iconBgColor ?? null;
-  editUseHdLogo.value = row.useHdLogo ?? false;
+  editBgColor.value = row.logo.iconBgColor ?? null;
+  editUseHdLogo.value = row.logo.useHdLogo ?? false;
   editAppName.value = row.appName ?? "";
   oldLogoError.value = false;
   newLogoError.value = false;
@@ -245,9 +245,7 @@ async function saveIcon() {
         useNewLogo: chooseLogo.value === "new",
       });
       item.title = updated.title;
-      item.iconBase64 = updated.iconBase64;
-      item.logoUrl = updated.logoUrl;
-      item.maximalLogoSize = updated.maximalLogoSize;
+      item.logo = updated.logo;
       refetchResult.value = null;
     }
     // 2. 保存图标设置（内边距 / 背景色 / 高清图开关 / 书签简称）
@@ -259,9 +257,9 @@ async function saveIcon() {
         useHdLogo: editUseHdLogo.value,
         appName: nextAppName,
       });
-      item.iconPadding = editPadding.value;
-      item.iconBgColor = editBgColor.value || undefined;
-      item.useHdLogo = editUseHdLogo.value;
+      item.logo.iconPadding = editPadding.value;
+      item.logo.iconBgColor = editBgColor.value || undefined;
+      item.logo.useHdLogo = editUseHdLogo.value;
       item.appName = nextAppName || undefined;
     }
     ElMessage.success("已保存");
@@ -330,7 +328,7 @@ onMounted(() => {
             <BookmarkIcon
               :value="item"
               :size="72"
-              :hd-url="item.useHdLogo ? item.logoUrl : undefined"
+              :hd-url="item.logo.useHdLogo ? item.logo.logoUrl : undefined"
             />
             <div class="title">{{ displayName(item) }}</div>
           </div>
@@ -376,7 +374,7 @@ onMounted(() => {
                     :size="s.value"
                     :padding="editPadding"
                     :bg-color="editBgColor ?? undefined"
-                    :hd-url="editUseHdLogo ? detailItem.logoUrl : undefined"
+                    :hd-url="editUseHdLogo ? detailItem.logo.logoUrl : undefined"
                   />
                   <span class="preview-size-tag">{{ s.label }}</span>
                 </div>
@@ -424,14 +422,14 @@ onMounted(() => {
                   <div
                     :class="[
                       'source-option',
-                      { active: editUseHdLogo, disabled: !detailItem.logoUrl },
+                      { active: editUseHdLogo, disabled: !detailItem.logo.logoUrl },
                     ]"
-                    @click="detailItem.logoUrl && (editUseHdLogo = true)"
+                    @click="detailItem.logo.logoUrl && (editUseHdLogo = true)"
                   >
                     <div class="source-thumb">
                       <img
-                        v-if="detailItem.logoUrl"
-                        :src="detailItem.logoUrl"
+                        v-if="detailItem.logo.logoUrl"
+                        :src="detailItem.logo.logoUrl"
                         class="source-thumb-img"
                         alt="高清图标"
                         draggable="false"
@@ -441,7 +439,7 @@ onMounted(() => {
                     <span class="source-tag">高清</span>
                   </div>
                 </div>
-                <span v-if="!detailItem.logoUrl" class="edit-hint">
+                <span v-if="!detailItem.logo.logoUrl" class="edit-hint">
                   未获取到高清 LOGO
                 </span>
               </div>
@@ -529,7 +527,10 @@ onMounted(() => {
                 @click="chooseIcon = 'new'"
               >
                 <BookmarkIcon
-                  :value="{ ...detailItem, iconBase64: refetchResult.iconBase64 }"
+                  :value="{
+                    ...detailItem,
+                    logo: { ...detailItem.logo, iconBase64: refetchResult.iconBase64 },
+                  }"
                   :size="52"
                 />
                 <span class="compare-tag is-new">新</span>
@@ -550,8 +551,8 @@ onMounted(() => {
               >
                 <div class="logo-thumb">
                   <img
-                    v-if="detailItem.logoUrl && !oldLogoError"
-                    :src="detailItem.logoUrl"
+                    v-if="detailItem.logo.logoUrl && !oldLogoError"
+                    :src="detailItem.logo.logoUrl"
                     class="logo-thumb-img"
                     alt="旧高清 LOGO"
                     draggable="false"

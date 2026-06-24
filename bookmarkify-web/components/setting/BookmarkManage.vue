@@ -1,158 +1,104 @@
 <template>
-  <div class="space-y-3 text-slate-900 dark:text-slate-100 transition-colors">
-    <div class="flex items-start justify-between gap-3">
-      <div>
-        <h3 class="text-xl font-semibold">书签管理</h3>
-        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">导入 Chrome 书签并快速检索当前账号的链接。</p>
-      </div>
-      <label class="cy-btn cy-btn-accent flex items-center gap-2 cursor-pointer" :class="{ 'opacity-70 pointer-events-none': importing }">
-        <input ref="fileInputRef" type="file" accept=".html,.htm" class="hidden" :disabled="importing" @change="handleFileChange" />
-        <Icon icon="memory:upload" class="size-5" />
-        <span>{{ importing ? '导入中…' : '导入书签' }}</span>
-      </label>
+  <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
+    <div>
+      <h3 class="text-xl font-semibold">导入书签</h3>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">从 Chrome 导出的 HTML 文件中批量导入书签。</p>
     </div>
 
-    <div class="bg-white dark:bg-slate-950/80 transition-colors rounded-lg border border-slate-200 dark:border-slate-800">
-      <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 px-4 py-3">
-        <input v-model="keyword" type="text" placeholder="输入标题、描述或域名搜索" class="cy-input cy-input-sm min-w-[220px] flex-1" :disabled="bookmarksLoading" @keyup.enter="handleSearchBookmarks" />
-        <button class="cy-btn cy-btn-soft" :disabled="bookmarksLoading" @click="handleSearchBookmarks">搜索</button>
-        <button class="cy-btn cy-btn-ghost" :disabled="bookmarksLoading" @click="handleResetSearch">重置</button>
-      </div>
+    <!-- 上传区域 -->
+    <label
+      class="relative flex flex-col items-center justify-center gap-4 w-full rounded-2xl border-2 border-dashed cursor-pointer transition-colors"
+      :class="[
+        isDragging
+          ? 'border-sky-400 bg-sky-50 dark:bg-sky-950/30'
+          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:border-sky-300 hover:bg-sky-50/50 dark:hover:bg-sky-950/20',
+        importing ? 'pointer-events-none opacity-60' : '',
+      ]"
+      style="min-height: 220px"
+      @dragover.prevent="isDragging = true"
+      @dragleave.prevent="isDragging = false"
+      @drop.prevent="handleDrop">
+      <input ref="fileInputRef" type="file" accept=".html,.htm" class="sr-only" :disabled="importing" @change="handleFileChange" />
 
-      <div v-if="statusMessage" class="mx-4 mt-3 rounded-md px-4 py-3 text-sm transition-colors" :class="statusClass">
-        {{ statusMessage }}
+      <div class="flex flex-col items-center gap-3 px-6 py-8 text-center select-none">
+        <div class="flex items-center justify-center w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700">
+          <Icon
+            :icon="importing ? 'memory:rotate-clockwise' : 'memory:upload'"
+            class="size-7 text-sky-500"
+            :class="{ 'animate-spin': importing }" />
+        </div>
+        <div>
+          <p class="text-base font-medium text-slate-700 dark:text-slate-200">
+            {{ importing ? '正在导入，请稍候…' : '点击选择或拖拽文件到此处' }}
+          </p>
+          <p class="mt-1 text-sm text-slate-400 dark:text-slate-500">支持 Chrome / Edge 导出的 .html 书签文件</p>
+        </div>
+        <button
+          v-if="!importing"
+          type="button"
+          class="cy-btn cy-btn-accent cy-btn-sm pointer-events-none">
+          选择文件
+        </button>
       </div>
+    </label>
 
-      <div class="p-4">
-        <div v-if="bookmarksLoading" class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-          <Icon icon="memory:rotate-clockwise" class="size-[18px] animate-spin" />
-          <span>正在加载书签...</span>
-        </div>
-        <div v-else-if="!bookmarks.length" class="rounded-md border border-dashed border-slate-200 dark:border-slate-800 px-4 py-6 text-sm text-slate-600 dark:text-slate-300">
-          尚未发现你的书签，可以先导入或在主页添加。
-        </div>
-        <div v-else class="mt-1 overflow-x-auto">
-          <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm bg-white/60 dark:bg-slate-900/40 rounded-lg">
-            <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-300">
-              <tr>
-                <th scope="col" class="px-4 py-2 text-left font-medium">书签</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-100">
-              <tr v-for="bookmark in bookmarks" :key="bookmark.bookmarkUserLinkId || bookmark.bookmarkId" class="hover:bg-slate-50 dark:hover:bg-slate-900/70 transition-colors">
-                <td class="px-4 py-2 align-middle">
-                  <div class="flex items-center gap-2 min-w-0">
-                    <div class="relative h-7 w-7 shrink-0">
-                      <BookmarkLogo :value="bookmark" :size="28" />
-                      <span class="absolute -top-0.5 -right-0.5 z-10 h-2 w-2 rounded-full ring-2 ring-white dark:ring-slate-900" :class="bookmark.isActivity ? 'bg-emerald-500' : 'bg-rose-500'" aria-hidden="true" />
-                    </div>
-                    <div class="min-w-0">
-                      <a class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate hover:text-sky-600 dark:hover:text-sky-400" :title="bookmark.description || bookmark.urlFull || bookmark.title" :href="bookmark.urlFull" target="_blank" rel="noopener">
-                        {{ bookmark.title }}
-                      </a>
-                      <div class="text-xs text-slate-500 dark:text-slate-400 truncate" :title="bookmark.urlBase">
-                        {{ bookmark.urlBase || '—' }}
-                      </div>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div v-if="bookmarks.length" class="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-400">
-          <div>
-            共 {{ total }} 条，当前第 {{ currentPage }} / {{ totalPages }} 页
-          </div>
-          <div class="flex items-center gap-2">
-            <button type="button" class="cy-btn cy-btn-ghost cy-btn-xs" :disabled="currentPage <= 1 || bookmarksLoading" @click="handlePageChange(currentPage - 1)">
-              上一页
-            </button>
-            <span>{{ currentPage }} / {{ totalPages }}</span>
-            <button type="button" class="cy-btn cy-btn-ghost cy-btn-xs" :disabled="currentPage >= totalPages || bookmarksLoading" @click="handlePageChange(currentPage + 1)">
-              下一页
-            </button>
-            <select v-model.number="pageSize" class="cy-input cy-input-sm w-24" :disabled="bookmarksLoading" @change="handlePageSizeChange">
-              <option :value="10">每页 10 条</option>
-              <option :value="20">每页 20 条</option>
-              <option :value="50">每页 50 条</option>
-            </select>
-          </div>
-        </div>
+    <!-- 状态消息 -->
+    <Transition name="fade-fast">
+      <div
+        v-if="statusMessage"
+        class="flex items-start gap-3 rounded-xl px-4 py-3 text-sm transition-colors"
+        :class="statusClass">
+        <Icon :icon="statusType === 'success' ? 'memory:check-circle' : statusType === 'error' ? 'memory:close-circle' : 'memory:information'" class="size-5 mt-0.5 shrink-0" />
+        <span>{{ statusMessage }}</span>
       </div>
+    </Transition>
 
-      <div v-if="bookmarkError" class="mx-4 mb-4 rounded-md bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200 px-4 py-3 text-sm">
-        {{ bookmarkError }}
-      </div>
+    <!-- 使用说明 -->
+    <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-5 text-sm text-slate-500 dark:text-slate-400 space-y-2">
+      <p class="font-medium text-slate-600 dark:text-slate-300">如何导出 Chrome 书签？</p>
+      <ol class="list-decimal list-inside space-y-1 text-slate-500 dark:text-slate-400">
+        <li>打开 Chrome，点击右上角菜单 → 书签 → 书签管理器</li>
+        <li>点击右上角三点图标 → 导出书签</li>
+        <li>保存为 <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-mono text-xs">.html</code> 文件后上传即可</li>
+      </ol>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { bookmarksList, bookmarksUpload } from '@api'
-import type { BookmarkShow } from '@typing'
-import BookmarkLogo from '../launchpad/cell/BookmarkLogo.vue'
+import { bookmarksUpload } from '@api'
 
 const bookmarkStore = useBookmarkStore()
 
 const fileInputRef = ref<HTMLInputElement>()
-const selectedFile = ref<File | null>(null)
 const importing = ref(false)
+const isDragging = ref(false)
 const statusMessage = ref('')
 const statusType = ref<'default' | 'success' | 'error'>('default')
-const bookmarksLoading = ref(false)
-const bookmarkError = ref('')
-const bookmarks = ref<BookmarkShow[]>([])
-const keyword = ref('')
-const currentPage = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
-
-const totalPages = computed(() => {
-  if (!total.value || !pageSize.value) return 1
-  const pages = Math.ceil(total.value / pageSize.value)
-  return pages > 0 ? pages : 1
-})
-
-async function handleFileChange(event: Event) {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-
-  statusMessage.value = ''
-  statusType.value = 'default'
-
-  if (!file) {
-    selectedFile.value = null
-    return
-  }
-
-  // 只简单校验后缀/类型，详细校验交给后端
-  if (!file.name.endsWith('.html') && !file.name.endsWith('.htm')) {
-    ElMessage.warning('请上传从 Chrome 导出的 HTML 书签文件')
-    selectedFile.value = null
-    if (fileInputRef.value) {
-      fileInputRef.value.value = ''
-    }
-    return
-  }
-
-  selectedFile.value = file
-
-  await handleImport()
-}
 
 const statusClass = computed(() =>
   statusType.value === 'success'
     ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
     : statusType.value === 'error'
-    ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200'
-    : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'
+      ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200'
+      : 'bg-sky-50 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200'
 )
 
-async function handleImport() {
-  if (!selectedFile.value) {
-    ElMessage.warning('请先选择要导入的书签文件')
+function handleDrop(event: DragEvent) {
+  isDragging.value = false
+  const file = event.dataTransfer?.files?.[0]
+  if (file) processFile(file)
+}
+
+async function handleFileChange(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (file) processFile(file)
+}
+
+async function processFile(file: File) {
+  if (!file.name.endsWith('.html') && !file.name.endsWith('.htm')) {
+    ElMessage.warning('请上传从 Chrome 导出的 HTML 书签文件')
+    if (fileInputRef.value) fileInputRef.value.value = ''
     return
   }
 
@@ -161,67 +107,28 @@ async function handleImport() {
   statusType.value = 'default'
 
   try {
-    await bookmarksUpload(selectedFile.value)
-    statusMessage.value = '导入完成!'
+    await bookmarksUpload(file)
+    statusMessage.value = '导入完成！书签已同步到你的书签鸭。'
     statusType.value = 'success'
-    await fetchBookmarks()
     bookmarkStore.update()
   } catch (error: any) {
-    console.error(error)
     statusMessage.value = error?.msg || error?.message || '导入失败，请稍后重试。'
     statusType.value = 'error'
   } finally {
     importing.value = false
-    selectedFile.value = null
-    if (fileInputRef.value) {
-      fileInputRef.value.value = ''
-    }
+    if (fileInputRef.value) fileInputRef.value.value = ''
   }
 }
-
-async function fetchBookmarks() {
-  bookmarksLoading.value = true
-  bookmarkError.value = ''
-  try {
-    const payload = {
-      ...(keyword.value.trim() ? { name: keyword.value.trim() } : {}),
-      currentPage: currentPage.value,
-      pageSize: pageSize.value,
-    }
-    const res = await bookmarksList(payload)
-    bookmarks.value = res?.records ?? []
-    total.value = res?.total ?? 0
-    if (typeof res?.current === 'number') currentPage.value = res.current
-    if (typeof res?.size === 'number') pageSize.value = res.size
-  } catch (error: any) {
-    bookmarkError.value = error?.msg || error?.message || '获取书签失败，请稍后重试。'
-  } finally {
-    bookmarksLoading.value = false
-  }
-}
-
-function handleSearchBookmarks() {
-  currentPage.value = 1
-  fetchBookmarks()
-}
-
-function handleResetSearch() {
-  keyword.value = ''
-  currentPage.value = 1
-  fetchBookmarks()
-}
-
-function handlePageChange(page: number) {
-  if (page < 1 || page > totalPages.value) return
-  if (page === currentPage.value) return
-  currentPage.value = page
-  fetchBookmarks()
-}
-
-function handlePageSizeChange() {
-  currentPage.value = 1
-  fetchBookmarks()
-}
-
-onMounted(fetchBookmarks)
 </script>
+
+<style scoped>
+.fade-fast-enter-active,
+.fade-fast-leave-active {
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.fade-fast-enter-from,
+.fade-fast-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+</style>

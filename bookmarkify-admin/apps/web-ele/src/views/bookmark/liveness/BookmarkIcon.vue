@@ -15,11 +15,11 @@ const props = withDefaults(
   { size: 72 },
 );
 
-// 实时预览时由外部传入 padding 覆盖；否则取书签自身已保存的 iconPadding
-const effectivePadding = computed(() => props.padding ?? props.value.iconPadding ?? 0);
+// 实时预览时由外部传入 padding 覆盖；否则取书签自身已保存的 iconPadding（在 logo 中）
+const effectivePadding = computed(() => props.padding ?? props.value.logo?.iconPadding ?? 0);
 
 // 自定义背景色：优先用外部传入（实时预览），其次书签已保存值；为空则用图标平均色
-const customBgColor = computed(() => props.bgColor ?? props.value.iconBgColor ?? "");
+const customBgColor = computed(() => props.bgColor ?? props.value.logo?.iconBgColor ?? "");
 
 // 无图标 / 加载失败时的兜底图标（灰色地球，内联 SVG 避免依赖静态资源）
 const FALLBACK_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -36,9 +36,9 @@ const logoSize = computed(() => props.size);
 // 取源优先级：HD 直链 → base64 → 兜底（与前台 BookmarkLogo 一致）
 const hasHd = computed(() => !hdError.value && !!props.hdUrl);
 const hasBase64 = computed(
-  () => !hasHd.value && !iconError.value && !!props.value.iconBase64,
+  () => !hasHd.value && !iconError.value && !!props.value.logo?.iconBase64,
 );
-const base64Src = computed(() => buildBase64DataUrl(props.value.iconBase64));
+const base64Src = computed(() => buildBase64DataUrl(props.value.logo?.iconBase64));
 
 // 外层卡片尺寸
 const cardStyle = computed(() => ({
@@ -94,7 +94,7 @@ watch(
 
 // 监听 iconBase64 变化：重置错误状态并重新计算主色
 watch(
-  () => props.value.iconBase64,
+  () => props.value.logo?.iconBase64,
   async (base64) => {
     iconError.value = false;
     if (!base64) {

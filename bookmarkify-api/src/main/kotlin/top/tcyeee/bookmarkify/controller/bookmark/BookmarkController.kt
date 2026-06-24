@@ -7,13 +7,13 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
+import top.tcyeee.bookmarkify.entity.BookmarkSearchVO
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
 import top.tcyeee.bookmarkify.entity.CreateDirParams
 import top.tcyeee.bookmarkify.entity.MoveNodeParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
@@ -36,7 +36,7 @@ class BookmarksController(
 
     @Operation(summary = "通过书签简称/标题/描述/根域名,搜索书签")
     @PostMapping("/search")
-    fun search(@RequestParam name: String): List<BookmarkEntity> = bookmarkService.search(name)
+    fun search(@RequestParam name: String): List<BookmarkSearchVO> = bookmarkService.search(name)
 
     @Operation(summary = "查看我的全部书签")
     @PostMapping("/list")

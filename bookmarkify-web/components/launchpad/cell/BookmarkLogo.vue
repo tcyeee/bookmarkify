@@ -10,16 +10,16 @@
     <div class="bg-white flex justify-center items-center" :style="[logoSizeStyle, logoStyle]">
       <!-- 优先使用高清图 -->
       <img
-        v-if="props.value.iconHdUrl && !hdError"
-        :key="`hd-${props.value.iconHdUrl}`"
-        :src="props.value.iconHdUrl"
+        v-if="props.value.logo?.iconHdUrl && !hdError"
+        :key="`hd-${props.value.logo?.iconHdUrl}`"
+        :src="props.value.logo?.iconHdUrl"
         alt=""
         @error="onHdError"
       />
       <!-- base64 图：可按尺寸放大 -->
       <img
         v-else-if="!iconError"
-        :key="`base64-${props.value.iconBase64?.slice(0, 20) || ''}`"
+        :key="`base64-${props.value.logo?.iconBase64?.slice(0, 20) || ''}`"
         :style="base64Style"
         :src="base64Src"
         alt=""
@@ -50,15 +50,15 @@ const shouldUpscale = ref(false)
 const logoSize = computed(() => props.size ?? 80)
 
 // 自定义背景色（管理台设置）：存在则直接铺该色
-const customBgColor = computed(() => props.value.iconBgColor || '')
+const customBgColor = computed(() => props.value.logo?.iconBgColor || '')
 // 图片内边距（管理台设置）：收缩 base64 图标
-const effectivePadding = computed(() => props.value.iconPadding ?? 0)
+const effectivePadding = computed(() => props.value.logo?.iconPadding ?? 0)
 
 // 开发环境标记
 const isDev = computed(() => isLocalhostOrIP(props.value.urlFull))
 // 判定是否需走 base64 分支
 const shouldUseBase64 = computed(
-  () => (!props.value.iconHdUrl || hdError.value) && !iconError.value && !!props.value.iconBase64,
+  () => (!props.value.logo?.iconHdUrl || hdError.value) && !iconError.value && !!props.value.logo?.iconBase64,
 )
 const devOutlineColor = computed(() => backgroundColor.value || '#ffffff')
 // base64 时叠加主色与淡白蒙版
@@ -92,7 +92,7 @@ const fallbackStyle = computed(() => ({
   width: `${Math.round(logoSize.value * 0.4)}px`,
   height: `${Math.round(logoSize.value * 0.4)}px`,
 }))
-const base64Src = computed(() => buildBase64DataUrl(props.value.iconBase64))
+const base64Src = computed(() => buildBase64DataUrl(props.value.logo?.iconBase64 || ''))
 
 function onHdError() {
   hdError.value = true
@@ -104,7 +104,7 @@ function onIconError() {
 
 // 监听 iconBase64 变化
 watch(
-  () => props.value.iconBase64,
+  () => props.value.logo?.iconBase64,
   async (base64) => {
     if (!import.meta.client || !base64) {
       backgroundColor.value = '#ffffff'
@@ -127,7 +127,7 @@ watch(
 
 // 监听 iconHdUrl 变化，重置错误状态以便重新加载
 watch(
-  () => props.value.iconHdUrl,
+  () => props.value.logo?.iconHdUrl,
   () => {
     hdError.value = false
   },
