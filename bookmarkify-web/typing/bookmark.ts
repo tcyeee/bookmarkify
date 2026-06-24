@@ -82,3 +82,16 @@ export interface BookmarkSortParams {
   id: string
   sort: number
 }
+
+export interface BookmarkImportItemVO {
+  title: string
+  url: string
+  folder?: string | null
+  isDuplicate: boolean
+}
+
+export interface BookmarkImportPreviewVO {
+  total: number
+  duplicateCount: number
+  items: BookmarkImportItemVO[]
+}
