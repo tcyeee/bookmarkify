@@ -37,6 +37,11 @@ interface IUserService : IService<UserEntity> {
     fun me(uid: String): UserInfoShow
 
     /**
+     * 为当前用户生成头像签名 URL（1 小时有效），按需调用，不应被持久化
+     */
+    fun avatarSignedUrl(uid: String): String?
+
+    /**
      * 更新背景颜色
      * @param params 背景颜色配置
      * @param uid 用户ID

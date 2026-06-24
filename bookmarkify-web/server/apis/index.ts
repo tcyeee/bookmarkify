@@ -29,6 +29,7 @@ export const bookmarksMoveNode = (nodeId: string, dirNodeId: string | null) =>
 /* =========[ /user ]========= */
 export const updateUserInfo = (param: t.UserInfoUpdate) => http.post<boolean>('/user/updateInfo', param)
 export const queryUserInfo = () => http.get<t.UserInfo>('/user/info')
+export const queryAvatarUrl = () => http.get<string | null>('/user/avatar-url')
 export const accountDelete = (email?: string) => http.post<boolean>('/user/del', { email })
 export const uploadAvatar = (file: File) => http.upload<string>('/user/uploadAvatar', file)
 export const bindGoogle = (idToken: string) => http.post<t.UserInfo>('/user/google/bind', { idToken })

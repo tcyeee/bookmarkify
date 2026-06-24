@@ -4,7 +4,7 @@
     <!-- 已关联：解绑按钮 -->
     <button
       v-if="props.googleEmail"
-      class="cy-btn cy-btn-ghost h-10 px-4 min-w-[104px]"
+      class="cy-btn cy-btn-ghost h-10 px-4 min-w-[100px]"
       :disabled="loading || disabled"
       @click="handleUnbind">
       <span v-if="loading">处理中...</span>
@@ -12,10 +12,10 @@
     </button>
 
     <!-- 未关联：可见按钮 + 透明覆盖的 Google 官方按钮（GIS 为跨域 iframe，无法编程触发，故直接覆盖承接点击） -->
-    <div v-else class="relative h-10 min-w-[104px]">
+    <div v-else class="relative h-10 min-w-[100px]">
       <button
         type="button"
-        class="cy-btn cy-btn-ghost pointer-events-none h-10 w-full px-4"
+        class="cy-btn cy-btn-primary cy-btn-outline pointer-events-none h-10 w-full px-4"
         :disabled="loading || disabled || !clientId">
         <span>{{ loading ? '关联中...' : '关联谷歌' }}</span>
       </button>

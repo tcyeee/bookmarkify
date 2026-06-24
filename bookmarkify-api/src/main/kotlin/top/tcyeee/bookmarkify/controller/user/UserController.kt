@@ -28,6 +28,10 @@ class UserController(private val userService: IUserService) {
     @Operation(summary = "获取用户信息")
     fun info(): UserInfoShow = userService.me(BaseUtils.uid())
 
+    @GetMapping("avatar-url")
+    @Operation(summary = "获取当前用户头像签名 URL（1 小时有效，按需调用，请勿持久化）")
+    fun avatarUrl(): String? = userService.avatarSignedUrl(BaseUtils.uid())
+
     @PostMapping("updateInfo")
     @Operation(summary = "修改用户信息")
     fun updateUsername(@RequestBody params: UserInfoUpdateParams) = userService.updateInfo(params)

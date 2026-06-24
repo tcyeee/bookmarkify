@@ -43,6 +43,9 @@ services:
       BOOKMARKIFY_GOOGLE_CLIENT_ID: 534119394768-5ed59pcgub9a1s45a9uvu69alvk1ddko.apps.googleusercontent.com
       BOOKMARKIFY_GOOGLE_PROXY_HOST: clash
       BOOKMARKIFY_GOOGLE_PROXY_PORT: 7890
+      # --- GitHub 登录（Client ID 为公开值；Secret 从 .env 注入；出站同走 clash 代理）---
+      BOOKMARKIFY_GITHUB_CLIENT_ID: Iv23liXTNklcSgqAa8rU
+      BOOKMARKIFY_GITHUB_CLIENT_SECRET: ${BOOKMARKIFY_GITHUB_CLIENT_SECRET}
     networks:
       - app_network
 

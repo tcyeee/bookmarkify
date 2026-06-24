@@ -13,7 +13,7 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 class ScheduledTasks(
     private val bookmarkService: IBookmarkService
 ) {
-    @Description("每天凌晨2点执行")
-    @Scheduled(cron = "0 0 2 * * ?")
+    @Description("每5分钟对账一次未完成解析的书签")
+    @Scheduled(cron = "0 */5 * * * ?")
     fun runTaskWithCron() = bookmarkService.checkAll()
 }

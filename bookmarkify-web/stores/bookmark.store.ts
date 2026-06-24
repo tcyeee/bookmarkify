@@ -24,6 +24,7 @@ export const useBookmarkStore = defineStore('homeItems', {
   state: () => ({
     nodes: {} as Record<string, UserLayoutNodeVO>,
     order: { [ROOT_KEY]: [] } as Record<string, string[]>,
+    lastFetchedAt: 0,
   }),
 
   getters: {
@@ -57,7 +58,17 @@ export const useBookmarkStore = defineStore('homeItems', {
     async update(): Promise<void> {
       const res = await bookmarksShowAll()
       this.setLayout(res)
+      this.lastFetchedAt = Date.now()
       console.log(`[DEBUG]桌面布局更新: 根 ${this.order[ROOT_KEY]?.length ?? 0} 项`)
+    },
+
+    // 数据是否仍然"新鲜"（缓存非空且在指定时间内拉取过）
+    isFresh(withinMs = 2 * 60 * 1000): boolean {
+      return (
+        this.lastFetchedAt > 0 &&
+        Date.now() - this.lastFetchedAt < withinMs &&
+        (this.order[ROOT_KEY]?.length ?? 0) > 0
+      )
     },
 
     setLayout(root?: UserLayoutNodeVO | null) {

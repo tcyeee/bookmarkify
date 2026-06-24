@@ -59,11 +59,18 @@ class UserServiceImpl(
      */
     override fun me(uid: String): UserInfoShow =
         (getById(uid) ?: throw CommonException(ErrorType.E215))
-            .let { UserInfoShow(it, it.avatarUrlWithSign()) }
+            .let { UserInfoShow(it, it.avatarPath()) }
 
-    fun UserEntity.avatarUrlWithSign(): String? {
+    // 返回原始 OSS 路径（如 avatar/xxx.svg），不签名，可安全持久化
+    fun UserEntity.avatarPath(): String? {
         if (StrUtil.isBlank(this.avatarFileId)) return null
-        return fileMapper.selectById(this.avatarFileId)?.fullUrlWithSign(300)
+        return fileMapper.selectById(this.avatarFileId)?.fullPath
+    }
+
+    override fun avatarSignedUrl(uid: String): String? {
+        val user = getById(uid) ?: return null
+        if (StrUtil.isBlank(user.avatarFileId)) return null
+        return fileMapper.selectById(user.avatarFileId)?.fullUrlWithSign(300)
     }
 
     /**
@@ -248,7 +255,7 @@ class UserServiceImpl(
         user.googleId = identity.googleId
         user.googleEmail = identity.email
         updateById(user)
-        return UserInfoShow(user, user.avatarUrlWithSign())
+        return UserInfoShow(user, user.avatarPath())
     }
 
     /**
@@ -258,7 +265,7 @@ class UserServiceImpl(
     @Transactional
     override fun unbindGoogle(uid: String): UserInfoShow {
         val user = getById(uid) ?: throw CommonException(ErrorType.E215)
-        if (user.googleId.isNullOrBlank()) return UserInfoShow(user, user.avatarUrlWithSign())
+        if (user.googleId.isNullOrBlank()) return UserInfoShow(user, user.avatarPath())
 
         val hasOtherCredential = !user.password.isNullOrBlank() || !user.email.isNullOrBlank()
         if (!hasOtherCredential) throw CommonException(ErrorType.E115)
@@ -271,7 +278,7 @@ class UserServiceImpl(
             .set(UserEntity::googleEmail, null)
             .eq(UserEntity::id, uid)
             .update()
-        return UserInfoShow(user, user.avatarUrlWithSign())
+        return UserInfoShow(user, user.avatarPath())
     }
 
     /**
@@ -292,14 +299,14 @@ class UserServiceImpl(
         user.githubId = identity.githubId
         user.githubLogin = identity.login
         updateById(user)
-        return UserInfoShow(user, user.avatarUrlWithSign())
+        return UserInfoShow(user, user.avatarPath())
     }
 
     /** 解绑当前账户的 GitHub 关联。解绑后若无密码且无可登录邮箱 => E115。 */
     @Transactional
     override fun unbindGithub(uid: String): UserInfoShow {
         val user = getById(uid) ?: throw CommonException(ErrorType.E215)
-        if (user.githubId.isNullOrBlank()) return UserInfoShow(user, user.avatarUrlWithSign())
+        if (user.githubId.isNullOrBlank()) return UserInfoShow(user, user.avatarPath())
 
         val hasOtherCredential = !user.password.isNullOrBlank() || !user.email.isNullOrBlank()
         if (!hasOtherCredential) throw CommonException(ErrorType.E115)
@@ -312,7 +319,7 @@ class UserServiceImpl(
             .set(UserEntity::githubLogin, null)
             .eq(UserEntity::id, uid)
             .update()
-        return UserInfoShow(user, user.avatarUrlWithSign())
+        return UserInfoShow(user, user.avatarPath())
     }
 
     /**
@@ -374,25 +381,31 @@ class UserServiceImpl(
         if (clientId.isBlank() || clientSecret.isBlank()) throw CommonException(ErrorType.E117, "服务端未配置 GitHub OAuth")
         if (params.code.isBlank()) throw CommonException(ErrorType.E117)
 
-        // 1. code -> access_token
-        val tokenResp = runCatching {
-            HttpUtil.createPost("https://github.com/login/oauth/access_token")
+        // 1. code -> access_token（HuTool HTTPS POST 不经代理直连，改用 Java 11 HttpClient 保证走 clash）
+        val accessToken: String = run {
+            val builder = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(8))
+            if (projectConfig.googleProxyHost.isNotBlank() && projectConfig.googleProxyPort > 0) {
+                builder.proxy(java.net.ProxySelector.of(
+                    java.net.InetSocketAddress(projectConfig.googleProxyHost, projectConfig.googleProxyPort)))
+            }
+            val formBody = "client_id=${java.net.URLEncoder.encode(clientId, "UTF-8")}" +
+                "&client_secret=${java.net.URLEncoder.encode(clientSecret, "UTF-8")}" +
+                "&code=${java.net.URLEncoder.encode(params.code, "UTF-8")}" +
+                "&redirect_uri=${java.net.URLEncoder.encode(params.redirectUri, "UTF-8")}"
+            val jReq = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create("https://github.com/login/oauth/access_token"))
                 .header("Accept", "application/json")
-                .form("client_id", clientId)
-                .form("client_secret", clientSecret)
-                .form("code", params.code)
-                .form("redirect_uri", params.redirectUri)
-                .timeout(8000)
-                .apply {
-                    if (projectConfig.googleProxyHost.isNotBlank() && projectConfig.googleProxyPort > 0) {
-                        setHttpProxy(projectConfig.googleProxyHost, projectConfig.googleProxyPort)
-                    }
-                }
-                .execute()
-        }.getOrElse { throw CommonException(ErrorType.E117, "无法连接 GitHub") }
-        if (!tokenResp.isOk) throw CommonException(ErrorType.E117)
-        val accessToken = JSONUtil.parseObj(tokenResp.body()).getStr("access_token")
-        if (accessToken.isNullOrBlank()) throw CommonException(ErrorType.E117, "未获取到 GitHub 令牌")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(formBody))
+                .timeout(java.time.Duration.ofSeconds(8))
+                .build()
+            val resp = try { builder.build().send(jReq, java.net.http.HttpResponse.BodyHandlers.ofString()) }
+            catch (e: Exception) { throw CommonException(ErrorType.E117, "无法连接 GitHub") }
+            if (resp.statusCode() !in 200..299) throw CommonException(ErrorType.E117)
+            JSONUtil.parseObj(resp.body()).getStr("access_token")
+                ?: throw CommonException(ErrorType.E117, "未获取到 GitHub 令牌")
+        }
 
         // 2. access_token -> 用户信息
         val userResp = runCatching {

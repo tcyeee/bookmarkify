@@ -21,5 +21,7 @@ export default defineNuxtPlugin(async () => {
   authStore.refreshUserInfo()
   preferenceStore.fetchPreference()
   const bookmarkStore = useBookmarkStore()
-  bookmarkStore.update()
+  // 缓存新鲜（2 分钟内拉取过且非空）时跳过全量拉取，避免不必要的重渲染；
+  // 缺失或过期时正常拉取（首次加载 / 长时间不活跃 / 清除缓存后）。
+  if (!bookmarkStore.isFresh()) bookmarkStore.update()
 })
