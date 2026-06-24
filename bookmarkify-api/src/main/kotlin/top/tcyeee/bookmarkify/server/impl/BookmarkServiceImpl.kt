@@ -101,6 +101,26 @@ class BookmarkServiceImpl(
         return result.convert { BookmarkShow(it, bookmarkEntityMap[it.bookmarkId], logoMap[it.bookmarkId]).initLogo() }
     }
 
+    override fun previewImport(file: MultipartFile, uid: String): BookmarkImportPreviewVO {
+        val existingUrls: Set<String> = bookmarkUserLinkService.urlsByUid(uid)
+        val structures = ChromeBookmarkParser.trim(file)
+        val items = structures.flatMap { structure ->
+            structure.bookmarks.map { raw ->
+                BookmarkImportItemVO(
+                    title = raw.title,
+                    url = raw.url,
+                    folder = structure.folderName.takeIf { it != "ROOT" },
+                    isDuplicate = raw.url in existingUrls,
+                )
+            }
+        }
+        return BookmarkImportPreviewVO(
+            total = items.size,
+            duplicateCount = items.count { it.isDuplicate },
+            items = items,
+        )
+    }
+
     /**
      * 数据读取完成以后,立即返回占位信息
      * 等待书签解析完成以后,通过WebSocket逐个向前端返回解析完成后的数据
@@ -130,7 +150,7 @@ class BookmarkServiceImpl(
         // production there may be a large backlog of unverified bookmarks. Without a limit,
         // the first post-fix run would flood the parse executor and delay newly-added bookmark parsing.
         ktQuery()
-            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
+            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -10, ChronoUnit.MINUTES))
             .eq(BookmarkEntity::verifyFlag, false)
             // 最旧的优先处理，配合 LIMIT 保证积压记录会被逐批消费，不会被新记录饿死。
             .orderByAsc(BookmarkEntity::updateTime)
