@@ -138,7 +138,7 @@ class ApiServiceImpl(
 
     override fun inferSimilarSites(title: String?, description: String?, host: String): List<SimilarSite> {
         val systemPrompt = """
-            你是一个网站推荐助手。根据用户给出的网站信息，推荐 5~8 个功能或定位相似的其它网站。
+            你是一个网站推荐助手。根据用户给出的网站信息，推荐 8~10 个功能或定位相似的其它网站。
             严格只返回 JSON 数组，每个元素形如 {"name":"网站名","domain":"example.com","reason":"一句话理由"}。
             不要 markdown 代码块，不要任何额外解释文字。domain 只填主域名，不带 http 前缀。
         """.trimIndent()
@@ -148,7 +148,7 @@ class ApiServiceImpl(
                 DeepSeekMessage(role = "system", content = systemPrompt),
                 DeepSeekMessage(role = "user", content = userContent),
             ),
-            maxTokens = 600,
+            maxTokens = 800,
         )
         val responseBody = runCatching {
             HttpUtil.createPost("https://api.deepseek.com/chat/completions")
@@ -163,7 +163,8 @@ class ApiServiceImpl(
             objectMapper.readValue<DeepSeekResponse>(responseBody)
                 .choices?.firstOrNull()?.message?.content
         }.getOrNull() ?: return emptyList()
-        return parseSimilarSites(content)
+        // 最多返回 10 个，防止模型偶发超量
+        return parseSimilarSites(content).take(10)
     }
 
     /** 解析 DeepSeek 返回的文本为相似网站列表：剥离 ```json 围栏后按 JSON 数组解析，失败返回空。 */

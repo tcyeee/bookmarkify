@@ -21,6 +21,30 @@
       <span v-if="dropTargetId === item.id && dropMode === 'left'" class="insert-bar -left-1" />
       <span v-if="dropTargetId === item.id && dropMode === 'right'" class="insert-bar -right-1" />
     </div>
+    <div
+      v-if="showAddButton"
+      key="__add__"
+      class="flex items-start justify-center"
+      :style="{ width: `${cellW}px`, height: `${cellH}px` }">
+      <button
+        class="flex flex-col items-center group cursor-pointer"
+        :style="{ paddingTop: 0 }"
+        @click="emit('add')">
+        <div
+          class="flex items-center justify-center rounded-xl border-2 border-dashed border-white/30 text-white/40 transition-all duration-200 group-hover:border-white/60 group-hover:bg-white/10 group-hover:text-white/80"
+          :style="{ width: `${cellW}px`, height: `${cellW}px` }">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </div>
+        <div
+          v-if="showTitle"
+          class="text-sm mt-[0.3rem] text-white/40 group-hover:text-white/70 transition-colors duration-200 truncate text-center select-none"
+          style="max-width: 72px">
+          添加书签
+        </div>
+      </button>
+    </div>
   </TransitionGroup>
 </template>
 
@@ -45,16 +69,19 @@ const props = defineProps<{
   items: UserLayoutNodeVO[]
   parentKey: string
   isFolder?: boolean // 文件夹内：禁套娃，folder 命中退化为排序
+  showAddButton?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'commit', c: DragCommit): void
   (e: 'open-dir', item: UserLayoutNodeVO): void
   (e: 'show-detail', b: BookmarkShow): void
+  (e: 'add'): void
 }>()
 
 const pref = usePreferenceStore()
 const cellW = computed(() => pref.bookmarkCellSizePx)
 const cellH = computed(() => pref.bookmarkCellSizePx + (pref.preference?.showTitle ? 28 : 0))
+const showTitle = computed(() => pref.preference?.showTitle ?? true)
 const gap = computed(() => pref.bookmarkGapPx)
 
 // ── 定宽块：按父容器可用宽度算整数列数，网格取定宽 → 内部 justify-start 左对齐，
@@ -70,7 +97,8 @@ const gridWidth = computed(() => {
   if (!avail) return undefined
   const pitch = cellW.value + gap.value
   const fit = Math.max(1, Math.floor((avail + gap.value) / pitch))
-  const cols = Math.min(fit, props.items.length || 1) // 项目数不足一行时块只取实际列数，仍居中
+  const effectiveCount = props.items.length + (props.showAddButton ? 1 : 0)
+  const cols = Math.min(fit, effectiveCount || 1) // 项目数不足一行时块只取实际列数，仍居中
   return cols * cellW.value + (cols - 1) * gap.value
 })
 

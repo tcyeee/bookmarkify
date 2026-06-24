@@ -51,33 +51,6 @@
 
         <div class="flex flex-wrap items-start gap-3 py-4">
           <div class="flex-1 space-y-1 min-w-[220px]">
-            <div class="text-sm font-semibold">翻页方式</div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">垂直滚动或横向翻页。</p>
-          </div>
-          <select v-model="preferenceForm.pageMode" class="cy-input cy-input-sm w-44">
-            <option :value="PageTurnMode.VERTICAL_SCROLL">垂直滚动</option>
-            <option :value="PageTurnMode.HORIZONTAL_PAGE">横向翻页</option>
-          </select>
-        </div>
-
-        <div class="flex flex-wrap items-start gap-3 py-4">
-          <div class="flex-1 space-y-1 min-w-[220px]">
-            <div class="text-sm font-semibold">极简模式</div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">隐藏装饰，聚焦内容。</p>
-          </div>
-          <button
-            type="button"
-            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-            :class="preferenceForm.minimalMode ? 'bg-primary/80' : 'bg-slate-300 dark:bg-slate-700'"
-            @click="toggleBoolean('minimalMode')">
-            <span
-              class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition"
-              :class="preferenceForm.minimalMode ? 'translate-x-5' : 'translate-x-1'" />
-          </button>
-        </div>
-
-        <div class="flex flex-wrap items-start gap-3 py-4">
-          <div class="flex-1 space-y-1 min-w-[220px]">
             <div class="text-sm font-semibold">显示标题</div>
             <p class="text-xs text-slate-500 dark:text-slate-400">仅展示图标或展示标题。</p>
           </div>

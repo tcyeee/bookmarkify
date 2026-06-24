@@ -69,7 +69,7 @@
                 :key="item.id"
                 class="flex items-center gap-3 p-2 hover:bg-gray-100/80 cursor-pointer rounded-lg transition-colors border border-transparent"
                 @click="selectBookmark(item)">
-                <img v-if="item.iconBase64" :src="`${item.iconBase64}`" class="w-8 h-8 object-cover" />
+                <img v-if="item.logo?.iconBase64" :src="`${item.logo?.iconBase64}`" class="w-8 h-8 object-cover" />
                 <div v-else class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shadow-sm">
                   <span class="icon--earth text-gray-400" />
                 </div>

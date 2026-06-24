@@ -21,6 +21,14 @@ export interface BookmarkFunctionVO {
   type: FunctionType,
 }
 
+// 书签图标信息（后端 website_logo 表，嵌套在 BookmarkShow.logo）
+export interface BookmarkLogo {
+  iconBase64?: string
+  iconHdUrl?: string
+  iconPadding?: number
+  iconBgColor?: string
+}
+
 // 书签详情（后端 BookmarkShow）
 export interface BookmarkShow {
   bookmarkId: string
@@ -29,10 +37,8 @@ export interface BookmarkShow {
   description: string
   urlFull: string
   urlBase: string
-  iconBase64: string
-  iconHdUrl: string
-  iconPadding?: number
-  iconBgColor?: string
+  // 图标相关字段统一收拢到 logo（后端 website_logo 表）
+  logo: BookmarkLogo
   isActivity: boolean
   createTime?: number
   paths?: Array<string>

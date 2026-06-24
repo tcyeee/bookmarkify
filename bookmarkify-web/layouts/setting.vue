@@ -69,7 +69,7 @@ const containerStyle: CSSProperties = {
 }
 const tabs = [
   { value: 0, label: '个人资料', icon: 'memory:account-box' },
-  { value: 1, label: '书签管理', icon: 'memory:application-code' },
+  { value: 1, label: '导入书签', icon: 'memory:upload' },
   { value: 2, label: '主页背景', icon: 'memory:cloud' },
   { value: 3, label: '偏好设置', icon: 'memory:toggle-switch-off' },
   // { value: 4, label: '快捷键', icon: 'memory:terminal' },

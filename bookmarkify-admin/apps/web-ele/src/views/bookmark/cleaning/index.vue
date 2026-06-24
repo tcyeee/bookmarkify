@@ -1,7 +1,14 @@
 <script lang="ts" setup>
 import type { BookmarkEntity, BookmarkSearchParams } from "#/api/bookmark";
 
-import { defineAsyncComponent, onMounted, reactive, ref } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+} from "vue";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
@@ -9,11 +16,16 @@ import { formatDateTime } from "@vben/utils";
 import {
   findSimilarSitesApi,
   getBookmarkListApi,
+  ingestSimilarSitesApi,
   recategorizeBookmarkApi,
   updateBookmarkCategoriesApi,
   type SimilarSite,
 } from "#/api/bookmark";
 import { getCategoryListApi, type CategoryEntity } from "#/api/category";
+import {
+  createIngestSocket,
+  type IngestSocketHandle,
+} from "#/api/similarIngestSocket";
 import { ElMessage } from "element-plus";
 
 import BookmarkIcon from "../liveness/BookmarkIcon.vue";
@@ -125,6 +137,65 @@ async function findSimilar() {
   }
 }
 
+// ── 一键收录 ──
+const ingesting = ref(false);
+// domain -> 状态：LOADING(收录中) / INGESTED(已收录) / SKIPPED(已跳过) / EXISTS(本地已有)
+const ingestStatus = ref<Record<string, string>>({});
+let ingestSocket: IngestSocketHandle | null = null;
+let pendingDomains = new Set<string>();
+
+// 待收录：本地不存在且本次尚未处理过的站点
+const ingestTargets = computed(() =>
+  similarSites.value.filter((s) => !s.exists && !ingestStatus.value[s.domain]),
+);
+
+function closeIngestSocket() {
+  ingestSocket?.close();
+  ingestSocket = null;
+}
+
+function resetIngest() {
+  closeIngestSocket();
+  ingesting.value = false;
+  ingestStatus.value = {};
+  pendingDomains = new Set();
+}
+
+async function oneClickIngest() {
+  if (!currentRow.value) return;
+  const targets = ingestTargets.value.map((s) => s.domain);
+  if (targets.length === 0) return;
+
+  ingesting.value = true;
+  pendingDomains = new Set(targets);
+  // 先把目标站点标记为「收录中」
+  const next = { ...ingestStatus.value };
+  targets.forEach((d) => (next[d] = "LOADING"));
+  ingestStatus.value = next;
+
+  // 开 WS 接收逐站进度（关弹窗或全部完成即断开）
+  closeIngestSocket();
+  ingestSocket = createIngestSocket((update) => {
+    ingestStatus.value = {
+      ...ingestStatus.value,
+      [update.domain]: update.status,
+    };
+    pendingDomains.delete(update.domain);
+    if (pendingDomains.size === 0) {
+      ingesting.value = false;
+      closeIngestSocket();
+    }
+  });
+
+  try {
+    await ingestSimilarSitesApi(currentRow.value.id, targets);
+  } catch {
+    resetIngest();
+  }
+}
+
+onUnmounted(() => closeIngestSocket());
+
 async function loadCategoryDict() {
   if (categoryDict.value.length === 0) {
     categoryDict.value = await getCategoryListApi();
@@ -220,6 +291,7 @@ async function handleRowClick(row: BookmarkEntity) {
   editingCategoryIds.value = (row.categories ?? []).map((c) => c.id);
   similarSites.value = [];
   similarLoaded.value = false;
+  resetIngest();
   await loadCategoryDict();
 }
 
@@ -287,7 +359,7 @@ onMounted(() => {
             <BookmarkIcon
               :value="row"
               :size="32"
-              :hd-url="row.useHdLogo ? row.logoUrl : undefined"
+              :hd-url="row.logo?.useHdLogo ? row.logo?.logoUrl : undefined"
               class="mx-auto"
             />
           </template>
@@ -321,7 +393,12 @@ onMounted(() => {
       <div class="mt-4 flex justify-end">
         <ElPagination v-model:current-page="pagination.currentPage" v-model:page-size="pagination.pageSize" :page-sizes="[10, 20, 50, 100]" :total="pagination.total" layout="total, sizes, prev, pager, next, jumper" @current-change="handleCurrentChange" @size-change="handleSizeChange" />
       </div>
-      <ElDialog v-model="detailVisible" title="书签详情" width="640px">
+      <ElDialog
+        v-model="detailVisible"
+        title="书签详情"
+        width="640px"
+        @close="resetIngest"
+      >
         <div v-if="currentRow" class="space-y-4 text-sm">
           <!-- 卡片一：基础信息 -->
           <ElCard shadow="never" class="detail-card">
@@ -334,7 +411,7 @@ onMounted(() => {
                 <BookmarkIcon
                   :value="currentRow"
                   :size="64"
-                  :hd-url="currentRow.useHdLogo ? currentRow.logoUrl : undefined"
+                  :hd-url="currentRow.logo?.useHdLogo ? currentRow.logo?.logoUrl : undefined"
                 />
                 <div>
                   <ElTag v-if="currentRow.parseStatus === 'SUCCESS'" type="success" size="small">
@@ -418,7 +495,7 @@ onMounted(() => {
               placeholder="选择分类"
               style="width: 100%"
             />
-            <div class="mt-2 flex gap-2">
+            <div class="mt-2 flex justify-end gap-2">
               <ElButton
                 type="primary"
                 size="small"
@@ -448,21 +525,63 @@ onMounted(() => {
                 :key="s.domain"
                 class="rounded border border-gray-100 p-2"
               >
-                <div class="font-medium">
-                  {{ s.name }}
+                <div class="flex flex-wrap items-center gap-2 font-medium">
+                  <span>{{ s.name }}</span>
                   <a
                     :href="`https://${s.domain}`"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="ml-1 text-blue-500"
+                    class="text-blue-500"
                   >
                     {{ s.domain }}
                   </a>
+                  <!-- 逐站收录状态优先于「本地已有」标记 -->
+                  <ElTag
+                    v-if="ingestStatus[s.domain] === 'LOADING'"
+                    type="info"
+                    size="small"
+                  >
+                    收录中
+                  </ElTag>
+                  <ElTag
+                    v-else-if="ingestStatus[s.domain] === 'INGESTED'"
+                    type="success"
+                    size="small"
+                  >
+                    已收录
+                  </ElTag>
+                  <ElTag
+                    v-else-if="ingestStatus[s.domain] === 'SKIPPED'"
+                    type="danger"
+                    size="small"
+                  >
+                    已跳过
+                  </ElTag>
+                  <ElTag
+                    v-else-if="s.exists || ingestStatus[s.domain] === 'EXISTS'"
+                    type="warning"
+                    size="small"
+                  >
+                    本地已有
+                  </ElTag>
                 </div>
                 <div class="text-gray-500">{{ s.reason }}</div>
               </li>
             </ul>
             <div v-else class="text-gray-400">未找到相似网站</div>
+            <div v-if="similarSites.length > 0" class="mt-3 flex justify-end">
+              <ElButton
+                type="primary"
+                size="small"
+                :loading="ingesting"
+                :disabled="ingestTargets.length === 0"
+                @click="oneClickIngest"
+              >
+                一键收录{{
+                  ingestTargets.length ? `（${ingestTargets.length}）` : ""
+                }}
+              </ElButton>
+            </div>
           </ElCard>
         </div>
         <template #footer>

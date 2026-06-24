@@ -11,6 +11,18 @@ export interface SimilarSite {
   name: string;
   domain: string;
   reason: string;
+  /** 本地是否已收录（后端按 urlHost 归一化比对回填） */
+  exists?: boolean;
+}
+
+/** 书签图标信息（后端 website_logo 表，与书签一对一） */
+export interface BookmarkLogo {
+  iconBase64?: string;
+  logoUrl?: string;
+  maximalLogoSize: number;
+  iconPadding: number;
+  iconBgColor?: string;
+  useHdLogo: boolean;
 }
 
 export interface BookmarkEntity {
@@ -21,12 +33,8 @@ export interface BookmarkEntity {
   appName?: string;
   title?: string;
   description?: string;
-  iconBase64?: string;
-  logoUrl?: string;
-  maximalLogoSize: number;
-  iconPadding: number;
-  iconBgColor?: string;
-  useHdLogo?: boolean;
+  // 图标相关字段统一收拢到 logo（后端 website_logo 表）
+  logo: BookmarkLogo;
   parseStatus: 'LOADING' | 'SUCCESS' | 'CLOSED' | 'BLOCKED'; // Add other statuses as needed
   isActivity: boolean;
   parseErrMsg?: string;
@@ -120,10 +128,21 @@ export async function recategorizeBookmarkApi(bookmarkId: string) {
   );
 }
 
-/** AI 推荐相似网站（仅展示，不入库） */
+/** AI 推荐相似网站（仅展示，不入库；返回项带 exists 标记本地是否已收录） */
 export async function findSimilarSitesApi(bookmarkId: string) {
   return requestClient.post<SimilarSite[]>(
     `/admin/bookmark/${bookmarkId}/similar`,
+  );
+}
+
+/** 一键收录：异步收录传入的相似网站域名，立即返回；进度经 WebSocket 推送 */
+export async function ingestSimilarSitesApi(
+  bookmarkId: string,
+  domains: string[],
+) {
+  return requestClient.post<{ count: number; started: boolean }>(
+    `/admin/bookmark/${bookmarkId}/similar/ingest`,
+    { domains },
   );
 }
 

@@ -6,8 +6,8 @@
     <div class="flex items-center gap-4">
       <div class="h-20 w-20 rounded-2xl bg-white flex justify-center items-center shadow-lg overflow-hidden">
         <img
-          v-if="detail.iconHdUrl && !hdError"
-          :src="detail.iconHdUrl"
+          v-if="detail.logo?.iconHdUrl && !hdError"
+          :src="detail.logo?.iconHdUrl"
           alt="bookmark icon"
           class="w-full h-full object-contain"
           @error="onHdError"
@@ -65,7 +65,7 @@ const isDirty = computed(() => form.title.trim() !== (detail.value?.title || '')
 
 const hdError = ref(false)
 const iconError = ref(false)
-const iconBase64 = computed(() => `data:image/png;base64,${detail.value?.iconBase64 || ''}`)
+const iconBase64 = computed(() => `data:image/png;base64,${detail.value?.logo?.iconBase64 || ''}`)
 
 watch(
   () => detail.value,

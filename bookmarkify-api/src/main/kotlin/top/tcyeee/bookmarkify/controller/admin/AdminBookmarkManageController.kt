@@ -12,8 +12,10 @@ import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.CategoryVO
+import top.tcyeee.bookmarkify.entity.dto.SimilarIngestParams
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.utils.StpKit
 
 /**
  * @author tcyeee
@@ -68,10 +70,21 @@ class AdminBookmarkManageController(
     fun recategorize(@PathVariable bookmarkId: String): List<CategoryVO> =
         bookmarkService.adminRecategorize(bookmarkId)
 
-    // AI 推荐相似网站（仅展示，不入库）
+    // AI 推荐相似网站（仅展示，不入库；返回项带 exists 标记本地是否已收录）
     @PostMapping("/{bookmarkId}/similar")
     fun similar(@PathVariable bookmarkId: String): List<SimilarSite> =
         bookmarkService.adminSimilarSites(bookmarkId)
+
+    // 「一键收录」：异步收录传入的相似网站域名，立即返回；逐站进度经 WebSocket(SIMILAR_INGEST_UPDATE) 推送
+    @PostMapping("/{bookmarkId}/similar/ingest")
+    fun ingestSimilar(
+        @PathVariable bookmarkId: String, @RequestBody params: SimilarIngestParams
+    ): Map<String, Any> {
+        val adminUid = StpKit.ADMIN.loginIdAsString
+        val domains = params.domains.distinct()
+        bookmarkService.adminIngestSimilar(adminUid, domains)
+        return mapOf("started" to true, "count" to domains.size)
+    }
 
     // DeepSeek 生成书签简称建议（不落库，供前端填入编辑框）
     @PostMapping("/{bookmarkId}/appname/generate")
