@@ -6,6 +6,13 @@ import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import java.net.URI
 import java.time.LocalDateTime
 
+/** bookmarkify-scrapper POST /ping 的请求体 */
+data class PingRequest(val url: String)
+
+/** bookmarkify-scrapper POST /ping 的响应体 */
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class PingResponse(val alive: Boolean = false)
+
 /** bookmarkify-scrapper POST /scrape 的请求体 */
 data class ScrapeRequest(
     /** 目标 URL */

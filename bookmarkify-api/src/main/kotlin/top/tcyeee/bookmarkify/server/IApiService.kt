@@ -35,4 +35,10 @@ interface IApiService {
      * @return 相似网站列表；失败或无结果返回空列表。
      */
     fun inferSimilarSites(title: String?, description: String?, host: String): List<SimilarSite>
+
+    /**
+     * 通过 scrapper /ping 探测目标网站是否存活（走代理）。
+     * 网络异常或 scrapper 不可达时返回 false（保守策略，不阻塞后续抓取兜底逻辑）。
+     */
+    fun pingWebsite(url: String): Boolean
 }

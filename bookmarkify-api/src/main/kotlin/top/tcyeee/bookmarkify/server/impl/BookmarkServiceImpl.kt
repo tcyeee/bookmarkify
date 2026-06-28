@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.async.AsyncConfig
+import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
@@ -24,6 +25,7 @@ import top.tcyeee.bookmarkify.entity.dto.SimilarIngestUpdate
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
+import top.tcyeee.bookmarkify.entity.entity.BookmarkPingLogEntity
 import top.tcyeee.bookmarkify.mapper.*
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkService
@@ -52,6 +54,7 @@ class BookmarkServiceImpl(
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val bookmarkFunctionMapper: BookmarkFunctionMapper,
     private val bookmarkCategoryService: IBookmarkCategoryService,
+    private val pingLogMapper: BookmarkPingLogMapper,
     transactionManager: PlatformTransactionManager,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
 
@@ -194,6 +197,40 @@ class BookmarkServiceImpl(
             .last("LIMIT $CHECKALL_BATCH_SIZE")
             .list()
             .forEach { eventPublisher.publishEvent(BookmarkParseEvent(it.id)) }
+
+    override fun retryClosedBookmarks() {
+        val candidates = ktQuery()
+            .eq(BookmarkEntity::parseStatus, ParseStatusEnum.CLOSED)
+            .eq(BookmarkEntity::verifyFlag, false)
+            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
+            .orderByAsc(BookmarkEntity::updateTime)
+            .last("LIMIT $RETRY_CLOSED_BATCH_SIZE")
+            .list()
+
+        log.debug("[retryClosedBookmarks] 本次待重试书签数: ${candidates.size}")
+        candidates.forEach { bookmark ->
+            val alive = apiService.pingWebsite(bookmark.rawUrl)
+            val triggeredParse = alive && !bookmark.verifyFlag
+            pingLogMapper.insert(
+                BookmarkPingLogEntity(
+                    bookmarkId = bookmark.id,
+                    urlHost = bookmark.urlHost,
+                    alive = alive,
+                    triggeredParse = triggeredParse,
+                )
+            )
+            if (triggeredParse) {
+                log.debug("[retryClosedBookmarks] ping 成功，触发重新解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                eventPublisher.publishEvent(BookmarkParseEvent(bookmark.id))
+            } else {
+                log.debug("[retryClosedBookmarks] ping 失败，更新 updateTime: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                // 更新 updateTime，使该记录在下次调度周期之前不会被重复选中
+                ktUpdate().eq(BookmarkEntity::id, bookmark.id)
+                    .set(BookmarkEntity::updateTime, LocalDateTime.now())
+                    .update()
+            }
+        }
+    }
 
     override fun addOne(url: String, uid: String): UserLayoutNodeVO {
         log.debug("[addOne] uid=$uid 开始添加书签, rawUrl=$url")
@@ -450,7 +487,8 @@ class BookmarkServiceImpl(
     // ────── 私有解析层 ──────
 
     /**
-     * 统一解析调度：检查 verifyFlag 后根据配置选择解析方式
+     * 统一解析调度：检查 verifyFlag 后先 ping 确认网站存活，再根据配置选择解析方式。
+     * ping 不通时直接标记 CLOSED 并跳过抓取（节省无效的 headless 开销）。
      */
     private fun parseBookmark(bookmark: BookmarkEntity): BookmarkEntity {
         log.debug("[parseBookmark] 开始调度解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
@@ -459,8 +497,23 @@ class BookmarkServiceImpl(
             log.debug("[parseBookmark] 书签已手动认证(verifyFlag=true), 跳过解析直接返回: bookmarkId=${bookmark.id}")
             return existing
         }
+
+        // ping 前置：网站不存活则直接标 CLOSED，避免无效爬取
+        val alive = apiService.pingWebsite(bookmark.rawUrl)
+        log.debug("[parseBookmark] ping 结果: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}, alive=$alive")
+        if (!alive) {
+            log.debug("[parseBookmark] ping 失败，网站不可达，标记 CLOSED: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+            return bookmark.apply {
+                isActivity = false
+                parseStatus = ParseStatusEnum.CLOSED
+                parseErrMsg = "ping failed: site unreachable"
+                updateTime = LocalDateTime.now()
+                baseMapper.insertOrUpdate(this)
+            }
+        }
+
         val mode = if (projectConfig.useThirdPartyParser) "远程scrapper" else "本地Jsoup"
-        log.debug("[parseBookmark] 选择解析模式: $mode, bookmarkId=${bookmark.id}")
+        log.debug("[parseBookmark] ping 通过，选择解析模式: $mode, bookmarkId=${bookmark.id}")
         val parsed = if (projectConfig.useThirdPartyParser) parseByApi(bookmark) else parseLocally(bookmark)
         if (parsed.parseStatus == ParseStatusEnum.SUCCESS || parsed.parseStatus == ParseStatusEnum.BLOCKED) {
             bookmarkCategoryService.categorize(parsed)
@@ -622,5 +675,6 @@ class BookmarkServiceImpl(
         // F-08: cap each checkAll() run to prevent flooding the parse executor when a large backlog
         // of unverified bookmarks exists (e.g., on first deployment after fixing the .lt→.eq bug).
         private const val CHECKALL_BATCH_SIZE = 100
+        private const val RETRY_CLOSED_BATCH_SIZE = 50
     }
 }

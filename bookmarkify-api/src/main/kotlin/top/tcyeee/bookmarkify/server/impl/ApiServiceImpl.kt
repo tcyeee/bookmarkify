@@ -12,6 +12,8 @@ import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekMessage
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekRequest
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekResponse
+import top.tcyeee.bookmarkify.entity.dto.PingRequest
+import top.tcyeee.bookmarkify.entity.dto.PingResponse
 import top.tcyeee.bookmarkify.entity.dto.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
@@ -172,6 +174,20 @@ class ApiServiceImpl(
         val json = content.trim()
             .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
         return runCatching { objectMapper.readValue<List<SimilarSite>>(json) }.getOrElse { emptyList() }
+    }
+
+    override fun pingWebsite(url: String): Boolean {
+        val targetUrl = buildUrl(url)
+        return runCatching {
+            val request = PingRequest(url = targetUrl)
+            val httpResponse = HttpUtil.createPost("${scrapperConfig.baseUrl.trimEnd('/')}/ping")
+                .header("Content-Type", "application/json")
+                .body(objectMapper.writeValueAsString(request))
+                .timeout(15000)
+                .execute()
+            if (!httpResponse.isOk) return false
+            objectMapper.readValue<PingResponse>(httpResponse.body()).alive
+        }.getOrElse { false }
     }
 
     private fun buildUrl(domain: String): String {

@@ -26,6 +26,9 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 每天检查数据库所有书签活性 */
     fun checkAll()
 
+    /** 定时重试 CLOSED 书签：ping 通后重新触发解析，结果写入 bookmark_ping_log */
+    fun retryClosedBookmarks()
+
     /** 添加书签并异步检查 */
     fun addOne(url: String, uid: String): UserLayoutNodeVO
 
