@@ -105,6 +105,7 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(health_handler))
         .route("/scrape", post(scrape_handler))
+        .route("/ping", post(ping_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
@@ -165,6 +166,58 @@ struct ErrorResponse {
     /// 可选的详细错误信息（如网络错误消息）
     #[serde(skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
+}
+
+/// POST /ping 的请求体结构。
+#[derive(Deserialize)]
+struct PingRequest {
+    /// 目标 URL，必填
+    url: String,
+}
+
+/// POST /ping 的响应体结构。
+#[derive(Serialize)]
+struct PingResponse {
+    /// 网站是否存活（HTTP 响应状态码 < 500）
+    alive: bool,
+}
+
+/// POST /ping：通过代理向目标 URL 发送 HEAD 请求，返回网站是否存活。
+///
+/// 存活判定：收到任意 HTTP 响应（包括 4xx）即视为存活；连接失败或超时视为不存活。
+async fn ping_handler(
+    State(state): State<AppState>,
+    Json(body): Json<PingRequest>,
+) -> Response {
+    let url = match reqwest::Url::parse(&body.url) {
+        Ok(u) => u,
+        Err(_) => {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(ErrorResponse { error: "invalid url".to_string(), detail: None }),
+            )
+                .into_response();
+        }
+    };
+
+    if !matches!(url.scheme(), "http" | "https") {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ErrorResponse { error: "invalid url".to_string(), detail: None }),
+        )
+            .into_response();
+    }
+
+    let domain = url.host_str().unwrap_or(&body.url).to_string();
+    tracing::info!(domain, "ping");
+
+    let alive = match state.client.head(url.as_str()).send().await {
+        Ok(resp) => resp.status().as_u16() < 500,
+        Err(_) => false,
+    };
+
+    tracing::info!(domain, alive, "ping done");
+    Json(PingResponse { alive }).into_response()
 }
 
 fn env_or<T: std::str::FromStr>(key: &str, default: T) -> T {
