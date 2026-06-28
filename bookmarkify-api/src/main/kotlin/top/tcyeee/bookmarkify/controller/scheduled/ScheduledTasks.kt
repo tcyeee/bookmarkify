@@ -16,4 +16,8 @@ class ScheduledTasks(
     @Description("每5分钟对账一次未完成解析的书签")
     @Scheduled(cron = "0 */5 * * * ?")
     fun runTaskWithCron() = bookmarkService.checkAll()
+
+    @Description("每天凌晨3点重试 CLOSED 书签：ping 通则触发重新解析，并写入 bookmark_ping_log")
+    @Scheduled(cron = "0 0 3 * * ?")
+    fun retryClosedBookmarks() = bookmarkService.retryClosedBookmarks()
 }
