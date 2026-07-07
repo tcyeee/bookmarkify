@@ -2,12 +2,15 @@
   <!-- 外层容器：卡片圆角与开发态提示 -->
   <div
     :class="[
-      'w-app h-app rounded-[22%] bg-gray-100 center shadow overflow-hidden',
+      'relative w-app h-app rounded-[22%] bg-gray-100 center shadow overflow-hidden',
       isDev ? 'dev-outline dev-shrink' : '',
     ]"
     :style="isDev ? { '--dev-outline-color': devOutlineColor } : undefined">
-    <!-- 内层 Logo：默认白底，必要时覆盖主色与淡白蒙版 -->
-    <div class="bg-white flex justify-center items-center" :style="[logoSizeStyle, logoStyle]">
+    <!-- 内层 Logo：默认白底，必要时覆盖主色与淡白蒙版；不可访问时整体变灰 -->
+    <div
+      class="bg-white flex justify-center items-center"
+      :class="{ 'inactive-logo': isInactive }"
+      :style="[logoSizeStyle, logoStyle]">
       <!-- 优先使用高清图 -->
       <img
         v-if="props.value.logo?.iconHdUrl && !hdError"
@@ -27,6 +30,18 @@
       />
       <!-- 最终兜底：灰色地球（内联 SVG，与管理台一致） -->
       <img v-else :style="fallbackStyle" :src="FALLBACK_ICON" alt="" />
+    </div>
+    <!-- 不可访问：叠加断网标识（内联 SVG，居中偏下） -->
+    <div v-if="isInactive" class="offline-badge" :style="offlineBadgeStyle" aria-label="无法访问">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="100%" height="100%">
+        <path d="M1 1l22 22" />
+        <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+        <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+        <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
+        <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+        <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+        <line x1="12" y1="20" x2="12.01" y2="20" />
+      </svg>
     </div>
   </div>
 </template>
@@ -56,6 +71,16 @@ const effectivePadding = computed(() => props.value.logo?.iconPadding ?? 0)
 
 // 开发环境标记
 const isDev = computed(() => isLocalhostOrIP(props.value.urlFull))
+// 网站不可访问：图标变灰并叠加断网标识
+const isInactive = computed(() => props.value?.isActivity === false)
+// 断网标识尺寸随图标尺寸缩放（约 38%）
+const offlineBadgeStyle = computed(() => {
+  const badge = Math.round(logoSize.value * 0.38)
+  return {
+    width: `${badge}px`,
+    height: `${badge}px`,
+  }
+})
 // 判定是否需走 base64 分支
 const shouldUseBase64 = computed(
   () => (!props.value.logo?.iconHdUrl || hdError.value) && !iconError.value && !!props.value.logo?.iconBase64,
@@ -258,6 +283,24 @@ function isLocalhostOrIP(url: string): boolean {
   /* 稍微缩放，让描边后的整体与正常图标一致 */
   transform: scale(0.9);
   transform-origin: center;
+}
+
+.inactive-logo {
+  /* 网站不可访问：图标去色并降低不透明度 */
+  filter: grayscale(100%);
+  opacity: 0.5;
+}
+
+.offline-badge {
+  /* 断网标识：绝对定位，居中偏下 */
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  transform: translate(-50%, -50%);
+  color: rgba(255, 255, 255, 0.95);
+  /* 深色描边保证在浅色图标上也可见 */
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.55)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
 }
 </style>
 
