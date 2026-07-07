@@ -31,7 +31,7 @@
         :style="{ paddingTop: 0 }"
         @click="emit('add')">
         <div
-          class="flex items-center justify-center rounded-xl border-2 border-dashed border-white/30 text-white/40 transition-all duration-200 group-hover:border-white/60 group-hover:bg-white/10 group-hover:text-white/80"
+          class="flex items-center justify-center rounded-[22%] border-2 border-dashed border-white/30 text-white/40 transition-all duration-200 group-hover:border-white/60 group-hover:bg-white/10 group-hover:text-white/80"
           :style="{ width: `${cellW}px`, height: `${cellW}px` }">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
             <path d="M12 5v14M5 12h14" />
