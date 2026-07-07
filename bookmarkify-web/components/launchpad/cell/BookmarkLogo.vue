@@ -251,7 +251,7 @@ function isLocalhostOrIP(url: string): boolean {
 .dev-outline {
   /* 外描边不占空间，避免缩小内部图标 */
   outline: 4px dashed var(--dev-outline-color, #ffffff);
-  outline-offset: 3px;
+  outline-offset: 0;
 }
 
 .dev-shrink {
