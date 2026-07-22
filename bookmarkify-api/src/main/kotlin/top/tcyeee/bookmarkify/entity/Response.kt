@@ -299,3 +299,26 @@ data class BookmarkImportPreviewVO(
     val duplicateCount: Int,
     val items: List<BookmarkImportItemVO>,
 )
+
+/** 管理后台展示的 scrapper 调用日志条目 */
+data class ScrapperCallLogVO(
+    @field:Schema(description = "日志ID") var id: String,
+    @field:Schema(description = "请求URL") var url: String,
+    @field:Schema(description = "URL host") var urlHost: String,
+    @field:Schema(description = "是否成功") var success: Boolean,
+    @field:Schema(description = "HTTP状态码") var httpStatus: Int? = null,
+    @field:Schema(description = "命中来源") var source: String? = null,
+    @field:Schema(description = "是否命中scrapper缓存") var cached: Boolean? = null,
+    @field:Schema(description = "耗时(ms)") var durationMs: Long = 0,
+    @field:Schema(description = "错误信息") var errorMsg: String? = null,
+    @field:Schema(description = "调用时间") var createTime: LocalDateTime = LocalDateTime.now(),
+) {
+    constructor(entity: ScrapperCallLogEntity) : this(
+        id = entity.id,
+        url = entity.url,
+        urlHost = entity.urlHost,
+        success = entity.success,
+    ) {
+        BeanUtil.copyProperties(entity, this)
+    }
+}
