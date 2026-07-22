@@ -134,3 +134,18 @@ data class CategorySaveParams(
 data class BookmarkCategoriesParams(
     val categoryIds: List<String> = emptyList(),
 )
+
+/** 管理后台 scrapper 调用日志查询入参 */
+data class ScrapperCallLogSearchParams(
+    var urlHost: String? = null,
+    var success: Boolean? = null,
+) : PageBean() {
+    fun toWrapper(): Wrapper<ScrapperCallLogEntity> {
+        val query = KtQueryWrapper(ScrapperCallLogEntity::class.java)
+        if (!urlHost.isNullOrBlank()) {
+            query.like(ScrapperCallLogEntity::urlHost, urlHost)
+        }
+        success?.let { query.eq(ScrapperCallLogEntity::success, it) }
+        return query.orderByDesc(ScrapperCallLogEntity::createTime)
+    }
+}

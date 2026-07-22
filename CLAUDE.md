@@ -93,7 +93,10 @@ Both `bookmarkify-web` and `bookmarkify-scrapper` listen on port **3000**. You c
 
 ## Deployment (CI/CD)
 
-All four services deploy via GitHub Actions (`.github/workflows/deploy-{api,web,scrapper,admin}.yml`), **triggered on push to the `prod` branch** (or manual `workflow_dispatch`). `main` is the working branch; deploys happen by promoting to `prod`. The `api`/`scrapper` workflows are path-filtered to their own directory; `web`/`admin` run on every `prod` push. Concurrency guards prevent overlapping deploys, and WeChat/Server酱 notifications fire on success/failure. Target host: `ubuntu@123.206.216.124`. API & scrapper build Docker images (Tencent TCR) and run via Compose; web & admin are static builds rsynced to nginx-served directories.
+All four services deploy via GitHub Actions (`.github/workflows/deploy-{api,web,scrapper,admin}.yml`), **triggered on push to the `prod` branch** (or manual `workflow_dispatch`), each path-filtered to its own directory. `main` is the working branch; deploys happen by promoting to `prod`. Concurrency guards prevent overlapping deploys, and WeChat/Server酱 notifications fire on success/failure. Target host: `ubuntu@123.206.216.124`.
+
+- **API & scrapper:** compiled on the GitHub runner (JVM fat jar / Rust binary via a Docker `export` build stage), relayed to the server through Aliyun OSS, then assembled into a thin runtime Docker image and started via Compose. This deliberately avoids a direct cross-border `docker push` to Tencent TCR, which used to take ~30–40 min from GitHub runners — **TCR is no longer used for either service.**
+- **Web & admin:** static builds (`nuxt generate` / Vben `build:ele`) rsynced directly to nginx-served directories on the server — no Docker involved.
 
 ## Prerequisites
 

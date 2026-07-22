@@ -8,6 +8,7 @@ import top.tcyeee.bookmarkify.config.entity.DeepSeekConfig
 import top.tcyeee.bookmarkify.config.entity.ScrapperConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekMessage
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekRequest
@@ -17,17 +18,22 @@ import top.tcyeee.bookmarkify.entity.dto.PingResponse
 import top.tcyeee.bookmarkify.entity.dto.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
+import top.tcyeee.bookmarkify.entity.entity.ScrapperCallLogEntity
+import top.tcyeee.bookmarkify.mapper.ScrapperCallLogMapper
 import top.tcyeee.bookmarkify.server.IApiService
+import top.tcyeee.bookmarkify.utils.WebsiteParser
 
 @Service
 class ApiServiceImpl(
     private val scrapperConfig: ScrapperConfig,
     private val deepSeekConfig: DeepSeekConfig,
     private val objectMapper: ObjectMapper,
+    private val scrapperCallLogMapper: ScrapperCallLogMapper,
 ) : IApiService {
 
     override fun queryWebsiteInfo(domain: String): ScrapeResponse {
         val url = buildUrl(domain)
+        val startedAt = System.currentTimeMillis()
         val request = ScrapeRequest(url = url)
 
         // scrapper 可能回退到无头浏览器（HEADLESS_TIMEOUT + IDLE_WAIT），超时给足 60s
@@ -37,18 +43,57 @@ class ApiServiceImpl(
                 .body(objectMapper.writeValueAsString(request))
                 .timeout(60000)
                 .execute()
-        }.getOrElse { throw CommonException(ErrorType.E304, it.message ?: it.toString()) }
+        }.getOrElse {
+            logScrapperCall(url, startedAt, success = false, httpStatus = null, errorMsg = it.message ?: it.toString())
+            throw CommonException(ErrorType.E304, it.message ?: it.toString())
+        }
 
         val body = httpResponse.body()
         if (!httpResponse.isOk) {
             // 错误响应体形如 {"error":"timeout","detail":"..."}
             val msg = runCatching { objectMapper.readTree(body).path("error").asText(null) }.getOrNull()
                 ?: "scrapper 返回 ${httpResponse.status}"
+            logScrapperCall(url, startedAt, success = false, httpStatus = httpResponse.status, errorMsg = msg)
             throw CommonException(ErrorType.E304, msg)
         }
 
-        return runCatching { objectMapper.readValue<ScrapeResponse>(body) }
-            .getOrElse { throw CommonException(ErrorType.E304, "scrapper 响应解析失败") }
+        val scrapeResponse = runCatching { objectMapper.readValue<ScrapeResponse>(body) }
+            .getOrElse {
+                logScrapperCall(url, startedAt, success = false, httpStatus = httpResponse.status, errorMsg = "scrapper 响应解析失败")
+                throw CommonException(ErrorType.E304, "scrapper 响应解析失败")
+            }
+
+        logScrapperCall(
+            url, startedAt, success = true, httpStatus = httpResponse.status,
+            source = scrapeResponse.source, cached = scrapeResponse.cached,
+        )
+        return scrapeResponse
+    }
+
+    /** 记录一次对 bookmarkify-scrapper /scrape 的调用；日志写入失败不影响主流程。 */
+    private fun logScrapperCall(
+        url: String,
+        startedAt: Long,
+        success: Boolean,
+        httpStatus: Int?,
+        source: String? = null,
+        cached: Boolean? = null,
+        errorMsg: String? = null,
+    ) {
+        runCatching {
+            scrapperCallLogMapper.insert(
+                ScrapperCallLogEntity(
+                    url = url,
+                    urlHost = runCatching { WebsiteParser.urlWrapper(url).urlHost }.getOrDefault(url),
+                    success = success,
+                    httpStatus = httpStatus,
+                    source = source,
+                    cached = cached,
+                    durationMs = System.currentTimeMillis() - startedAt,
+                    errorMsg = errorMsg?.take(500),
+                )
+            )
+        }.onFailure { log.warn("[logScrapperCall] 写入 scrapper 调用日志失败: ${it.message}") }
     }
 
     override fun inferAppName(title: String): String? {

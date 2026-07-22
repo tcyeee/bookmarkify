@@ -58,6 +58,15 @@ const routes: RouteRecordRaw[] = [
           title: '分类管理',
         },
       },
+      {
+        name: 'ScrapperCallLog',
+        path: '/bookmark/scrapper-log',
+        component: () => import('#/views/bookmark/scrapper-log/index.vue'),
+        meta: {
+          icon: 'carbon:cloud-logging',
+          title: 'Scrapper调用日志',
+        },
+      },
     ],
   },
   {
