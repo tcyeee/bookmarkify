@@ -11,10 +11,6 @@ interface IContextMenuItem {
    */
   handler?: (data: any) => void;
   /**
-   * @zh_CN 是否隐藏
-   */
-  hidden?: boolean;
-  /**
    * @zh_CN 图标
    */
   icon?: Component;

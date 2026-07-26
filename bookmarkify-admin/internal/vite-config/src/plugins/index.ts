@@ -7,6 +7,7 @@ import type {
   LibraryPluginOptions,
 } from '../typing';
 
+import viteVueI18nPlugin from '@intlify/unplugin-vue-i18n/vite';
 import viteVue from '@vitejs/plugin-vue';
 import viteVueJsx from '@vitejs/plugin-vue-jsx';
 import { visualizer as viteVisualizerPlugin } from 'rollup-plugin-visualizer';
@@ -73,10 +74,10 @@ async function loadCommonPlugins(
     {
       condition: isBuild && !!visualizer,
       plugins: () => [<PluginOption>viteVisualizerPlugin({
-        filename: './node_modules/.cache/visualizer/stats.html',
-        gzipSize: true,
-        open: true,
-      })],
+          filename: './node_modules/.cache/visualizer/stats.html',
+          gzipSize: true,
+          open: true,
+        })],
     },
   ];
 }
@@ -117,6 +118,18 @@ async function loadApplicationPlugins(
 
   return await loadConditionPlugins([
     ...commonPlugins,
+    {
+      condition: i18n,
+      plugins: async () => {
+        return [
+          viteVueI18nPlugin({
+            compositionOnly: true,
+            fullInstall: true,
+            runtimeOnly: true,
+          }),
+        ];
+      },
+    },
     {
       condition: print,
       plugins: async () => {

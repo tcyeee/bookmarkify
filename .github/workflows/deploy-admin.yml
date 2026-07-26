@@ -39,11 +39,11 @@ jobs:
       #   - VITE_GLOB_API_URL=/api -> admin calls /api/admin/**, nginx strips /api
       #     and proxies to bookmarkify-api:7001.
       #   - VITE_APP_TITLE / NAMESPACE / STORE_SECURE_KEY normally live in the
-      #     gitignored apps/web-ele/.env, which is ABSENT in CI. Without
-      #     VITE_APP_TITLE the index.html EJS build fails ("not defined"), so we
-      #     supply them here.
+      #     gitignored .env at the bookmarkify-admin root, which is ABSENT in
+      #     CI. Without VITE_APP_TITLE the index.html EJS build fails ("not
+      #     defined"), so we supply them here.
       - name: Write production env overrides
-        working-directory: bookmarkify-admin/apps/web-ele
+        working-directory: bookmarkify-admin
         run: |
           {
             echo "VITE_APP_TITLE=书签鸭 Admin"
@@ -54,11 +54,11 @@ jobs:
             echo "VITE_ARCHIVER=false"
           } > .env.production.local
 
-      # Builds @vben/web-ele in production mode → apps/web-ele/dist (hash router,
-      # so a single /index.html SPA fallback covers every route).
+      # Builds the (pruned, web-ele-only) app in production mode → dist/
+      # (hash router, so a single /index.html SPA fallback covers every route).
       - name: Build admin
         working-directory: bookmarkify-admin
-        run: pnpm build:ele
+        run: pnpm build
 
       # rsync the static output to the dir nginx serves for admin.bookmarkify.cc
       # (/home/ubuntu/www → /var/www in the nginx container). --delete keeps it in sync.
@@ -76,7 +76,7 @@ jobs:
           ssh-keyscan -p "$SERVER_PORT" "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           rsync -az --delete \
             -e "ssh -i ~/.ssh/id_deploy -p $SERVER_PORT -o StrictHostKeyChecking=accept-new" \
-            bookmarkify-admin/apps/web-ele/dist/ \
+            bookmarkify-admin/dist/ \
             "$SERVER_USER@$SERVER_HOST:/home/ubuntu/www/bookmarkify-admin/"
 
       # Push a WeChat notification via Server酱 once the deploy succeeds.

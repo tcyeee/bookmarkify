@@ -11,6 +11,10 @@ interface BasicUserInfo {
    */
   realName: string;
   /**
+   * 用户昵称（bookmarkify-api 实际返回字段名）
+   */
+  nickName: string;
+  /**
    * 用户角色
    */
   roles?: string[];

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { BreadcrumbProps } from './types';
 
-import { useForwardPropsEmits } from 'reka-ui';
+import { useForwardPropsEmits } from 'radix-vue';
 
 import BreadcrumbBackground from './breadcrumb-background.vue';
 import Breadcrumb from './breadcrumb.vue';

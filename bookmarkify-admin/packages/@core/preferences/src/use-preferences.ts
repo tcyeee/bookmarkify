@@ -175,6 +175,11 @@ function usePreferences() {
     return enable && globalLogout;
   });
 
+  const globalLockScreenShortcutKey = computed(() => {
+    const { enable, globalLockScreen } = shortcutKeysPreferences.value;
+    return enable && globalLockScreen;
+  });
+
   /**
    * @zh_CN 偏好设置按钮位置
    */
@@ -224,6 +229,7 @@ function usePreferences() {
     authPanelRight,
     contentIsMaximize,
     diffPreference,
+    globalLockScreenShortcutKey,
     globalLogoutShortcutKey,
     globalSearchShortcutKey,
     isDark,

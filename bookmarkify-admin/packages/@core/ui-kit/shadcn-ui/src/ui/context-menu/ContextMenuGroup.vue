@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { ContextMenuGroupProps } from 'reka-ui';
+import type { ContextMenuGroupProps } from 'radix-vue';
 
-import { ContextMenuGroup } from 'reka-ui';
+import { ContextMenuGroup } from 'radix-vue';
 
 const props = defineProps<ContextMenuGroupProps>();
 </script>

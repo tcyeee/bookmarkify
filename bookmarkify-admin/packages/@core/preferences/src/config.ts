@@ -17,12 +17,11 @@ const defaultPreferences: Preferences = {
     contentPaddingTop: 0,
     defaultAvatar:
       'https://unpkg.com/@vbenjs/static-source@0.1.7/source/avatar-v1.webp',
-    defaultHomePath: '/workspace',
+    defaultHomePath: '/analytics',
     dynamicTitle: true,
     enableCheckUpdates: true,
     enablePreferences: true,
     enableRefreshToken: false,
-    enableStickyPreferencesNavigationBar: true,
     isMobile: false,
     layout: 'sidebar-nav',
     locale: 'zh-CN',
@@ -74,6 +73,7 @@ const defaultPreferences: Preferences = {
   },
   shortcutKeys: {
     enable: true,
+    globalLockScreen: true,
     globalLogout: true,
     globalPreferences: true,
     globalSearch: true,
@@ -115,7 +115,6 @@ const defaultPreferences: Preferences = {
     colorWarning: 'hsl(42 84% 61%)',
     mode: 'dark',
     radius: '0.5',
-    fontSize: 16,
     semiDarkHeader: false,
     semiDarkSidebar: false,
   },
@@ -128,6 +127,8 @@ const defaultPreferences: Preferences = {
   widget: {
     fullscreen: true,
     globalSearch: true,
+    languageToggle: true,
+    lockScreen: true,
     notification: true,
     refresh: true,
     sidebarToggle: true,

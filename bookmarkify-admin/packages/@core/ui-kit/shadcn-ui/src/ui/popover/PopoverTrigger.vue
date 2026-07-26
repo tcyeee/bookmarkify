@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { PopoverTriggerProps } from 'reka-ui';
+import type { PopoverTriggerProps } from 'radix-vue';
 
-import { PopoverTrigger } from 'reka-ui';
+import { PopoverTrigger } from 'radix-vue';
 
 const props = defineProps<PopoverTriggerProps>();
 </script>

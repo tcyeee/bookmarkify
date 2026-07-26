@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { NumberFieldIncrementProps } from 'reka-ui';
+import type { NumberFieldIncrementProps } from 'radix-vue';
 
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
 import { Plus } from 'lucide-vue-next';
-import { NumberFieldIncrement, useForwardProps } from 'reka-ui';
+import { NumberFieldIncrement, useForwardProps } from 'radix-vue';
 
 const props = defineProps<NumberFieldIncrementProps & { class?: any }>();
 

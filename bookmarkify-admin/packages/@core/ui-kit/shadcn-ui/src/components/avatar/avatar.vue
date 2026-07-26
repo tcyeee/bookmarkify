@@ -3,7 +3,7 @@ import type {
   AvatarFallbackProps,
   AvatarImageProps,
   AvatarRootProps,
-} from 'reka-ui';
+} from 'radix-vue';
 
 import type { CSSProperties } from 'vue';
 
@@ -69,7 +69,7 @@ const rootStyle = computed(() => {
     <span
       v-if="dot"
       :class="dotClass"
-      class="absolute bottom-0 right-0 size-3 rounded-full border-2 border-background"
+      class="border-background absolute bottom-0 right-0 size-3 rounded-full border-2"
     >
     </span>
   </div>
