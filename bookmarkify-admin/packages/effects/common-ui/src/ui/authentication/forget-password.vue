@@ -4,6 +4,7 @@ import type { VbenFormSchema } from '@vben-core/form-ui';
 import { computed, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { $t } from '@vben/locales';
 
 import { useVbenForm } from '@vben-core/form-ui';
 import { VbenButton } from '@vben-core/shadcn-ui';
@@ -84,11 +85,11 @@ defineExpose({
   <div>
     <Title>
       <slot name="title">
-        {{ title || '忘记密码?' }} 🤦🏻‍♂️
+        {{ title || $t('authentication.forgetPassword') }} 🤦🏻‍♂️
       </slot>
       <template #desc>
         <slot name="subTitle">
-          {{ subTitle || '输入您的电子邮件，我们将向您发送重置密码的连接' }}
+          {{ subTitle || $t('authentication.forgetPasswordSubtitle') }}
         </slot>
       </template>
     </Title>
@@ -104,11 +105,11 @@ defineExpose({
         @click="handleSubmit"
       >
         <slot name="submitButtonText">
-          {{ submitButtonText || '发送重置链接' }}
+          {{ submitButtonText || $t('authentication.sendResetLink') }}
         </slot>
       </VbenButton>
       <VbenButton class="mt-4 w-full" variant="outline" @click="goToLogin()">
-        {{ '返回' }}
+        {{ $t('common.back') }}
       </VbenButton>
     </div>
   </div>

@@ -64,9 +64,9 @@ function toggleTheme(event: MouseEvent) {
       `circle(0px at ${x}px ${y}px)`,
       `circle(${endRadius}px at ${x}px ${y}px)`,
     ];
-    const animate = document.documentElement.animate(
+    document.documentElement.animate(
       {
-        clipPath: isDark.value ? [...clipPath].toReversed() : clipPath,
+        clipPath: isDark.value ? [...clipPath].reverse() : clipPath,
       },
       {
         duration: 450,
@@ -76,9 +76,6 @@ function toggleTheme(event: MouseEvent) {
           : '::view-transition-new(root)',
       },
     );
-    animate.onfinish = () => {
-      transition.skipTransition();
-    };
   });
 }
 </script>
@@ -88,7 +85,7 @@ function toggleTheme(event: MouseEvent) {
     :aria-label="theme"
     :class="[`is-${theme}`]"
     aria-live="polite"
-    class="theme-toggle cursor-pointer border-none bg-none hover:animate-[shrink_0.3s_ease-in-out]"
+    class="theme-toggle cursor-pointer border-none bg-none"
     v-bind="bindProps"
     @click.stop="toggleTheme"
   >

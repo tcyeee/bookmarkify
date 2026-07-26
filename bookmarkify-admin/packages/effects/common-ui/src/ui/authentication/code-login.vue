@@ -6,6 +6,7 @@ import type { VbenFormSchema } from '@vben-core/form-ui';
 import { computed, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { $t } from '@vben/locales';
 
 import { useVbenForm } from '@vben-core/form-ui';
 import { VbenButton } from '@vben-core/shadcn-ui';
@@ -34,10 +35,6 @@ interface Props {
    * @zh_CN 按钮文本
    */
   submitButtonText?: string;
-  /**
-   * @zh_CN 是否显示返回按钮
-   */
-  showBack?: boolean;
 }
 
 defineOptions({
@@ -46,7 +43,6 @@ defineOptions({
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
-  showBack: true,
   loginPath: '/auth/login',
   submitButtonText: '',
   subTitle: '',
@@ -91,12 +87,12 @@ defineExpose({
   <div>
     <Title>
       <slot name="title">
-        {{ title || '欢迎回来' }} 📲
+        {{ title || $t('authentication.welcomeBack') }} 📲
       </slot>
       <template #desc>
         <span class="text-muted-foreground">
           <slot name="subTitle">
-            {{ subTitle || '请输入您的手机号码以开始管理您的项目' }}
+            {{ subTitle || $t('authentication.codeSubtitle') }}
           </slot>
         </span>
       </template>
@@ -111,16 +107,11 @@ defineExpose({
       @click="handleSubmit"
     >
       <slot name="submitButtonText">
-        {{ submitButtonText || '登录' }}
+        {{ submitButtonText || $t('common.login') }}
       </slot>
     </VbenButton>
-    <VbenButton
-      v-if="showBack"
-      class="mt-4 w-full"
-      variant="outline"
-      @click="goToLogin()"
-    >
-      {{ '返回' }}
+    <VbenButton class="mt-4 w-full" variant="outline" @click="goToLogin()">
+      {{ $t('common.back') }}
     </VbenButton>
   </div>
 </template>

@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { $t } from '@vben/locales';
 
 import { VbenButton } from '@vben-core/shadcn-ui';
 
@@ -34,10 +35,6 @@ interface Props {
    * @zh_CN 描述
    */
   description?: string;
-  /**
-   * @zh_CN 是否显示返回按钮
-   */
-  showBack?: boolean;
 }
 
 defineOptions({
@@ -47,7 +44,6 @@ defineOptions({
 const props = withDefaults(defineProps<Props>(), {
   description: '',
   loading: false,
-  showBack: true,
   loginPath: '/auth/login',
   submitButtonText: '',
   subTitle: '',
@@ -72,12 +68,12 @@ function goToLogin() {
   <div>
     <Title>
       <slot name="title">
-        {{ title || '欢迎回来' }} 📱
+        {{ title || $t('authentication.welcomeBack') }} 📱
       </slot>
       <template #desc>
         <span class="text-muted-foreground">
           <slot name="subTitle">
-            {{ subTitle || '请用手机扫描二维码登录' }}
+            {{ subTitle || $t('authentication.qrcodeSubtitle') }}
           </slot>
         </span>
       </template>
@@ -87,18 +83,13 @@ function goToLogin() {
       <img :src="qrcode" alt="qrcode" class="w-1/2" />
       <p class="text-muted-foreground mt-4 text-sm">
         <slot name="description">
-          {{ description || '扫码后点击 \'确认\'，即可完成登录' }}
+          {{ description || $t('authentication.qrcodePrompt') }}
         </slot>
       </p>
     </div>
 
-    <VbenButton
-      v-if="showBack"
-      class="mt-4 w-full"
-      variant="outline"
-      @click="goToLogin()"
-    >
-      {{ '返回' }}
+    <VbenButton class="mt-4 w-full" variant="outline" @click="goToLogin()">
+      {{ $t('common.back') }}
     </VbenButton>
   </div>
 </template>

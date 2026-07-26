@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-
 import { VbenAvatar } from '../avatar';
 
 interface Props {
@@ -25,10 +23,6 @@ interface Props {
    */
   src?: string;
   /**
-   * @zh_CN 暗色主题 Logo 图标 (可选，若不设置则使用 src)
-   */
-  srcDark?: string;
-  /**
    * @zh_CN Logo 文本
    */
   text: string;
@@ -42,26 +36,13 @@ defineOptions({
   name: 'VbenLogo',
 });
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   collapsed: false,
   href: 'javascript:void 0',
   logoSize: 32,
   src: '',
-  srcDark: '',
   theme: 'light',
   fit: 'cover',
-});
-
-/**
- * @zh_CN 根据主题选择合适的 logo 图标
- */
-const logoSrc = computed(() => {
-  // 如果是暗色主题且提供了 srcDark，则使用暗色主题的 logo
-  if (props.theme === 'dark' && props.srcDark) {
-    return props.srcDark;
-  }
-  // 否则使用默认的 src
-  return props.src;
 });
 </script>
 
@@ -73,16 +54,16 @@ const logoSrc = computed(() => {
       class="flex h-full items-center gap-2 overflow-hidden px-3 text-lg leading-normal transition-all duration-500"
     >
       <VbenAvatar
-        v-if="logoSrc"
+        v-if="src"
         :alt="text"
-        :src="logoSrc"
+        :src="src"
         :size="logoSize"
         :fit="fit"
         class="relative rounded-none bg-transparent"
       />
       <template v-if="!collapsed">
         <slot name="text">
-          <span class="truncate text-nowrap font-semibold text-foreground">
+          <span class="text-foreground truncate text-nowrap font-semibold">
             {{ text }}
           </span>
         </slot>

@@ -3,6 +3,7 @@ import type { Component } from 'vue';
 
 import { computed } from 'vue';
 
+import { $t } from '@vben/locales';
 
 import { ContentCompact, ContentWide } from '../../icons';
 
@@ -19,11 +20,11 @@ const components: Record<string, Component> = {
 
 const PRESET = computed(() => [
   {
-    name: '流式',
+    name: $t('preferences.wide'),
     type: 'wide',
   },
   {
-    name: '定宽',
+    name: $t('preferences.compact'),
     type: 'compact',
   },
 ]);

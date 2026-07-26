@@ -6,4 +6,4 @@ declare module 'pinia' {
   ): (newModule: any) => any;
 }
 
-export { acceptHMRUpdate };
+export {};

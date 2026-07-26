@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { TabsContentProps } from 'reka-ui';
+import type { TabsContentProps } from 'radix-vue';
 
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
-import { TabsContent } from 'reka-ui';
+import { TabsContent } from 'radix-vue';
 
 const props = defineProps<TabsContentProps & { class?: any }>();
 
@@ -20,7 +20,7 @@ const delegatedProps = computed(() => {
   <TabsContent
     :class="
       cn(
-        'mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'ring-offset-background focus-visible:ring-ring mt-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
         props.class,
       )
     "

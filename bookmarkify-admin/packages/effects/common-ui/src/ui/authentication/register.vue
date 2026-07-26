@@ -6,6 +6,7 @@ import type { VbenFormSchema } from '@vben-core/form-ui';
 import { computed, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { $t } from '@vben/locales';
 
 import { useVbenForm } from '@vben-core/form-ui';
 import { VbenButton } from '@vben-core/shadcn-ui';
@@ -87,11 +88,11 @@ defineExpose({
   <div>
     <Title>
       <slot name="title">
-        {{ title || '创建一个账号' }} 🚀
+        {{ title || $t('authentication.createAnAccount') }} 🚀
       </slot>
       <template #desc>
         <slot name="subTitle">
-          {{ subTitle || '让您的应用程序管理变得简单而有趣' }}
+          {{ subTitle || $t('authentication.signUpSubtitle') }}
         </slot>
       </template>
     </Title>
@@ -107,13 +108,13 @@ defineExpose({
       @click="handleSubmit"
     >
       <slot name="submitButtonText">
-        {{ submitButtonText || '注册' }}
+        {{ submitButtonText || $t('authentication.signUp') }}
       </slot>
     </VbenButton>
     <div class="mt-4 text-center text-sm">
-      {{ '已经有账号了?' }}
+      {{ $t('authentication.alreadyHaveAccount') }}
       <span class="vben-link text-sm font-normal" @click="goToLogin()">
-        {{ '去登录' }}
+        {{ $t('authentication.goToLogin') }}
       </span>
     </div>
   </div>

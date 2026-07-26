@@ -20,6 +20,8 @@
   ],
   "dependencies": {
     "@vben/types": "workspace:*",
-    "vite": "catalog:"
-  }
+    "vite": "^6.3.5"
+  },
+  "scripts": {},
+  "devDependencies": {}
 }

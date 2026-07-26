@@ -44,11 +44,12 @@
     "@vben-core/icons": "workspace:*",
     "@vben-core/shared": "workspace:*",
     "@vben-core/typings": "workspace:*",
-    "@vueuse/core": "catalog:",
-    "class-variance-authority": "catalog:",
-    "lucide-vue-next": "catalog:",
-    "reka-ui": "catalog:",
-    "vee-validate": "catalog:",
-    "vue": "catalog:"
-  }
+    "@vueuse/core": "^13.4.0",
+    "class-variance-authority": "^0.7.1",
+    "lucide-vue-next": "^0.507.0",
+    "radix-vue": "^1.9.17",
+    "vee-validate": "^4.15.1",
+    "vue": "^3.5.17"
+  },
+  "devDependencies": {}
 }

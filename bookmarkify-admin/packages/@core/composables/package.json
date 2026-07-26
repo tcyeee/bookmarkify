@@ -36,12 +36,12 @@
   },
   "dependencies": {
     "@vben-core/shared": "workspace:*",
-    "@vueuse/core": "catalog:",
-    "reka-ui": "catalog:",
-    "sortablejs": "catalog:",
-    "vue": "catalog:"
+    "@vueuse/core": "^13.4.0",
+    "radix-vue": "^1.9.17",
+    "sortablejs": "^1.15.6",
+    "vue": "^3.5.17"
   },
   "devDependencies": {
-    "@types/sortablejs": "catalog:"
+    "@types/sortablejs": "^1.15.8"
   }
 }

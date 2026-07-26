@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import { $t } from '@vben/locales';
 
 import InputItem from '../input-item.vue';
 import SwitchItem from '../switch-item.vue';
@@ -21,23 +22,23 @@ const itemDisabled = computed(() => props.disabled || !copyrightEnable.value);
 
 <template>
   <SwitchItem v-model="copyrightEnable" :disabled="disabled">
-    {{ '启用版权' }}
+    {{ $t('preferences.copyright.enable') }}
   </SwitchItem>
 
   <InputItem v-model="copyrightCompanyName" :disabled="itemDisabled">
-    {{ '公司名' }}
+    {{ $t('preferences.copyright.companyName') }}
   </InputItem>
   <InputItem v-model="copyrightCompanySiteLink" :disabled="itemDisabled">
-    {{ '公司主页' }}
+    {{ $t('preferences.copyright.companySiteLink') }}
   </InputItem>
   <InputItem v-model="copyrightDate" :disabled="itemDisabled">
-    {{ '日期' }}
+    {{ $t('preferences.copyright.date') }}
   </InputItem>
 
   <InputItem v-model="copyrightIcp" :disabled="itemDisabled">
-    {{ 'ICP 备案号' }}
+    {{ $t('preferences.copyright.icp') }}
   </InputItem>
   <InputItem v-model="copyrightIcpLink" :disabled="itemDisabled">
-    {{ 'ICP 网站链接' }}
+    {{ $t('preferences.copyright.icpLink') }}
   </InputItem>
 </template>

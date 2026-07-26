@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { DialogTitleProps } from 'reka-ui';
+import type { DialogTitleProps } from 'radix-vue';
 
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
-import { DialogTitle } from 'reka-ui';
+import { DialogTitle } from 'radix-vue';
 
 const props = defineProps<DialogTitleProps & { class?: any }>();
 
@@ -18,7 +18,7 @@ const delegatedProps = computed(() => {
 
 <template>
   <DialogTitle
-    :class="cn('font-medium text-foreground', props.class)"
+    :class="cn('text-foreground font-medium', props.class)"
     v-bind="delegatedProps"
   >
     <slot></slot>
