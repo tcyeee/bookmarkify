@@ -12,12 +12,13 @@ export default defineNuxtPlugin(async () => {
 
   if (authStore.authStatus === AuthStatusEnum.NONE) return
 
-  // 如果用户已登录,先连接 WebSocket(若 token 已过期,refreshUserInfo 会触发 logout +
-  // 重新登录,WebSocket store 的 connect 会在 token 变化时自动关闭旧连接并重建)。
+  // 如果用户已登录,先连接 WebSocket(若 token 已过期,refreshUserInfo 会触发 logout 并
+  // 跳转 /welcome,不会自动重新登录;WebSocket store 的 connect 会在 token 变化时自动
+  // 关闭旧连接并重建)。
   const webSocketStore = useWebSocketStore()
   webSocketStore.connect(authStore.account!.token)
 
-  // 并行加载用户信息 / 偏好 / 书签;refreshUserInfo 失败(如 202)会自动 logout + 重连
+  // 并行加载用户信息 / 偏好 / 书签;refreshUserInfo 失败(如 202)会 logout 并跳转 /welcome,不会自动重连
   authStore.refreshUserInfo()
   preferenceStore.fetchPreference()
   const bookmarkStore = useBookmarkStore()

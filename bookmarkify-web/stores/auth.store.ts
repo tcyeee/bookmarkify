@@ -71,7 +71,7 @@ export const useAuthStore = defineStore('auth', {
 
     async refreshUserInfo(): Promise<UserInfo> {
       try {
-        // 重新拉取用户信息，失败后处理过期态并自动重新登录
+        // 重新拉取用户信息，失败后(如 202 过期)登出并跳转 /welcome，不会自动重新登录
         const result = await queryUserInfo()
 
         this.account = { ...this.account, ...result }

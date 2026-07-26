@@ -14,7 +14,7 @@ The backend (Kotlin/Spring Boot) lives at `../bookmarkify-api/` on port 8001 (lo
 - **Styling:** Tailwind CSS 4 + DaisyUI 5 (prefix `cy-`) + Element Plus 2.11 + Sass
 - **State:** Pinia 3 + `pinia-plugin-persistedstate` (Option Store syntax)
 - **Package manager:** pnpm (Node 18+)
-- **Notable libs:** vuuri (Muuri drag-and-drop grid), GSAP, Typed.js, Lenis, @vueuse/core, vue-command-palette, @imengyu/vue3-context-menu, @iconify/vue
+- **Notable libs:** @atlaskit/pragmatic-drag-and-drop (drag-and-drop grid), GSAP, Typed.js, Lenis, @vueuse/core, vue-command-palette, @imengyu/vue3-context-menu, @iconify/vue
 
 ## Commands
 
@@ -30,7 +30,7 @@ pnpm generate             # static site generation → .output/public
 
 Deployed as a **static site** (`nuxt generate` → `.output/public`) served directly by nginx — there is no Node/Docker runtime in production. CI (`.github/workflows/deploy-web.yml`, monorepo root) builds on push to the `prod` branch, rsyncs `.output/public` to `/home/ubuntu/www/bookmarkify-web/` on the server (nginx `location /` serves it with a `/200.html` SPA fallback), then notifies WeChat via Server酱. The prod public URLs (`NUXT_API_BASE=https://bookmarkify.cc/api`, `NUXT_WS_BASE=wss://bookmarkify.cc`) are baked in at build time by the workflow.
 
-There is no test runner, lint script, or typecheck script configured in `package.json`. No tests exist in the repo.
+There is no test runner or lint script configured in `package.json`. No tests exist in the repo. A `pnpm typecheck` script (`nuxt typecheck`) does exist, but it currently fails with several pre-existing type errors (implicit `any`, possibly-`undefined` access in `bookmark.store.ts`) that predate this note — it is not wired into CI.
 
 ## Environment Variables
 
@@ -51,13 +51,13 @@ Every visitor gets a session via `POST /auth/track` — no login required. Guest
 Bookmarks are a `UserLayoutNodeVO[]` tree in `bookmark.store.ts`. Node types (see `typing/enum.ts` `HomeItemType`): `BOOKMARK`, `BOOKMARK_DIR`, `FUNCTION`, `BOOKMARK_LOADING` (placeholder while the backend parses the URL). `components/launch/LaunchItem.vue` dispatches each node to the right cell component under `components/launchpad/cell/`.
 
 ### WebSocket-driven live updates
-After the user adds a URL, the backend parses the page asynchronously (Kafka) and pushes a `HOME_ITEM_UPDATE` message. `stores/websocket.store.ts` connects to `{wsBase}/ws?token={token}`, pings every 5s, and reconnects with exponential backoff (1s → 30s, max 5 attempts). On `HOME_ITEM_UPDATE`, the bookmark store **must replace nodes with new object references** to trigger Vue reactivity — see `updateOneBookmarkCell()` for the pattern. Direct nested mutation will not re-render.
+After the user adds a URL, the backend parses the page asynchronously (Spring `ApplicationEvent` + `@Async`, in-process — not a message queue) and pushes a `HOME_ITEM_UPDATE` message. `stores/websocket.store.ts` connects to `{wsBase}/ws?token={token}`, pings every 5s, and reconnects with exponential backoff (1s → 30s, max 5 attempts). On `HOME_ITEM_UPDATE`, the bookmark store **must replace nodes with new object references** to trigger Vue reactivity — see `updateOneBookmarkCell()` for the pattern. Direct nested mutation will not re-render.
 
 ### HTTP client
 All API calls go through the static `http` class in `server/apis/http.ts`. Endpoint functions live in `server/apis/index.ts` and return `Promise<t.SomeType>`.
 
 - Auto-injects `satoken` header
-- On response code `101` (token expired), it auto re-issues `/auth/track` and retries the original request
+- On response code `101` (token expired), it logs the user out (`authStore.logout()`) and redirects to `/welcome` — there is no silent re-login/retry
 - `http.withDebounce()` deduplicates in-flight requests within a 600ms window
 - Response shape: `Result<T> { code, msg, data, ok }` — `code === 0` is success, `1xx` shows an error toast via `ElMessage.error()`, `3xx` rejects silently
 - Components should not duplicate API error toasts; the client handles them centrally
