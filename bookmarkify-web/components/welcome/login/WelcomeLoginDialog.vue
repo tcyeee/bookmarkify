@@ -21,7 +21,7 @@
       <span class="h-px flex-1 bg-white/8"></span>
     </div>
     <div class="mt-4 flex flex-col items-center gap-3">
-      <GoogleLoginButton @success="onSuccess" />
+      <GoogleLoginButton />
       <GithubLoginButton @success="onSuccess" />
     </div>
   </div>
