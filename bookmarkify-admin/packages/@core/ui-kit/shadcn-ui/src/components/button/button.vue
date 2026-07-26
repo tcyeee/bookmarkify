@@ -6,7 +6,7 @@ import { computed } from 'vue';
 import { LoaderCircle } from '@vben-core/icons';
 import { cn } from '@vben-core/shared/utils';
 
-import { Primitive } from 'reka-ui';
+import { Primitive } from 'radix-vue';
 
 import { buttonVariants } from '../../ui';
 

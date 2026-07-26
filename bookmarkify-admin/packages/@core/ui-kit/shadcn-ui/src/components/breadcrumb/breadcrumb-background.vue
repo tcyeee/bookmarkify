@@ -37,7 +37,7 @@ function handleClick(index: number, path?: string) {
               />
               <span
                 :class="{
-                  'font-normal text-foreground':
+                  'text-foreground font-normal':
                     index === breadcrumbs.length - 1,
                 }"
                 >{{ item.title }}
@@ -55,7 +55,7 @@ li {
 }
 
 li a {
-  @apply relative mr-9 flex h-7 items-center bg-accent py-0 pl-[5px] pr-2 text-[13px] text-muted-foreground;
+  @apply text-muted-foreground bg-accent relative mr-9 flex h-7 items-center py-0 pl-[5px] pr-2 text-[13px];
 }
 
 li a > span {
@@ -84,7 +84,7 @@ li:last-child a::after {
 
 li a::before,
 li a::after {
-  @apply absolute top-0 h-0 w-0 border-[.875rem] border-solid border-accent content-[''];
+  @apply border-accent absolute top-0 h-0 w-0 border-[.875rem] border-solid content-[''];
 }
 
 li a::before {
@@ -92,7 +92,7 @@ li a::before {
 }
 
 li a::after {
-  @apply left-full border-transparent border-l-accent;
+  @apply border-l-accent left-full border-transparent;
 }
 
 li:not(:last-child) a:hover {

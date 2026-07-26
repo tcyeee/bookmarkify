@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { LabelProps } from 'reka-ui';
+import type { LabelProps } from 'radix-vue';
 
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
-import { Label } from 'reka-ui';
+import { Label } from 'radix-vue';
 
 const props = defineProps<LabelProps & { class?: any }>();
 

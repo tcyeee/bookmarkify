@@ -22,5 +22,7 @@
   "dependencies": {
     "@vben-core/preferences": "workspace:*",
     "@vben-core/typings": "workspace:*"
-  }
+  },
+  "scripts": {},
+  "devDependencies": {}
 }

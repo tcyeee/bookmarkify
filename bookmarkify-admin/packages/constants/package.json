@@ -21,5 +21,7 @@
   },
   "dependencies": {
     "@vben-core/shared": "workspace:*"
-  }
+  },
+  "scripts": {},
+  "devDependencies": {}
 }

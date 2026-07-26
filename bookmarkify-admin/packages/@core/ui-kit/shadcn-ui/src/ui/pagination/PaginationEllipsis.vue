@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { PaginationEllipsisProps } from 'reka-ui';
+import type { PaginationEllipsisProps } from 'radix-vue';
 
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
 import { MoreHorizontal } from 'lucide-vue-next';
-import { PaginationEllipsis } from 'reka-ui';
+import { PaginationEllipsis } from 'radix-vue';
 
 const props = defineProps<PaginationEllipsisProps & { class?: any }>();
 

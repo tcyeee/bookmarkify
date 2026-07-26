@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { SelectScrollDownButtonProps } from 'reka-ui';
+import type { SelectScrollDownButtonProps } from 'radix-vue';
 
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
 import { ChevronDown } from 'lucide-vue-next';
-import { SelectScrollDownButton, useForwardProps } from 'reka-ui';
+import { SelectScrollDownButton, useForwardProps } from 'radix-vue';
 
 const props = defineProps<SelectScrollDownButtonProps & { class?: any }>();
 

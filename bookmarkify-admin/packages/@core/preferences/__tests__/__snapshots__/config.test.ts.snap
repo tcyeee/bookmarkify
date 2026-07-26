@@ -22,7 +22,6 @@ exports[`defaultPreferences immutability test > should not modify the config obj
     "enableCheckUpdates": true,
     "enablePreferences": true,
     "enableRefreshToken": false,
-    "enableStickyPreferencesNavigationBar": true,
     "isMobile": false,
     "layout": "sidebar-nav",
     "locale": "zh-CN",
@@ -30,7 +29,6 @@ exports[`defaultPreferences immutability test > should not modify the config obj
     "name": "Vben Admin",
     "preferencesButtonPosition": "auto",
     "watermark": false,
-    "watermarkContent": "",
     "zIndex": 200,
   },
   "breadcrumb": {
@@ -73,6 +71,7 @@ exports[`defaultPreferences immutability test > should not modify the config obj
   },
   "shortcutKeys": {
     "enable": true,
+    "globalLockScreen": true,
     "globalLogout": true,
     "globalPreferences": true,
     "globalSearch": true,
@@ -112,7 +111,6 @@ exports[`defaultPreferences immutability test > should not modify the config obj
     "colorPrimary": "hsl(212 100% 45%)",
     "colorSuccess": "hsl(144 57% 58%)",
     "colorWarning": "hsl(42 84% 61%)",
-    "fontSize": 16,
     "mode": "dark",
     "radius": "0.5",
     "semiDarkHeader": false,
@@ -127,6 +125,8 @@ exports[`defaultPreferences immutability test > should not modify the config obj
   "widget": {
     "fullscreen": true,
     "globalSearch": true,
+    "languageToggle": true,
+    "lockScreen": true,
     "notification": true,
     "refresh": true,
     "sidebarToggle": true,

@@ -18,5 +18,7 @@
   },
   "dependencies": {
     "@vben-core/icons": "workspace:*"
-  }
+  },
+  "scripts": {},
+  "devDependencies": {}
 }

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { DrawerProps, ExtendedDrawerApi } from "./drawer";
+import type { DrawerProps, ExtendedDrawerApi } from './drawer';
 
 import {
   computed,
@@ -9,10 +9,14 @@ import {
   unref,
   useId,
   watch,
-} from "vue";
+} from 'vue';
 
-import { useIsMobile, usePriorityValues } from "@vben-core/composables";
-import { X } from "@vben-core/icons";
+import {
+  useIsMobile,
+  usePriorityValues,
+  useSimpleLocale,
+} from '@vben-core/composables';
+import { X } from '@vben-core/icons';
 import {
   Separator,
   Sheet,
@@ -27,10 +31,10 @@ import {
   VbenIconButton,
   VbenLoading,
   VisuallyHidden,
-} from "@vben-core/shadcn-ui";
-import { ELEMENT_ID_MAIN_CONTENT } from "@vben-core/shared/constants";
-import { globalShareState } from "@vben-core/shared/global-state";
-import { cn } from "@vben-core/shared/utils";
+} from '@vben-core/shadcn-ui';
+import { ELEMENT_ID_MAIN_CONTENT } from '@vben-core/shared/constants';
+import { globalShareState } from '@vben-core/shared/global-state';
+import { cn } from '@vben-core/shared/utils';
 
 interface Props extends DrawerProps {
   drawerApi?: ExtendedDrawerApi;
@@ -38,7 +42,7 @@ interface Props extends DrawerProps {
 
 const props = withDefaults(defineProps<Props>(), {
   appendToMain: false,
-  closeIconPlacement: "right",
+  closeIconPlacement: 'right',
   destroyOnClose: false,
   drawerApi: undefined,
   submitting: false,
@@ -48,9 +52,10 @@ const props = withDefaults(defineProps<Props>(), {
 const components = globalShareState.getComponents();
 
 const id = useId();
-provide("DISMISSABLE_DRAWER_ID", id);
+provide('DISMISSABLE_DRAWER_ID', id);
 
 const wrapperRef = ref<HTMLElement>();
+const { $t } = useSimpleLocale();
 const { isMobile } = useIsMobile();
 
 const state = props.drawerApi?.useStore?.();
@@ -160,7 +165,7 @@ watch(
     if (value && !unref(hasOpened)) {
       hasOpened.value = true;
     }
-  }
+  },
 );
 function handleClosed() {
   isClosed.value = true;
@@ -171,15 +176,38 @@ const getForceMount = computed(() => {
 });
 </script>
 <template>
-  <Sheet :modal="false" :open="state?.isOpen" @update:open="() => drawerApi?.close()">
-    <SheetContent :append-to="getAppendTo" :class="
+  <Sheet
+    :modal="false"
+    :open="state?.isOpen"
+    @update:open="() => drawerApi?.close()"
+  >
+    <SheetContent
+      :append-to="getAppendTo"
+      :class="
         cn('flex w-[520px] flex-col', drawerClass, {
           '!w-full': isMobile || placement === 'bottom' || placement === 'top',
           'max-h-[100vh]': placement === 'bottom' || placement === 'top',
           hidden: isClosed,
         })
-      " :modal="modal" :open="state?.isOpen" :side="placement" :z-index="zIndex" :force-mount="getForceMount" :overlay-blur="overlayBlur" @close-auto-focus="handleFocusOutside" @closed="handleClosed" @escape-key-down="escapeKeyDown" @focus-outside="handleFocusOutside" @interact-outside="interactOutside" @open-auto-focus="handerOpenAutoFocus" @opened="() => drawerApi?.onOpened()" @pointer-down-outside="pointerDownOutside">
-      <SheetHeader v-if="showHeader" :class="
+      "
+      :modal="modal"
+      :open="state?.isOpen"
+      :side="placement"
+      :z-index="zIndex"
+      :force-mount="getForceMount"
+      :overlay-blur="overlayBlur"
+      @close-auto-focus="handleFocusOutside"
+      @closed="handleClosed"
+      @escape-key-down="escapeKeyDown"
+      @focus-outside="handleFocusOutside"
+      @interact-outside="interactOutside"
+      @open-auto-focus="handerOpenAutoFocus"
+      @opened="() => drawerApi?.onOpened()"
+      @pointer-down-outside="pointerDownOutside"
+    >
+      <SheetHeader
+        v-if="showHeader"
+        :class="
           cn(
             '!flex flex-row items-center justify-between border-b px-6 py-5',
             headerClass,
@@ -188,16 +216,27 @@ const getForceMount = computed(() => {
               'pl-2': closable && closeIconPlacement === 'left',
             },
           )
-        ">
+        "
+      >
         <div class="flex items-center">
-          <SheetClose v-if="closable && closeIconPlacement === 'left'" as-child :disabled="submitting" class="ml-[2px] cursor-pointer rounded-full opacity-80 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none data-[state=open]:bg-secondary">
+          <SheetClose
+            v-if="closable && closeIconPlacement === 'left'"
+            as-child
+            :disabled="submitting"
+            class="data-[state=open]:bg-secondary ml-[2px] cursor-pointer rounded-full opacity-80 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none"
+          >
             <slot name="close-icon">
               <VbenIconButton>
                 <X class="size-4" />
               </VbenIconButton>
             </slot>
           </SheetClose>
-          <Separator v-if="closable && closeIconPlacement === 'left'" class="ml-1 mr-2 h-8" decorative orientation="vertical" />
+          <Separator
+            v-if="closable && closeIconPlacement === 'left'"
+            class="ml-1 mr-2 h-8"
+            decorative
+            orientation="vertical"
+          />
           <SheetTitle v-if="title" class="text-left">
             <slot name="title">
               {{ title }}
@@ -221,7 +260,12 @@ const getForceMount = computed(() => {
 
         <div class="flex-center">
           <slot name="extra"></slot>
-          <SheetClose v-if="closable && closeIconPlacement === 'right'" as-child :disabled="submitting" class="ml-[2px] cursor-pointer rounded-full opacity-80 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none data-[state=open]:bg-secondary">
+          <SheetClose
+            v-if="closable && closeIconPlacement === 'right'"
+            as-child
+            :disabled="submitting"
+            class="data-[state=open]:bg-secondary ml-[2px] cursor-pointer rounded-full opacity-80 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none"
+          >
             <slot name="close-icon">
               <VbenIconButton>
                 <X class="size-4" />
@@ -236,31 +280,48 @@ const getForceMount = computed(() => {
           <SheetDescription />
         </VisuallyHidden>
       </template>
-      <div ref="wrapperRef" :class="
+      <div
+        ref="wrapperRef"
+        :class="
           cn('relative flex-1 overflow-y-auto p-3', contentClass, {
             'pointer-events-none': showLoading || submitting,
           })
-        ">
+        "
+      >
         <slot></slot>
       </div>
       <VbenLoading v-if="showLoading || submitting" spinning />
-      <SheetFooter v-if="showFooter" :class="
+      <SheetFooter
+        v-if="showFooter"
+        :class="
           cn(
             'w-full flex-row items-center justify-end border-t p-2 px-3',
             footerClass,
           )
-        ">
+        "
+      >
         <slot name="prepend-footer"></slot>
         <slot name="footer">
-          <component :is="components.DefaultButton || VbenButton" v-if="showCancelButton" variant="ghost" :disabled="submitting" @click="() => drawerApi?.onCancel()">
+          <component
+            :is="components.DefaultButton || VbenButton"
+            v-if="showCancelButton"
+            variant="ghost"
+            :disabled="submitting"
+            @click="() => drawerApi?.onCancel()"
+          >
             <slot name="cancelText">
-              {{ cancelText || '取消' }}
+              {{ cancelText || $t('cancel') }}
             </slot>
           </component>
           <slot name="center-footer"></slot>
-          <component :is="components.PrimaryButton || VbenButton" v-if="showConfirmButton" :loading="confirmLoading || submitting" @click="() => drawerApi?.onConfirm()">
+          <component
+            :is="components.PrimaryButton || VbenButton"
+            v-if="showConfirmButton"
+            :loading="confirmLoading || submitting"
+            @click="() => drawerApi?.onConfirm()"
+          >
             <slot name="confirmText">
-              {{ confirmText || '确认' }}
+              {{ confirmText || $t('confirm') }}
             </slot>
           </component>
         </slot>
