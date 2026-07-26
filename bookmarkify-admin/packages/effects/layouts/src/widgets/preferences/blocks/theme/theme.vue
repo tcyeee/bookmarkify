@@ -4,7 +4,6 @@ import type { Component } from 'vue';
 import type { ThemeModeType } from '@vben/types';
 
 import { MoonStar, Sun, SunMoon } from '@vben/icons';
-import { $t } from '@vben/locales';
 
 import SwitchItem from '../switch-item.vue';
 
@@ -38,13 +37,13 @@ function activeClass(theme: string): string[] {
 function nameView(name: string) {
   switch (name) {
     case 'auto': {
-      return $t('preferences.followSystem');
+      return '跟随系统';
     }
     case 'dark': {
-      return $t('preferences.theme.dark');
+      return '深色';
     }
     case 'light': {
-      return $t('preferences.theme.light');
+      return '浅色';
     }
   }
 }
@@ -74,10 +73,10 @@ function nameView(name: string) {
       :disabled="modelValue === 'dark'"
       class="mt-6"
     >
-      {{ $t('preferences.theme.darkSidebar') }}
+      {{ '深色侧边栏' }}
     </SwitchItem>
     <SwitchItem v-model="themeSemiDarkHeader" :disabled="modelValue === 'dark'">
-      {{ $t('preferences.theme.darkHeader') }}
+      {{ '深色顶栏' }}
     </SwitchItem>
   </div>
 </template>

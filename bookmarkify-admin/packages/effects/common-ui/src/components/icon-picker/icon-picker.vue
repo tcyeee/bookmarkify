@@ -5,7 +5,6 @@ import { computed, ref, useAttrs, watch, watchEffect } from 'vue';
 
 import { usePagination } from '@vben/hooks';
 import { EmptyIcon, Grip, listIcons } from '@vben/icons';
-import { $t } from '@vben/locales';
 
 import {
   Button,
@@ -71,16 +70,9 @@ const modelValue = defineModel({ default: '', type: String });
 
 const visible = ref(false);
 const currentSelect = ref('');
-const currentPage = ref(1);
 const keyword = ref('');
 const keywordDebounce = refDebounced(keyword, 300);
 const innerIcons = ref<string[]>([]);
-
-/* 当检索关键词变化时，重置分页 */
-watch(keywordDebounce, () => {
-  currentPage.value = 1;
-  setCurrentPage(1);
-});
 
 watchDebounced(
   () => props.prefix,
@@ -122,7 +114,7 @@ const showList = computed(() => {
   );
 });
 
-const { paginationList, total, setCurrentPage } = usePagination(
+const { paginationList, total, setCurrentPage, currentPage } = usePagination(
   showList,
   props.pageSize,
 );
@@ -145,7 +137,6 @@ const handleClick = (icon: string) => {
 };
 
 const handlePageChange = (page: number) => {
-  currentPage.value = page;
   setCurrentPage(page);
 };
 
@@ -167,7 +158,7 @@ function onKeywordChange(v: string) {
 
 const searchInputProps = computed(() => {
   return {
-    placeholder: $t('ui.iconPicker.search'),
+    placeholder: '搜索图标...',
     [props.modelValueProp]: keyword.value,
     [`onUpdate:${props.modelValueProp}`]: onKeywordChange,
     class: 'mx-2',
@@ -200,9 +191,9 @@ defineExpose({ toggleOpenState, open, close });
           v-if="props.inputComponent"
           :is="inputComponent"
           :[modelValueProp]="currentSelect"
-          :placeholder="$t('ui.iconPicker.placeholder')"
+          :placeholder="'选择一个图标'"
           role="combobox"
-          :aria-label="$t('ui.iconPicker.placeholder')"
+          :aria-label="'选择一个图标'"
           aria-expanded="visible"
           :[`onUpdate:${modelValueProp}`]="updateCurrentSelect"
           v-bind="getBindAttrs"
@@ -219,10 +210,10 @@ defineExpose({ toggleOpenState, open, close });
           <Input
             v-bind="$attrs"
             v-model="currentSelect"
-            :placeholder="$t('ui.iconPicker.placeholder')"
+            :placeholder="'选择一个图标'"
             class="h-8 w-full pr-8"
             role="combobox"
-            :aria-label="$t('ui.iconPicker.placeholder')"
+            :aria-label="'选择一个图标'"
             aria-expanded="visible"
           />
           <VbenIcon
@@ -248,7 +239,7 @@ defineExpose({ toggleOpenState, open, close });
       <Input
         v-else
         class="mx-2 h-8 w-full"
-        :placeholder="$t('ui.iconPicker.search')"
+        :placeholder="'搜索图标...'"
         v-model="keyword"
       />
     </div>
@@ -319,7 +310,7 @@ defineExpose({ toggleOpenState, open, close });
     <template v-else>
       <div class="flex-col-center text-muted-foreground min-h-[150px] w-full">
         <EmptyIcon class="size-10" />
-        <div class="mt-1 text-sm">{{ $t('common.noData') }}</div>
+        <div class="mt-1 text-sm">{{ '暂无数据' }}</div>
       </div>
     </template>
   </VbenPopover>

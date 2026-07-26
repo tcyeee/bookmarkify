@@ -2,7 +2,6 @@
 import type { ThemeModeType } from '@vben/types';
 
 import { MoonStar, Sun, SunMoon } from '@vben/icons';
-import { $t } from '@vben/locales';
 import {
   preferences,
   updatePreferences,
@@ -37,17 +36,17 @@ const PRESETS = [
   {
     icon: Sun,
     name: 'light',
-    title: $t('preferences.theme.light'),
+    title: '浅色',
   },
   {
     icon: MoonStar,
     name: 'dark',
-    title: $t('preferences.theme.dark'),
+    title: '深色',
   },
   {
     icon: SunMoon,
     name: 'auto',
-    title: $t('preferences.followSystem'),
+    title: '跟随系统',
   },
 ];
 </script>

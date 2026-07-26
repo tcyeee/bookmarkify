@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { SelectOption } from '@vben/types';
 
-import { $t } from '@vben/locales';
 
 import SwitchItem from '../switch-item.vue';
 import ToggleItem from '../toggle-item.vue';
@@ -17,8 +16,8 @@ const navigationSplit = defineModel<boolean>('navigationSplit');
 const navigationAccordion = defineModel<boolean>('navigationAccordion');
 
 const stylesItems: SelectOption[] = [
-  { label: $t('preferences.rounded'), value: 'rounded' },
-  { label: $t('preferences.plain'), value: 'plain' },
+  { label: '圆润', value: 'rounded' },
+  { label: '朴素', value: 'plain' },
 ];
 </script>
 
@@ -28,18 +27,18 @@ const stylesItems: SelectOption[] = [
     :disabled="disabled"
     :items="stylesItems"
   >
-    {{ $t('preferences.navigationMenu.style') }}
+    {{ '导航菜单风格' }}
   </ToggleItem>
   <SwitchItem
     v-model="navigationSplit"
     :disabled="disabledNavigationSplit || disabled"
   >
-    {{ $t('preferences.navigationMenu.split') }}
+    {{ '导航菜单分离' }}
     <template #tip>
-      {{ $t('preferences.navigationMenu.splitTip') }}
+      {{ '开启时，侧边栏显示顶栏对应菜单的子菜单' }}
     </template>
   </SwitchItem>
   <SwitchItem v-model="navigationAccordion" :disabled="disabled">
-    {{ $t('preferences.navigationMenu.accordion') }}
+    {{ '侧边导航菜单手风琴模式' }}
   </SwitchItem>
 </template>
