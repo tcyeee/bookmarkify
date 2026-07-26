@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router';
 
-import { RiDingding } from '@vben/icons';
-import { $t } from '@vben/locales';
+import { SvgDingDingIcon } from '@vben/icons';
 
 import { alert, useVbenModal } from '@vben-core/popup-ui';
 import { VbenIconButton } from '@vben-core/shadcn-ui';
@@ -93,10 +92,10 @@ const handleLogin = () => {
   <div>
     <VbenIconButton
       @click="handleLogin"
-      :tooltip="$t('authentication.dingdingLogin')"
+      :tooltip="'钉钉登录'"
       tooltip-side="top"
     >
-      <RiDingding />
+      <SvgDingDingIcon />
     </VbenIconButton>
     <Modal>
       <div id="dingding_qrcode_login_element"></div>

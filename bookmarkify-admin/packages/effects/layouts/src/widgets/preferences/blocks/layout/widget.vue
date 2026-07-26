@@ -1,71 +1,61 @@
 <script setup lang="ts">
-import type { SelectOption } from '@vben/types';
+import type { SelectOption } from "@vben/types";
 
-import { computed } from 'vue';
+import { computed } from "vue";
 
-import { $t } from '@vben/locales';
-
-import SelectItem from '../select-item.vue';
-import SwitchItem from '../switch-item.vue';
+import SelectItem from "../select-item.vue";
+import SwitchItem from "../switch-item.vue";
 
 defineOptions({
-  name: 'PreferenceInterfaceControl',
+  name: "PreferenceInterfaceControl",
 });
 
-const widgetGlobalSearch = defineModel<boolean>('widgetGlobalSearch');
-const widgetFullscreen = defineModel<boolean>('widgetFullscreen');
-const widgetLanguageToggle = defineModel<boolean>('widgetLanguageToggle');
-const widgetNotification = defineModel<boolean>('widgetNotification');
-const widgetThemeToggle = defineModel<boolean>('widgetThemeToggle');
-const widgetSidebarToggle = defineModel<boolean>('widgetSidebarToggle');
-const widgetLockScreen = defineModel<boolean>('widgetLockScreen');
+const widgetGlobalSearch = defineModel<boolean>("widgetGlobalSearch");
+const widgetFullscreen = defineModel<boolean>("widgetFullscreen");
+const widgetNotification = defineModel<boolean>("widgetNotification");
+const widgetThemeToggle = defineModel<boolean>("widgetThemeToggle");
+const widgetSidebarToggle = defineModel<boolean>("widgetSidebarToggle");
 const appPreferencesButtonPosition = defineModel<string>(
-  'appPreferencesButtonPosition',
+  "appPreferencesButtonPosition"
 );
-const widgetRefresh = defineModel<boolean>('widgetRefresh');
+const widgetRefresh = defineModel<boolean>("widgetRefresh");
 
 const positionItems = computed((): SelectOption[] => [
   {
-    label: $t('preferences.position.auto'),
-    value: 'auto',
+    label: "自动",
+    value: "auto",
   },
   {
-    label: $t('preferences.position.header'),
-    value: 'header',
+    label: "顶栏",
+    value: "header",
   },
   {
-    label: $t('preferences.position.fixed'),
-    value: 'fixed',
+    label: "固定",
+    value: "fixed",
   },
 ]);
 </script>
 
 <template>
   <SwitchItem v-model="widgetGlobalSearch">
-    {{ $t('preferences.widget.globalSearch') }}
+    {{ '启用全局搜索' }}
   </SwitchItem>
   <SwitchItem v-model="widgetThemeToggle">
-    {{ $t('preferences.widget.themeToggle') }}
-  </SwitchItem>
-  <SwitchItem v-model="widgetLanguageToggle">
-    {{ $t('preferences.widget.languageToggle') }}
+    {{ '启用主题切换' }}
   </SwitchItem>
   <SwitchItem v-model="widgetFullscreen">
-    {{ $t('preferences.widget.fullscreen') }}
+    {{ '启用全屏' }}
   </SwitchItem>
   <SwitchItem v-model="widgetNotification">
-    {{ $t('preferences.widget.notification') }}
-  </SwitchItem>
-  <SwitchItem v-model="widgetLockScreen">
-    {{ $t('preferences.widget.lockScreen') }}
+    {{ '启用通知' }}
   </SwitchItem>
   <SwitchItem v-model="widgetSidebarToggle">
-    {{ $t('preferences.widget.sidebarToggle') }}
+    {{ '启用侧边栏切换' }}
   </SwitchItem>
   <SwitchItem v-model="widgetRefresh">
-    {{ $t('preferences.widget.refresh') }}
+    {{ '启用刷新' }}
   </SwitchItem>
   <SelectItem v-model="appPreferencesButtonPosition" :items="positionItems">
-    {{ $t('preferences.position.title') }}
+    {{ '偏好设置位置' }}
   </SelectItem>
 </template>

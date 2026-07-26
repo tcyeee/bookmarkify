@@ -19,6 +19,7 @@ export {
   VbenButtonGroup,
   VbenCheckbox,
   VbenCheckButtonGroup,
+  VbenContextMenu,
   VbenCountToAnimator,
   VbenFullScreen,
   VbenInputPassword,
@@ -27,7 +28,6 @@ export {
   VbenPinInput,
   VbenSelect,
   VbenSpinner,
-  VbenTree,
 } from '@vben-core/shadcn-ui';
 
 export type { FlattenedItem } from '@vben-core/shadcn-ui';
