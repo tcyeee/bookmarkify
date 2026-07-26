@@ -32,9 +32,9 @@
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.17",
     "typed.js": "^2.1.0",
-    "vue": "latest",
+    "vue": "^3.5.40",
     "vue-command-palette": "^0.2.3",
-    "vue-router": "latest"
+    "vue-router": "^5.2.0"
   },
   "devDependencies": {
     "@element-plus/nuxt": "^1.1.4",
@@ -44,7 +44,6 @@
     "element-plus": "^2.11.8",
     "sass": "^1.94.2",
     "typescript": "^5.9.3",
-    "vue-tsc": "^2.2.0",
-    "vuedraggable": "4.1.0"
+    "vue-tsc": "^2.2.0"
   }
 }
