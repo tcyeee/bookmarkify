@@ -2,8 +2,7 @@
 import { useElementPlusDesignTokens } from '@vben/hooks';
 
 import { ElConfigProvider } from 'element-plus';
-
-import { elementLocale } from '#/locales';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 
 defineOptions({ name: 'App' });
 
@@ -11,7 +10,7 @@ useElementPlusDesignTokens();
 </script>
 
 <template>
-  <ElConfigProvider :locale="elementLocale">
+  <ElConfigProvider :locale="zhCn">
     <RouterView />
   </ElConfigProvider>
 </template>

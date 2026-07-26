@@ -6,7 +6,6 @@ import type {
 import type { ComponentType } from './component';
 
 import { setupVbenForm, useVbenForm as useForm, z } from '@vben/common-ui';
-import { $t } from '@vben/locales';
 
 async function initSetupVbenForm() {
   setupVbenForm<ComponentType>({
@@ -19,13 +18,13 @@ async function initSetupVbenForm() {
     defineRules: {
       required: (value, _params, ctx) => {
         if (value === undefined || value === null || value.length === 0) {
-          return $t('ui.formRules.required', [ctx.label]);
+          return `请输入${ctx.label}`;
         }
         return true;
       },
       selectRequired: (value, _params, ctx) => {
         if (value === undefined || value === null) {
-          return $t('ui.formRules.selectRequired', [ctx.label]);
+          return `请选择${ctx.label}`;
         }
         return true;
       },
