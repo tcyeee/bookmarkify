@@ -1,81 +1,80 @@
 <script lang="ts" setup>
-import type { VbenFormSchema } from '@vben/common-ui';
-import type { Recordable } from '@vben/types';
+import type { VbenFormSchema } from "@vben/common-ui";
+import type { Recordable } from "@vben/types";
 
-import { computed, h, ref } from 'vue';
+import { computed, h, ref } from "vue";
 
-import { AuthenticationRegister, z } from '@vben/common-ui';
-import { $t } from '@vben/locales';
+import { AuthenticationRegister, z } from "@vben/common-ui";
 
-defineOptions({ name: 'Register' });
+defineOptions({ name: "Register" });
 
 const loading = ref(false);
 
 const formSchema = computed((): VbenFormSchema[] => {
   return [
     {
-      component: 'VbenInput',
+      component: "VbenInput",
       componentProps: {
-        placeholder: $t('authentication.usernameTip'),
+        placeholder: "请输入用户名",
       },
-      fieldName: 'username',
-      label: $t('authentication.username'),
-      rules: z.string().min(1, { message: $t('authentication.usernameTip') }),
+      fieldName: "username",
+      label: "用户名",
+      rules: z.string().min(1, { message: "请输入用户名" }),
     },
     {
-      component: 'VbenInputPassword',
+      component: "VbenInputPassword",
       componentProps: {
         passwordStrength: true,
-        placeholder: $t('authentication.password'),
+        placeholder: "密码",
       },
-      fieldName: 'password',
-      label: $t('authentication.password'),
+      fieldName: "password",
+      label: "密码",
       renderComponentContent() {
         return {
-          strengthText: () => $t('authentication.passwordStrength'),
+          strengthText: () => "密码强度",
         };
       },
-      rules: z.string().min(1, { message: $t('authentication.passwordTip') }),
+      rules: z.string().min(1, { message: "请输入密码" }),
     },
     {
-      component: 'VbenInputPassword',
+      component: "VbenInputPassword",
       componentProps: {
-        placeholder: $t('authentication.confirmPassword'),
+        placeholder: "确认密码",
       },
       dependencies: {
         rules(values) {
           const { password } = values;
           return z
-            .string({ required_error: $t('authentication.passwordTip') })
-            .min(1, { message: $t('authentication.passwordTip') })
+            .string({ required_error: "请输入密码" })
+            .min(1, { message: "请输入密码" })
             .refine((value) => value === password, {
-              message: $t('authentication.confirmPasswordTip'),
+              message: "两次输入密码不一致",
             });
         },
-        triggerFields: ['password'],
+        triggerFields: ["password"],
       },
-      fieldName: 'confirmPassword',
-      label: $t('authentication.confirmPassword'),
+      fieldName: "confirmPassword",
+      label: "确认密码",
     },
     {
-      component: 'VbenCheckbox',
-      fieldName: 'agreePolicy',
+      component: "VbenCheckbox",
+      fieldName: "agreePolicy",
       renderComponentContent: () => ({
         default: () =>
-          h('span', [
-            $t('authentication.agree'),
+          h("span", [
+            "我已阅读并同意",
             h(
-              'a',
+              "a",
               {
-                class: 'vben-link ml-1 ',
-                href: '',
+                class: "vben-link ml-1 ",
+                href: "",
               },
-              `${$t('authentication.privacyPolicy')} & ${$t('authentication.terms')}`,
+              "隐私政策 & 服务条款"
             ),
           ]),
       }),
       rules: z.boolean().refine((value) => !!value, {
-        message: $t('authentication.agreeTip'),
+        message: "请同意隐私政策和服务条款",
       }),
     },
   ];
@@ -83,14 +82,10 @@ const formSchema = computed((): VbenFormSchema[] => {
 
 function handleSubmit(value: Recordable<any>) {
   // eslint-disable-next-line no-console
-  console.log('register submit:', value);
+  console.log("register submit:", value);
 }
 </script>
 
 <template>
-  <AuthenticationRegister
-    :form-schema="formSchema"
-    :loading="loading"
-    @submit="handleSubmit"
-  />
+  <AuthenticationRegister :form-schema="formSchema" :loading="loading" @submit="handleSubmit" />
 </template>

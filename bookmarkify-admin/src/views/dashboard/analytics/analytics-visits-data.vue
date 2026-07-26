@@ -1,40 +1,28 @@
 <script lang="ts" setup>
 import type { EchartsUIType } from '@vben/plugins/echarts';
 
-import { onMounted, ref } from 'vue';
+import type { NamedCount } from '#/api/analytics';
+
+import { onMounted, ref, watch } from 'vue';
 
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
+
+const props = defineProps<{
+  data: NamedCount[];
+}>();
 
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
 
-onMounted(() => {
+function render() {
+  const max = Math.max(1, ...props.data.map((item) => item.count));
   renderEcharts({
     legend: {
       bottom: 0,
-      data: ['访问', '趋势'],
+      data: ['访问量'],
     },
     radar: {
-      indicator: [
-        {
-          name: '网页',
-        },
-        {
-          name: '移动端',
-        },
-        {
-          name: 'Ipad',
-        },
-        {
-          name: '客户端',
-        },
-        {
-          name: '第三方',
-        },
-        {
-          name: '其它',
-        },
-      ],
+      indicator: props.data.map((item) => ({ max, name: item.name })),
       radius: '60%',
       splitNumber: 8,
     },
@@ -49,32 +37,25 @@ onMounted(() => {
         },
         data: [
           {
-            itemStyle: {
-              color: '#b6a2de',
-            },
-            name: '访问',
-            value: [90, 50, 86, 40, 50, 20],
-          },
-          {
-            itemStyle: {
-              color: '#5ab1ef',
-            },
-            name: '趋势',
-            value: [70, 75, 70, 76, 20, 85],
+            itemStyle: { color: '#5ab1ef' },
+            name: '访问量',
+            value: props.data.map((item) => item.count),
           },
         ],
         itemStyle: {
-          // borderColor: '#fff',
           borderRadius: 10,
           borderWidth: 2,
         },
-        symbolSize: 0,
+        symbolSize: 4,
         type: 'radar',
       },
     ],
     tooltip: {},
   });
-});
+}
+
+onMounted(render);
+watch(() => props.data, render);
 </script>
 
 <template>

@@ -11,7 +11,6 @@ import { ElNotification } from 'element-plus';
 import { defineStore } from 'pinia';
 
 import { getAccessCodesApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
-import { $t } from '#/locales';
 
 export const useAuthStore = defineStore('auth', () => {
   const accessStore = useAccessStore();
@@ -33,7 +32,11 @@ export const useAuthStore = defineStore('auth', () => {
     let userInfo: null | UserInfo = null;
     try {
       loginLoading.value = true;
-      const { accessToken } = await loginApi(params);
+      const { tokenValue } = await loginApi({
+        account: params.username,
+        password: params.password,
+      });
+      const accessToken = tokenValue;
 
       // 如果成功获取到 accessToken
       if (accessToken) {
@@ -57,14 +60,14 @@ export const useAuthStore = defineStore('auth', () => {
           onSuccess
             ? await onSuccess?.()
             : await router.push(
-                userInfo.homePath || preferences.app.defaultHomePath,
-              );
+              userInfo.homePath || preferences.app.defaultHomePath,
+            );
         }
 
-        if (userInfo?.realName) {
+        if (userInfo?.nickName) {
           ElNotification({
-            message: `${$t('authentication.loginSuccessDesc')}:${userInfo?.realName}`,
-            title: $t('authentication.loginSuccess'),
+            message: `欢迎回来:${userInfo?.nickName}`,
+            title: '登录成功',
             type: 'success',
           });
         }
@@ -92,8 +95,8 @@ export const useAuthStore = defineStore('auth', () => {
       path: LOGIN_PATH,
       query: redirect
         ? {
-            redirect: encodeURIComponent(router.currentRoute.value.fullPath),
-          }
+          redirect: encodeURIComponent(router.currentRoute.value.fullPath),
+        }
         : {},
     });
   }
