@@ -141,10 +141,7 @@ class PreferenceManager {
   private handleUpdates(updates: DeepPartial<Preferences>) {
     const themeUpdates = updates.theme || {};
     const appUpdates = updates.app || {};
-    if (
-      (themeUpdates && Object.keys(themeUpdates).length > 0) ||
-      Reflect.has(themeUpdates, 'fontSize')
-    ) {
+    if (themeUpdates && Object.keys(themeUpdates).length > 0) {
       updateCSSVariables(this.state);
     }
 
@@ -224,8 +221,12 @@ class PreferenceManager {
       const dom = document.documentElement;
       const COLOR_WEAK = 'invert-mode';
       const COLOR_GRAY = 'grayscale-mode';
-      dom.classList.toggle(COLOR_WEAK, colorWeakMode);
-      dom.classList.toggle(COLOR_GRAY, colorGrayMode);
+      colorWeakMode
+        ? dom.classList.add(COLOR_WEAK)
+        : dom.classList.remove(COLOR_WEAK);
+      colorGrayMode
+        ? dom.classList.add(COLOR_GRAY)
+        : dom.classList.remove(COLOR_GRAY);
     }
   }
 }

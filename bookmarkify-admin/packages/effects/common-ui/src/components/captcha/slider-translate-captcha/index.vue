@@ -16,6 +16,7 @@ import {
   watch,
 } from 'vue';
 
+import { $t } from '@vben/locales';
 
 import SliderCaptcha from '../slider-captcha/index.vue';
 
@@ -72,8 +73,10 @@ function setLeft(val: string) {
 
 const verifyTip = computed(() => {
   return state.isPassing
-    ? `验证成功，耗时${((state.endTime - state.startTime) / 1000).toFixed(1)}秒`
-    : '验证失败';
+    ? $t('ui.captcha.sliderTranslateSuccessTip', [
+        ((state.endTime - state.startTime) / 1000).toFixed(1),
+      ])
+    : $t('ui.captcha.sliderTranslateFailTip');
 });
 function handleStart() {
   state.startTime = Date.now();
@@ -287,7 +290,7 @@ onMounted(() => {
           {{ verifyTip }}
         </div>
         <div v-if="!state.dragging" class="bg-black/30">
-          {{ defaultTip || '点击图片可刷新' }}
+          {{ defaultTip || $t('ui.captcha.sliderTranslateDefaultTip') }}
         </div>
       </div>
     </div>

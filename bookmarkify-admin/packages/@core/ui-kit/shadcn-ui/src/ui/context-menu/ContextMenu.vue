@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { ContextMenuRootEmits, ContextMenuRootProps } from 'reka-ui';
+import type { ContextMenuRootEmits, ContextMenuRootProps } from 'radix-vue';
 
-import { ContextMenuRoot, useForwardPropsEmits } from 'reka-ui';
+import { ContextMenuRoot, useForwardPropsEmits } from 'radix-vue';
 
 const props = withDefaults(defineProps<ContextMenuRootProps>(), {
   modal: false,

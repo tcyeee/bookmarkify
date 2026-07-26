@@ -6,6 +6,7 @@ import type { LayoutType } from '@vben/types';
 import { computed } from 'vue';
 
 import { CircleHelp } from '@vben/icons';
+import { $t } from '@vben/locales';
 
 import { VbenTooltip } from '@vben-core/shadcn-ui';
 
@@ -43,38 +44,38 @@ const components: Record<LayoutType, Component> = {
 
 const PRESET = computed((): PresetItem[] => [
   {
-    name: '垂直',
-    tip: '侧边垂直菜单模式',
+    name: $t('preferences.vertical'),
+    tip: $t('preferences.verticalTip'),
     type: 'sidebar-nav',
   },
   {
-    name: '双列菜单',
-    tip: '垂直双列菜单模式',
+    name: $t('preferences.twoColumn'),
+    tip: $t('preferences.twoColumnTip'),
     type: 'sidebar-mixed-nav',
   },
   {
-    name: '水平',
-    tip: '水平菜单模式，菜单全部显示在顶部',
+    name: $t('preferences.horizontal'),
+    tip: $t('preferences.horizontalTip'),
     type: 'header-nav',
   },
   {
-    name: '侧边导航',
-    tip: '顶部通栏，侧边导航模式',
+    name: $t('preferences.headerSidebarNav'),
+    tip: $t('preferences.headerSidebarNavTip'),
     type: 'header-sidebar-nav',
   },
   {
-    name: '混合垂直',
-    tip: '垂直水平菜单共存',
+    name: $t('preferences.mixedMenu'),
+    tip: $t('preferences.mixedMenuTip'),
     type: 'mixed-nav',
   },
   {
-    name: '混合双列',
-    tip: '双列、水平菜单共存模式',
+    name: $t('preferences.headerTwoColumn'),
+    tip: $t('preferences.headerTwoColumnTip'),
     type: 'header-mixed-nav',
   },
   {
-    name: '内容全屏',
-    tip: '不显示任何菜单，只显示内容主体',
+    name: $t('preferences.fullContent'),
+    tip: $t('preferences.fullContentTip'),
     type: 'full-content',
   },
 ]);

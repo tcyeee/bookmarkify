@@ -37,11 +37,13 @@
     "@vben/preferences": "workspace:*",
     "@vben/types": "workspace:*",
     "@vben/utils": "workspace:*",
-    "@vueuse/core": "catalog:",
-    "@vueuse/motion": "catalog:",
-    "echarts": "catalog:",
-    "vue": "catalog:",
-    "vxe-pc-ui": "catalog:",
-    "vxe-table": "catalog:"
-  }
+    "@vueuse/core": "^13.4.0",
+    "@vueuse/motion": "^3.0.3",
+    "echarts": "^5.6.0",
+    "vue": "^3.5.17",
+    "vxe-pc-ui": "^4.7.12",
+    "vxe-table": "^4.14.4"
+  },
+  "scripts": {},
+  "devDependencies": {}
 }

@@ -21,6 +21,7 @@ import {
   RotateCw,
   X,
 } from '@vben/icons';
+import { $t, useI18n } from '@vben/locales';
 import { getTabKey, useAccessStore, useTabbarStore } from '@vben/stores';
 import { filterTree } from '@vben/utils';
 
@@ -50,11 +51,13 @@ export function useTabbar() {
     return getTabKey(route);
   });
 
+  const { locale } = useI18n();
   const currentTabs = ref<RouteLocationNormalizedGeneric[]>();
   watch(
     [
       () => tabbarStore.getTabs,
       () => tabbarStore.updateTime,
+      () => locale.value,
     ],
     ([tabs]) => {
       currentTabs.value = tabs.map((item) => wrapperTabLocale(item));
@@ -87,7 +90,7 @@ export function useTabbar() {
       ...tab,
       meta: {
         ...tab?.meta,
-        title: (tab?.meta?.title as string) || '',
+        title: $t(tab?.meta?.title as string),
       },
     };
   }
@@ -132,7 +135,7 @@ export function useTabbar() {
         },
         icon: X,
         key: 'close',
-        text: '关闭',
+        text: $t('preferences.tabbar.contextMenu.close'),
       },
       {
         handler: async () => {
@@ -141,8 +144,8 @@ export function useTabbar() {
         icon: affixTab ? PinOff : Pin,
         key: 'affix',
         text: affixTab
-          ? '取消固定'
-          : '固定',
+          ? $t('preferences.tabbar.contextMenu.unpin')
+          : $t('preferences.tabbar.contextMenu.pin'),
       },
       {
         handler: async () => {
@@ -154,15 +157,15 @@ export function useTabbar() {
         icon: contentIsMaximize.value ? Minimize2 : Fullscreen,
         key: contentIsMaximize.value ? 'restore-maximize' : 'maximize',
         text: contentIsMaximize.value
-          ? '还原'
-          : '最大化',
+          ? $t('preferences.tabbar.contextMenu.restoreMaximize')
+          : $t('preferences.tabbar.contextMenu.maximize'),
       },
       {
         disabled: disabledRefresh,
         handler: () => refreshTab(),
         icon: RotateCw,
         key: 'reload',
-        text: '重新加载',
+        text: $t('preferences.tabbar.contextMenu.reload'),
       },
       {
         handler: async () => {
@@ -171,7 +174,7 @@ export function useTabbar() {
         icon: ExternalLink,
         key: 'open-in-new-window',
         separator: true,
-        text: '在新窗口打开',
+        text: $t('preferences.tabbar.contextMenu.openInNewWindow'),
       },
 
       {
@@ -181,7 +184,7 @@ export function useTabbar() {
         },
         icon: ArrowLeftToLine,
         key: 'close-left',
-        text: '关闭左侧标签页',
+        text: $t('preferences.tabbar.contextMenu.closeLeft'),
       },
       {
         disabled: disabledCloseRight,
@@ -191,7 +194,7 @@ export function useTabbar() {
         icon: ArrowRightToLine,
         key: 'close-right',
         separator: true,
-        text: '关闭右侧标签页',
+        text: $t('preferences.tabbar.contextMenu.closeRight'),
       },
       {
         disabled: disabledCloseOther,
@@ -200,14 +203,14 @@ export function useTabbar() {
         },
         icon: FoldHorizontal,
         key: 'close-other',
-        text: '关闭其它标签页',
+        text: $t('preferences.tabbar.contextMenu.closeOther'),
       },
       {
         disabled: disabledCloseAll,
         handler: closeAllTabs,
         icon: ArrowRightLeft,
         key: 'close-all',
-        text: '关闭全部标签页',
+        text: $t('preferences.tabbar.contextMenu.closeAll'),
       },
     ];
 

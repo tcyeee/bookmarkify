@@ -8,6 +8,7 @@ import type {
 
 import { computed, reactive, unref, useTemplateRef, watch } from 'vue';
 
+import { $t } from '@vben/locales';
 
 import { useTimeoutFn } from '@vueuse/core';
 
@@ -151,8 +152,10 @@ const imgCls = computed(() => {
 
 const verifyTip = computed(() => {
   return state.isPassing
-    ? `验证成功，耗时${((state.endTime - state.startTime) / 1000).toFixed(1)}秒`
-    : '验证失败';
+    ? $t('ui.captcha.sliderRotateSuccessTip', [
+        ((state.endTime - state.startTime) / 1000).toFixed(1),
+      ])
+    : $t('ui.captcha.sliderRotateFailTip');
 });
 
 defineExpose({
@@ -188,7 +191,7 @@ defineExpose({
           {{ verifyTip }}
         </div>
         <div v-if="!state.dragging" class="bg-black/30">
-          {{ defaultTip || '点击图片可刷新' }}
+          {{ defaultTip || $t('ui.captcha.sliderRotateDefaultTip') }}
         </div>
       </div>
     </div>

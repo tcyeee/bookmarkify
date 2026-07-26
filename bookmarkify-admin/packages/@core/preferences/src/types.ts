@@ -16,7 +16,7 @@ import type {
   ThemeModeType,
 } from '@vben-core/typings';
 
-type SupportedLanguagesType = 'zh-CN';
+type SupportedLanguagesType = 'en-US' | 'zh-CN';
 
 interface AppPreferences {
   /** 权限模式 */
@@ -59,10 +59,6 @@ interface AppPreferences {
    * @zh_CN 是否开启refreshToken
    */
   enableRefreshToken: boolean;
-  /**
-   * @zh_CN 是否开启首选项导航栏吸顶效果
-   */
-  enableStickyPreferencesNavigationBar: boolean;
   /** 是否移动端 */
   isMobile: boolean;
   /** 布局方式 */
@@ -79,10 +75,6 @@ interface AppPreferences {
    * @zh_CN 是否开启水印
    */
   watermark: boolean;
-  /**
-   * @zh_CN 水印文案
-   */
-  watermarkContent: string;
   /** z-index */
   zIndex: number;
 }
@@ -146,8 +138,6 @@ interface LogoPreferences {
   fit: 'contain' | 'cover' | 'fill' | 'none' | 'scale-down';
   /** logo地址 */
   source: string;
-  /** 暗色主题logo地址 (可选，若不设置则使用 source) */
-  sourceDark?: string;
 }
 
 interface NavigationPreferences {
@@ -191,6 +181,8 @@ interface SidebarPreferences {
 interface ShortcutKeyPreferences {
   /** 是否启用快捷键-全局 */
   enable: boolean;
+  /** 是否启用全局锁屏快捷键 */
+  globalLockScreen: boolean;
   /** 是否启用全局注销快捷键 */
   globalLogout: boolean;
   /** 是否启用全局偏好设置快捷键 */
@@ -237,8 +229,6 @@ interface ThemePreferences {
   colorSuccess: string;
   /** 警告色 */
   colorWarning: string;
-  /** 字体大小（单位：px） */
-  fontSize: number;
   /** 当前主题 */
   mode: ThemeModeType;
   /** 圆角 */
@@ -265,6 +255,10 @@ interface WidgetPreferences {
   fullscreen: boolean;
   /** 是否启用全局搜索部件 */
   globalSearch: boolean;
+  /** 是否启用语言切换部件 */
+  languageToggle: boolean;
+  /** 是否开启锁屏功能 */
+  lockScreen: boolean;
   /** 是否显示通知部件 */
   notification: boolean;
   /** 显示刷新按钮 */

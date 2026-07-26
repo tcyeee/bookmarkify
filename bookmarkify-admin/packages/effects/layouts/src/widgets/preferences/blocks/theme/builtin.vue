@@ -5,6 +5,7 @@ import type { BuiltinThemeType } from '@vben/types';
 import { computed, ref, watch } from 'vue';
 
 import { UserRoundPen } from '@vben/icons';
+import { $t } from '@vben/locales';
 import { BUILT_IN_THEME_PRESETS } from '@vben/preferences';
 import { convertToHsl, TinyColor } from '@vben/utils';
 
@@ -40,50 +41,50 @@ const builtinThemePresets = computed(() => {
 function typeView(name: BuiltinThemeType) {
   switch (name) {
     case 'custom': {
-      return '自定义';
+      return $t('preferences.theme.builtin.custom');
     }
     case 'deep-blue': {
-      return '深蓝色';
+      return $t('preferences.theme.builtin.deepBlue');
     }
     case 'deep-green': {
-      return '深绿色';
+      return $t('preferences.theme.builtin.deepGreen');
     }
     case 'default': {
-      return '默认';
+      return $t('preferences.theme.builtin.default');
     }
     case 'gray': {
-      return '中灰色';
+      return $t('preferences.theme.builtin.gray');
     }
     case 'green': {
-      return '浅绿色';
+      return $t('preferences.theme.builtin.green');
     }
 
     case 'neutral': {
-      return '中性色';
+      return $t('preferences.theme.builtin.neutral');
     }
     case 'orange': {
-      return '橙黄色';
+      return $t('preferences.theme.builtin.orange');
     }
     case 'pink': {
-      return '樱花粉';
+      return $t('preferences.theme.builtin.pink');
     }
     case 'rose': {
-      return '玫瑰红';
+      return $t('preferences.theme.builtin.rose');
     }
     case 'sky-blue': {
-      return '天蓝色';
+      return $t('preferences.theme.builtin.skyBlue');
     }
     case 'slate': {
-      return '石板灰';
+      return $t('preferences.theme.builtin.slate');
     }
     case 'violet': {
-      return '紫罗兰';
+      return $t('preferences.theme.builtin.violet');
     }
     case 'yellow': {
-      return '柠檬黄';
+      return $t('preferences.theme.builtin.yellow');
     }
     case 'zinc': {
-      return '锌色灰';
+      return $t('preferences.theme.builtin.zinc');
     }
   }
 }
@@ -103,7 +104,7 @@ function selectColor() {
 
 watch(
   () => [modelValue.value, props.isDark] as [BuiltinThemeType, boolean],
-  ([themeType, isDark], [_, isDarkPrev]) => {
+  ([themeType, isDark]) => {
     const theme = builtinThemePresets.value.find(
       (item) => item.type === themeType,
     );
@@ -112,9 +113,7 @@ watch(
         ? theme.darkPrimaryColor || theme.primaryColor
         : theme.primaryColor;
 
-      if (!(theme.type === 'custom' && isDark !== isDarkPrev)) {
-        themeColorPrimary.value = primaryColor || theme.color;
-      }
+      themeColorPrimary.value = primaryColor || theme.color;
     }
   },
 );
@@ -133,14 +132,14 @@ watch(
           <template v-if="theme.type !== 'custom'">
             <div
               :style="{ backgroundColor: theme.color }"
-              class="mx-9 my-2 size-5 rounded-md"
+              class="mx-10 my-2 size-5 rounded-md"
             ></div>
           </template>
           <template v-else>
-            <div class="size-full px-9 py-2" @click.stop="selectColor">
+            <div class="size-full px-10 py-2" @click.stop="selectColor">
               <div class="flex-center relative size-5 rounded-sm">
                 <UserRoundPen
-                  class="z-1 absolute size-5 opacity-60 group-hover:opacity-100"
+                  class="absolute z-10 size-5 opacity-60 group-hover:opacity-100"
                 />
                 <input
                   ref="colorInput"

@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { useAppConfig } from '@vben/hooks';
-import {
-  SvgGithubIcon,
-  SvgGoogleIcon,
-  SvgQQChatIcon,
-  SvgWeChatIcon,
-} from '@vben/icons';
+import { MdiGithub, MdiGoogle, MdiQqchat, MdiWechat } from '@vben/icons';
+import { $t } from '@vben/locales';
 
 import { VbenIconButton } from '@vben-core/shadcn-ui';
 
@@ -25,39 +21,39 @@ const {
     <div class="mt-4 flex items-center justify-between">
       <span class="border-input w-[35%] border-b dark:border-gray-600"></span>
       <span class="text-muted-foreground text-center text-xs uppercase">
-        {{ '其他登录方式' }}
+        {{ $t('authentication.thirdPartyLogin') }}
       </span>
       <span class="border-input w-[35%] border-b dark:border-gray-600"></span>
     </div>
 
     <div class="mt-4 flex flex-wrap justify-center">
       <VbenIconButton
-        :tooltip="'微信登录'"
+        :tooltip="$t('authentication.wechatLogin')"
         tooltip-side="top"
         class="mb-3"
       >
-        <SvgWeChatIcon />
+        <MdiWechat />
       </VbenIconButton>
       <VbenIconButton
-        :tooltip="'QQ登录'"
+        :tooltip="$t('authentication.qqLogin')"
         tooltip-side="top"
         class="mb-3"
       >
-        <SvgQQChatIcon />
+        <MdiQqchat />
       </VbenIconButton>
       <VbenIconButton
-        :tooltip="'Github登录'"
+        :tooltip="$t('authentication.githubLogin')"
         tooltip-side="top"
         class="mb-3"
       >
-        <SvgGithubIcon />
+        <MdiGithub />
       </VbenIconButton>
       <VbenIconButton
-        :tooltip="'Google登录'"
+        :tooltip="$t('authentication.googleLogin')"
         tooltip-side="top"
         class="mb-3"
       >
-        <SvgGoogleIcon />
+        <MdiGoogle />
       </VbenIconButton>
       <DingdingLogin
         v-if="dingdingAuthConfig"

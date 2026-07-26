@@ -15,7 +15,7 @@ interface BasicUserInfo {
   /**
    * 用户昵称
    */
-  nickName: string;
+  realName: string;
   /**
    * 用户角色
    */

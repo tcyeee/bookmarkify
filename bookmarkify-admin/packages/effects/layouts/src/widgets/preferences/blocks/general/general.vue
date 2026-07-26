@@ -1,39 +1,31 @@
 <script setup lang="ts">
-import InputItem from '../input-item.vue';
+import { SUPPORT_LANGUAGES } from '@vben/constants';
+import { $t } from '@vben/locales';
+
+import SelectItem from '../select-item.vue';
 import SwitchItem from '../switch-item.vue';
 
 defineOptions({
   name: 'PreferenceGeneralConfig',
 });
 
+const appLocale = defineModel<string>('appLocale');
 const appDynamicTitle = defineModel<boolean>('appDynamicTitle');
 const appWatermark = defineModel<boolean>('appWatermark');
-const appWatermarkContent = defineModel<string>('appWatermarkContent');
 const appEnableCheckUpdates = defineModel<boolean>('appEnableCheckUpdates');
 </script>
 
 <template>
+  <SelectItem v-model="appLocale" :items="SUPPORT_LANGUAGES">
+    {{ $t('preferences.language') }}
+  </SelectItem>
   <SwitchItem v-model="appDynamicTitle">
-    {{ '动态标题' }}
+    {{ $t('preferences.dynamicTitle') }}
   </SwitchItem>
-  <SwitchItem
-    v-model="appWatermark"
-    @update:model-value="
-      (val) => {
-        if (!val) appWatermarkContent = '';
-      }
-    "
-  >
-    {{ '水印' }}
+  <SwitchItem v-model="appWatermark">
+    {{ $t('preferences.watermark') }}
   </SwitchItem>
-  <InputItem
-    v-if="appWatermark"
-    v-model="appWatermarkContent"
-    :placeholder="'请输入水印文案'"
-  >
-    {{ '请输入水印文案' }}
-  </InputItem>
   <SwitchItem v-model="appEnableCheckUpdates">
-    {{ '定时检查更新' }}
+    {{ $t('preferences.checkUpdates') }}
   </SwitchItem>
 </template>

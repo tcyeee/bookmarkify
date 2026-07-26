@@ -14,7 +14,6 @@ export function useModalDraggable(
   dragRef: Ref<HTMLElement | undefined>,
   draggable: ComputedRef<boolean>,
   containerSelector?: ComputedRef<string | undefined>,
-  centered?: ComputedRef<boolean>,
 ) {
   const transform = reactive({
     offsetX: 0,
@@ -74,10 +73,7 @@ export function useModalDraggable(
       transform.offsetY = moveY;
 
       if (targetRef.value) {
-        const isCentered = centered?.value;
-        targetRef.value.style.transform = isCentered
-          ? `translate(${moveX}px, calc(-50% + ${moveY}px))`
-          : `translate(${moveX}px, ${moveY}px)`;
+        targetRef.value.style.transform = `translate(${moveX}px, ${moveY}px)`;
         dragging.value = true;
       }
     };
@@ -112,7 +108,7 @@ export function useModalDraggable(
 
     const target = unrefElement(targetRef);
     if (target) {
-      target.style.transform = '';
+      target.style.transform = 'none';
     }
   };
 

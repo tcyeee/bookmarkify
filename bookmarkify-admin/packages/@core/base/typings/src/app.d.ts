@@ -93,7 +93,6 @@ type PageTransitionType = 'fade' | 'fade-down' | 'fade-slide' | 'fade-up';
  */
 type AuthPageLayoutType = 'panel-center' | 'panel-left' | 'panel-right';
 
-
 export type {
   AccessModeType,
   AuthPageLayoutType,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
 
+import { $t } from '@vben/locales';
 
 import { useVbenModal } from '@vben-core/popup-ui';
 
@@ -121,15 +122,15 @@ onUnmounted(() => {
 </script>
 <template>
   <UpdateNoticeModal
-    :cancel-text="'取消'"
-    :confirm-text="'刷新'"
+    :cancel-text="$t('common.cancel')"
+    :confirm-text="$t('common.refresh')"
     :fullscreen-button="false"
-    :title="'新版本可用'"
+    :title="$t('ui.widgets.checkUpdatesTitle')"
     centered
     content-class="px-8 min-h-10"
     footer-class="border-none mb-3 mr-3"
     header-class="border-none"
   >
-    {{ '点击刷新以获取最新版本' }}
+    {{ $t('ui.widgets.checkUpdatesDescription') }}
   </UpdateNoticeModal>
 </template>

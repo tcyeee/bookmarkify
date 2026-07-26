@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type { ToolbarType } from './types';
 
-import { computed } from 'vue';
-
 import { preferences, usePreferences } from '@vben/preferences';
 
 import { Copyright } from '../basic/copyright';
@@ -13,7 +11,6 @@ import Toolbar from './toolbar.vue';
 interface Props {
   appName?: string;
   logo?: string;
-  logoDark?: string;
   pageTitle?: string;
   pageDescription?: string;
   sloganImage?: string;
@@ -23,33 +20,20 @@ interface Props {
   clickLogo?: () => void;
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   appName: '',
   copyright: true,
   logo: '',
-  logoDark: '',
   pageDescription: '',
   pageTitle: '',
   sloganImage: '',
   toolbar: true,
-  toolbarList: () => ['color', 'layout', 'theme'],
+  toolbarList: () => ['color', 'language', 'layout', 'theme'],
   clickLogo: () => {},
 });
 
 const { authPanelCenter, authPanelLeft, authPanelRight, isDark } =
   usePreferences();
-
-/**
- * @zh_CN 根据主题选择合适的 logo 图标
- */
-const logoSrc = computed(() => {
-  // 如果是暗色主题且提供了 logoDark，则使用暗色主题的 logo
-  if (isDark.value && props.logoDark) {
-    return props.logoDark;
-  }
-  // 否则使用默认的 logo
-  return props.logo;
-});
 </script>
 
 <template>
@@ -66,7 +50,7 @@ const logoSrc = computed(() => {
     <AuthenticationFormView
       v-if="authPanelLeft"
       class="min-h-full w-2/5 flex-1"
-      data-side="left"
+      transition-name="slide-left"
     >
       <template v-if="copyright" #copyright>
         <slot name="copyright">
@@ -81,21 +65,14 @@ const logoSrc = computed(() => {
     <slot name="logo">
       <!-- 头部 Logo 和应用名称 -->
       <div
-        v-if="logoSrc || appName"
+        v-if="logo || appName"
         class="absolute left-0 top-0 z-10 flex flex-1"
         @click="clickLogo"
       >
         <div
           class="text-foreground lg:text-foreground ml-4 mt-4 flex flex-1 items-center sm:left-6 sm:top-6"
         >
-          <img
-            v-if="logoSrc"
-            :key="logoSrc"
-            :alt="appName"
-            :src="logoSrc"
-            class="mr-2"
-            width="42"
-          />
+          <img v-if="logo" :alt="appName" :src="logo" class="mr-2" width="42" />
           <p v-if="appName" class="m-0 text-xl font-medium">
             {{ appName }}
           </p>
@@ -109,14 +86,7 @@ const logoSrc = computed(() => {
         class="bg-background-deep absolute inset-0 h-full w-full dark:bg-[#070709]"
       >
         <div class="login-background absolute left-0 top-0 size-full"></div>
-        <div
-          :key="authPanelLeft ? 'left' : authPanelRight ? 'right' : 'center'"
-          class="flex-col-center mr-20 h-full"
-          :class="{
-            'enter-x': authPanelLeft,
-            '-enter-x': authPanelRight,
-          }"
-        >
+        <div class="flex-col-center -enter-x mr-20 h-full">
           <template v-if="sloganImage">
             <img
               :alt="appName"
@@ -140,7 +110,6 @@ const logoSrc = computed(() => {
       <div class="login-background absolute left-0 top-0 size-full"></div>
       <AuthenticationFormView
         class="md:bg-background shadow-primary/5 shadow-float w-full rounded-3xl pb-20 md:w-2/3 lg:w-1/2 xl:w-[36%]"
-        data-side="bottom"
       >
         <template v-if="copyright" #copyright>
           <slot name="copyright">
@@ -156,8 +125,7 @@ const logoSrc = computed(() => {
     <!-- 右侧认证面板 -->
     <AuthenticationFormView
       v-if="authPanelRight"
-      class="min-h-full w-2/5 flex-1"
-      data-side="right"
+      class="min-h-full w-[34%] flex-1"
     >
       <template v-if="copyright" #copyright>
         <slot name="copyright">
@@ -182,13 +150,15 @@ const logoSrc = computed(() => {
   filter: blur(100px);
 }
 
-.dark .login-background {
-  background: linear-gradient(
-    154deg,
-    #07070915 30%,
-    hsl(var(--primary) / 20%) 48%,
-    #07070915 64%
-  );
-  filter: blur(100px);
+.dark {
+  .login-background {
+    background: linear-gradient(
+      154deg,
+      #07070915 30%,
+      hsl(var(--primary) / 20%) 48%,
+      #07070915 64%
+    );
+    filter: blur(100px);
+  }
 }
 </style>

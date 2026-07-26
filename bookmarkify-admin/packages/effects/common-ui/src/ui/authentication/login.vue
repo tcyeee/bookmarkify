@@ -8,6 +8,7 @@ import type { AuthenticationProps } from './types';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { $t } from '@vben/locales';
 
 import { useVbenForm } from '@vben-core/form-ui';
 import { VbenButton, VbenCheckbox } from '@vben-core/shadcn-ui';
@@ -95,12 +96,12 @@ defineExpose({
     <slot name="title">
       <Title>
         <slot name="title">
-          {{ title || `${'欢迎回来'} 👋🏻` }}
+          {{ title || `${$t('authentication.welcomeBack')} 👋🏻` }}
         </slot>
         <template #desc>
           <span class="text-muted-foreground">
             <slot name="subTitle">
-              {{ subTitle || '请输入您的帐户信息以开始管理您的项目' }}
+              {{ subTitle || $t('authentication.loginSubtitle') }}
             </slot>
           </span>
         </template>
@@ -116,10 +117,10 @@ defineExpose({
       <div class="flex-center">
         <VbenCheckbox
           v-if="showRememberMe"
-          v-model="rememberMe"
+          v-model:checked="rememberMe"
           name="rememberMe"
         >
-          {{ '记住账号' }}
+          {{ $t('authentication.rememberMe') }}
         </VbenCheckbox>
       </div>
 
@@ -128,7 +129,7 @@ defineExpose({
         class="vben-link text-sm font-normal"
         @click="handleGo(forgetPasswordPath)"
       >
-        {{ '忘记密码?' }}
+        {{ $t('authentication.forgetPassword') }}
       </span>
     </div>
     <VbenButton
@@ -140,7 +141,7 @@ defineExpose({
       class="w-full"
       @click="handleSubmit"
     >
-      {{ submitButtonText || '登录' }}
+      {{ submitButtonText || $t('common.login') }}
     </VbenButton>
 
     <div
@@ -153,7 +154,7 @@ defineExpose({
         variant="outline"
         @click="handleGo(codeLoginPath)"
       >
-        {{ '手机号登录' }}
+        {{ $t('authentication.mobileLogin') }}
       </VbenButton>
       <VbenButton
         v-if="showQrcodeLogin"
@@ -161,7 +162,7 @@ defineExpose({
         variant="outline"
         @click="handleGo(qrCodeLoginPath)"
       >
-        {{ '扫码登录' }}
+        {{ $t('authentication.qrcodeLogin') }}
       </VbenButton>
     </div>
 
@@ -172,12 +173,12 @@ defineExpose({
 
     <slot name="to-register">
       <div v-if="showRegister" class="mt-3 text-center text-sm">
-        {{ '还没有账号?' }}
+        {{ $t('authentication.accountTip') }}
         <span
           class="vben-link text-sm font-normal"
           @click="handleGo(registerPath)"
         >
-          {{ '创建账号' }}
+          {{ $t('authentication.createAccount') }}
         </span>
       </div>
     </slot>

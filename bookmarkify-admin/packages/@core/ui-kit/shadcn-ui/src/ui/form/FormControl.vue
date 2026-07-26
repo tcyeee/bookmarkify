@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { Slot } from 'reka-ui';
+import { Slot } from 'radix-vue';
 
 import { useFormField } from './useFormField';
 

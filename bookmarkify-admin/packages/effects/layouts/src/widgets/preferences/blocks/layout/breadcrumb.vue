@@ -3,6 +3,7 @@ import type { SelectOption } from '@vben/types';
 
 import { computed } from 'vue';
 
+import { $t } from '@vben/locales';
 
 import SwitchItem from '../switch-item.vue';
 import ToggleItem from '../toggle-item.vue';
@@ -20,8 +21,8 @@ const breadcrumbShowHome = defineModel<boolean>('breadcrumbShowHome');
 const breadcrumbHideOnlyOne = defineModel<boolean>('breadcrumbHideOnlyOne');
 
 const typeItems: SelectOption[] = [
-  { label: '常规', value: 'normal' },
-  { label: '背景', value: 'background' },
+  { label: $t('preferences.normal'), value: 'normal' },
+  { label: $t('preferences.breadcrumb.background'), value: 'background' },
 ];
 
 const disableItem = computed(() => {
@@ -31,25 +32,25 @@ const disableItem = computed(() => {
 
 <template>
   <SwitchItem v-model="breadcrumbEnable" :disabled="disabled">
-    {{ '开启面包屑导航' }}
+    {{ $t('preferences.breadcrumb.enable') }}
   </SwitchItem>
   <SwitchItem v-model="breadcrumbHideOnlyOne" :disabled="disableItem">
-    {{ '仅有一个时隐藏' }}
+    {{ $t('preferences.breadcrumb.hideOnlyOne') }}
   </SwitchItem>
   <SwitchItem v-model="breadcrumbShowIcon" :disabled="disableItem">
-    {{ '显示面包屑图标' }}
+    {{ $t('preferences.breadcrumb.icon') }}
   </SwitchItem>
   <SwitchItem
     v-model="breadcrumbShowHome"
     :disabled="disableItem || !breadcrumbShowIcon"
   >
-    {{ '显示首页按钮' }}
+    {{ $t('preferences.breadcrumb.home') }}
   </SwitchItem>
   <ToggleItem
     v-model="breadcrumbStyleType"
     :disabled="disableItem"
     :items="typeItems"
   >
-    {{ '面包屑风格' }}
+    {{ $t('preferences.breadcrumb.style') }}
   </ToggleItem>
 </template>

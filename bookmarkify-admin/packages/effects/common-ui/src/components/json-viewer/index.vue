@@ -14,6 +14,7 @@ import { computed, useAttrs } from 'vue';
 // @ts-ignore
 import VueJsonViewer from 'vue-json-viewer';
 
+import { $t } from '@vben/locales';
 
 import { isBoolean } from '@vben-core/shared/utils';
 
@@ -54,12 +55,16 @@ function handleClick(event: MouseEvent) {
       return;
     }
     const param: JsonViewerValue = {
+      path: '',
+      value: '',
+      depth: 0,
       el: event.target,
-      path: pathNode.getAttribute('path') || '',
-      depth: Number(pathNode.getAttribute('depth')) || 0,
-      value: event.target.textContent || undefined,
     };
 
+    param.path = pathNode.getAttribute('path') || '';
+    param.depth = Number(pathNode.getAttribute('depth')) || 0;
+
+    param.value = event.target.textContent || undefined;
     param.value = JSON.parse(param.value);
     emit('valueClick', param);
   }
@@ -82,8 +87,8 @@ const jsonData = computed<Record<string, any>>(() => {
 
 const bindProps = computed<Recordable<any>>(() => {
   const copyable = {
-    copyText: '复制',
-    copiedText: '已复制',
+    copyText: $t('ui.jsonViewer.copy'),
+    copiedText: $t('ui.jsonViewer.copied'),
     timeout: 2000,
     ...(isBoolean(props.copyable) ? {} : props.copyable),
   };

@@ -7,4 +7,4 @@ export {
   PaginationRoot as Pagination,
   PaginationList,
   PaginationListItem,
-} from 'reka-ui';
+} from 'radix-vue';

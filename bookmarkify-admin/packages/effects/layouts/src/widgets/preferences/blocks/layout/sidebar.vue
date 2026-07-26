@@ -3,6 +3,7 @@ import type { LayoutType } from '@vben/types';
 
 import { onMounted } from 'vue';
 
+import { $t } from '@vben/locales';
 
 import CheckboxItem from '../checkbox-item.vue';
 import NumberFieldItem from '../number-field-item.vue';
@@ -45,23 +46,23 @@ const handleCheckboxChange = () => {
 
 <template>
   <SwitchItem v-model="sidebarEnable" :disabled="disabled">
-    {{ '显示侧边栏' }}
+    {{ $t('preferences.sidebar.visible') }}
   </SwitchItem>
   <SwitchItem v-model="sidebarCollapsed" :disabled="!sidebarEnable || disabled">
-    {{ '折叠菜单' }}
+    {{ $t('preferences.sidebar.collapsed') }}
   </SwitchItem>
   <SwitchItem
     v-model="sidebarExpandOnHover"
     :disabled="!sidebarEnable || disabled || !sidebarCollapsed"
-    :tip="'鼠标在折叠区域悬浮时，`启用`则展开当前子菜单，`禁用`则展开整个侧边栏'"
+    :tip="$t('preferences.sidebar.expandOnHoverTip')"
   >
-    {{ '鼠标悬停展开' }}
+    {{ $t('preferences.sidebar.expandOnHover') }}
   </SwitchItem>
   <SwitchItem
     v-model="sidebarCollapsedShowTitle"
     :disabled="!sidebarEnable || disabled || !sidebarCollapsed"
   >
-    {{ '折叠显示菜单名' }}
+    {{ $t('preferences.sidebar.collapsedShowTitle') }}
   </SwitchItem>
   <SwitchItem
     v-model="sidebarAutoActivateChild"
@@ -72,20 +73,20 @@ const handleCheckboxChange = () => {
       ) ||
       disabled
     "
-    :tip="'点击顶层菜单时,自动激活第一个子菜单或者上一次激活的子菜单'"
+    :tip="$t('preferences.sidebar.autoActivateChildTip')"
   >
-    {{ '自动激活子菜单' }}
+    {{ $t('preferences.sidebar.autoActivateChild') }}
   </SwitchItem>
   <CheckboxItem
     :items="[
-      { label: '折叠按钮', value: 'collapsed' },
-      { label: '固定按钮', value: 'fixed' },
+      { label: $t('preferences.sidebar.buttonCollapsed'), value: 'collapsed' },
+      { label: $t('preferences.sidebar.buttonFixed'), value: 'fixed' },
     ]"
     multiple
     v-model="sidebarButtons"
     :on-btn-click="handleCheckboxChange"
   >
-    {{ '显示按钮' }}
+    {{ $t('preferences.sidebar.buttons') }}
   </CheckboxItem>
   <NumberFieldItem
     v-model="sidebarWidth"
@@ -94,6 +95,6 @@ const handleCheckboxChange = () => {
     :min="160"
     :step="10"
   >
-    {{ '宽度' }}
+    {{ $t('preferences.sidebar.width') }}
   </NumberFieldItem>
 </template>

@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { ContextMenuLabelProps } from 'reka-ui';
+import type { ContextMenuLabelProps } from 'radix-vue';
 
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
-import { ContextMenuLabel } from 'reka-ui';
+import { ContextMenuLabel } from 'radix-vue';
 
 const props = defineProps<
   ContextMenuLabelProps & { class?: any; inset?: boolean }
@@ -23,7 +23,7 @@ const delegatedProps = computed(() => {
     v-bind="delegatedProps"
     :class="
       cn(
-        'px-2 py-1.5 text-sm font-semibold text-foreground',
+        'text-foreground px-2 py-1.5 text-sm font-semibold',
         inset && 'pl-8',
         props.class,
       )

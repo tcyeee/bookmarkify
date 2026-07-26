@@ -2,10 +2,6 @@
 defineOptions({
   name: 'AuthenticationFormView',
 });
-
-defineProps<{
-  dataSide?: 'bottom' | 'left' | 'right' | 'top';
-}>();
 </script>
 
 <template>
@@ -20,8 +16,7 @@ defineProps<{
           <component
             :is="Component"
             :key="route.fullPath"
-            class="side-content mt-6 w-full sm:mx-auto md:max-w-md"
-            :data-side="dataSide"
+            class="enter-x mt-6 w-full sm:mx-auto md:max-w-md"
           />
         </KeepAlive>
       </Transition>
