@@ -2,7 +2,7 @@
   <div class="flex h-screen w-full flex-col">
     <CommonHeader />
     <div class="flex-1 overflow-y-auto bg-white dark:bg-slate-900">
-      <div class="max-w-2xl mx-auto px-4 py-6">
+      <div class="max-w-6xl mx-auto px-4 py-6">
         <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">全部书签</h1>
 
         <label
@@ -24,17 +24,26 @@
         </label>
 
         <template v-if="!query">
-          <template v-if="bookmarkStore.rootNodes.length === 0">
+          <template v-if="isLoadingBookmarks">
+            <div class="animate-pulse space-y-0 max-w-2xl">
+              <div v-for="i in 8" :key="i" class="flex items-center gap-2 py-1.5">
+                <div class="size-5 rounded-full bg-slate-200 dark:bg-slate-700 shrink-0" />
+                <div class="h-4 rounded bg-slate-200 dark:bg-slate-700" :style="{ width: skeletonWidth(i) }" />
+              </div>
+            </div>
+          </template>
+          <template v-else-if="bookmarkStore.rootNodes.length === 0">
             <div class="text-sm text-slate-400 dark:text-slate-500 py-10 text-center">暂无书签</div>
           </template>
-          <template v-else>
-            <BookmarkTreeRow
-              v-for="node in bookmarkStore.rootNodes"
-              :key="node.id"
-              :node="node"
-              :depth="0"
-              @edit="openEditModal" />
-          </template>
+          <div v-else class="columns-1 md:columns-2 xl:columns-3 gap-4">
+            <div v-for="folder in folderCards" :key="folder.id" class="mb-4 break-inside-avoid">
+              <BookmarkFolderCard
+                :name="folder.name"
+                :is-root="folder.isRoot"
+                :children="folder.children"
+                @edit="openEditModal" />
+            </div>
+          </div>
         </template>
 
         <template v-else>
@@ -130,10 +139,12 @@
 </template>
 
 <script lang="ts" setup>
+import { h } from 'vue'
 import { HomeItemType, type UserLayoutNodeVO } from '@typing'
 import { bookmarksSearch, bookmarksLinkOne, bookmarksDel, bookmarksUpdate } from '@api'
 import { useDebounceFn } from '@vueuse/core'
 import ContextMenu from '@imengyu/vue3-context-menu'
+import { Icon } from '@iconify/vue'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
 definePageMeta({ middleware: 'auth' })
@@ -149,8 +160,38 @@ interface BookmarkSearchVO {
 
 const bookmarkStore = useBookmarkStore()
 
+const isLoadingBookmarks = ref(false)
+// 骨架屏行宽随机化，避免整齐划一显得呆板
+const skeletonWidths = ['70%', '45%', '85%', '55%', '65%', '40%', '75%', '50%']
+const skeletonWidth = (i: number) => skeletonWidths[(i - 1) % skeletonWidths.length]
+
 onMounted(() => {
-  if (!bookmarkStore.isFresh()) bookmarkStore.update()
+  if (bookmarkStore.isFresh()) return
+  // 有缓存时静默后台刷新：先展示缓存中的书签，数据到了再替换，不阻塞展示
+  const hasCache = bookmarkStore.rootNodes.length > 0
+  if (!hasCache) isLoadingBookmarks.value = true
+  bookmarkStore
+    .update()
+    .catch((error) => console.error('[index] 书签刷新失败', error))
+    .finally(() => {
+      isLoadingBookmarks.value = false
+    })
+})
+
+// 按文件夹分组为卡片：根目录下未归入任何文件夹的书签单独作为「根目录」卡片，其余每个顶层文件夹各一张卡片
+const ROOT_CARD_ID = '__root_card__'
+const folderCards = computed(() => {
+  const rootBookmarks = bookmarkStore.rootNodes.filter((node) => node.type !== HomeItemType.BOOKMARK_DIR)
+  const dirs = bookmarkStore.rootNodes.filter((node) => node.type === HomeItemType.BOOKMARK_DIR)
+  return [
+    { id: ROOT_CARD_ID, name: '根目录', isRoot: true, children: rootBookmarks },
+    ...dirs.map((dir) => ({
+      id: dir.id,
+      name: dir.name || '文件夹',
+      isRoot: false,
+      children: dir.children ?? [],
+    })),
+  ]
 })
 
 const query = ref('')
@@ -237,8 +278,8 @@ function onMyResultContextMenu(e: MouseEvent, item: UserLayoutNodeVO) {
   if (!item.typeApp) return
   ContextMenu.showContextMenu({
     items: [
-      { label: '修改', onClick: () => openEditModal(item) },
-      { label: '删除', onClick: () => delMyResult(item) },
+      { label: '修改', icon: h(Icon, { icon: 'memory:pencil', class: 'size-4' }), onClick: () => openEditModal(item) },
+      { label: '删除', icon: h(Icon, { icon: 'memory:trash', class: 'size-4' }), onClick: () => delMyResult(item) },
     ],
     x: e.x,
     y: e.y,
