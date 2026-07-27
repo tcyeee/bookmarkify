@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Max
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
+import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.utils.ChromeBookmarkRawData
 import top.tcyeee.bookmarkify.utils.WebsiteParser
@@ -105,6 +106,7 @@ data class BookmarkUserLink(
     @field:Max(200) @field:Schema(description = "书签标题(用户写的)") val title: String? = null,
     @field:Max(1000) @field:Schema(description = "书签备注(用户写的)") val description: String? = null,
     @field:Max(1000) @field:Schema(description = "书签完整URL(带参数)") val urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
+    @field:Schema(description = "书签链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
 
     @field:Schema(description = "是否置顶") var pinned: Boolean = false,
 
@@ -118,6 +120,7 @@ data class BookmarkUserLink(
         description = bookmark.description,
         urlFull = rawUrl,
         layoutNodeId = nodeId,
+        linkType = WebsiteParser.classifyLinkType(bookmark.urlHost),
     )
 
     constructor(bookmark: BookmarkEntity, nodeId: String, uid: String) : this(
@@ -127,6 +130,7 @@ data class BookmarkUserLink(
         description = bookmark.description,
         urlFull = bookmark.rawUrl,
         layoutNodeId = nodeId,
+        linkType = WebsiteParser.classifyLinkType(bookmark.urlHost),
     )
 
     /**
@@ -139,7 +143,14 @@ data class BookmarkUserLink(
         title = raw.title,
         urlFull = raw.url,
         layoutNodeId = nodeId,
+        linkType = classifyRawLinkType(raw.url),
     )
+
+    companion object {
+        private fun classifyRawLinkType(rawUrl: String): BookmarkLinkType =
+            runCatching { WebsiteParser.classifyLinkType(WebsiteParser.urlWrapper(rawUrl).urlHost) }
+                .getOrDefault(BookmarkLinkType.OTHER)
+    }
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { FunctionType, HomeItemType } from './enum'
+import type { BookmarkLinkType, FunctionType, HomeItemType } from './enum'
 
 // 根层在归一化 order 中的固定键
 export const ROOT_KEY = '__root__'
@@ -38,11 +38,17 @@ export interface BookmarkShow {
   urlFull: string
   urlBase: string
   pinned: boolean
+  // 书签链接类型：本地/IP 类型不会被后端抓取，前端仅展示统一的 mdi 圆圈图标
+  linkType: BookmarkLinkType
   // 图标相关字段统一收拢到 logo（后端 website_logo 表）
   logo: BookmarkLogo
   isActivity: boolean
   createTime?: number
   paths?: Array<string>
+  // 用户桌面排布节点ID：批量删除(bookmarksDel)/创建集合(bookmarksCreateDir)等基于节点树的操作使用此ID，而非 bookmarkUserLinkId
+  layoutNodeId?: string | null
+  folderId?: string | null
+  folderName?: string | null
 }
 
 export interface BookmarkDir {
@@ -64,6 +70,8 @@ export interface BookmarkListParams {
   name?: string
   currentPage?: number
   pageSize?: number
+  duplicatesOnly?: boolean
+  invalidOnly?: boolean
 }
 
 export interface BookmarkPage<T = BookmarkShow> {

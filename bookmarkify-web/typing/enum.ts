@@ -65,3 +65,11 @@ export enum PageTurnMode {
 }
 
 export enum FunctionType { SETTING = 'SETTING' }
+
+// 书签链接类型：域名(正常网站) / 本地(localhost、127.0.0.1) / IP地址 / 其他(预留)
+export enum BookmarkLinkType {
+  DOMAIN = 'DOMAIN',
+  LOCAL = 'LOCAL',
+  IP = 'IP',
+  OTHER = 'OTHER',
+}

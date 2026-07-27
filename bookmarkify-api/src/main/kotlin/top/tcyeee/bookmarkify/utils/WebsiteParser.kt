@@ -12,6 +12,7 @@ import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.*
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
+import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import java.net.URL
 
 /** 网站信息解析器 负责从 URL 获取 Document 并解析出 WebsiteHeaderInfo */
@@ -71,6 +72,38 @@ object WebsiteParser {
             urlRoot = "${url.protocol}://${url.host}",
             urlFull = "${url.protocol}://${url.host}${normalizedPath}",
         ).also { log.debug("[urlWrapper] 解析结果: scheme={}, host={}, path={}, query={}", it.urlScheme, it.urlHost, it.urlPath, it.urlQuery) }
+    }
+
+    /**
+     * 按 host 对书签进行分类：域名 / 本地(localhost、127.0.0.1) / IP / 其他。
+     * host 可能带端口（如 "localhost:3000"、"192.168.1.5:8080"）或 IPv6 字面量（如 "[::1]:8080"），
+     * 先剥离端口/中括号再判断。
+     */
+    fun classifyLinkType(host: String): BookmarkLinkType {
+        val hostname = extractHostname(host)
+        return when {
+            hostname.isBlank() -> BookmarkLinkType.OTHER
+            hostname.equals("localhost", ignoreCase = true) || hostname == "127.0.0.1" || hostname == "::1" -> BookmarkLinkType.LOCAL
+            isIpAddress(hostname) -> BookmarkLinkType.IP
+            hostname.contains(".") -> BookmarkLinkType.DOMAIN
+            else -> BookmarkLinkType.OTHER
+        }
+    }
+
+    private fun extractHostname(host: String): String {
+        if (host.startsWith("[")) {
+            val end = host.indexOf(']')
+            if (end > 0) return host.substring(1, end)
+        }
+        return host.substringBeforeLast(":")
+    }
+
+    private fun isIpAddress(host: String): Boolean {
+        val ipv4 = Regex("^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$")
+        val match = ipv4.matchEntire(host)
+        if (match != null) return match.groupValues.drop(1).all { (it.toIntOrNull() ?: -1) in 0..255 }
+        // 粗略判断 IPv6：包含冒号，且仅由十六进制字符/冒号组成
+        return host.contains(":") && host.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' || it == ':' }
     }
 
     /**

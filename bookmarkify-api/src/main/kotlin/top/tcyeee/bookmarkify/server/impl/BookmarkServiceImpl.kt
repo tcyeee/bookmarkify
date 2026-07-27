@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server.impl
 
 import cn.hutool.core.date.LocalDateTimeUtil
 import com.baomidou.mybatisplus.core.metadata.IPage
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DuplicateKeyException
@@ -24,6 +25,7 @@ import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarIngestUpdate
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.*
+import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.entity.BookmarkPingLogEntity
 import top.tcyeee.bookmarkify.mapper.*
@@ -100,12 +102,41 @@ class BookmarkServiceImpl(
     }
 
     override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): IPage<BookmarkShow> {
-        val result = bookmarkUserLinkMapper.selectPage(params.toPage(), params.toWrapper())
+        // "重复书签"/"失效书签" 筛选：先在用户自己的书签范围内算出候选 bookmarkId 集合，
+        // 再作为 IN 条件叠加到分页查询上；两者同时开启时取交集。
+        val duplicateIds = if (params.duplicatesOnly) bookmarkUserLinkService.duplicateBookmarkIds(uid) else null
+        val invalidIds = if (params.invalidOnly) {
+            val mine = bookmarkUserLinkService.bookmarkIdsByUid(uid)
+            if (mine.isEmpty()) emptySet() else ktQuery().`in`(BookmarkEntity::id, mine).eq(BookmarkEntity::isActivity, false).list().map { it.id }.toSet()
+        } else null
+        val restrictIds: Set<String>? = when {
+            duplicateIds != null && invalidIds != null -> duplicateIds intersect invalidIds
+            duplicateIds != null -> duplicateIds
+            invalidIds != null -> invalidIds
+            else -> null
+        }
+        // 候选集合已知为空：直接返回空页，避免下面拼出一条恒假的 IN () 查询
+        if (restrictIds != null && restrictIds.isEmpty()) return Page(params.currentPage.toLong(), params.pageSize.toLong(), 0)
+
+        val result = bookmarkUserLinkMapper.selectPage(params.toPage(), params.toWrapper(restrictIds))
         val bookmarkIds: List<String> = result.records.mapNotNull { it.bookmarkId }
         val bookmarkEntityMap =
             if (bookmarkIds.isEmpty()) emptyMap() else baseMapper.selectByIds(bookmarkIds).associateBy { it.id }
         val logoMap = logosByBookmarkIds(bookmarkIds)
-        return result.convert { BookmarkShow(it, bookmarkEntityMap[it.bookmarkId], logoMap[it.bookmarkId]).initLogo() }
+
+        // 所属文件夹：布局节点(layoutNodeId) -> 父节点(parentId) -> 父节点名称，两次批量查询避免 N+1
+        val layoutNodeIds = result.records.map { it.layoutNodeId }
+        val layoutNodeMap = if (layoutNodeIds.isEmpty()) emptyMap() else layoutNodeMapper.selectByIds(layoutNodeIds).associateBy { it.id }
+        val folderIds = layoutNodeMap.values.mapNotNull { it.parentId }.distinct()
+        val folderMap = if (folderIds.isEmpty()) emptyMap() else layoutNodeMapper.selectByIds(folderIds).associateBy { it.id }
+
+        return result.convert {
+            val folder = layoutNodeMap[it.layoutNodeId]?.parentId?.let { fid -> folderMap[fid] }
+            BookmarkShow(it, bookmarkEntityMap[it.bookmarkId], logoMap[it.bookmarkId]).initLogo().apply {
+                folderId = folder?.id
+                folderName = folder?.name
+            }
+        }
     }
 
     override fun previewImport(file: MultipartFile, uid: String): BookmarkImportPreviewVO {
@@ -212,6 +243,8 @@ class BookmarkServiceImpl(
             .orderByAsc(BookmarkEntity::updateTime)
             .last("LIMIT $RETRY_CLOSED_BATCH_SIZE")
             .list()
+            // 非域名类型(本地/IP/其他)不抓取，也不应对其发起存活 ping
+            .filter { WebsiteParser.classifyLinkType(it.urlHost) == BookmarkLinkType.DOMAIN }
 
         log.debug("[retryClosedBookmarks] 本次待重试书签数: ${candidates.size}")
         candidates.forEach { bookmark ->
@@ -247,6 +280,8 @@ class BookmarkServiceImpl(
             .orderByAsc(BookmarkEntity::updateTime)
             .last("LIMIT $LIVENESS_CHECK_BATCH_SIZE")
             .list()
+            // 非域名类型(本地/IP/其他)不抓取，也不应对其发起存活 ping
+            .filter { WebsiteParser.classifyLinkType(it.urlHost) == BookmarkLinkType.DOMAIN }
 
         log.debug("[livenessCheckStaleBookmarks] 本次待检查书签数: ${candidates.size}")
         candidates.forEach { bookmark ->
@@ -622,6 +657,19 @@ class BookmarkServiceImpl(
         if (existing != null && existing.verifyFlag) {
             log.debug("[parseBookmark] 书签已手动认证(verifyFlag=true), 跳过解析直接返回: bookmarkId=${bookmark.id}")
             return existing
+        }
+
+        // 非域名类型(本地/IP/其他)不进行网络抓取：跳过 ping 与内容解析，直接标记为可用，
+        // 前端会对这类书签展示统一的圆圈图标，不依赖抓取到的标题/图标。
+        if (WebsiteParser.classifyLinkType(bookmark.urlHost) != BookmarkLinkType.DOMAIN) {
+            log.debug("[parseBookmark] 非域名类型，跳过抓取: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+            return bookmark.apply {
+                isActivity = true
+                parseStatus = ParseStatusEnum.SUCCESS
+                parseErrMsg = null
+                updateTime = LocalDateTime.now()
+                baseMapper.insertOrUpdate(this)
+            }
         }
 
         // ping 前置：网站不存活则直接标 CLOSED，避免无效爬取

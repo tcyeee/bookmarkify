@@ -1,7 +1,7 @@
 <template>
   <div class="px-4 h-16 bg-white w-full overflow-hidden shadow flex items-center select-none">
     <div class="flex items-center gap-2 cursor-pointer" @click="navigateTo('/')">
-      <Icon icon="mdi:monitor" class="size-[30px] hover:text-white" />
+      <img src="/favicon.ico" alt="bookmarkify" class="size-[30px]" />
       <div class="font-jersey10 font-bold text-4xl">bookmarkify</div>
     </div>
 

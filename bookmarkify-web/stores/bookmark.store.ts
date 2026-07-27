@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { HomeItemType, ROOT_KEY, type UserLayoutNodeVO } from '@typing'
-import { bookmarksShowAll } from '@api'
+import { bookmarksShowAll, bookmarksMoveNode, bookmarksDel } from '@api'
 
 /** 后端树 → 扁平 { nodes, order }。nodes 不保留 children（归属/顺序唯一来源是 order）。 */
 function normalize(root?: UserLayoutNodeVO | null) {
@@ -206,6 +206,20 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.order[ROOT_KEY] = [...rootIds, ...children]
       delete this.order[folderId]
       delete this.nodes[folderId]
+      // 本地解散只改了本地状态，后端仍认为文件夹和其残留子项存在 —— 不同步的话，下次全量刷新
+      // （缓存过期 / F5）会让已"消失"的文件夹从后端重新长出来，把排序搅乱。这里把解散动作异步
+      // 补写回后端：先把残留子项移出文件夹，再删除已空的文件夹节点本身；不阻塞、不影响本地已完成的即时反馈。
+      this.persistDissolve(folderId, children)
+    },
+
+    async persistDissolve(folderId: string, children: string[]) {
+      try {
+        const [remainingId] = children
+        if (remainingId) await bookmarksMoveNode(remainingId, null)
+        await bookmarksDel([folderId])
+      } catch (error) {
+        console.error('[bookmark] 文件夹解散状态同步到后端失败', { folderId, children, error })
+      }
     },
 
     // 不变量强制：扫描所有文件夹，任何 ≤1 项的存在都是「重大事故」→ 响亮报警 + 强制解散自愈。
