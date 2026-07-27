@@ -67,3 +67,6 @@ export const updateUserPreference = (params: t.UserPreference) => http.post<bool
 /* =========[ /share ]========= */
 export const shareCreate = (params: t.ShareCreateParams) => http.post<t.ShareVO>('/share/create', params)
 export const shareView = (code: string) => http.get<t.SharePublicVO>('/share/view', { code })
+export const shareMine = (params?: t.ShareListParams) => http.post<t.BookmarkPage<t.ShareVO>>('/share/mine', params ?? {})
+export const shareCancel = (id: string) => http.post<boolean>(`/share/cancel?id=${encodeURIComponent(id)}`)
+export const shareUpdate = (params: t.ShareUpdateParams) => http.post<t.ShareVO>('/share/update', params)
