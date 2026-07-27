@@ -97,7 +97,7 @@ const tableData = ref<ScrapperCallLogVO[]>([]);
 
 const pagination = reactive({
   currentPage: 1,
-  pageSize: 10,
+  pageSize: 50,
   total: 0,
 });
 

@@ -11,9 +11,17 @@ import { enterAnimationPlugin } from './plugins/entry';
 
 // import defaultTheme from 'tailwindcss/defaultTheme';
 
-const { packages } = getPackagesSync(process.cwd());
+const { packages, rootPackage } = getPackagesSync(process.cwd());
 
 const tailwindPackages: string[] = [];
+
+// getPackagesSync 只返回工作区子包（packages/*、internal/*），不包含工作区根目录本身。
+// bookmarkify-admin 的 app 代码（src/views 等）就直接放在根目录下，
+// 若不显式把 rootPackage 加进来，Tailwind 的 content 就扫不到这些文件，
+// 导致 src/** 里直接写的 class（如 md:w-1/3）静默不生成，页面看起来布局错乱。
+if (rootPackage) {
+  tailwindPackages.push(rootPackage.dir);
+}
 
 packages.forEach((pkg) => {
   // apps目录下和 @vben-core/tailwind-ui 包需要使用到 tailwindcss ui

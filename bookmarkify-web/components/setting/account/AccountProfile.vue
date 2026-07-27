@@ -84,7 +84,7 @@
         <div
           class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
           <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
-            <Icon icon="mdi:github" class="size-8 text-slate-800 dark:text-slate-100" />
+            <IconMdiGithub class="size-8 text-slate-800 dark:text-slate-100" />
             <div>
               <div class="font-medium">GitHub 账号</div>
               <div class="text-sm text-slate-500 dark:text-slate-400">{{ githubLogin || '未关联' }}</div>
@@ -137,6 +137,7 @@
 
 <script lang="ts" setup>
 import { computed, reactive, ref, watch } from 'vue'
+import IconMdiGithub from '~icons/mdi/github'
 import { updateUserInfo } from '@api'
 import { randomNickName } from '@utils'
 import type { UserInfo } from '@typing'
