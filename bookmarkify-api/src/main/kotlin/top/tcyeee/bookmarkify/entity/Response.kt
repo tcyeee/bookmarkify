@@ -36,6 +36,7 @@ data class BookmarkShow(
     @JsonIgnore @field:Schema(description = "大图尺寸") var hdSize: Int = 0,
     @JsonIgnore @field:Schema(description = "Host(用于拿不到name的情况下最后显示Title)") var urlHost: String? = null,
     @JsonIgnore @field:Schema(description = "在有manifest的情况下,替换title") var appName: String? = null,
+    @JsonIgnore @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)，供分享审核使用") var nsfw: Boolean = false,
     @field:Schema(description = "用户桌面排布节点ID(书签管理页批量删除/移入文件夹等操作使用此ID，而非 bookmarkUserLinkId)") var layoutNodeId: String? = null,
     @JsonIgnore @field:Schema(description = "大图标OSS地址,带权限(序列化进 logo)") var iconHdUrl: String? = null,
     @field:Schema(description = "所属文件夹节点ID，无所属文件夹时为 null") var folderId: String? = null,
@@ -207,6 +208,7 @@ data class BookmarkAdminVO(
     @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
     @field:Schema(description = "命中的分类") var categories: List<CategoryVO> = emptyList(),
+    @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)") var nsfw: Boolean = false,
 ) {
     constructor(entity: BookmarkEntity, logo: BookmarkLogoEntity?) : this(
         id = entity.id,
@@ -369,6 +371,7 @@ data class UserShareVO(
     @field:Schema(description = "分享文案") var note: String? = null,
     @field:Schema(description = "过期时间(为空表示永不过期)") var expireTime: LocalDateTime? = null,
     @field:Schema(description = "分享状态") var status: ShareStatus = ShareStatus.NORMAL,
+    @field:Schema(description = "审核驳回理由(status=REVIEW_REJECTED 时有值)") var rejectReason: String? = null,
     @field:Schema(description = "包含的书签数量") var bookmarkCount: Int = 0,
     @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
 ) {
@@ -377,10 +380,18 @@ data class UserShareVO(
         note = entity.note,
         expireTime = entity.expireTime,
         status = entity.effectiveStatus,
+        rejectReason = entity.rejectReason,
         bookmarkCount = bookmarkCount,
         createTime = entity.createTime,
     )
 }
+
+/** 分享状态变化推送(如异步 AI 审核未通过被下架) */
+data class ShareStatusChangedVO(
+    @field:Schema(description = "分享ID") var id: String,
+    @field:Schema(description = "变化后的状态") var status: ShareStatus,
+    @field:Schema(description = "审核驳回理由") var rejectReason: String? = null,
+)
 
 /** 分享公开查看页(无需登录即可访问) */
 data class SharePublicVO(
@@ -400,6 +411,7 @@ data class UserShareAdminVO(
     @field:Schema(description = "分享文案") var note: String? = null,
     @field:Schema(description = "过期时间(为空表示永不过期)") var expireTime: LocalDateTime? = null,
     @field:Schema(description = "分享状态") var status: ShareStatus = ShareStatus.NORMAL,
+    @field:Schema(description = "审核驳回理由(status=REVIEW_REJECTED 时有值)") var rejectReason: String? = null,
     @field:Schema(description = "包含的书签数量") var bookmarkCount: Int = 0,
     @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
 ) {
@@ -410,6 +422,7 @@ data class UserShareAdminVO(
         note = entity.note,
         expireTime = entity.expireTime,
         status = entity.effectiveStatus,
+        rejectReason = entity.rejectReason,
         bookmarkCount = bookmarkCount,
         createTime = entity.createTime,
     )

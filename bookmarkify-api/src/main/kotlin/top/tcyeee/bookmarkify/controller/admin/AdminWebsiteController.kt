@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.entity.dto.WebsiteLivenessCheckParams
 import top.tcyeee.bookmarkify.entity.dto.WebsiteLivenessCheckVO
 import top.tcyeee.bookmarkify.server.IApiService
+import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 
 /**
@@ -19,13 +20,21 @@ import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 @RequestMapping("/admin/website")
 class AdminWebsiteController(
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
+    private val bookmarkService: IBookmarkService,
     private val apiService: IApiService,
 ) {
 
-    // 对全部书签重新按 host 计算并回写 linkType(域名/本地/IP/其他)
+    // 对全部书签重新按 host 计算并回写 linkType(域名/本地/IP/其他)；同时批量检查全部书签是否 NSFW(涉黄/涉赌等)
     @PostMapping("/classify-link-type")
-    fun classifyLinkType(): Map<String, Int> =
-        mapOf("total" to bookmarkUserLinkService.reclassifyAllLinkTypes())
+    fun classifyLinkType(): Map<String, Int> {
+        val total = bookmarkUserLinkService.reclassifyAllLinkTypes()
+        val (nsfwChecked, nsfwFlagged) = bookmarkService.checkNsfwForAll()
+        return mapOf(
+            "total" to total,
+            "nsfwChecked" to nsfwChecked,
+            "nsfwFlagged" to nsfwFlagged,
+        )
+    }
 
     // 任意 URL 活性检测：直接调用 scrapper /scrape 并原样返回其全部字段；不要求该 URL 已收录为书签，也不落库
     @PostMapping("/liveness-check")

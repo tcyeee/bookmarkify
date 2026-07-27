@@ -308,6 +308,7 @@ const gridOptions: VxeGridProps<BookmarkEntity> = {
     { field: "title", title: "标题", minWidth: 220 },
     { field: "urlHost", title: "域名", minWidth: 180 },
     { field: "parseStatus", title: "状态", width: 140, slots: { default: "parseStatus" } },
+    { field: "nsfw", title: "NSFW", width: 90, slots: { default: "nsfw" } },
     {
       field: "updateTime",
       title: "更新时间",
@@ -389,6 +390,9 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
           </ElTag>
           <ElTag v-else size="small"> 未知 </ElTag>
         </template>
+        <template #nsfw="{ row }">
+          <ElTag v-if="row.nsfw" type="danger" size="small">NSFW</ElTag>
+        </template>
       </Grid>
       <ElDialog
         v-model="detailVisible"
@@ -428,6 +432,9 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
                   </ElTag>
                   <ElTag v-else size="small">
                     {{ currentRow.parseStatus || "未知" }}
+                  </ElTag>
+                  <ElTag v-if="currentRow.nsfw" type="danger" size="small" class="ml-1">
+                    NSFW
                   </ElTag>
                 </div>
                 <div class="flex items-center gap-2">

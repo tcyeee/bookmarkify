@@ -153,11 +153,13 @@
     "noNote": "(Aucune note)",
     "neverExpire": "N'expire jamais",
     "expireLabel": "Expire le : {date}",
+    "rejectReasonLabel": "Motif : {reason}",
     "status": {
       "normal": "Actif",
       "expired": "Expiré",
       "cancelled": "Retiré",
-      "adminTakedown": "Retiré par un administrateur"
+      "adminTakedown": "Retiré par un administrateur",
+      "reviewRejected": "Rejeté"
     },
     "loading": "Chargement des partages…",
     "empty": "Vous n'avez encore publié aucun partage",

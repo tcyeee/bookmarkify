@@ -12,5 +12,7 @@ enum class ShareStatus {
     // 分享者本人主动下架
     CANCELLED,
     // 管理员强制下架
-    ADMIN_TAKEDOWN
+    ADMIN_TAKEDOWN,
+    // 未通过审核（规则审核或AI审核驳回）
+    REVIEW_REJECTED
 }

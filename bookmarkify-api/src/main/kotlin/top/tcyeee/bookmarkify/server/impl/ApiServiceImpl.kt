@@ -10,6 +10,7 @@ import top.tcyeee.bookmarkify.config.entity.ScrapperConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.log
+import top.tcyeee.bookmarkify.entity.dto.AiReviewOutcome
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekMessage
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekRequest
@@ -241,6 +242,75 @@ class ApiServiceImpl(
             if (!httpResponse.isOk) return false
             objectMapper.readValue<PingResponse>(httpResponse.body()).alive
         }.getOrElse { false }
+    }
+
+    override fun inferNsfw(title: String?, description: String?, host: String): Boolean {
+        val systemPrompt = """
+            你是一个网站内容安全审核助手。根据用户给出的网站信息，判断该网站是否可能涉及
+            成人色情、赌博博彩、或其他明显违法违规内容。
+            规则：只返回 yes 或 no，不要任何解释、标点或额外文字；信息不足或无法判断时返回 no。
+        """.trimIndent()
+        val userContent = "host: $host\ntitle: ${title ?: ""}\ndescription: ${description ?: ""}"
+
+        val request = DeepSeekRequest(
+            messages = listOf(
+                DeepSeekMessage(role = "system", content = systemPrompt),
+                DeepSeekMessage(role = "user", content = userContent),
+            ),
+            maxTokens = 5,
+        )
+
+        val responseBody = runCatching {
+            HttpUtil.createPost("https://api.deepseek.com/chat/completions")
+                .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
+                .header("Content-Type", "application/json")
+                .body(objectMapper.writeValueAsString(request))
+                .timeout(10000)
+                .execute()
+                .body()
+        }.getOrNull() ?: return false
+
+        val raw = runCatching {
+            objectMapper.readValue<DeepSeekResponse>(responseBody)
+                .choices?.firstOrNull()?.message?.content
+        }.getOrNull() ?: return false
+
+        return raw.trim().lowercase().startsWith("y")
+    }
+
+    override fun inferContentViolation(title: String?, description: String?, host: String): AiReviewOutcome {
+        val systemPrompt = """
+            你是一个内容安全审核助手。根据用户给出的网站信息，判断其中是否包含
+            色情低俗、涉政敏感、歧视侮辱等任意不合规内容。
+            规则：如果内容正常，只返回 OK；如果不合规，返回一个不超过10个字的简短违规类别
+            （例如：色情内容、涉政内容、歧视侮辱内容）。不要任何解释、标点或额外文字。
+        """.trimIndent()
+        val userContent = "host: $host\ntitle: ${title ?: ""}\ndescription: ${description ?: ""}"
+
+        val request = DeepSeekRequest(
+            messages = listOf(
+                DeepSeekMessage(role = "system", content = systemPrompt),
+                DeepSeekMessage(role = "user", content = userContent),
+            ),
+            maxTokens = 20,
+        )
+
+        val responseBody = runCatching {
+            HttpUtil.createPost("https://api.deepseek.com/chat/completions")
+                .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
+                .header("Content-Type", "application/json")
+                .body(objectMapper.writeValueAsString(request))
+                .timeout(10000)
+                .execute()
+                .body()
+        }.getOrNull() ?: return AiReviewOutcome.Unavailable
+
+        val raw = runCatching {
+            objectMapper.readValue<DeepSeekResponse>(responseBody)
+                .choices?.firstOrNull()?.message?.content
+        }.getOrNull()?.trim()?.takeIf { it.isNotBlank() } ?: return AiReviewOutcome.Unavailable
+
+        return if (raw.equals("OK", ignoreCase = true)) AiReviewOutcome.Pass else AiReviewOutcome.Rejected(raw)
     }
 
     private fun buildUrl(domain: String): String {

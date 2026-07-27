@@ -28,6 +28,7 @@ interface UserShareBookmarkMapper : BaseMapper<UserShareBookmarkEntity> {
                b.is_activity                                AS isActivity,
                b.url_host                                   AS urlHost,
                b.app_name                                   AS appName,
+               b.nsfw                                        AS nsfw,
                wl.icon_base64                               AS iconBase64,
                COALESCE(wl.icon_padding, 25)                AS iconPadding,
                wl.icon_bg_color                             AS iconBgColor,

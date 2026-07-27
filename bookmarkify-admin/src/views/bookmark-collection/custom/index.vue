@@ -149,6 +149,7 @@ async function handleTakeDown(row: UserShareAdminVO) {
               <ElOption label="正常" value="NORMAL" />
               <ElOption label="到期下架" value="EXPIRED" />
               <ElOption label="管理员下架" value="ADMIN_TAKEDOWN" />
+              <ElOption label="未通过审核" value="REVIEW_REJECTED" />
             </ElSelect>
           </ElFormItem>
           <ElFormItem>
@@ -162,6 +163,10 @@ async function handleTakeDown(row: UserShareAdminVO) {
           <ElTag v-if="row.status === 'NORMAL'" type="success" size="small">正常</ElTag>
           <ElTag v-else-if="row.status === 'EXPIRED'" type="info" size="small">到期下架</ElTag>
           <ElTag v-else-if="row.status === 'ADMIN_TAKEDOWN'" type="danger" size="small">管理员下架</ElTag>
+          <template v-else-if="row.status === 'REVIEW_REJECTED'">
+            <ElTag type="warning" size="small" :title="row.rejectReason || undefined">未通过审核</ElTag>
+            <div v-if="row.rejectReason" class="mt-1 text-xs text-gray-400">{{ row.rejectReason }}</div>
+          </template>
           <ElTag v-else type="info" size="small">{{ row.status || "未知" }}</ElTag>
         </template>
         <template #actions="{ row }">
