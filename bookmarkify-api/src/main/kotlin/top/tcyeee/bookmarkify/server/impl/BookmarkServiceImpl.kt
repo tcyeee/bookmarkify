@@ -107,6 +107,7 @@ class BookmarkServiceImpl(
     override fun previewImport(file: MultipartFile, uid: String): BookmarkImportPreviewVO {
         val existingUrls: Set<String> = bookmarkUserLinkService.urlsByUid(uid)
         val structures = ChromeBookmarkParser.trim(file)
+        assertImportSizeWithinLimit(structures)
         val items = structures.flatMap { structure ->
             structure.bookmarks.map { raw ->
                 BookmarkImportItemVO(
@@ -134,6 +135,7 @@ class BookmarkServiceImpl(
         skipUrls: Set<String>,
     ): List<UserLayoutNodeVO> {
         val structures = ChromeBookmarkParser.trim(file)
+        assertImportSizeWithinLimit(structures)
 
         data class FolderSlice(val folderNode: UserLayoutNodeEntity?, val items: List<Pair<ChromeBookmarkRawData, UserLayoutNodeEntity>>)
 
@@ -460,8 +462,21 @@ class BookmarkServiceImpl(
         uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String
     ) {
         val urlWrapper = WebsiteParser.urlWrapper(rawUrl)
-        val entity = getOrCreateByHost(urlWrapper)
-        if (entity.parseStatus == ParseStatusEnum.LOADING) parseBookmark(entity)
+        val entity = runCatching {
+            getOrCreateByHost(urlWrapper).also { if (it.parseStatus == ParseStatusEnum.LOADING) parseBookmark(it) }
+        }.getOrElse { ex ->
+            // 解析链路中的未预期异常不能让节点永久停在 BOOKMARK_LOADING——此前这里的异常会一路
+            // 冒泡到事件监听器，被 runCatching 吞掉且不回写任何状态，用户端只会看到一个转不动的
+            // 加载占位符。这里退化为与「ping 不通」一致的处理：落一条 CLOSED 记录，让节点照常收口。
+            log.error("[parseAndResetUserItem] 解析异常，标记为不可用: urlHost=${urlWrapper.urlHost}", ex)
+            (getByHost(urlWrapper.urlHost) ?: BookmarkEntity(urlWrapper)).apply {
+                isActivity = false
+                parseStatus = ParseStatusEnum.CLOSED
+                parseErrMsg = "parse failed: ${ex.message}"
+                updateTime = LocalDateTime.now()
+                baseMapper.insertOrUpdate(this)
+            }
+        }
         // 抓取已结束，下面两处写入（重绑 userLink + 更新节点类型）需原子提交，放进短事务。
         val layoutNode: UserLayoutNodeEntity = txTemplate.execute {
             bookmarkUserLinkService.resetBookmarkId(uid, userLinkId, entity.id)
@@ -671,10 +686,20 @@ class BookmarkServiceImpl(
     private fun findById(bookmarkId: String): BookmarkEntity =
         requireNotNull(ktQuery().eq(BookmarkEntity::id, bookmarkId).one())
 
+    // 单次导入的书签数量上限：10MB 的书签文件可能包含数万条 <A> 记录，
+    // 若不加限制会在一个事务里批量写入并逐条发布异步解析事件，冲垮解析线程池与抓取下游。
+    private fun assertImportSizeWithinLimit(structures: List<SystemBookmarkStructure>) {
+        val total = structures.sumOf { it.bookmarks.size }
+        if (total > MAX_IMPORT_BOOKMARK_COUNT) {
+            throw CommonException(ErrorType.E121, "${ErrorType.E121.msg}(${total}/${MAX_IMPORT_BOOKMARK_COUNT})")
+        }
+    }
+
     companion object {
         // F-08: cap each checkAll() run to prevent flooding the parse executor when a large backlog
         // of unverified bookmarks exists (e.g., on first deployment after fixing the .lt→.eq bug).
         private const val CHECKALL_BATCH_SIZE = 100
         private const val RETRY_CLOSED_BATCH_SIZE = 50
+        private const val MAX_IMPORT_BOOKMARK_COUNT = 2000
     }
 }

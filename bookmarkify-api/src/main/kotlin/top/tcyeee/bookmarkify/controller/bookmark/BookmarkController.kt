@@ -48,11 +48,13 @@ class BookmarksController(
     @Operation(summary = "我的桌面布局")
     fun query(): UserLayoutNodeVO = layoutNodeService.layout(BaseUtils.uid())
 
+    @Throttle(interval = 5000)
     @PostMapping("/upload/preview")
     @Operation(summary = "书签导入预览（不写库）")
     fun uploadPreview(@RequestParam file: MultipartFile): BookmarkImportPreviewVO =
         bookmarkService.previewImport(file, BaseUtils.uid())
 
+    @Throttle(interval = 5000)
     @PostMapping("/upload")
     @Operation(summary = "书签上传")
     fun upload(
