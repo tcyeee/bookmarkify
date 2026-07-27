@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.entity.AppNameSuggestVO
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
+import top.tcyeee.bookmarkify.entity.BookmarkBasicInfoUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkCategoriesParams
 import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkLivenessVO
@@ -34,14 +35,11 @@ class AdminBookmarkManageController(
     fun getAllBookmarks(@RequestBody params: BookmarkSearchParams): IPage<BookmarkAdminVO> =
         bookmarkService.adminListAll(params)
 
-    // 修改单个书签信息 (使用POST替换PUT)
+    // 修改单个书签基础信息（标题/简介），非空字段才会覆盖
     @PostMapping("/{bookmarkId}/update")
     fun updateBookmark(
-        @PathVariable bookmarkId: Long, @RequestBody bookmarkData: Map<String, Any>
-    ): ResponseEntity<Any> {
-        // 实现更新单个书签信息的逻辑
-        return ResponseEntity.ok().build()
-    }
+        @PathVariable bookmarkId: String, @RequestBody params: BookmarkBasicInfoUpdateParams
+    ): BookmarkAdminVO = bookmarkService.adminUpdateBasicInfo(bookmarkId, params)
 
     // 修改单个书签的图标设置（图片内边距 iconPadding、图标背景色 iconBgColor）
     @PostMapping("/{bookmarkId}/icon")
@@ -103,6 +101,11 @@ class AdminBookmarkManageController(
     @PostMapping("/{bookmarkId}/liveness")
     fun checkBookmarkLiveness(@PathVariable bookmarkId: String): BookmarkLivenessVO =
         bookmarkService.adminCheckLiveness(bookmarkId)
+
+    // 「一键更新」：重新抓取网站信息并直接覆盖持久化标题/简介/图标/高清 LOGO，同步落库 isActivity/parseStatus
+    @PostMapping("/{bookmarkId}/refresh")
+    fun refreshBookmark(@PathVariable bookmarkId: String): BookmarkAdminVO =
+        bookmarkService.adminRefresh(bookmarkId)
 
     /* 书签集管理 */
 

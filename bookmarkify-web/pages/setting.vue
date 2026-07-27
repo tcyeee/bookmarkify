@@ -15,6 +15,7 @@ import PreferenceSettings from '~/components/setting/PreferenceSettings.vue'
 import ShortcutSettings from '~/components/setting/ShortcutSettings.vue'
 import BookmarkLibrary from '~/components/setting/BookmarkLibrary.vue'
 import ShareManage from '~/components/setting/ShareManage.vue'
+import AccessTokenManage from '~/components/setting/AccessTokenManage.vue'
 
 definePageMeta({
   middleware: 'auth',
@@ -30,6 +31,7 @@ const components = [
   ShortcutSettings,
   BookmarkLibrary,
   ShareManage,
+  AccessTokenManage,
 ] as const
 const currentComponent = computed(() => components[sysStore.settingTabIndex] ?? components[0])
 </script>

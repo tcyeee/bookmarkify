@@ -44,8 +44,9 @@ data class BookmarkEntity(
     // 图标相关字段（小图标/高清LOGO/内边距/背景色/高清开关）已迁移到 bookmark_logo 表（BookmarkLogoEntity），与书签一对一。
 
     /* 状态信息 */
-    @JsonIgnore @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.LOADING,
+    @JsonIgnore @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.PENDING,
     @JsonIgnore @field:Schema(description = "网站是否活跃") var isActivity: Boolean = false,
+    @JsonIgnore @field:Schema(description = "抓取成功但页面疑似反爬虫/WAF挑战页,内容可能不可靠") var antiCrawlerBlocked: Boolean = false,
     @JsonIgnore @field:Schema(description = "手动认证状态") var verifyFlag: Boolean = false, // 如果该书签信息都没问题, 添加手动认证状态以后, 即可被搜索到
     @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)，由 DeepSeek 判断") var nsfw: Boolean = false,
     @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
@@ -64,7 +65,7 @@ data class BookmarkEntity(
         urlHost = url.urlHost,
         urlPath = url.urlPath ?: "/",
         urlScheme = url.urlScheme,
-        parseStatus = ParseStatusEnum.LOADING,
+        parseStatus = ParseStatusEnum.PENDING,
     )
 
     constructor(chromeRowDate: ChromeBookmarkRawData) : this(
@@ -85,7 +86,8 @@ data class BookmarkEntity(
         this.parseErrMsg = null
         this.title = wrapper.title
         this.description = wrapper.description
-        this.parseStatus = if (wrapper.antiCrawlerDetected) ParseStatusEnum.BLOCKED else ParseStatusEnum.SUCCESS
+        this.parseStatus = ParseStatusEnum.SUCCESS
+        this.antiCrawlerBlocked = wrapper.antiCrawlerDetected
         this.updateTime = LocalDateTime.now()
         // 小图标(iconBase64)已迁出到 bookmark_logo，由解析层在保存元信息后单独 upsert。
     }

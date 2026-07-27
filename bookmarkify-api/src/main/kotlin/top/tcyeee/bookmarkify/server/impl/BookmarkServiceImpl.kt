@@ -235,18 +235,18 @@ class BookmarkServiceImpl(
             .list()
             .forEach { eventPublisher.publishEvent(BookmarkParseEvent(it.id)) }
 
-    override fun retryClosedBookmarks() {
+    override fun retryUnreachableBookmarks() {
         val candidates = ktQuery()
-            .eq(BookmarkEntity::parseStatus, ParseStatusEnum.CLOSED)
+            .eq(BookmarkEntity::parseStatus, ParseStatusEnum.UNREACHABLE)
             .eq(BookmarkEntity::verifyFlag, false)
             .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
             .orderByAsc(BookmarkEntity::updateTime)
-            .last("LIMIT $RETRY_CLOSED_BATCH_SIZE")
+            .last("LIMIT $RETRY_UNREACHABLE_BATCH_SIZE")
             .list()
             // 非域名类型(本地/IP/其他)不抓取，也不应对其发起存活 ping
             .filter { WebsiteParser.classifyLinkType(it.urlHost) == BookmarkLinkType.DOMAIN }
 
-        log.debug("[retryClosedBookmarks] 本次待重试书签数: ${candidates.size}")
+        log.debug("[retryUnreachableBookmarks] 本次待重试书签数: ${candidates.size}")
         candidates.forEach { bookmark ->
             val alive = apiService.pingWebsite(bookmark.rawUrl)
             val triggeredParse = alive && !bookmark.verifyFlag
@@ -259,10 +259,10 @@ class BookmarkServiceImpl(
                 )
             )
             if (triggeredParse) {
-                log.debug("[retryClosedBookmarks] ping 成功，触发重新解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                log.debug("[retryUnreachableBookmarks] ping 成功，触发重新解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
                 eventPublisher.publishEvent(BookmarkParseEvent(bookmark.id))
             } else {
-                log.debug("[retryClosedBookmarks] ping 失败，更新 updateTime: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                log.debug("[retryUnreachableBookmarks] ping 失败，更新 updateTime: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
                 // 更新 updateTime，使该记录在下次调度周期之前不会被重复选中
                 ktUpdate().eq(BookmarkEntity::id, bookmark.id)
                     .set(BookmarkEntity::updateTime, LocalDateTime.now())
@@ -272,10 +272,10 @@ class BookmarkServiceImpl(
     }
 
     override fun livenessCheckStaleBookmarks() {
-        // 范围覆盖全部书签（含已手动认证的），因为 checkAll/retryClosedBookmarks 都只处理 verifyFlag=false，
-        // 已认证书签此前从未被自动复查过。排除 LOADING：尚未解析完成的记录由 checkAll 每5分钟负责兜底。
+        // 范围覆盖全部书签（含已手动认证的），因为 checkAll/retryUnreachableBookmarks 都只处理 verifyFlag=false，
+        // 已认证书签此前从未被自动复查过。排除 PENDING：尚未解析完成的记录由 checkAll 每5分钟负责兜底。
         val candidates = ktQuery()
-            .ne(BookmarkEntity::parseStatus, ParseStatusEnum.LOADING)
+            .ne(BookmarkEntity::parseStatus, ParseStatusEnum.PENDING)
             .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -7, ChronoUnit.DAYS))
             .orderByAsc(BookmarkEntity::updateTime)
             .last("LIMIT $LIVENESS_CHECK_BATCH_SIZE")
@@ -309,10 +309,10 @@ class BookmarkServiceImpl(
                         .update()
                 }
                 else -> {
-                    log.debug("[livenessCheckStaleBookmarks] ping 失败，标记 CLOSED: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                    log.debug("[livenessCheckStaleBookmarks] ping 失败，标记 UNREACHABLE: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
                     ktUpdate().eq(BookmarkEntity::id, bookmark.id)
                         .set(BookmarkEntity::updateTime, LocalDateTime.now())
-                        .set(BookmarkEntity::parseStatus, ParseStatusEnum.CLOSED)
+                        .set(BookmarkEntity::parseStatus, ParseStatusEnum.UNREACHABLE)
                         .set(BookmarkEntity::isActivity, false)
                         .update()
                 }
@@ -439,7 +439,7 @@ class BookmarkServiceImpl(
             onFailure = { e ->
                 bookmark.apply {
                     isActivity = false
-                    parseStatus = ParseStatusEnum.CLOSED
+                    parseStatus = ParseStatusEnum.UNREACHABLE
                     parseErrMsg = e.message
                     updateTime = LocalDateTime.now()
                 }
@@ -449,7 +449,7 @@ class BookmarkServiceImpl(
                     success = false,
                     errorMsg = e.message,
                     isActivity = false,
-                    parseStatus = ParseStatusEnum.CLOSED,
+                    parseStatus = ParseStatusEnum.UNREACHABLE,
                 )
             },
         )
@@ -481,6 +481,52 @@ class BookmarkServiceImpl(
         RedisUtils.del(RedisType.BOOKMARK_REFETCH, bookmarkId)
         log.debug("[adminApplyRefetch] 应用完成: bookmarkId=$bookmarkId, title=${bookmark.title}")
         return BookmarkAdminVO(bookmark, logo)
+    }
+
+    override fun adminRefresh(bookmarkId: String): BookmarkAdminVO {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        log.debug("[adminRefresh] 管理员一键更新书签信息: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
+        val logo = logoOf(bookmarkId)
+        runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
+            onSuccess = { vo ->
+                bookmark.apply {
+                    title = vo.title
+                    description = vo.description
+                    isActivity = true
+                    parseStatus = ParseStatusEnum.SUCCESS
+                    parseErrMsg = null
+                    updateTime = LocalDateTime.now()
+                }
+                val icons = vo.toManifestIcons(bookmark.rawUrl)
+                logo.iconBase64 = vo.favicon?.takeIf { it.isNotBlank() }
+                    ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
+                applyHdLogo(logo, icons, bookmarkId)
+                logo.updateTime = LocalDateTime.now()
+                bookmarkLogoService.saveOrUpdate(logo)
+                log.debug("[adminRefresh] 更新成功: bookmarkId=$bookmarkId, title=${bookmark.title}")
+            },
+            onFailure = { e ->
+                bookmark.apply {
+                    isActivity = false
+                    parseStatus = ParseStatusEnum.UNREACHABLE
+                    parseErrMsg = e.message
+                    updateTime = LocalDateTime.now()
+                }
+                log.debug("[adminRefresh] 更新失败: bookmarkId=$bookmarkId, err=${e.message}")
+            },
+        )
+        baseMapper.updateById(bookmark)
+        return BookmarkAdminVO(bookmark, logo)
+    }
+
+    override fun adminUpdateBasicInfo(bookmarkId: String, params: BookmarkBasicInfoUpdateParams): BookmarkAdminVO {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        params.title?.let { bookmark.title = it }
+        params.description?.let { bookmark.description = it }
+        bookmark.updateTime = LocalDateTime.now()
+        baseMapper.updateById(bookmark)
+        log.debug("[adminUpdateBasicInfo] 管理员手动更新基础信息: bookmarkId=$bookmarkId, title=${bookmark.title}")
+        return BookmarkAdminVO(bookmark, logoOf(bookmarkId))
     }
 
     override fun adminUpdateCategories(bookmarkId: String, categoryIds: List<String>): List<CategoryVO> {
@@ -523,18 +569,17 @@ class BookmarkServiceImpl(
         }
     }
 
-    /** 收录单个相似站点：本地已有→EXISTS；抓取失败(不可达=幻觉/失效)→删除记录并 SKIPPED；抓到(SUCCESS/BLOCKED)→INGESTED。 */
+    /** 收录单个相似站点：本地已有→EXISTS；抓取失败(不可达=幻觉/失效)→删除记录并 SKIPPED；抓到(SUCCESS)→INGESTED。 */
     private fun ingestOneSimilar(domain: String): String {
         val wrapper = WebsiteParser.urlWrapper("https://${domain.trim().substringAfter("://")}")
         findByHost(wrapper.urlHost)?.let { return "EXISTS" }
         val bookmark = getOrCreateByUrl(wrapper)
-        // 抓取可能抛异常（本地解析器）或落 CLOSED（scrapper 不可达）；统一以「最终落库状态」判定，
-        // 抓到正文(SUCCESS/BLOCKED)才保留，其余一律删除——保证幻觉域名绝不留在库里。
+        // 抓取可能抛异常（本地解析器）或落 UNREACHABLE（scrapper 不可达）；统一以「最终落库状态」判定，
+        // 抓到正文(SUCCESS，反爬页面也算)才保留，其余一律删除——保证幻觉域名绝不留在库里。
         runCatching { parseBookmark(bookmark) }
             .onFailure { log.warn("[ingestOneSimilar] 解析异常 domain=$domain: ${it.message}") }
         val saved = baseMapper.selectById(bookmark.id)
-        val ok = saved != null &&
-            (saved.parseStatus == ParseStatusEnum.SUCCESS || saved.parseStatus == ParseStatusEnum.BLOCKED)
+        val ok = saved != null && saved.parseStatus == ParseStatusEnum.SUCCESS
         return if (ok) {
             "INGESTED"
         } else {
@@ -570,14 +615,14 @@ class BookmarkServiceImpl(
     override fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
         log.debug("[parseAndNotice-4] 开始书签解析: uid=$uid, bookmarkId=$bookmarkId, userLinkId=$userLinkId, nodeId=$nodeId")
         runCatching { parseBookmark(baseMapper.selectById(bookmarkId)) }.onFailure { ex ->
-            // 解析链路中的未预期异常（而非「抓取失败」这类已内部兜底为 CLOSED 的正常业务失败）不能让节点
+            // 解析链路中的未预期异常（而非「抓取失败」这类已内部兜底为 UNREACHABLE 的正常业务失败）不能让节点
             // 永久停在 BOOKMARK_LOADING——此前这里的异常会一路冒泡到事件监听器，被其 runCatching 吞掉且
             // 不回写任何状态，用户端只会看到一个转不动的加载占位符。与 parseAndResetUserItem 保持一致，
-            // 退化为与「ping 不通」一致的处理：落一条 CLOSED 记录，让节点照常收口而不是无限转圈。
+            // 退化为与「ping 不通」一致的处理：落一条 UNREACHABLE 记录，让节点照常收口而不是无限转圈。
             log.error("[parseAndNotice-4] 解析异常，标记为不可用: bookmarkId=$bookmarkId", ex)
             baseMapper.selectById(bookmarkId)?.apply {
                 isActivity = false
-                parseStatus = ParseStatusEnum.CLOSED
+                parseStatus = ParseStatusEnum.UNREACHABLE
                 parseErrMsg = "parse failed: ${ex.message}"
                 updateTime = LocalDateTime.now()
                 baseMapper.insertOrUpdate(this)
@@ -597,7 +642,7 @@ class BookmarkServiceImpl(
 
     /**
      * 通过网址解析为书签，同时重新绑定到添加这个网址的用户
-     * 1. 解析书签，更新书签状态（之前是 LOADING）
+     * 1. 解析书签，更新书签状态（之前是 PENDING）
      * 2. 根据 host 重新绑定用户自定义书签
      * 3. 修改用户布局元素状态（之前是 LOADING）
      *
@@ -609,15 +654,15 @@ class BookmarkServiceImpl(
     ) {
         val urlWrapper = WebsiteParser.urlWrapper(rawUrl)
         val entity = runCatching {
-            getOrCreateByUrl(urlWrapper).also { if (it.parseStatus == ParseStatusEnum.LOADING) parseBookmark(it) }
+            getOrCreateByUrl(urlWrapper).also { if (it.parseStatus == ParseStatusEnum.PENDING) parseBookmark(it) }
         }.getOrElse { ex ->
             // 解析链路中的未预期异常不能让节点永久停在 BOOKMARK_LOADING——此前这里的异常会一路
             // 冒泡到事件监听器，被 runCatching 吞掉且不回写任何状态，用户端只会看到一个转不动的
-            // 加载占位符。这里退化为与「ping 不通」一致的处理：落一条 CLOSED 记录，让节点照常收口。
+            // 加载占位符。这里退化为与「ping 不通」一致的处理：落一条 UNREACHABLE 记录，让节点照常收口。
             log.error("[parseAndResetUserItem] 解析异常，标记为不可用: urlHost=${urlWrapper.urlHost}, urlPath=${urlWrapper.urlPath}", ex)
             (getByUrl(urlWrapper.urlHost, urlWrapper.urlPath ?: "/") ?: BookmarkEntity(urlWrapper)).apply {
                 isActivity = false
-                parseStatus = ParseStatusEnum.CLOSED
+                parseStatus = ParseStatusEnum.UNREACHABLE
                 parseErrMsg = "parse failed: ${ex.message}"
                 updateTime = LocalDateTime.now()
                 baseMapper.insertOrUpdate(this)
@@ -649,7 +694,7 @@ class BookmarkServiceImpl(
 
     /**
      * 统一解析调度：检查 verifyFlag 后先 ping 确认网站存活，再根据配置选择解析方式。
-     * ping 不通时直接标记 CLOSED 并跳过抓取（节省无效的 headless 开销）。
+     * ping 不通时直接标记 UNREACHABLE 并跳过抓取（节省无效的 headless 开销）。
      */
     private fun parseBookmark(bookmark: BookmarkEntity): BookmarkEntity {
         log.debug("[parseBookmark] 开始调度解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
@@ -672,14 +717,14 @@ class BookmarkServiceImpl(
             }
         }
 
-        // ping 前置：网站不存活则直接标 CLOSED，避免无效爬取
+        // ping 前置：网站不存活则直接标 UNREACHABLE，避免无效爬取
         val alive = apiService.pingWebsite(bookmark.rawUrl)
         log.debug("[parseBookmark] ping 结果: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}, alive=$alive")
         if (!alive) {
-            log.debug("[parseBookmark] ping 失败，网站不可达，标记 CLOSED: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+            log.debug("[parseBookmark] ping 失败，网站不可达，标记 UNREACHABLE: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
             return bookmark.apply {
                 isActivity = false
-                parseStatus = ParseStatusEnum.CLOSED
+                parseStatus = ParseStatusEnum.UNREACHABLE
                 parseErrMsg = "ping failed: site unreachable"
                 updateTime = LocalDateTime.now()
                 baseMapper.insertOrUpdate(this)
@@ -689,7 +734,7 @@ class BookmarkServiceImpl(
         val mode = if (projectConfig.useThirdPartyParser) "远程scrapper" else "本地Jsoup"
         log.debug("[parseBookmark] ping 通过，选择解析模式: $mode, bookmarkId=${bookmark.id}")
         val parsed = if (projectConfig.useThirdPartyParser) parseByApi(bookmark) else parseLocally(bookmark)
-        if (parsed.parseStatus == ParseStatusEnum.SUCCESS || parsed.parseStatus == ParseStatusEnum.BLOCKED) {
+        if (parsed.parseStatus == ParseStatusEnum.SUCCESS) {
             bookmarkCategoryService.categorize(parsed)
             checkNsfw(parsed)
         }
@@ -727,15 +772,14 @@ class BookmarkServiceImpl(
     private fun parseLocally(bookmark: BookmarkEntity): BookmarkEntity {
         log.debug("[parseLocally] 开始本地解析(Jsoup): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")
         val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
-            val status = if (it.message?.contains("403") == true) ParseStatusEnum.BLOCKED else ParseStatusEnum.CLOSED
-            log.debug("[parseLocally] 页面抓取失败: bookmarkId=${bookmark.id}, status=$status, err=${it.message}")
+            log.debug("[parseLocally] 页面抓取失败: bookmarkId=${bookmark.id}, err=${it.message}")
             bookmark.apply {
-                parseStatus = status
+                parseStatus = ParseStatusEnum.UNREACHABLE
                 isActivity = false
                 parseErrMsg = it.message
                 baseMapper.insertOrUpdate(this)
             }
-            log.warn("[parseLocally] 页面抓取失败: bookmarkId=${bookmark.id}, status=$status, err=${it.message}")
+            log.warn("[parseLocally] 页面抓取失败: bookmarkId=${bookmark.id}, err=${it.message}")
             return bookmark
         }
         log.debug("[parseLocally] 页面抓取成功, 开始填充元信息: bookmarkId=${bookmark.id}, title=${wrapper.title}")
@@ -782,7 +826,7 @@ class BookmarkServiceImpl(
                 log.debug("[parseByApi] API 调用失败: bookmarkId=${bookmark.id}, err=${e.message}")
                 bookmark.apply {
                     isActivity = false
-                    parseStatus = ParseStatusEnum.CLOSED
+                    parseStatus = ParseStatusEnum.UNREACHABLE
                     parseErrMsg = e.message
                     updateTime = LocalDateTime.now()
                     baseMapper.insertOrUpdate(this)
@@ -843,7 +887,7 @@ class BookmarkServiceImpl(
     /**
      * 通过 DeepSeek 推断书签简称，有结果则覆盖 appName，失败静默忽略。
      *
-     * [previousTitle] 是本次解析开始前（覆盖 title 之前）该书签原有的标题：checkAll/retryClosedBookmarks
+     * [previousTitle] 是本次解析开始前（覆盖 title 之前）该书签原有的标题：checkAll/retryUnreachableBookmarks
      * 这类定时对账会对同一 canonical 书签反复重新解析，若网页标题相较上次没有变化、且已经有 appName，
      * 就没必要再打一次 DeepSeek——这既省了一次外部 API 调用，也缩短了异步解析任务占用线程池的时间。
      */
@@ -900,7 +944,7 @@ class BookmarkServiceImpl(
         // F-08: cap each checkAll() run to prevent flooding the parse executor when a large backlog
         // of unverified bookmarks exists (e.g., on first deployment after fixing the .lt→.eq bug).
         private const val CHECKALL_BATCH_SIZE = 100
-        private const val RETRY_CLOSED_BATCH_SIZE = 50
+        private const val RETRY_UNREACHABLE_BATCH_SIZE = 50
         private const val LIVENESS_CHECK_BATCH_SIZE = 200
         private const val MAX_IMPORT_BOOKMARK_COUNT = 2000
     }

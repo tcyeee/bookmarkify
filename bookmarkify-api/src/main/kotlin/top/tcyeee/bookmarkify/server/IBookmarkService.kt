@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server
 import com.baomidou.mybatisplus.extension.service.IService
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
+import top.tcyeee.bookmarkify.entity.BookmarkBasicInfoUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
@@ -27,8 +28,8 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 每天检查数据库所有书签活性 */
     fun checkAll()
 
-    /** 定时重试 CLOSED 书签：ping 通后重新触发解析，结果写入 bookmark_ping_log */
-    fun retryClosedBookmarks()
+    /** 定时重试 UNREACHABLE 书签：ping 通后重新触发解析，结果写入 bookmark_ping_log */
+    fun retryUnreachableBookmarks()
 
     /** 每小时扫描一次全部 7 天未更新的书签（含已认证）做活性检查，结果写入 bookmark_ping_log */
     fun livenessCheckStaleBookmarks()
@@ -71,6 +72,12 @@ interface IBookmarkService : IService<BookmarkEntity> {
 
     /** 管理员应用「重新获取」的结果：按选择采用新标题/新图标并持久化（采用新图标会重抓高清 LOGO 到 OSS） */
     fun adminApplyRefetch(bookmarkId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO
+
+    /** 管理员「一键更新」：重新抓取网站信息并直接覆盖持久化标题/简介/图标/高清 LOGO，同步落库 isActivity/parseStatus */
+    fun adminRefresh(bookmarkId: String): BookmarkAdminVO
+
+    /** 管理员手动编辑书签基础信息（标题/简介），非空字段才会覆盖 */
+    fun adminUpdateBasicInfo(bookmarkId: String, params: BookmarkBasicInfoUpdateParams): BookmarkAdminVO
 
     /** 管理员手动设置某书签的分类（覆盖式），返回更新后的分类列表 */
     fun adminUpdateCategories(bookmarkId: String, categoryIds: List<String>): List<CategoryVO>

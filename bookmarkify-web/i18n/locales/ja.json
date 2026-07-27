@@ -8,7 +8,8 @@
       "preference": "環境設定",
       "shortcuts": "ショートカット",
       "bookmarkLibrary": "ブックマーク管理",
-      "shareManage": "共有管理"
+      "shareManage": "共有管理",
+      "accessToken": "AccessToken"
     }
   },
   "preferenceSettings": {
@@ -181,6 +182,38 @@
     "pagination": {
       "total": "合計 {total} 件の共有",
       "pageOf": "{current} / {total} ページ"
+    }
+  },
+  "accessTokenManage": {
+    "title": "AccessToken",
+    "desc": "ブラウザ拡張機能用のアクセストークンを生成します。拡張機能はこのトークンで現在のサイトのタイトルやアイコンなどの基本情報を取得します。権限はアカウントセッションと完全に分離されています。",
+    "generate": "新しいトークンを生成",
+    "defaultName": "名称未設定のトークン",
+    "columns": {
+      "name": "名前",
+      "prefix": "プレフィックス",
+      "lastUsedAt": "最終使用",
+      "createdAt": "作成日時"
+    },
+    "neverUsed": "未使用",
+    "loading": "トークンを読み込み中…",
+    "empty": "まだトークンが生成されていません",
+    "revoke": "失効",
+    "revokeConfirm": "このトークンを失効させますか？使用中の拡張機能は直ちに使用できなくなります。",
+    "revokeSuccess": "失効しました",
+    "createDialog": {
+      "title": "新しいトークンを生成",
+      "nameLabel": "名前",
+      "namePlaceholder": "例：Chrome 拡張機能",
+      "cancel": "キャンセル",
+      "confirm": "生成"
+    },
+    "revealDialog": {
+      "title": "トークンが生成されました",
+      "warning": "このトークンは今回のみ表示されます。閉じると二度と確認できないため、今すぐコピーして保管してください。",
+      "copy": "コピー",
+      "copySuccess": "クリップボードにコピーしました",
+      "done": "保存しました"
     }
   }
 }

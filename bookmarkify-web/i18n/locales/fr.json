@@ -8,7 +8,8 @@
       "preference": "Préférences",
       "shortcuts": "Raccourcis",
       "bookmarkLibrary": "Gestion des favoris",
-      "shareManage": "Gestion des partages"
+      "shareManage": "Gestion des partages",
+      "accessToken": "AccessToken"
     }
   },
   "preferenceSettings": {
@@ -181,6 +182,38 @@
     "pagination": {
       "total": "{total} partages au total",
       "pageOf": "Page {current} sur {total}"
+    }
+  },
+  "accessTokenManage": {
+    "title": "AccessToken",
+    "desc": "Générez des jetons d'accès pour l'extension de navigateur. L'extension utilise un jeton pour récupérer les informations de base du site actuel (titre, favicon) — ses permissions sont totalement isolées de votre session de compte.",
+    "generate": "Générer un nouveau jeton",
+    "defaultName": "Jeton sans nom",
+    "columns": {
+      "name": "Nom",
+      "prefix": "Préfixe",
+      "lastUsedAt": "Dernière utilisation",
+      "createdAt": "Créé le"
+    },
+    "neverUsed": "Jamais utilisé",
+    "loading": "Chargement des jetons…",
+    "empty": "Vous n'avez encore généré aucun jeton",
+    "revoke": "Révoquer",
+    "revokeConfirm": "Révoquer ce jeton ? Toute extension qui l'utilise cessera immédiatement de fonctionner.",
+    "revokeSuccess": "Révoqué",
+    "createDialog": {
+      "title": "Générer un nouveau jeton",
+      "nameLabel": "Nom",
+      "namePlaceholder": "ex. Extension Chrome",
+      "cancel": "Annuler",
+      "confirm": "Générer"
+    },
+    "revealDialog": {
+      "title": "Jeton généré",
+      "warning": "Ce jeton n'est affiché qu'une seule fois et ne pourra plus être consulté après fermeture — copiez-le et sauvegardez-le maintenant.",
+      "copy": "Copier",
+      "copySuccess": "Copié dans le presse-papiers",
+      "done": "Je l'ai sauvegardé"
     }
   }
 }

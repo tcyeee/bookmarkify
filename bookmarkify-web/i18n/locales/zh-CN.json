@@ -8,7 +8,8 @@
       "preference": "偏好设置",
       "shortcuts": "快捷键",
       "bookmarkLibrary": "书签管理",
-      "shareManage": "分享管理"
+      "shareManage": "分享管理",
+      "accessToken": "AccessToken"
     }
   },
   "preferenceSettings": {
@@ -181,6 +182,38 @@
     "pagination": {
       "total": "共 {total} 个分享",
       "pageOf": "第 {current} / {total} 页"
+    }
+  },
+  "accessTokenManage": {
+    "title": "AccessToken",
+    "desc": "生成用于浏览器插件的访问令牌，插件凭此令牌获取当前网站的标题与图标等基础信息，权限与你的账号会话完全隔离。",
+    "generate": "生成新 Token",
+    "defaultName": "未命名令牌",
+    "columns": {
+      "name": "备注",
+      "prefix": "前缀",
+      "lastUsedAt": "最后使用",
+      "createdAt": "创建时间"
+    },
+    "neverUsed": "尚未使用",
+    "loading": "正在加载令牌…",
+    "empty": "还没有生成过任何令牌",
+    "revoke": "撤销",
+    "revokeConfirm": "确定要撤销这个令牌吗？撤销后使用该令牌的插件将立即失效。",
+    "revokeSuccess": "已撤销",
+    "createDialog": {
+      "title": "生成新 Token",
+      "nameLabel": "备注名称",
+      "namePlaceholder": "例如：Chrome 插件",
+      "cancel": "取消",
+      "confirm": "生成"
+    },
+    "revealDialog": {
+      "title": "令牌已生成",
+      "warning": "该令牌仅显示这一次，关闭后将无法再次查看，请立即复制并妥善保存。",
+      "copy": "复制",
+      "copySuccess": "已复制到剪贴板",
+      "done": "我已保存"
     }
   }
 }

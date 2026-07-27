@@ -76,6 +76,7 @@ const tabs = computed(() => [
   // { value: 4, label: t('settingLayout.tabs.shortcuts'), icon: 'mdi:console' },
   { value: 5, label: t('settingLayout.tabs.bookmarkLibrary'), icon: 'mdi:bookmark-multiple' },
   { value: 6, label: t('settingLayout.tabs.shareManage'), icon: 'mdi:share-variant' },
+  { value: 7, label: t('settingLayout.tabs.accessToken'), icon: 'mdi:key-variant' },
 ])
 const indicatorStyle = ref<CSSProperties>({
   transform: 'translate3d(0, 0, 0)',
