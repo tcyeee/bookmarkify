@@ -23,6 +23,7 @@ data class BookmarkShow(
     @field:Schema(description = "书签备注") var description: String? = null,
     @field:Schema(description = "完整url") var urlFull: String? = null,
     @field:Schema(description = "基础url") var urlBase: String? = null,
+    @field:Schema(description = "是否置顶") var pinned: Boolean = false,
     // 图标相关字段已迁移到 website_logo，对外统一以 logo 嵌套对象输出（下面这些扁平字段仅供内部/SQL 映射用，不直接序列化）
     @JsonIgnore @field:Schema(description = "小图标(序列化进 logo)") var iconBase64: String? = null,
     @JsonIgnore @field:Schema(description = "图片内边距(序列化进 logo)") var iconPadding: Int = 25,
@@ -36,8 +37,8 @@ data class BookmarkShow(
     @JsonIgnore @field:Schema(description = "用户桌面排布ID") var layoutNodeId: String? = null,
     @JsonIgnore @field:Schema(description = "大图标OSS地址,带权限(序列化进 logo)") var iconHdUrl: String? = null,
 ) {
-    // 高清渲染改由用户开关控制：开关开启且存在达标高清图时才用高清
-    val isHd: Boolean get() = useHdLogo && hdSize > 0
+    // 高清渲染：管理员开关开启，或书签本身被用户置顶（置顶区域始终尝试用高清图），且存在达标高清图时才用高清
+    val isHd: Boolean get() = (useHdLogo || pinned) && hdSize > 0
 
     /** 图标信息（嵌套对象）：小图标 / 高清地址 / 内边距 / 背景色，统一收拢供前端读取。 */
     val logo: BookmarkLogoShowVO

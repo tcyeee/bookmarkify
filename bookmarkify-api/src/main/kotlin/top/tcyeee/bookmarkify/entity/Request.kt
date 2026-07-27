@@ -41,6 +41,7 @@ data class GithubLoginParams(val code: String, val redirectUri: String)  // GitH
 data class UserDelParams(val email: String? = null)
 data class UserInfoUpdateParams(var nickName: String)
 data class BookmarkUpdatePrams(var linkId: String, var title: String, var description: String)
+data class BookmarkPinParams(var linkId: String, var pinned: Boolean)
 data class BookmarkIconUpdateParams(
     @field:Schema(description = "图片内边距") var iconPadding: Int = 0,
     @field:Schema(description = "图标背景色") var iconBgColor: String? = null,

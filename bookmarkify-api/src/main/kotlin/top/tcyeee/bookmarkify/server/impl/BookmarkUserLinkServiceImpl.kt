@@ -21,6 +21,12 @@ class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<Bookma
             .set(BookmarkUserLink::description, params.description)
             .update()
 
+    override fun setPinned(linkId: String, pinned: Boolean, uid: String): Boolean =
+        ktUpdate().eq(BookmarkUserLink::id, linkId)
+            .eq(BookmarkUserLink::uid, uid)
+            .set(BookmarkUserLink::pinned, pinned)
+            .update()
+
     @Transactional(rollbackFor = [Exception::class])
     override fun copy(sourceUid: String, targetUid: String) {
         // F-06 (dead-code warning): This method has no current callers and MUST NOT be activated

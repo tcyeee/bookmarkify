@@ -36,9 +36,10 @@
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, h } from 'vue'
 import ContextMenu from '@imengyu/vue3-context-menu'
-import { bookmarksDel } from '@api'
+import { Icon } from '@iconify/vue'
+import { bookmarksDel, bookmarksPin } from '@api'
 import { HomeItemType, type UserLayoutNodeVO } from '@typing'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
@@ -68,12 +69,38 @@ async function delOne(node: UserLayoutNodeVO) {
   }
 }
 
+function goSimilar(node: UserLayoutNodeVO) {
+  navigateTo({ path: '/bookmark/similar', query: { id: node.id } })
+}
+
+async function togglePinned(node: UserLayoutNodeVO) {
+  if (!node.typeApp) return
+  const next = !node.typeApp.pinned
+  try {
+    await bookmarksPin(node.typeApp.bookmarkUserLinkId, next)
+    bookmarkStore.setPinnedLocal(node.id, next)
+    useToastStore().success(next ? '已置顶' : '已取消置顶')
+  } catch (error) {
+    console.error('[BookmarkTreeRow] 置顶状态切换失败', error)
+  }
+}
+
 function onContextMenu(e: MouseEvent, node: UserLayoutNodeVO) {
   if (!node.typeApp) return
   ContextMenu.showContextMenu({
     items: [
-      { label: '修改', onClick: () => emit('edit', node) },
-      { label: '删除', onClick: () => delOne(node) },
+      { label: '修改', icon: h(Icon, { icon: 'mdi:pencil', class: 'size-4' }), onClick: () => emit('edit', node) },
+      {
+        label: node.typeApp.pinned ? '取消置顶' : '置顶',
+        icon: h(Icon, { icon: node.typeApp.pinned ? 'mdi:pin-off' : 'mdi:pin', class: 'size-4' }),
+        onClick: () => togglePinned(node),
+      },
+      {
+        label: '更多相似书签',
+        icon: h(Icon, { icon: 'mdi:view-grid-outline', class: 'size-4' }),
+        onClick: () => goSimilar(node),
+      },
+      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), onClick: () => delOne(node) },
     ],
     x: e.x,
     y: e.y,

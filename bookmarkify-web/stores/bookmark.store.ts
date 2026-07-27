@@ -54,6 +54,12 @@ export const useBookmarkStore = defineStore('homeItems', {
         return null
       }
     },
+    // 全部被置顶的书签节点（不区分所在文件夹），沿用书签自身的桌面排序
+    pinnedNodes(state): Array<UserLayoutNodeVO> {
+      return Object.values(state.nodes)
+        .filter((n) => n.type === HomeItemType.BOOKMARK && n.typeApp?.pinned)
+        .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+    },
   },
 
   actions: {
@@ -141,6 +147,13 @@ export const useBookmarkStore = defineStore('homeItems', {
       const cur = this.nodes[node.id]
       if (!cur) return
       this.nodes[node.id] = { ...node, parentId: cur.parentId, children: undefined }
+    },
+
+    // 置顶/取消置顶：本地就地替换 typeApp 对象引用以触发响应式更新
+    setPinnedLocal(nodeId: string, pinned: boolean) {
+      const node = this.nodes[nodeId]
+      if (!node?.typeApp) return
+      this.nodes[nodeId] = { ...node, typeApp: { ...node.typeApp, pinned } }
     },
 
     removeNode(id: string) {

@@ -60,6 +60,7 @@ export default defineNuxtConfig({
   routeRules: {
     '/': { ssr: false },
     '/setting': { ssr: false },
+    '/bookmark/similar': { ssr: false },
   },
   // 首页改为 SPA 后爬虫无法再从 `/` 发现 /welcome，需显式声明以保证落地页仍被预渲染（SEO）。
   nitro: {

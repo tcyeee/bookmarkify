@@ -37,6 +37,7 @@ export interface BookmarkShow {
   description: string
   urlFull: string
   urlBase: string
+  pinned: boolean
   // 图标相关字段统一收拢到 logo（后端 website_logo 表）
   logo: BookmarkLogo
   isActivity: boolean
