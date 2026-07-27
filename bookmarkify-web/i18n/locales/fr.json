@@ -124,8 +124,6 @@
     "batchDelete": "Supprimer la sélection",
     "createCollection": "Créer une collection",
     "createCollectionHint": "Sélectionnez au moins 2 favoris pour créer une collection",
-    "confirmDeleteMessage": "Supprimer les {count} favori(s) sélectionné(s) ? Cette action est irréversible.",
-    "deleteSuccess": "{count} favori(s) supprimé(s)",
     "createDialog": {
       "title": "Créer une collection",
       "placeholder": "Saisissez un nom de collection (dossier)",

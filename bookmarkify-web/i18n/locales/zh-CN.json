@@ -124,8 +124,6 @@
     "batchDelete": "批量删除",
     "createCollection": "创建集合",
     "createCollectionHint": "至少选择 2 个书签才能创建集合",
-    "confirmDeleteMessage": "确定要删除选中的 {count} 个书签吗？此操作不可撤销。",
-    "deleteSuccess": "已删除 {count} 个书签",
     "createDialog": {
       "title": "创建集合",
       "placeholder": "请输入集合（文件夹）名称",

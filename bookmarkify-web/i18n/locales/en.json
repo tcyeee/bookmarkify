@@ -124,8 +124,6 @@
     "batchDelete": "Delete Selected",
     "createCollection": "Create Collection",
     "createCollectionHint": "Select at least 2 bookmarks to create a collection",
-    "confirmDeleteMessage": "Delete the selected {count} bookmark(s)? This cannot be undone.",
-    "deleteSuccess": "{count} bookmark(s) deleted",
     "createDialog": {
       "title": "Create Collection",
       "placeholder": "Enter a collection (folder) name",

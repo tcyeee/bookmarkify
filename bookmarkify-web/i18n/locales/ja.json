@@ -124,8 +124,6 @@
     "batchDelete": "選択項目を削除",
     "createCollection": "コレクションを作成",
     "createCollectionHint": "コレクションを作成するには2件以上選択してください",
-    "confirmDeleteMessage": "選択した {count} 件のブックマークを削除しますか？この操作は取り消せません。",
-    "deleteSuccess": "{count} 件のブックマークを削除しました",
     "createDialog": {
       "title": "コレクションを作成",
       "placeholder": "コレクション（フォルダ）名を入力してください",

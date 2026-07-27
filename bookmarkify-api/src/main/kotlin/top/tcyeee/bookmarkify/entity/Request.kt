@@ -110,6 +110,8 @@ data class AllOfMyBookmarkParams(
             }
         }
         if (restrictBookmarkIds != null) query.`in`(BookmarkUserLink::bookmarkId, restrictBookmarkIds)
+        // 查看"重复书签"时按 bookmarkId 排序，让同一站点的重复项在列表中相邻，便于用户对比和清理
+        if (duplicatesOnly) query.orderByAsc(BookmarkUserLink::bookmarkId).orderByAsc(BookmarkUserLink::createTime)
         return query
     }
 }

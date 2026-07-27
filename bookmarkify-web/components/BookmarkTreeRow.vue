@@ -19,7 +19,7 @@
       target="_blank"
       rel="noopener noreferrer"
       class="flex items-center gap-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
-      :style="indentStyle"
+      :style="bookmarkIndentStyle"
       @contextmenu.prevent="onContextMenu($event, node)">
       <BookmarkLogo :value="node.typeApp" :size="20" />
       <span class="text-sm text-slate-700 dark:text-slate-200 truncate">{{ node.typeApp.title || node.typeApp.urlBase }}</span>
@@ -53,6 +53,8 @@ const children = computed(() =>
   props.node.type === HomeItemType.BOOKMARK_DIR ? bookmarkStore.childrenOf(props.node.id) : [],
 )
 const indentStyle = computed(() => ({ paddingLeft: `${props.depth * 1.25}rem` }))
+// 单条书签在文件夹卡片中额外增加左内边距，与文件夹行区分开
+const bookmarkIndentStyle = computed(() => ({ paddingLeft: `${props.depth * 1.25 + 0.5}rem` }))
 
 async function delOne(node: UserLayoutNodeVO) {
   try {

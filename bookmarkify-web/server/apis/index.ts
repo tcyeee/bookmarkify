@@ -63,3 +63,7 @@ export const deleteGradientBackground = (id: string) => http.start<boolean>(`/ba
 /* =========[ /preference ]========= */
 export const queryUserPreference = () => http.get<t.UserPreference | null>('/preference')
 export const updateUserPreference = (params: t.UserPreference) => http.post<boolean>('/preference', params)
+
+/* =========[ /share ]========= */
+export const shareCreate = (params: t.ShareCreateParams) => http.post<t.ShareVO>('/share/create', params)
+export const shareView = (code: string) => http.get<t.SharePublicVO>('/share/view', { code })
