@@ -12,7 +12,9 @@ export const authQuickLogin = () => http.get<t.UserInfo>('/auth/quickLogin')
 /* =========[ /bookmark ]========= */
 export const bookmarksShowAll = () => http.post<t.UserLayoutNodeVO>('/bookmark/query')
 export const bookmarksSearch = (name: string) => http.post<Array<any>>(`/bookmark/search?name=${encodeURIComponent(name)}`)
-export const bookmarksAddOne = (url: string) => http.get<t.UserLayoutNodeVO>('/bookmark/addOne', { url: url })
+// addOne 会创建 bookmark/user_layout_node/bookmark_user_link 三张表的写入，改用 POST 承载（与 bookmarksSearch 一致的写法：
+// query string 传参 + POST 方法），避免 GET 请求被浏览器预取/代理缓存/爬虫意外重放触发非预期写操作
+export const bookmarksAddOne = (url: string) => http.post<t.UserLayoutNodeVO>(`/bookmark/addOne?url=${encodeURIComponent(url)}`)
 export const bookmarksLinkOne = (bookmarkId: string) => http.get<t.UserLayoutNodeVO>('/bookmark/linkOne', { bookmarkId })
 export const bookmarksSort = (params: Record<string, number>) => http.post<boolean>('/bookmark/sort', params)
 export const bookmarksDel = (params: Array<string>) => http.post<boolean>('/bookmark/delete', params)

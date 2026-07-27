@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { CategoryEntity } from "#/api/category";
 
-import { defineAsyncComponent, onMounted, reactive, ref } from "vue";
+import { defineAsyncComponent, reactive, ref } from "vue";
 
 import { Page } from "@vben/common-ui";
 
@@ -12,6 +12,7 @@ import {
   getCategoryListApi,
   saveCategoryApi,
 } from "#/api/category";
+import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
@@ -25,20 +26,6 @@ const ElButton = defineAsyncComponent(() =>
     import("element-plus/es/components/button/index"),
     import("element-plus/es/components/button/style/css"),
   ]).then(([res]) => res.ElButton),
-);
-
-const ElTable = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/table/index"),
-    import("element-plus/es/components/table/style/css"),
-  ]).then(([res]) => res.ElTable),
-);
-
-const ElTableColumn = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/table/index"),
-    import("element-plus/es/components/table/style/css"),
-  ]).then(([res]) => res.ElTableColumn),
 );
 
 const ElDialog = defineAsyncComponent(() =>
@@ -76,8 +63,6 @@ const ElInputNumber = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElInputNumber),
 );
 
-const loading = ref(false);
-const tableData = ref<CategoryEntity[]>([]);
 const dialogVisible = ref(false);
 const saving = ref(false);
 
@@ -97,15 +82,6 @@ function resetForm() {
   form.description = "";
   form.color = "";
   form.sort = 0;
-}
-
-async function fetchData() {
-  loading.value = true;
-  try {
-    tableData.value = await getCategoryListApi();
-  } finally {
-    loading.value = false;
-  }
 }
 
 function handleAdd() {
@@ -133,7 +109,7 @@ async function handleSave() {
     await saveCategoryApi({ ...form });
     ElMessage.success("已保存");
     dialogVisible.value = false;
-    await fetchData();
+    await gridApi.query();
   } finally {
     saving.value = false;
   }
@@ -149,10 +125,32 @@ async function handleDelete(row: CategoryEntity) {
   }
   await deleteCategoryApi(row.id);
   ElMessage.success("已删除");
-  await fetchData();
+  await gridApi.query();
 }
 
-onMounted(fetchData);
+const gridOptions: VxeGridProps<CategoryEntity> = {
+  id: "admin-bookmark-category",
+  columns: [
+    { field: "name", title: "名称", minWidth: 140 },
+    { field: "slug", title: "Slug", minWidth: 140 },
+    { field: "description", title: "描述", minWidth: 220 },
+    { field: "color", title: "颜色", width: 100, align: "center", slots: { default: "color" } },
+    { field: "sort", title: "排序", width: 80, align: "center" },
+    { title: "操作", width: 160, align: "center", slots: { default: "actions" } },
+  ],
+  toolbarConfig: { custom: true, refresh: true },
+  pagerConfig: { enabled: false },
+  proxyConfig: {
+    ajax: {
+      query: async () => {
+        const items = await getCategoryListApi();
+        return { items, total: items.length };
+      },
+    },
+  },
+};
+
+const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
 </script>
 
 <template>
@@ -164,28 +162,20 @@ onMounted(fetchData);
           <ElButton type="primary" @click="handleAdd">新增分类</ElButton>
         </div>
       </template>
-      <ElTable :data="tableData" v-loading="loading" border style="width: 100%">
-        <ElTableColumn prop="name" label="名称" min-width="140" />
-        <ElTableColumn prop="slug" label="Slug" min-width="140" />
-        <ElTableColumn prop="description" label="描述" min-width="220" />
-        <ElTableColumn label="颜色" width="100" align="center">
-          <template #default="{ row }">
-            <span
-              v-if="row.color"
-              class="inline-block h-4 w-4 rounded"
-              :style="{ backgroundColor: row.color }"
-            />
-            <span v-else class="text-gray-300">-</span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="sort" label="排序" width="80" align="center" />
-        <ElTableColumn label="操作" width="160" align="center">
-          <template #default="{ row }">
-            <ElButton link type="primary" @click="handleEdit(row)">编辑</ElButton>
-            <ElButton link type="danger" @click="handleDelete(row)">删除</ElButton>
-          </template>
-        </ElTableColumn>
-      </ElTable>
+      <Grid>
+        <template #color="{ row }">
+          <span
+            v-if="row.color"
+            class="inline-block h-4 w-4 rounded"
+            :style="{ backgroundColor: row.color }"
+          />
+          <span v-else class="text-gray-300">-</span>
+        </template>
+        <template #actions="{ row }">
+          <ElButton link type="primary" @click="handleEdit(row)">编辑</ElButton>
+          <ElButton link type="danger" @click="handleDelete(row)">删除</ElButton>
+        </template>
+      </Grid>
 
       <ElDialog v-model="dialogVisible" :title="form.id ? '编辑分类' : '新增分类'" width="480px">
         <ElForm :model="form" label-width="80px">

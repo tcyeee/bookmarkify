@@ -4,6 +4,9 @@ services:
     image: ${SCRAPPER_IMAGE}
     container_name: bookmarkify-scraper
     restart: unless-stopped
+    # Give in-flight requests time to finish under graceful shutdown before Docker
+    # SIGKILLs the container. Must exceed HEADLESS_TIMEOUT_SECS (30s below) with margin.
+    stop_grace_period: 40s
     # Memory cap — headless Chrome can spike; serialized to one browser at a time.
     # mem_limit is the hard ceiling; memswap_limit allows a little swap headroom so
     # occasional spikes don't OOM-kill Chrome mid-scrape. Tune for the host.
@@ -11,10 +14,10 @@ services:
     mem_reservation: 256m
     memswap_limit: 2g
     ports:
-      # Exposed on all interfaces for external testing. Host 3000 is owned by bookmarkify-web.
-      # NOTE: also open inbound TCP 3001 in the Tencent Cloud security group.
-      # Re-bind to "127.0.0.1:3001:3000" once testing is done to make it private again.
-      - "3001:3000"
+      # Bound to loopback only — this service has no auth of its own beyond
+      # SCRAPER_AUTH_TOKEN (see below) and was never meant to be reachable from
+      # the public internet. Host 3000 is owned by bookmarkify-web, hence 3001.
+      - "127.0.0.1:3001:3000"
     environment:
       TZ: Asia/Shanghai
       # Container listens on 3000 (host port is controlled by the mapping above)
@@ -28,6 +31,10 @@ services:
       # go direct via Clash's GEOIP,CN,DIRECT rule. The clash container is managed on the
       # host by /opt/clash/docker-compose.yml (not by this CI deploy).
       PROXY_URL: http://clash:7890
+      # Shared-secret auth for /scrape and /ping — value comes from the SCRAPER_AUTH_TOKEN
+      # GitHub secret via .env. Leave unset only during initial rollout; bookmarkify-api
+      # must send the same token as `Authorization: Bearer <token>` once this is set.
+      SCRAPER_AUTH_TOKEN: ${SCRAPER_AUTH_TOKEN}
       # Aliyun OSS upload — all five must be set to enable; values come from .env
       OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
       OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}

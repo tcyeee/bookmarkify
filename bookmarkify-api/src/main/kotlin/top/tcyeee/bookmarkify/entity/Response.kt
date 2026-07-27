@@ -11,6 +11,11 @@ import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 import top.tcyeee.bookmarkify.utils.OssUtils
 import java.time.LocalDateTime
 
+data class AdminGridConfigVO(
+    @field:Schema(description = "表格标识") val gridId: String,
+    @field:Schema(description = "列配置(宽度/隐藏/排序)") val storeData: Any? = null,
+)
+
 data class BookmarkShow(
     @field:Schema(description = "关联书签ID") var bookmarkId: String? = null,
     @field:Schema(description = "关联用户自定义信息ID") var bookmarkUserLinkId: String? = null,
@@ -334,6 +339,25 @@ data class ScrapperCallLogVO(
         url = entity.url,
         urlHost = entity.urlHost,
         success = entity.success,
+    ) {
+        BeanUtil.copyProperties(entity, this)
+    }
+}
+
+/** 管理后台展示的书签活性检查日志条目 */
+data class BookmarkPingLogVO(
+    @field:Schema(description = "日志ID") var id: String,
+    @field:Schema(description = "书签ID") var bookmarkId: String,
+    @field:Schema(description = "URL host") var urlHost: String,
+    @field:Schema(description = "是否存活") var alive: Boolean,
+    @field:Schema(description = "ping通后是否触发了重新解析") var triggeredParse: Boolean = false,
+    @field:Schema(description = "检查时间") var createTime: LocalDateTime = LocalDateTime.now(),
+) {
+    constructor(entity: BookmarkPingLogEntity) : this(
+        id = entity.id,
+        bookmarkId = entity.bookmarkId,
+        urlHost = entity.urlHost,
+        alive = entity.alive,
     ) {
         BeanUtil.copyProperties(entity, this)
     }

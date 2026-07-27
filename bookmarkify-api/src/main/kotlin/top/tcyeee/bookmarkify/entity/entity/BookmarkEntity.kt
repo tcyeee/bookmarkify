@@ -29,6 +29,10 @@ data class BookmarkEntity(
     /* URL相关 */
     @TableId var id: String,
     @field:Max(200) @field:Schema(description = "书签根域名") var urlHost: String,        // sfz.uzuzuz.com.cn
+    // canonical 书签按 (urlHost, urlPath) 联合去重/抓取，而不是只按 urlHost：
+    // 同一域名下不同路径（如不同 GitHub 仓库、不同 Notion 页面）是完全不同的页面，
+    // 各自应有自己的标题/简称/图标，不能共用同一条记录。根路径统一存 "/"。
+    @field:Max(500) @field:Schema(description = "书签路径(与 urlHost 联合构成去重/抓取的唯一标识)") var urlPath: String = "/",
     @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
     /* 基础信息 */
@@ -46,8 +50,8 @@ data class BookmarkEntity(
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
 ) {
-    // 拼接后的完整网站
-    val rawUrl get() = "${this.urlScheme}://${this.urlHost}"
+    // 拼接后的完整网站（含路径，抓取/ping 都以这个具体页面为目标，而不是域名根路径）
+    val rawUrl get() = "${this.urlScheme}://${this.urlHost}${this.urlPath}"
 
     // JSON格式化后的数据
     val json: String? get() = JSONUtil.toJsonStr(this)
@@ -56,6 +60,7 @@ data class BookmarkEntity(
     constructor(url: BookmarkUrlWrapper) : this(
         id = IdUtil.fastUUID(),
         urlHost = url.urlHost,
+        urlPath = url.urlPath ?: "/",
         urlScheme = url.urlScheme,
         parseStatus = ParseStatusEnum.LOADING,
     )
@@ -68,6 +73,7 @@ data class BookmarkEntity(
     ) {
         val bookmarkUrl: BookmarkUrlWrapper = WebsiteParser.urlWrapper(chromeRowDate.url)
         urlHost = bookmarkUrl.urlHost
+        urlPath = bookmarkUrl.urlPath ?: "/"
         urlScheme = bookmarkUrl.urlScheme
     }
 

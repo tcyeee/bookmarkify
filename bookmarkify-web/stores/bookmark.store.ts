@@ -25,6 +25,8 @@ export const useBookmarkStore = defineStore('homeItems', {
     nodes: {} as Record<string, UserLayoutNodeVO>,
     order: { [ROOT_KEY]: [] } as Record<string, string[]>,
     lastFetchedAt: 0,
+    // LOADING 节点的兜底定时器句柄（进程内瞬时状态，不落盘，见下方 persist.paths）
+    pendingTimeouts: {} as Record<string, ReturnType<typeof setTimeout>>,
   }),
 
   getters: {
@@ -85,6 +87,28 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []), node.id]
     },
 
+    // 兜底：解析结果靠 WebSocket 推送，是尽力而为的——连接断开/消息丢失时后端不会重试推送。
+    // 超时仍未解除 LOADING 就主动整体重新拉取桌面布局对账，避免节点永远转圈。
+    // 调用方应在插入 LOADING 节点后（addLoading / addImportLoadingBatch）为每个节点调用一次。
+    watchForResolution(nodeId: string, timeoutMs = 30000) {
+      this.clearResolutionWatch(nodeId)
+      this.pendingTimeouts[nodeId] = setTimeout(() => {
+        delete this.pendingTimeouts[nodeId]
+        if (this.nodes[nodeId]?.type === HomeItemType.BOOKMARK_LOADING) {
+          console.warn(`[bookmark] 节点 ${nodeId} 超过 ${timeoutMs}ms 未收到解析结果，主动重新拉取桌面布局`)
+          this.update()
+        }
+      }, timeoutMs)
+    },
+
+    // 收到 WS 更新 / 节点被手动删除时调用，取消其兜底定时器
+    clearResolutionWatch(nodeId: string) {
+      const handle = this.pendingTimeouts[nodeId]
+      if (handle == null) return
+      clearTimeout(handle)
+      delete this.pendingTimeouts[nodeId]
+    },
+
     // 批量注入导入书签的 LOADING 节点（含文件夹）；避免全量 update()
     addImportLoadingBatch(nodes: UserLayoutNodeVO[]) {
       for (const node of nodes) {
@@ -120,6 +144,7 @@ export const useBookmarkStore = defineStore('homeItems', {
     },
 
     removeNode(id: string) {
+      this.clearResolutionWatch(id)
       const from = this.parentKeyOf(id)
       delete this.nodes[id]
       for (const k of Object.keys(this.order)) this.order[k] = this.order[k].filter((x) => x !== id)
@@ -196,5 +221,6 @@ export const useBookmarkStore = defineStore('homeItems', {
   // pinia-plugin-persistedstate 会回退到 cookies（单条 ~4KB 上限），书签树（含内嵌
   // base64 图标）写入必然静默失败/截断，导致缓存永远无法在 F5 后存活。与
   // preference.store 写法保持一致。
-  persist: { storage: piniaPluginPersistedstate.localStorage() },
+  // pendingTimeouts 是进程内定时器句柄，刷新后必然失效，排除在持久化范围外。
+  persist: { storage: piniaPluginPersistedstate.localStorage(), paths: ['nodes', 'order', 'lastFetchedAt'] },
 })

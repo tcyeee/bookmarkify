@@ -3,7 +3,7 @@
     class="w-full max-w-[420px] mx-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-4">
     <div class="flex items-center gap-2 mb-2">
       <Icon
-        :icon="isRoot ? 'memory:home-thatched' : 'memory:folder'"
+        :icon="isRoot ? 'mdi:home-variant' : 'mdi:folder'"
         class="size-4 shrink-0"
         :class="isRoot ? 'text-slate-400 dark:text-slate-500' : 'text-amber-500'" />
       <span class="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{{ name }}</span>

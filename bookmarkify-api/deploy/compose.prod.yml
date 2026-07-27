@@ -46,6 +46,9 @@ services:
       # --- GitHub 登录（Client ID 为公开值；Secret 从 .env 注入；出站同走 clash 代理）---
       BOOKMARKIFY_GITHUB_CLIENT_ID: Iv23liXTNklcSgqAa8rU
       BOOKMARKIFY_GITHUB_CLIENT_SECRET: ${BOOKMARKIFY_GITHUB_CLIENT_SECRET}
+      # --- bookmarkify-scrapper shared-secret auth (secret from .env; empty disables it,
+      # matching scrapper's own SCRAPER_AUTH_TOKEN-unset-means-no-auth default) ---
+      BOOKMARKIFY_SCRAPPER_AUTH_TOKEN: ${BOOKMARKIFY_SCRAPPER_AUTH_TOKEN}
     networks:
       - app_network
 

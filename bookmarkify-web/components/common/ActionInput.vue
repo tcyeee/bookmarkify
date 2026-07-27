@@ -20,7 +20,7 @@
           title="随机生成"
           @click.stop.prevent="emit('random')"
           :disabled="busy || disabled">
-          <Icon icon="memory:rotate-clockwise" class="size-5" />
+          <Icon icon="mdi:loading" class="size-5" />
         </button>
       </div>
     </label>

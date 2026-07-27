@@ -1,0 +1,98 @@
+{
+  "settingLayout": {
+    "back": "Retour",
+    "tabs": {
+      "profile": "Profil",
+      "importBookmarks": "Importer des favoris",
+      "background": "Arrière-plan",
+      "preference": "Préférences",
+      "shortcuts": "Raccourcis"
+    }
+  },
+  "preferenceSettings": {
+    "title": "Préférences",
+    "loading": "Chargement des préférences...",
+    "synced": "Préférences synchronisées",
+    "bookmarkOpenMode": {
+      "label": "Ouverture des favoris",
+      "desc": "Ouvrir dans l'onglet actuel ou un nouvel onglet.",
+      "currentTab": "Onglet actuel",
+      "newTab": "Nouvel onglet"
+    },
+    "bookmarkGap": {
+      "label": "Espacement des favoris",
+      "desc": "Disposition compacte, par défaut ou spacieuse.",
+      "compact": "Compact",
+      "default": "Par défaut",
+      "spacious": "Spacieux"
+    },
+    "bookmarkImageSize": {
+      "label": "Taille des icônes",
+      "desc": "Contrôle la taille des logos des favoris.",
+      "large": "Grande",
+      "medium": "Moyenne (par défaut)",
+      "small": "Petite"
+    },
+    "showTitle": {
+      "label": "Afficher le titre",
+      "desc": "Afficher uniquement les icônes ou aussi les titres."
+    },
+    "showDesktopAddEntry": {
+      "label": "Afficher le bouton d'ajout",
+      "desc": "Afficher le bouton « Ajouter » sur le bureau."
+    },
+    "language": {
+      "label": "Langue",
+      "desc": "Changer la langue de l'interface."
+    }
+  },
+  "accountProfile": {
+    "verified": "Vérifié",
+    "unnamedUser": "Utilisateur sans nom",
+    "basicInfo": "Informations de base",
+    "nickname": "Pseudo",
+    "nicknamePlaceholder": "Saisissez un pseudo",
+    "save": "Enregistrer",
+    "saving": "Enregistrement...",
+    "cancel": "Annuler",
+    "accountSecurity": "Sécurité du compte",
+    "email": "E-mail",
+    "emailUnbound": "Aucun e-mail associé",
+    "googleAccount": "Compte Google",
+    "githubAccount": "Compte GitHub",
+    "unlinked": "Non lié",
+    "accountActions": "Actions du compte",
+    "logout": "Se déconnecter",
+    "logoutDesc": "Déconnecte uniquement cet appareil ; les données du compte ne sont pas affectées.",
+    "dangerZone": "Zone de danger",
+    "deleteAccount": "Supprimer le compte",
+    "deleteAccountDesc": "La suppression détruit définitivement le compte et ses données. Agissez avec prudence.",
+    "profileUpdateSuccess": "Profil mis à jour avec succès"
+  },
+  "bookmarkManage": {
+    "title": "Importer des favoris",
+    "desc": "Importez en masse des favoris depuis un fichier HTML exporté par Chrome.",
+    "importing": "Importation démarrée, analyse des favoris en cours…",
+    "loadingFile": "Lecture du fichier…",
+    "dropHint": "Cliquez pour choisir ou glissez-déposez un fichier ici",
+    "supportedFormats": "Prend en charge les fichiers .html exportés depuis Chrome / Edge",
+    "chooseFile": "Choisir un fichier",
+    "totalCount": "{total} favoris au total",
+    "duplicateCount": ", dont {count} déjà existants",
+    "willImport": "{count} seront importés",
+    "cancel": "Annuler",
+    "startImport": "Démarrer l'import ({count})",
+    "existing": "Existant",
+    "howToExport": "Comment exporter les favoris Chrome ?",
+    "step1": "Ouvrez Chrome, cliquez sur le menu en haut à droite → Favoris → Gestionnaire de favoris",
+    "step2": "Cliquez sur l'icône à trois points en haut à droite → Exporter les favoris",
+    "step3Before": "Enregistrez le fichier au format ",
+    "step3Code": ".html",
+    "step3After": " puis importez-le",
+    "noBookmarksFound": "Aucun favori importable n'a été trouvé dans le fichier.",
+    "readFileFailed": "Échec de la lecture du fichier, veuillez réessayer.",
+    "invalidFileType": "Veuillez importer un fichier HTML de favoris exporté depuis Chrome",
+    "importStarted": "Importation démarrée ! {count} éléments sont en cours d'analyse en arrière-plan et se mettront à jour automatiquement.",
+    "importFailed": "Échec de l'importation, veuillez réessayer plus tard."
+  }
+}

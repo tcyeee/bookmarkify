@@ -1,8 +1,8 @@
 <template>
   <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
     <div>
-      <h3 class="text-xl font-semibold">导入书签</h3>
-      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">从 Chrome 导出的 HTML 文件中批量导入书签。</p>
+      <h3 class="text-xl font-semibold">{{ $t('bookmarkManage.title') }}</h3>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t('bookmarkManage.desc') }}</p>
     </div>
 
     <!-- 阶段：idle / importing — 上传区 -->
@@ -23,17 +23,17 @@
         <div class="flex flex-col items-center gap-3 px-6 py-8 text-center select-none">
           <div class="flex items-center justify-center w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700">
             <Icon
-              :icon="phase !== 'idle' ? 'memory:rotate-clockwise' : 'memory:upload'"
+              :icon="phase !== 'idle' ? 'mdi:loading' : 'mdi:upload'"
               class="size-7 text-sky-500"
               :class="{ 'animate-spin': phase !== 'idle' }" />
           </div>
           <div>
             <p class="text-base font-medium text-slate-700 dark:text-slate-200">
-              {{ phase === 'importing' ? '导入已开始，书签解析中…' : phase === 'loading' ? '正在读取文件…' : '点击选择或拖拽文件到此处' }}
+              {{ phase === 'importing' ? $t('bookmarkManage.importing') : phase === 'loading' ? $t('bookmarkManage.loadingFile') : $t('bookmarkManage.dropHint') }}
             </p>
-            <p class="mt-1 text-sm text-slate-400 dark:text-slate-500">支持 Chrome / Edge 导出的 .html 书签文件</p>
+            <p class="mt-1 text-sm text-slate-400 dark:text-slate-500">{{ $t('bookmarkManage.supportedFormats') }}</p>
           </div>
-          <button v-if="phase === 'idle'" type="button" class="cy-btn cy-btn-accent cy-btn-sm pointer-events-none">选择文件</button>
+          <button v-if="phase === 'idle'" type="button" class="cy-btn cy-btn-accent cy-btn-sm pointer-events-none">{{ $t('bookmarkManage.chooseFile') }}</button>
         </div>
       </label>
     </template>
@@ -44,12 +44,14 @@
         <!-- 头部统计 -->
         <div class="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
           <p class="text-sm text-slate-600 dark:text-slate-300">
-            共 <span class="font-semibold">{{ previewData.total }}</span> 个书签
-            <template v-if="previewData.duplicateCount > 0">
-              ，其中 <span class="font-semibold text-amber-600 dark:text-amber-400">{{ previewData.duplicateCount }}</span> 个已有
-            </template>
+            <i18n-t keypath="bookmarkManage.totalCount" tag="span">
+              <template #total><span class="font-semibold">{{ previewData.total }}</span></template>
+            </i18n-t>
+            <i18n-t v-if="previewData.duplicateCount > 0" keypath="bookmarkManage.duplicateCount" tag="span">
+              <template #count><span class="font-semibold text-amber-600 dark:text-amber-400">{{ previewData.duplicateCount }}</span></template>
+            </i18n-t>
           </p>
-          <p class="text-sm text-sky-600 dark:text-sky-400 font-medium">将导入 {{ selectedCount }} 个</p>
+          <p class="text-sm text-sky-600 dark:text-sky-400 font-medium">{{ $t('bookmarkManage.willImport', { count: selectedCount }) }}</p>
         </div>
 
         <!-- 书签列表（按文件夹分组） -->
@@ -59,7 +61,7 @@
             <div
               v-if="group.folder"
               class="flex items-center gap-2 px-4 py-2 bg-slate-50/70 dark:bg-slate-800/40 sticky top-0 z-10">
-              <Icon icon="memory:folder" class="size-4 text-amber-500 shrink-0" />
+              <Icon icon="mdi:folder" class="size-4 text-amber-500 shrink-0" />
               <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide truncate">{{ group.folder }}</span>
             </div>
             <!-- 书签项 -->
@@ -74,20 +76,20 @@
                 </p>
                 <p class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ item.url }}</p>
               </div>
-              <span v-if="item.isDuplicate" class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">已有</span>
+              <span v-if="item.isDuplicate" class="shrink-0 text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{{ $t('bookmarkManage.existing') }}</span>
             </label>
           </div>
         </div>
 
         <!-- 底部操作 -->
         <div class="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-700">
-          <button type="button" class="cy-btn cy-btn-ghost cy-btn-sm" @click="reset">取消</button>
+          <button type="button" class="cy-btn cy-btn-ghost cy-btn-sm" @click="reset">{{ $t('bookmarkManage.cancel') }}</button>
           <button
             type="button"
             class="cy-btn cy-btn-accent cy-btn-sm"
             :disabled="selectedCount === 0"
             @click="startImport">
-            开始导入（{{ selectedCount }} 个）
+            {{ $t('bookmarkManage.startImport', { count: selectedCount }) }}
           </button>
         </div>
       </div>
@@ -99,18 +101,20 @@
         v-if="statusMessage"
         class="flex items-start gap-3 rounded-xl px-4 py-3 text-sm transition-colors"
         :class="statusClass">
-        <Icon :icon="statusType === 'success' ? 'memory:check-circle' : statusType === 'error' ? 'memory:close-circle' : 'memory:information'" class="size-5 mt-0.5 shrink-0" />
+        <Icon :icon="statusType === 'success' ? 'mdi:check-circle' : statusType === 'error' ? 'mdi:close-circle' : 'mdi:information'" class="size-5 mt-0.5 shrink-0" />
         <span>{{ statusMessage }}</span>
       </div>
     </Transition>
 
     <!-- 使用说明（仅 idle 时展示） -->
     <div v-if="phase === 'idle'" class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-5 text-sm text-slate-500 dark:text-slate-400 space-y-2">
-      <p class="font-medium text-slate-600 dark:text-slate-300">如何导出 Chrome 书签？</p>
+      <p class="font-medium text-slate-600 dark:text-slate-300">{{ $t('bookmarkManage.howToExport') }}</p>
       <ol class="list-decimal list-inside space-y-1 text-slate-500 dark:text-slate-400">
-        <li>打开 Chrome，点击右上角菜单 → 书签 → 书签管理器</li>
-        <li>点击右上角三点图标 → 导出书签</li>
-        <li>保存为 <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-mono text-xs">.html</code> 文件后上传即可</li>
+        <li>{{ $t('bookmarkManage.step1') }}</li>
+        <li>{{ $t('bookmarkManage.step2') }}</li>
+        <li>
+          {{ $t('bookmarkManage.step3Before') }}<code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-mono text-xs">{{ $t('bookmarkManage.step3Code') }}</code>{{ $t('bookmarkManage.step3After') }}
+        </li>
       </ol>
     </div>
   </div>
@@ -123,6 +127,7 @@ import type * as t from '@typing'
 
 type Phase = 'idle' | 'loading' | 'reviewing' | 'importing'
 
+const { t: translate } = useI18n()
 const bookmarkStore = useBookmarkStore()
 
 const fileInputRef = ref<HTMLInputElement>()
@@ -187,7 +192,7 @@ function handleFileChange(event: Event) {
 
 async function processFile(file: File) {
   if (!file.name.endsWith('.html') && !file.name.endsWith('.htm')) {
-    useToastStore().warning('请上传从 Chrome 导出的 HTML 书签文件')
+    useToastStore().warning(translate('bookmarkManage.invalidFileType'))
     if (fileInputRef.value) fileInputRef.value.value = ''
     return
   }
@@ -199,7 +204,7 @@ async function processFile(file: File) {
     const data = await bookmarksUploadPreview(file)
 
     if (data.total === 0) {
-      statusMessage.value = '文件中没有找到可导入的书签。'
+      statusMessage.value = translate('bookmarkManage.noBookmarksFound')
       statusType.value = 'default'
       phase.value = 'idle'
       return
@@ -220,7 +225,7 @@ async function processFile(file: File) {
       phase.value = 'reviewing'
     }
   } catch (error: any) {
-    statusMessage.value = error?.msg || error?.message || '读取文件失败，请重试。'
+    statusMessage.value = error?.msg || error?.message || translate('bookmarkManage.readFileFailed')
     statusType.value = 'error'
     phase.value = 'idle'
     if (fileInputRef.value) fileInputRef.value.value = ''
@@ -240,11 +245,14 @@ async function startImport() {
     bookmarkStore.addImportLoadingBatch(nodes)
     const loadingIds = nodes.filter((n) => n.type === HomeItemType.BOOKMARK_LOADING).map((n) => n.id)
     useImportProgressStore().startBatch(loadingIds)
-    statusMessage.value = `导入已开始！共 ${nodes.length} 项正在后台解析，稍后会自动更新。`
+    // 批量导入同样只靠 WebSocket 推送解除 loading，逐项注册超时兜底（放宽到 60s：导入批量大时
+    // 解析队列本身排队更久，避免和正常排队耗时打架产生误报式的重新拉取）
+    loadingIds.forEach((id) => bookmarkStore.watchForResolution(id, 60000))
+    statusMessage.value = translate('bookmarkManage.importStarted', { count: nodes.length })
     statusType.value = 'success'
     phase.value = 'idle'
   } catch (error: any) {
-    statusMessage.value = error?.msg || error?.message || '导入失败，请稍后重试。'
+    statusMessage.value = error?.msg || error?.message || translate('bookmarkManage.importFailed')
     statusType.value = 'error'
     phase.value = 'idle'
   } finally {

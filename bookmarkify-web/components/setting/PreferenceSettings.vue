@@ -3,56 +3,56 @@
     <section
       class="bg-white/70  backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/70">
           <div>
-            <h3 class="text-lg font-semibold">偏好设置</h3>
+            <h3 class="text-lg font-semibold">{{ $t('preferenceSettings.title') }}</h3>
           </div>
 
       <div
         v-if="preferenceLoading"
         class="mt-4 flex items-center gap-2 rounded-xl border border-dashed border-slate-200/80 bg-white/70 px-4 py-3 text-sm text-slate-500 transition-colors dark:border-slate-800/70 dark:bg-slate-900/60 dark:text-slate-300">
-        <Icon icon="memory:rotate-clockwise" class="size-[18px] animate-spin" />
-        <span>正在加载偏好设置...</span>
+        <Icon icon="mdi:loading" class="size-[18px] animate-spin" />
+        <span>{{ $t('preferenceSettings.loading') }}</span>
       </div>
 
       <div v-else class="mt-2 divide-y divide-slate-200/70 dark:divide-slate-800/70">
         <div class="flex flex-wrap items-start gap-3 py-4">
           <div class="flex-1 space-y-1 min-w-[220px]">
-            <div class="text-sm font-semibold">书签打开方式</div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">在当前或新标签页中打开。</p>
+            <div class="text-sm font-semibold">{{ $t('preferenceSettings.bookmarkOpenMode.label') }}</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ $t('preferenceSettings.bookmarkOpenMode.desc') }}</p>
           </div>
           <select v-model="preferenceForm.bookmarkOpenMode" class="cy-input cy-input-sm w-44">
-            <option :value="BookmarkOpenMode.CURRENT_TAB">当前标签页</option>
-            <option :value="BookmarkOpenMode.NEW_TAB">新标签页</option>
+            <option :value="BookmarkOpenMode.CURRENT_TAB">{{ $t('preferenceSettings.bookmarkOpenMode.currentTab') }}</option>
+            <option :value="BookmarkOpenMode.NEW_TAB">{{ $t('preferenceSettings.bookmarkOpenMode.newTab') }}</option>
           </select>
         </div>
 
         <div class="flex flex-wrap items-start gap-3 py-4">
           <div class="flex-1 space-y-1 min-w-[220px]">
-            <div class="text-sm font-semibold">书签间距</div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">紧凑、默认或宽松排布。</p>
+            <div class="text-sm font-semibold">{{ $t('preferenceSettings.bookmarkGap.label') }}</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ $t('preferenceSettings.bookmarkGap.desc') }}</p>
           </div>
           <select v-model="preferenceForm.bookmarkGap" class="cy-input cy-input-sm w-44">
-            <option :value="BookmarkGapMode.COMPACT">紧凑</option>
-            <option :value="BookmarkGapMode.DEFAULT">默认</option>
-            <option :value="BookmarkGapMode.SPACIOUS">宽松</option>
+            <option :value="BookmarkGapMode.COMPACT">{{ $t('preferenceSettings.bookmarkGap.compact') }}</option>
+            <option :value="BookmarkGapMode.DEFAULT">{{ $t('preferenceSettings.bookmarkGap.default') }}</option>
+            <option :value="BookmarkGapMode.SPACIOUS">{{ $t('preferenceSettings.bookmarkGap.spacious') }}</option>
           </select>
         </div>
 
         <div class="flex flex-wrap items-start gap-3 py-4">
           <div class="flex-1 space-y-1 min-w-[220px]">
-            <div class="text-sm font-semibold">书签图片大小</div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">控制书签 Logo 显示尺寸。</p>
+            <div class="text-sm font-semibold">{{ $t('preferenceSettings.bookmarkImageSize.label') }}</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ $t('preferenceSettings.bookmarkImageSize.desc') }}</p>
           </div>
           <select v-model="preferenceForm.bookmarkImageSize" class="cy-input cy-input-sm w-44">
-            <option :value="BookmarkImageSize.LARGE">大</option>
-            <option :value="BookmarkImageSize.MEDIUM">中（默认）</option>
-            <option :value="BookmarkImageSize.SMALL">小</option>
+            <option :value="BookmarkImageSize.LARGE">{{ $t('preferenceSettings.bookmarkImageSize.large') }}</option>
+            <option :value="BookmarkImageSize.MEDIUM">{{ $t('preferenceSettings.bookmarkImageSize.medium') }}</option>
+            <option :value="BookmarkImageSize.SMALL">{{ $t('preferenceSettings.bookmarkImageSize.small') }}</option>
           </select>
         </div>
 
         <div class="flex flex-wrap items-start gap-3 py-4">
           <div class="flex-1 space-y-1 min-w-[220px]">
-            <div class="text-sm font-semibold">显示标题</div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">仅展示图标或展示标题。</p>
+            <div class="text-sm font-semibold">{{ $t('preferenceSettings.showTitle.label') }}</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ $t('preferenceSettings.showTitle.desc') }}</p>
           </div>
           <button
             type="button"
@@ -67,8 +67,8 @@
 
         <div class="flex flex-wrap items-start gap-3 py-4">
           <div class="flex-1 space-y-1 min-w-[220px]">
-            <div class="text-sm font-semibold">显示桌面增加入口</div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">在桌面展示“增加”入口按钮。</p>
+            <div class="text-sm font-semibold">{{ $t('preferenceSettings.showDesktopAddEntry.label') }}</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ $t('preferenceSettings.showDesktopAddEntry.desc') }}</p>
           </div>
           <button
             type="button"
@@ -80,20 +80,30 @@
               :class="preferenceForm.showDesktopAddEntry ? 'translate-x-5' : 'translate-x-1'" />
           </button>
         </div>
+
+        <div class="flex flex-wrap items-start gap-3 py-4">
+          <div class="flex-1 space-y-1 min-w-[220px]">
+            <div class="text-sm font-semibold">{{ $t('preferenceSettings.language.label') }}</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ $t('preferenceSettings.language.desc') }}</p>
+          </div>
+          <select v-model="selectedLocale" class="cy-input cy-input-sm w-44" @change="onLocaleChange">
+            <option v-for="l in availableLocales" :key="l.code" :value="l.code">{{ l.name }}</option>
+          </select>
+        </div>
       </div>
     </section>
 
     <div
       v-if="!preferenceLoading && !preferenceDirty"
       class="flex items-center gap-2 text-xs text-slate-500 transition-colors dark:text-slate-400">
-      <Icon icon="memory:cloud" class="size-4" />
-      <span>已同步最新偏好设置</span>
+      <Icon icon="mdi:cloud" class="size-4" />
+      <span>{{ $t('preferenceSettings.synced') }}</span>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   BookmarkImageSize,
@@ -106,6 +116,21 @@ import { usePreferenceStore } from '@stores/preference.store'
 
 const preferenceStore = usePreferenceStore()
 const { preference } = storeToRefs(preferenceStore)
+
+// @nuxtjs/i18n 通过 declare module 'vue-i18n' 扩展 Composer 添加 locales/setLocale，
+// 但该模块增强在本项目的 vue-tsc 全局类型解析下未生效，故此处显式声明扩展后的类型。
+type I18nComposerExt = {
+  locale: Ref<string>
+  locales: ComputedRef<Array<{ code: string; name?: string }>>
+  setLocale: (code: string) => Promise<void>
+}
+const { locale, locales, setLocale } = useI18n() as unknown as I18nComposerExt
+const availableLocales = computed(() => locales.value)
+const selectedLocale = ref(locale.value)
+
+function onLocaleChange() {
+  setLocale(selectedLocale.value)
+}
 
 const preferenceLoading = ref(false)
 const preferenceSaving = ref(false)
@@ -207,6 +232,10 @@ watch(
   },
   { deep: true }
 )
+
+watch(locale, (val) => {
+  selectedLocale.value = val
+})
 
 onMounted(loadPreference)
 </script>

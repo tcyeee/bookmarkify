@@ -1,7 +1,7 @@
 import { addCollection, Icon } from '@iconify/vue'
-import memoryIcons from '@iconify-json/memory/icons.json'
+import mdiIcons from '../assets/icons/mdi-subset.json'
 
 export default defineNuxtPlugin((nuxtApp) => {
-  addCollection(memoryIcons as any)
+  addCollection(mdiIcons as any)
   nuxtApp.vueApp.component('Icon', Icon)
 })

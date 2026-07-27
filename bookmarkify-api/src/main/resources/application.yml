@@ -51,6 +51,7 @@ bookmarkify:
       domain-name: ${BOOKMARKIFY_ALIYUN_OSS_DOMAIN} # 自定义域名 https://i.tcyeee.top
   scrapper:
     base-url: ${BOOKMARKIFY_SCRAPPER_BASE_URL:http://bookmarkify-scraper:3000}  # 自部署 scrapper 服务地址（接替 iframely）
+    auth-token: ${BOOKMARKIFY_SCRAPPER_AUTH_TOKEN:}  # 对应 scrapper 的 SCRAPER_AUTH_TOKEN；留空则不发送鉴权 header
   goatcounter:
     # 自托管 GoatCounter 站点地址（dev/prod 同走公网域名，prod 经 nginx 回环命中 site3）
     base-url: ${BOOKMARKIFY_GOATCOUNTER_BASE_URL:https://bookmarkify.stats.viii.me}

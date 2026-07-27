@@ -4,7 +4,7 @@
   <dialog ref="delDialogRef" class="cy-modal">
     <div class="cy-modal-box">
       <div class="flex items-end gap-2">
-        <Icon icon="memory:alert-box-fill" class="size-7 text-red-500" />
+        <Icon icon="mdi:alert-box" class="size-7 text-red-500" />
         <h3 class="text-lg font-bold text-red-500">警告：账号注销后将无法找回！</h3>
       </div>
       <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">注销后账号及全部数据将被销毁且不可恢复，请谨慎操作。</p>

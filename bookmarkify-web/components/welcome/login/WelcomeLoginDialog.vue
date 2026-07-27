@@ -3,7 +3,7 @@
   <div v-if="!isVerifying" class="flex flex-col items-center pb-6 pt-1">
     <div
       class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 via-indigo-500 to-fuchsia-500 shadow-lg shadow-indigo-500/30">
-      <Icon icon="memory:bookmark" class="size-6 text-white" />
+      <Icon icon="mdi:bookmark" class="size-6 text-white" />
     </div>
     <h2 class="text-xl font-semibold text-white">欢迎登录 Bookmarkify</h2>
     <p class="mt-1.5 text-sm text-white/45">登录后可保障数据安全并支持跨设备同步</p>

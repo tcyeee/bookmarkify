@@ -169,7 +169,7 @@ export const useAuthStore = defineStore('auth', {
         if (import.meta.client) {
           // 清理前端缓存与 cookie，避免残留
           localStorage.removeItem('homeItems')
-          localStorage.removeItem('user')
+          localStorage.removeItem('auth')
           localStorage.removeItem('backgroundImageDataUrl')
           document.cookie = 'satoken=;auth=;user=; Max-Age=0; path=/'
         }
@@ -179,5 +179,7 @@ export const useAuthStore = defineStore('auth', {
     },
   },
 
-  persist: true,
+  // 显式指定 localStorage，理由同 bookmark.store：裸 `persist: true` 在本项目未配置
+  // 模块级 storage 时会回退到 cookies（~4KB 上限），登录态静默写入失败/截断。
+  persist: { storage: piniaPluginPersistedstate.localStorage() },
 })

@@ -64,7 +64,7 @@ class BookmarkServiceImpl(
 
     // 找到全部的系统默认书签,存储用户桌面布局和自定义书签
     override fun setDefaultBookmark(uid: String) =
-        projectConfig.defaultBookmarkify.map { WebsiteParser.urlWrapper(it).urlHost }.let { this.findListByHost(it) }
+        findListByUrl(projectConfig.defaultBookmarkify)
             .map { bookmark ->
                 UserLayoutNodeEntity(uid = uid).let { node -> Pair(node, BookmarkUserLink(bookmark, node.id, uid)) }
             }.also { pair ->
@@ -73,6 +73,10 @@ class BookmarkServiceImpl(
             }.run {}
 
     override fun findByHost(host: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, host).one()
+
+    override fun findListByUrl(urls: List<String>): List<BookmarkEntity> =
+        urls.mapNotNull { runCatching { WebsiteParser.urlWrapper(it) }.getOrNull() }
+            .mapNotNull { getByUrl(it.urlHost, it.urlPath ?: "/") }
 
     @Transactional
     override fun setDefaultFunction(uid: String) =
@@ -234,6 +238,53 @@ class BookmarkServiceImpl(
         }
     }
 
+    override fun livenessCheckStaleBookmarks() {
+        // 范围覆盖全部书签（含已手动认证的），因为 checkAll/retryClosedBookmarks 都只处理 verifyFlag=false，
+        // 已认证书签此前从未被自动复查过。排除 LOADING：尚未解析完成的记录由 checkAll 每5分钟负责兜底。
+        val candidates = ktQuery()
+            .ne(BookmarkEntity::parseStatus, ParseStatusEnum.LOADING)
+            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -7, ChronoUnit.DAYS))
+            .orderByAsc(BookmarkEntity::updateTime)
+            .last("LIMIT $LIVENESS_CHECK_BATCH_SIZE")
+            .list()
+
+        log.debug("[livenessCheckStaleBookmarks] 本次待检查书签数: ${candidates.size}")
+        candidates.forEach { bookmark ->
+            val alive = apiService.pingWebsite(bookmark.rawUrl)
+            // parseBookmark() 对 verifyFlag=true 的书签直接短路返回，不会更新 updateTime，
+            // 发布重新解析事件对已认证书签是无效操作，会导致该记录每小时被重复选中。
+            val triggeredParse = alive && !bookmark.isActivity && !bookmark.verifyFlag
+            pingLogMapper.insert(
+                BookmarkPingLogEntity(
+                    bookmarkId = bookmark.id,
+                    urlHost = bookmark.urlHost,
+                    alive = alive,
+                    triggeredParse = triggeredParse,
+                )
+            )
+            when {
+                triggeredParse -> {
+                    log.debug("[livenessCheckStaleBookmarks] ping 成功且此前不活跃，触发重新解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                    eventPublisher.publishEvent(BookmarkParseEvent(bookmark.id))
+                }
+                alive -> {
+                    log.debug("[livenessCheckStaleBookmarks] ping 成功，仅刷新 updateTime: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                    ktUpdate().eq(BookmarkEntity::id, bookmark.id)
+                        .set(BookmarkEntity::updateTime, LocalDateTime.now())
+                        .update()
+                }
+                else -> {
+                    log.debug("[livenessCheckStaleBookmarks] ping 失败，标记 CLOSED: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                    ktUpdate().eq(BookmarkEntity::id, bookmark.id)
+                        .set(BookmarkEntity::updateTime, LocalDateTime.now())
+                        .set(BookmarkEntity::parseStatus, ParseStatusEnum.CLOSED)
+                        .set(BookmarkEntity::isActivity, false)
+                        .update()
+                }
+            }
+        }
+    }
+
     override fun addOne(url: String, uid: String): UserLayoutNodeVO {
         log.debug("[addOne] uid=$uid 开始添加书签, rawUrl=$url")
 
@@ -241,10 +292,11 @@ class BookmarkServiceImpl(
         val bookmarkUrl: BookmarkUrlWrapper = WebsiteParser.urlWrapper(url)
         log.debug("[addOne] Step1 URL 标准化完成: urlHost=${bookmarkUrl.urlHost}, urlFull=${bookmarkUrl.urlFull}")
 
-        // 2. 按 urlHost 获取或创建 canonical 书签记录。
-        //    多个用户共享同一条 bookmark 记录（一对多），避免重复抓取同一网站。
-        //    getOrCreateByHost 容忍并发插入同一 host（依赖 url_host 唯一约束）。
-        val bookmark = getOrCreateByHost(bookmarkUrl)
+        // 2. 按 (urlHost, urlPath) 获取或创建 canonical 书签记录。
+        //    多个用户添加同一个页面时共享同一条 bookmark 记录（一对多），避免重复抓取同一页面；
+        //    不同路径（即使同域名）各自独立记录，因为路径不同即页面不同，标题/简称/图标不能共用。
+        //    getOrCreateByUrl 容忍并发插入同一 (host, path)（依赖 (url_host, url_path) 联合唯一约束）。
+        val bookmark = getOrCreateByUrl(bookmarkUrl)
         log.debug("[addOne] Step2 书签记录就绪: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}, parseStatus=${bookmark.parseStatus}")
 
         // 3. 为当前用户创建桌面布局节点，初始类型为 BOOKMARK_LOADING，
@@ -440,7 +492,7 @@ class BookmarkServiceImpl(
     private fun ingestOneSimilar(domain: String): String {
         val wrapper = WebsiteParser.urlWrapper("https://${domain.trim().substringAfter("://")}")
         findByHost(wrapper.urlHost)?.let { return "EXISTS" }
-        val bookmark = getOrCreateByHost(wrapper)
+        val bookmark = getOrCreateByUrl(wrapper)
         // 抓取可能抛异常（本地解析器）或落 CLOSED（scrapper 不可达）；统一以「最终落库状态」判定，
         // 抓到正文(SUCCESS/BLOCKED)才保留，其余一律删除——保证幻觉域名绝不留在库里。
         runCatching { parseBookmark(bookmark) }
@@ -482,7 +534,20 @@ class BookmarkServiceImpl(
     /** 解析书签，然后保存到数据库，同时通知到用户 */
     override fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
         log.debug("[parseAndNotice-4] 开始书签解析: uid=$uid, bookmarkId=$bookmarkId, userLinkId=$userLinkId, nodeId=$nodeId")
-        parseBookmark(baseMapper.selectById(bookmarkId))
+        runCatching { parseBookmark(baseMapper.selectById(bookmarkId)) }.onFailure { ex ->
+            // 解析链路中的未预期异常（而非「抓取失败」这类已内部兜底为 CLOSED 的正常业务失败）不能让节点
+            // 永久停在 BOOKMARK_LOADING——此前这里的异常会一路冒泡到事件监听器，被其 runCatching 吞掉且
+            // 不回写任何状态，用户端只会看到一个转不动的加载占位符。与 parseAndResetUserItem 保持一致，
+            // 退化为与「ping 不通」一致的处理：落一条 CLOSED 记录，让节点照常收口而不是无限转圈。
+            log.error("[parseAndNotice-4] 解析异常，标记为不可用: bookmarkId=$bookmarkId", ex)
+            baseMapper.selectById(bookmarkId)?.apply {
+                isActivity = false
+                parseStatus = ParseStatusEnum.CLOSED
+                parseErrMsg = "parse failed: ${ex.message}"
+                updateTime = LocalDateTime.now()
+                baseMapper.insertOrUpdate(this)
+            }
+        }
         log.debug("[parseAndNotice-4] 书签解析完成, 开始构建展示数据: userLinkId=$userLinkId")
         val bookmarkShow = bookmarkUserLinkMapper.findShowById(userLinkId).initLogo()
         log.debug("[parseAndNotice-4] 已查询 bookmarkShow, title=${bookmarkShow.title}, 开始更新布局节点类型: nodeId=$nodeId")
@@ -509,13 +574,13 @@ class BookmarkServiceImpl(
     ) {
         val urlWrapper = WebsiteParser.urlWrapper(rawUrl)
         val entity = runCatching {
-            getOrCreateByHost(urlWrapper).also { if (it.parseStatus == ParseStatusEnum.LOADING) parseBookmark(it) }
+            getOrCreateByUrl(urlWrapper).also { if (it.parseStatus == ParseStatusEnum.LOADING) parseBookmark(it) }
         }.getOrElse { ex ->
             // 解析链路中的未预期异常不能让节点永久停在 BOOKMARK_LOADING——此前这里的异常会一路
             // 冒泡到事件监听器，被 runCatching 吞掉且不回写任何状态，用户端只会看到一个转不动的
             // 加载占位符。这里退化为与「ping 不通」一致的处理：落一条 CLOSED 记录，让节点照常收口。
-            log.error("[parseAndResetUserItem] 解析异常，标记为不可用: urlHost=${urlWrapper.urlHost}", ex)
-            (getByHost(urlWrapper.urlHost) ?: BookmarkEntity(urlWrapper)).apply {
+            log.error("[parseAndResetUserItem] 解析异常，标记为不可用: urlHost=${urlWrapper.urlHost}, urlPath=${urlWrapper.urlPath}", ex)
+            (getByUrl(urlWrapper.urlHost, urlWrapper.urlPath ?: "/") ?: BookmarkEntity(urlWrapper)).apply {
                 isActivity = false
                 parseStatus = ParseStatusEnum.CLOSED
                 parseErrMsg = "parse failed: ${ex.message}"
@@ -600,8 +665,9 @@ class BookmarkServiceImpl(
             return bookmark
         }
         log.debug("[parseLocally] 页面抓取成功, 开始填充元信息: bookmarkId=${bookmark.id}, title=${wrapper.title}")
+        val previousTitle = bookmark.title
         bookmark.successInit(wrapper)
-        inferAndSetAppName(bookmark)
+        inferAndSetAppName(bookmark, previousTitle)
         baseMapper.insertOrUpdate(bookmark)
         log.debug("[parseLocally] 元信息已保存, 开始存储图标记录(website_logo): bookmarkId=${bookmark.id}, iconCount=${wrapper.distinctIcons?.size ?: 0}")
         // 小图标(favicon) + 高清 LOGO 一并 upsert 到 website_logo
@@ -624,8 +690,9 @@ class BookmarkServiceImpl(
                 val icons = vo.toManifestIcons(bookmark.rawUrl)
                 log.debug("[parseByApi] scrapper 返回成功: bookmarkId=${bookmark.id}, title=${vo.title}, source=${vo.source}, iconCount=${icons.size}")
                 // 填充基础信息 + iconBase64 + DeepSeek 简称推断，保存一次
+                val previousTitle = bookmark.title
                 vo.entity(bookmark).also {
-                    inferAndSetAppName(it)
+                    inferAndSetAppName(it, previousTitle)
                     baseMapper.insertOrUpdate(it)
                     log.debug("[parseByApi] 元信息已保存: bookmarkId=${it.id}, appName=${it.appName}, parseStatus=${it.parseStatus}")
                 }
@@ -699,10 +766,20 @@ class BookmarkServiceImpl(
 
     // ────── 私有工具 ──────
 
-    /** 通过 DeepSeek 推断书签简称，有结果则覆盖 appName，失败静默忽略 */
-    private fun inferAndSetAppName(bookmark: BookmarkEntity) {
+    /**
+     * 通过 DeepSeek 推断书签简称，有结果则覆盖 appName，失败静默忽略。
+     *
+     * [previousTitle] 是本次解析开始前（覆盖 title 之前）该书签原有的标题：checkAll/retryClosedBookmarks
+     * 这类定时对账会对同一 canonical 书签反复重新解析，若网页标题相较上次没有变化、且已经有 appName，
+     * 就没必要再打一次 DeepSeek——这既省了一次外部 API 调用，也缩短了异步解析任务占用线程池的时间。
+     */
+    private fun inferAndSetAppName(bookmark: BookmarkEntity, previousTitle: String? = null) {
         val title = bookmark.title ?: run {
             log.debug("[inferAndSetAppName] title 为空，跳过 appName 推断: bookmarkId=${bookmark.id}")
+            return
+        }
+        if (!bookmark.appName.isNullOrBlank() && title == previousTitle) {
+            log.debug("[inferAndSetAppName] 标题未变化且已有 appName，跳过重复推断: bookmarkId=${bookmark.id}, appName=${bookmark.appName}")
             return
         }
         log.debug("[inferAndSetAppName] 调用 DeepSeek 推断 appName: bookmarkId=${bookmark.id}, title=$title")
@@ -713,19 +790,23 @@ class BookmarkServiceImpl(
             } ?: log.debug("[inferAndSetAppName] appName 推断结果为空，保持原值: bookmarkId=${bookmark.id}")
     }
 
-    private fun getByHost(urlHost: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, urlHost).one()
+    private fun getByUrl(urlHost: String, urlPath: String): BookmarkEntity? =
+        ktQuery().eq(BookmarkEntity::urlHost, urlHost).eq(BookmarkEntity::urlPath, urlPath).one()
 
     /**
-     * 按 host 获取或创建 canonical 书签。
-     * `bookmark.url_host` 上有唯一约束：并发插入同一 host 时，落败的一方捕获唯一键冲突后
-     * 回查已存在记录，保证「一域一条」，杜绝重复 canonical 记录。
+     * 按 (urlHost, urlPath) 获取或创建 canonical 书签。
+     * `bookmark` 表在 (url_host, url_path) 上有联合唯一约束：并发插入同一 (host, path) 时，落败的一方
+     * 捕获唯一键冲突后回查已存在记录，保证「一页一条」，杜绝重复 canonical 记录。
+     * 之所以不能只按 host 去重：同一域名下不同路径是完全不同的页面（不同 GitHub 仓库、不同 Notion
+     * 页面……），各自的标题/简称/图标不能共用同一次抓取结果。
      */
-    private fun getOrCreateByHost(urlWrapper: BookmarkUrlWrapper): BookmarkEntity {
-        getByHost(urlWrapper.urlHost)?.let { return it }
+    private fun getOrCreateByUrl(urlWrapper: BookmarkUrlWrapper): BookmarkEntity {
+        val path = urlWrapper.urlPath ?: "/"
+        getByUrl(urlWrapper.urlHost, path)?.let { return it }
         return try {
             BookmarkEntity(urlWrapper).also { save(it) }
         } catch (e: DuplicateKeyException) {
-            getByHost(urlWrapper.urlHost) ?: throw e
+            getByUrl(urlWrapper.urlHost, path) ?: throw e
         }
     }
 
@@ -746,6 +827,7 @@ class BookmarkServiceImpl(
         // of unverified bookmarks exists (e.g., on first deployment after fixing the .lt→.eq bug).
         private const val CHECKALL_BATCH_SIZE = 100
         private const val RETRY_CLOSED_BATCH_SIZE = 50
+        private const val LIVENESS_CHECK_BATCH_SIZE = 200
         private const val MAX_IMPORT_BOOKMARK_COUNT = 2000
     }
 }

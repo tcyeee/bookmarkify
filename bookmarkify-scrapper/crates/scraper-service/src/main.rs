@@ -4,8 +4,10 @@ mod oss;
 mod scraper;
 
 use axum::{
-    extract::State,
-    http::StatusCode,
+    error_handling::HandleErrorLayer,
+    extract::{Request, State},
+    http::{header::AUTHORIZATION, StatusCode},
+    middleware::{self, Next},
     response::{IntoResponse, Json, Response},
     routing::{get, post},
     Router,
@@ -13,6 +15,8 @@ use axum::{
 use cache::ScrapeCache;
 use serde::{Deserialize, Serialize};
 use std::{env, sync::Arc, time::{Duration, Instant}};
+use subtle::ConstantTimeEq;
+use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
 /// 全局应用状态，通过 `Arc` 在所有请求处理器之间共享。
@@ -28,6 +32,9 @@ struct AppState {
     cache: Arc<ScrapeCache>,
     /// OSS 客户端，用于将截图和图片上传到对象存储（可选）
     oss: Option<Arc<oss::OssClient>>,
+    /// 共享密钥鉴权 token，对应环境变量 `SCRAPER_AUTH_TOKEN`。
+    /// `None` 时 `/scrape`、`/ping` 不做鉴权（本地开发默认状态）。
+    auth_token: Option<Arc<String>>,
 }
 
 /// 服务入口：读取环境变量、构建路由并启动 HTTP 服务器。
@@ -100,21 +107,98 @@ async fn main() {
         tracing::info!("OSS upload disabled (OSS_* env vars not configured)");
     }
 
-    let state = AppState { client, headless_timeout_secs, headless_idle_wait_secs, cache, oss };
+    let auth_token = env::var("SCRAPER_AUTH_TOKEN")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(Arc::new);
+    if auth_token.is_some() {
+        tracing::info!("auth enabled: /scrape and /ping require Authorization: Bearer <token>");
+    } else {
+        tracing::warn!(
+            "auth disabled (SCRAPER_AUTH_TOKEN not set): /scrape and /ping accept unauthenticated requests"
+        );
+    }
 
-    let app = Router::new()
-        .route("/health", get(health_handler))
-        .route("/scrape", post(scrape_handler))
-        .route("/ping", post(ping_handler))
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+    let state = AppState { client, headless_timeout_secs, headless_idle_wait_secs, cache, oss, auth_token };
+
+    // Bounds how many /scrape + /ping requests run at once. Layer 1 fetches have no
+    // per-request cost limit otherwise, and Layer 2 already serializes on HEADLESS_LOCK
+    // but with no cap on how many callers can be queued waiting for it. Beyond this cap,
+    // load_shed fails fast with 503 instead of letting requests queue indefinitely.
+    let max_concurrent: usize = env_or("MAX_CONCURRENT_REQUESTS", 32);
+
+    // Installs a process-wide global metrics recorder — must happen exactly once, so it
+    // lives here rather than in `build_router` (which integration tests also call, and
+    // would panic on the second `Router` built within the same test binary).
+    let (prometheus_layer, metric_handle) = axum_prometheus::PrometheusMetricLayer::pair();
+    let app = build_router(state, max_concurrent)
+        .route("/metrics", get(move || async move { metric_handle.render() }))
+        .layer(prometheus_layer);
 
     let addr = format!("0.0.0.0:{port}");
     tracing::info!("scraper-service listening on {addr}");
     let listener = tokio::net::TcpListener::bind(&addr).await
         .expect("failed to bind TCP listener");
-    axum::serve(listener, app).await
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
         .expect("server error");
+}
+
+/// 等待 SIGTERM（容器编排下发的停止信号）或 Ctrl+C。
+///
+/// 触发后 `axum::serve` 会停止接受新连接，但等正在处理的请求（包括可能耗时
+/// 到 `HEADLESS_TIMEOUT_SECS` 的无头抓取）跑完再退出，而不是直接腰斩。
+/// 对应地，容器编排的停止宽限期需要大于 `HEADLESS_TIMEOUT_SECS`
+/// （见 `deploy/compose.prod.yml` 的 `stop_grace_period`）。
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+    tracing::info!("shutdown signal received, draining in-flight requests");
+}
+
+/// 组装 `/health`、`/scrape`、`/ping` 路由：`/health` 不鉴权、不限流（运维探活用，
+/// 且服务只监听回环地址，见 `deploy/compose.prod.yml`）；`/scrape`、`/ping` 经过鉴权
+/// 中间件（`auth_token` 为 `None` 时是 no-op）和并发上限 + 过载快速失败。
+///
+/// 不含 `/metrics`——那需要装一个进程级全局 metrics recorder，只能装一次，装在
+/// `main()` 里；这里独立成函数纯粹是为了让集成测试能直接构造 `Router` 发请求，
+/// 而不必绑定真实端口，也不必触碰那个全局单例。
+fn build_router(state: AppState, max_concurrent: usize) -> Router {
+    // Layer order: auth (outer, added last via route_layer) runs before a request can
+    // consume a concurrency permit, so unauthenticated requests never count against it.
+    let protected = Router::new()
+        .route("/scrape", post(scrape_handler))
+        .route("/ping", post(ping_handler))
+        .layer(
+            ServiceBuilder::new()
+                .layer(HandleErrorLayer::new(handle_overload))
+                .load_shed()
+                .concurrency_limit(max_concurrent),
+        )
+        .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
+
+    Router::new()
+        .route("/health", get(health_handler))
+        .merge(protected)
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
 }
 
 /// 健康检查处理器。
@@ -122,6 +206,36 @@ async fn main() {
 /// 始终返回 `200 OK` 和 `{"status": "ok"}`，供负载均衡器或容器编排系统探活。
 async fn health_handler() -> Json<serde_json::Value> {
     Json(serde_json::json!({"status": "ok"}))
+}
+
+/// `/scrape`、`/ping` 的鉴权中间件。
+///
+/// `state.auth_token` 为 `None` 时直接放行（本地开发 / 未配置场景）。
+/// 否则要求 `Authorization: Bearer <token>` 且与配置值常量时间相等，防止时序攻击泄露 token。
+async fn auth_middleware(State(state): State<AppState>, req: Request, next: Next) -> Response {
+    let Some(expected) = &state.auth_token else {
+        return next.run(req).await;
+    };
+
+    let provided = req
+        .headers()
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+
+    let authorized = provided.is_some_and(|token| {
+        token.as_bytes().ct_eq(expected.as_bytes()).into()
+    });
+
+    if authorized {
+        next.run(req).await
+    } else {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse { error: "unauthorized".to_string(), detail: None }),
+        )
+            .into_response()
+    }
 }
 
 
@@ -211,6 +325,19 @@ async fn ping_handler(
     let domain = url.host_str().unwrap_or(&body.url).to_string();
     tracing::info!(domain, "ping");
 
+    // Explicit SSRF pre-flight: the shared client's SsrfSafeResolver only runs for
+    // hostnames it actually has to resolve. Many HTTP stacks (including this one) skip
+    // DNS resolution entirely when the host is already an IP literal, so a bare
+    // "http://169.254.169.254/" would otherwise reach the target directly. scrape() and
+    // favicon_to_base64() already guard against this with the same call — ping_handler
+    // was missing it. A blocked target degrades to `alive: false` rather than a distinct
+    // error, keeping this endpoint's contract simple and not revealing to the caller
+    // that we recognized it as an internal address.
+    if let Err(e) = scraper::validate_target_host(&url).await {
+        tracing::info!(domain, ?e, "ping rejected: forbidden target");
+        return Json(PingResponse { alive: false }).into_response();
+    }
+
     let alive = match state.client.head(url.as_str()).send().await {
         Ok(resp) => resp.status().as_u16() < 500,
         Err(_) => false,
@@ -218,6 +345,19 @@ async fn ping_handler(
 
     tracing::info!(domain, alive, "ping done");
     Json(PingResponse { alive }).into_response()
+}
+
+/// 并发上限触发时的兜底响应：`load_shed` 把"超过 concurrency_limit"包装成一个
+/// `tower::BoxError`，这里统一转成 `503`，而不是让请求无限排队等待许可。
+async fn handle_overload(_err: tower::BoxError) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(ErrorResponse {
+            error: "service overloaded".to_string(),
+            detail: Some("too many concurrent scrape requests, retry shortly".to_string()),
+        }),
+    )
+        .into_response()
 }
 
 fn env_or<T: std::str::FromStr>(key: &str, default: T) -> T {
@@ -423,5 +563,221 @@ async fn scrape_handler(
             )
                 .into_response()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::{to_bytes, Body};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tower::ServiceExt;
+
+    fn test_state() -> AppState {
+        AppState {
+            client: reqwest::Client::new(),
+            headless_timeout_secs: 5,
+            headless_idle_wait_secs: 1,
+            cache: Arc::new(ScrapeCache::new(3600)),
+            oss: None,
+            auth_token: None,
+        }
+    }
+
+    fn json_request(method: &str, uri: &str, body: serde_json::Value, bearer: Option<&str>) -> Request {
+        let mut builder = axum::http::Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("content-type", "application/json");
+        if let Some(token) = bearer {
+            builder = builder.header("authorization", format!("Bearer {token}"));
+        }
+        builder.body(Body::from(body.to_string())).unwrap()
+    }
+
+    async fn call(app: Router, req: Request) -> (StatusCode, serde_json::Value) {
+        let response = app.oneshot(req).await.unwrap();
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+        let json = if bytes.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_slice(&bytes).unwrap()
+        };
+        (status, json)
+    }
+
+    #[tokio::test]
+    async fn health_returns_ok() {
+        let app = build_router(test_state(), 32);
+        let req = axum::http::Request::builder().uri("/health").body(Body::empty()).unwrap();
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn health_bypasses_auth_even_when_token_is_set() {
+        let mut state = test_state();
+        state.auth_token = Some(Arc::new("secret".to_string()));
+        let app = build_router(state, 32);
+        let req = axum::http::Request::builder().uri("/health").body(Body::empty()).unwrap();
+        let (status, _) = call(app, req).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn scrape_invalid_url_returns_422() {
+        let app = build_router(test_state(), 32);
+        let req = json_request("POST", "/scrape", serde_json::json!({"url": "not-a-url"}), None);
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(json["error"], "invalid url");
+    }
+
+    #[tokio::test]
+    async fn scrape_forbidden_target_returns_403() {
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        let app = build_router(test_state(), 32);
+        let req = json_request("POST", "/scrape", serde_json::json!({"url": "http://127.0.0.1/"}), None);
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(json["error"], "forbidden target");
+    }
+
+    #[tokio::test]
+    async fn scrape_negative_cache_hit_returns_502_with_retry_message() {
+        let state = test_state();
+        state.cache.set_error("https://example.com/flaky").await;
+        let app = build_router(state, 32);
+        let req = json_request("POST", "/scrape", serde_json::json!({"url": "https://example.com/flaky"}), None);
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::BAD_GATEWAY);
+        assert!(json["error"].as_str().unwrap().contains("retry after 60s"));
+    }
+
+    #[tokio::test]
+    async fn scrape_cache_hit_returns_cached_result() {
+        let state = test_state();
+        let result = Arc::new(scraper::ScrapeResult {
+            title: Some("Cached Title".to_string()),
+            description: None,
+            image: None,
+            favicon: None,
+            logo: None,
+            source: "og".to_string(),
+            screenshot_bytes: None,
+            screenshot_url: None,
+        });
+        state.cache.set("https://example.com/cached", result).await;
+        let app = build_router(state, 32);
+        let req = json_request("POST", "/scrape", serde_json::json!({"url": "https://example.com/cached"}), None);
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["title"], "Cached Title");
+        assert_eq!(json["cached"], true);
+    }
+
+    #[tokio::test]
+    async fn scrape_without_token_is_rejected_when_auth_enabled() {
+        let mut state = test_state();
+        state.auth_token = Some(Arc::new("s3cret".to_string()));
+        let app = build_router(state, 32);
+        let req = json_request("POST", "/scrape", serde_json::json!({"url": "https://example.com/"}), None);
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(json["error"], "unauthorized");
+    }
+
+    #[tokio::test]
+    async fn scrape_with_wrong_token_is_rejected() {
+        let mut state = test_state();
+        state.auth_token = Some(Arc::new("s3cret".to_string()));
+        let app = build_router(state, 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({"url": "https://example.com/"}),
+            Some("wrong-token"),
+        );
+        let (status, _) = call(app, req).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn scrape_with_correct_token_passes_auth() {
+        let mut state = test_state();
+        state.auth_token = Some(Arc::new("s3cret".to_string()));
+        // Pre-populate the cache so this request never touches the network — the point
+        // of this test is only that the auth middleware lets a valid token through.
+        state
+            .cache
+            .set(
+                "https://example.com/authed",
+                Arc::new(scraper::ScrapeResult {
+                    title: Some("Authed".to_string()),
+                    description: None,
+                    image: None,
+                    favicon: None,
+                    logo: None,
+                    source: "html".to_string(),
+                    screenshot_bytes: None,
+                    screenshot_url: None,
+                }),
+            )
+            .await;
+        let app = build_router(state, 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({"url": "https://example.com/authed"}),
+            Some("s3cret"),
+        );
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["title"], "Authed");
+    }
+
+    #[tokio::test]
+    async fn ping_invalid_url_returns_422() {
+        let app = build_router(test_state(), 32);
+        let req = json_request("POST", "/ping", serde_json::json!({"url": "not-a-url"}), None);
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(json["error"], "invalid url");
+    }
+
+    /// Regression test for an SSRF gap found in review: `ping_handler` used to rely
+    /// solely on the shared client's DNS-level `SsrfSafeResolver`, which is never
+    /// consulted for hosts that are already IP literals (hyper connects to those
+    /// directly) — so `"http://127.0.0.1:<port>/"` reached a real local listener
+    /// instead of being blocked. Verifies both that the target is reported as
+    /// not-alive AND that the local listener is never actually contacted, proving
+    /// it's blocked pre-flight rather than just refused for some other reason.
+    #[tokio::test]
+    async fn ping_blocks_loopback_ip_literal_and_never_connects() {
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+
+        let hits = Arc::new(AtomicUsize::new(0));
+        let hits_clone = Arc::clone(&hits);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                hits_clone.fetch_add(1, Ordering::SeqCst);
+                use tokio::io::AsyncWriteExt;
+                let _ = socket.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n").await;
+            }
+        });
+
+        let app = build_router(test_state(), 32);
+        let req = json_request("POST", "/ping", serde_json::json!({"url": format!("http://{addr}/")}), None);
+        let (status, json) = call(app, req).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["alive"], false);
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(hits.load(Ordering::SeqCst), 0, "loopback listener should never be contacted");
     }
 }

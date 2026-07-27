@@ -26,11 +26,11 @@ function alertClass(type: string) {
 function iconOf(type: string) {
   return (
     {
-      success: 'memory:check-circle',
-      error: 'memory:close-circle',
-      warning: 'memory:alert-box-fill',
-      info: 'memory:information',
-    }[type] || 'memory:information'
+      success: 'mdi:check-circle',
+      error: 'mdi:close-circle',
+      warning: 'mdi:alert-box',
+      info: 'mdi:information',
+    }[type] || 'mdi:information'
   )
 }
 </script>

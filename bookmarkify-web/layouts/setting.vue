@@ -16,7 +16,7 @@
             <NuxtLink to="/" class="block w-full">
               <div
                 class="cy-btn w-full cy-btn-xl cy-btn-ghost bg-white dark:bg-slate-900 dark:border-slate-700 rounded-xl text-lg transition-colors">
-                返回
+                {{ $t('settingLayout.back') }}
               </div>
             </NuxtLink>
 
@@ -67,13 +67,14 @@ const SCROLL_THRESHOLD = 12
 const containerStyle: CSSProperties = {
   maxWidth: 'clamp(960px, 80vw, 1280px)',
 }
-const tabs = [
-  { value: 0, label: '个人资料', icon: 'memory:account-box' },
-  { value: 1, label: '导入书签', icon: 'memory:upload' },
-  { value: 2, label: '主页背景', icon: 'memory:cloud' },
-  { value: 3, label: '偏好设置', icon: 'memory:toggle-switch-off' },
-  // { value: 4, label: '快捷键', icon: 'memory:terminal' },
-]
+const { t } = useI18n()
+const tabs = computed(() => [
+  { value: 0, label: t('settingLayout.tabs.profile'), icon: 'mdi:account-box' },
+  { value: 1, label: t('settingLayout.tabs.importBookmarks'), icon: 'mdi:upload' },
+  { value: 2, label: t('settingLayout.tabs.background'), icon: 'mdi:cloud' },
+  { value: 3, label: t('settingLayout.tabs.preference'), icon: 'mdi:toggle-switch-off' },
+  // { value: 4, label: t('settingLayout.tabs.shortcuts'), icon: 'mdi:console' },
+])
 const indicatorStyle = ref<CSSProperties>({
   transform: 'translate3d(0, 0, 0)',
   height: '0px',

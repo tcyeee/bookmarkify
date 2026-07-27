@@ -20,8 +20,14 @@ logging:
 
 bookmarkify:
   scrapper:
-    # 本地开发连远程已部署的 scrapper（容器 3000 映射到宿主机 3001，对外开放）
-    base-url: http://123.206.216.124:3001
+    # 之前这里连的是生产服务器的公网 3001 端口——该端口只是"临时对外开放做测试"，
+    # 但一直没收回，属于真实的未授权访问敞口，已收紧为仅 127.0.0.1 可达
+    # （见 bookmarkify-scrapper/deploy/compose.prod.yml）。本地开发现在自己跑一份：
+    #   cd bookmarkify-scrapper && PORT=3001 cargo run -p scraper-service
+    # （用 3001 是为了避开 bookmarkify-web 默认占用的 3000，见 scrapper 的 CLAUDE.md）
+    # 仍想连生产环境验证的话，走 SSH 隧道而不是重新公开端口：
+    #   ssh -L 3001:127.0.0.1:3001 ubuntu@123.206.216.124
+    base-url: http://127.0.0.1:3001
   config:
     # 这里必须是前端项目中/public/upload目录，否则图片无法正常读取
     img-path: ${BOOKMARKIFY_FILE_UPLOAD_DIR}

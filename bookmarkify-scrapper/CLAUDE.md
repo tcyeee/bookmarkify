@@ -38,13 +38,15 @@ docker-compose up -d
 | `HEADLESS_TIMEOUT_SECS` | 30 | Layer 2 Chrome total timeout |
 | `HEADLESS_IDLE_WAIT_SECS` | 10 | Layer 2 network-idle wait for JS rendering |
 | `CACHE_TTL_SECS` | 3600 | Cache entry lifetime |
-| `PROXY_URL` | (optional) | HTTP proxy URL, e.g. `http://127.0.0.1:7890` (or `http://clash:7890` in prod). Applies to **both** Layer 1 (reqwest) and Layer 2 (headless Chrome `--proxy-server`). Does **not** apply to OSS uploads (oss-rust-sdk creates its own client). |
+| `PROXY_URL` | (optional) | HTTP proxy URL, e.g. `http://127.0.0.1:7890` (or `http://clash:7890` in prod). Applies to Layer 1 (reqwest), Layer 2 (headless Chrome `--proxy-server`), **and** the OSS upload client (`oss.rs` builds its own `reqwest::Client` that also reads this var). |
 | `OSS_ACCESS_KEY_ID` | (optional) | Alibaba Cloud Access Key ID. All five OSS_* vars must be set to enable OSS upload. |
 | `OSS_ACCESS_KEY_SECRET` | (optional) | Alibaba Cloud Access Key Secret |
 | `OSS_BUCKET` | (optional) | OSS bucket name |
 | `OSS_ENDPOINT` | (optional) | OSS endpoint, e.g. `oss-cn-hangzhou.aliyuncs.com` |
 | `OSS_BASE_URL` | (optional) | Public URL prefix for returned OSS links, e.g. `https://<bucket>.oss-cn-hangzhou.aliyuncs.com` |
 | `SSRF_ALLOW_PRIVATE` | (optional) | Set to `1` to disable SSRF protection (allow targets resolving to private/loopback/link-local addresses). Unset → protection is **on** by default. |
+| `SCRAPER_AUTH_TOKEN` | (optional) | Shared secret for `/scrape` and `/ping`: when set, requests must send `Authorization: Bearer <token>` (constant-time compared) or get `401`. Unset (default) → those routes are unauthenticated. `/health` and `/metrics` never require it. `bookmarkify-api` sends this via `bookmarkify.scrapper.auth-token` / `BOOKMARKIFY_SCRAPPER_AUTH_TOKEN`, which must match. |
+| `MAX_CONCURRENT_REQUESTS` | 32 | Caps in-flight `/scrape` + `/ping` requests; beyond this, `load_shed` fails fast with `503` instead of queuing. |
 | `RUST_LOG` | info | Tracing filter |
 | `CHROME_BIN` | (auto) | Path to Chromium binary for headless mode; Docker sets this to `/usr/bin/chromium`. Required for local headless runs if `chromium` is not on PATH. |
 
@@ -57,51 +59,69 @@ Cargo workspace with a single crate:
 
 ```
 POST /scrape
+  └─ Negative-cache check → recently failed? return 502 immediately ("retry after 60s")
   └─ Cache check → hit: return immediately
   └─ headless=true? → skip to Layer 2
   └─ Layer 1: reqwest HTTP fetch → parse HTML metadata
        └─ title found? → cache + return
        └─ no title (JS-rendered) → Layer 2
   └─ Layer 2: headless Chrome (spider-rs) → render → extract + screenshot
-       └─ OSS configured? → upload image/logo/screenshot concurrently → cache + return
+       └─ OSS configured? → upload image/logo/screenshot concurrently (non-fatal on failure) → cache + return
        └─ no OSS → convert favicon to base64 → cache + return
+  └─ Timeout / FetchFailed / HeadlessFailed → write to negative cache (60s TTL) before returning the error
 ```
+
+Errors are JSON `{"error": "<type>", "detail": "<optional>"}`. Status mapping: `422 invalid url`, `403 forbidden target`, `504 timeout`, `502 fetch failed` / `headless failed` / negative-cache rejection. Asset failures (image/logo/favicon/screenshot download or OSS upload) never fail the request — the field is set to `null`/original URL and a warning is logged instead.
 
 ### Key Modules (`crates/scraper-service/src/`)
 
 **`main.rs`** — Server setup, route handlers, `AppState`.
-- Routes: `GET /health`, `POST /scrape`.
+- Routes: `GET /health`, `GET /metrics` (Prometheus text format, via `axum-prometheus`), `POST /scrape`, `POST /ping`. `/health` and `/metrics` are unauthenticated and unlimited (ops endpoints); `/scrape` and `/ping` sit behind `auth_middleware` (no-op unless `SCRAPER_AUTH_TOKEN` is set) and a `concurrency_limit` + `load_shed` layer (`MAX_CONCURRENT_REQUESTS`, fails fast with `503 service overloaded` instead of queueing).
+- `build_router(state, max_concurrent) -> Router` assembles everything except `/metrics` (which needs a process-global metrics recorder installed exactly once — done in `main()`, not in `build_router`, so integration tests can call `build_router` repeatedly within one test binary without hitting `axum-prometheus`'s "recorder already set" panic).
+- `POST /ping` (`{"url": "..."}` → `{"alive": bool}`): does its own `validate_target_host()` pre-flight — added after finding that the shared client's `SsrfSafeResolver` is *not* consulted for hosts that are already IP literals (many HTTP stacks, including this one via hyper, connect straight to an IP literal without a DNS step), so a bare `"http://169.254.169.254/"` used to reach the target directly. A blocked target now degrades to `alive: false` rather than a distinct error. Otherwise sends a `HEAD` request through the shared client; any response status `< 500` counts as alive, connection failure/timeout counts as dead. Used by `bookmarkify-api`'s bookmark-liveness/ping-log feature — independent of the scrape cache.
 - `ScrapeResponse` fields: `title`, `description`, `image`, `favicon`, `logo`, `source`, `cached` (optional), `screenshot` (optional).
+- `favicon_to_base64()` does its own `validate_target_host()` pre-flight before downloading (belt-and-suspenders on top of the client's SSRF resolver) and strips ASCII control chars from the sniffed `Content-Type` before embedding it in the `data:` URI, since that value flows unescaped into the response.
+- Graceful shutdown: `shutdown_signal()` waits on SIGTERM/Ctrl+C and is wired via `axum::serve(..).with_graceful_shutdown(..)`, so an in-flight headless scrape gets to finish instead of being cut off mid-request. The container's `stop_grace_period` (see `deploy/compose.prod.yml`) must stay comfortably above `HEADLESS_TIMEOUT_SECS` or Docker SIGKILLs before that drain completes.
+- Integration tests at the bottom of `main.rs` exercise the full router via `tower::ServiceExt::oneshot` (cache hit/miss, negative cache, auth allow/deny, SSRF blocks) without binding a real port or hitting the network — including a regression test for the `/ping` IP-literal SSRF gap above.
 
 **`scraper.rs`** — Layer 1 HTTP scraping and HTML parsing.
 - `parse_metadata()` extracts in priority order: Open Graph → Twitter Card → JSON-LD → raw HTML.
 - `ScrapeResult` and `ScrapeError` are the canonical types used throughout.
-- `ScrapeError` variants: `InvalidUrl`, `ForbiddenTarget`, `Timeout`, `FetchFailed`, `HeadlessFailed`, `OssFailed`.
+- `ScrapeError` variants: `InvalidUrl`, `ForbiddenTarget`, `Timeout`, `FetchFailed`, `HeadlessFailed`, `OssFailed` — `OssFailed` is unreachable in practice since `oss.rs::upload_assets()` degrades to `None`/original-URL on failure instead of propagating; the match arm exists only for exhaustiveness.
 - **SSRF protection:** `validate_target_host()` + a custom `SsrfSafeResolver` reject hosts resolving to private/loopback/link-local IPs (both IP literals and DNS results). The configured proxy host is exempt (trusted, lives on the docker private network). Bypass with `SSRF_ALLOW_PRIVATE=1`. A blocked target maps to `ForbiddenTarget` → HTTP `403`.
 
 **`headless.rs`** — Layer 2 headless Chrome via spider-rs.
 - Global `HEADLESS_LOCK: Mutex<()>` enforces serial Chrome execution (only one browser instance at a time).
-- Clears `chromiumoxide-runner/SingletonLock` before each run to recover from prior Chrome crashes.
+- Lock-wait and the Chrome run itself share a single deadline (`timeout_secs` total) via `tokio::time::timeout_at` — the two phases used to each get their own `timeout_secs`, which could double worst-case latency.
+- `with_limit(2)` (not `1`) to scrape only the seed page: spider's budget check treats `budget == 1` as already over-budget, so `with_limit(1)` skips even the seed page and returns zero pages.
+- Clears `chromiumoxide-runner/SingletonLock` before each run to recover from prior Chrome crashes (falls back to `remove_dir_all` on the whole runner dir if the single-file removal fails for a reason other than "not found").
 - Features: stealth mode, request interception, idle-network wait (configurable via `HEADLESS_IDLE_WAIT_SECS`, separate from `HEADLESS_TIMEOUT_SECS`), PNG screenshot capture into `screenshot_bytes`.
 - Integration tests are `#[ignore]` — run explicitly when Chrome is available.
 
-**`cache.rs`** — In-memory LRU cache via moka.
-- URL normalization before caching: lowercase host, sort query params, strip fragment.
-- 10 000-entry capacity with configurable TTL.
+**`cache.rs`** — In-memory LRU cache via moka, holding two independent `moka::future::Cache` instances.
+- Positive cache (`inner`): 10 000-entry capacity, TTL = `CACHE_TTL_SECS` (default 3600s). URL normalization before keying: lowercase host, sort query params, strip fragment (`normalize()`, shared by get/set).
+- Negative cache (`errors`): 1 000-entry capacity, fixed 60s TTL, keyed the same way. `get_error()`/`set_error()` back the "recently failed, retry after 60s" fast-reject path in `main.rs`; only `Timeout`/`FetchFailed`/`HeadlessFailed` populate it — `InvalidUrl`/`ForbiddenTarget` do not, since those aren't transient.
 
-**`oss.rs`** — Optional Alibaba Cloud OSS upload via oss-rust-sdk.
-- `OssClient::from_env()` returns `None` when any OSS_* var is missing; OSS is silently disabled.
+**`oss.rs`** — Optional Alibaba Cloud OSS upload, signed and sent directly over `reqwest` (no SDK dependency).
+- `OssClient::from_env()` returns `None` when any OSS_* var is missing; OSS is silently disabled. It builds its own `reqwest::Client` (30s timeout, honors `PROXY_URL`) — separate from the page-scrape client since uploads can be several MB and shouldn't share `REQUEST_TIMEOUT_SECS`.
+- Requests are signed with Aliyun OSS's V1 scheme by hand: `Authorization: OSS <key_id>:<base64(hmac_sha1(secret, string_to_sign))>` (`sign_hmac_sha1_base64`), PUT straight to the virtual-hosted-style URL `https://{bucket}.{endpoint}/{key}`. This replaced the `oss-rust-sdk` crate, which was unmaintained, built its own untimeoutable/unproxyable client, and dragged in a whole second major version of `reqwest` plus two extra `base64` versions as transitive dependencies — removing it also made the `quick-xml` future-incompat warning `cargo build` used to print go away (it was `oss-rust-sdk`'s dependency, not ours).
 - `upload_assets()` concurrently uploads OG image, logo, and screenshot; replaces URLs in `ScrapeResult`.
 - Favicon is **never** uploaded to OSS — always fetched and returned as a base64 `data:` URL.
 - OSS object keys are SHA-256 of the source URL, so the same source always maps to the same key (no deduplication check, unconditional PUT). All keys live under the `bookmarkify/scrapper/{og,logo,screenshots}/` prefix (`OSS_PREFIX` in `oss.rs`).
-- `PROXY_URL` / `REQUEST_TIMEOUT_SECS` do not apply to OSS operations.
+- `sign_hmac_sha1_base64` has a known-answer test against RFC 2202 test case 1 — worth keeping if this ever gets refactored, since a silent signing bug would fail every OSS upload without necessarily erroring loudly (Aliyun returns a plain `403` for a bad signature, same as for a lot of other misconfigurations).
 
 ## Deployment Notes
 
-- `docker-compose.yml` hardcodes `PROXY_URL: 'http://127.0.0.1:7890'` — remove or override this for environments without a local proxy.
+- `deploy/compose.prod.yml` binds the host port as `127.0.0.1:3001:3000` — **loopback only**. It was briefly changed to a bare `3001:3000` (public on all interfaces) for manual testing and left that way for weeks before being caught in review; this service has no network-level protection of its own beyond `SCRAPER_AUTH_TOKEN`, so don't republish it to `0.0.0.0`/a public IP without also turning that on. Local dev used to point straight at the public prod port (`bookmarkify-api`'s `application-dev.yml`) — now run scrapper locally (`PORT=3001 cargo run -p scraper-service`) or use an SSH tunnel instead.
+- `deploy/compose.prod.yml` sets `stop_grace_period: 40s`, comfortably above `HEADLESS_TIMEOUT_SECS` (30s), so graceful shutdown (see `main.rs`) has time to drain an in-flight headless scrape before Docker SIGKILLs the container.
 - The Dockerfile supports `--build-arg USE_CN_MIRROR=1` to enable `rsproxy.cn` (Cargo) and `mirrors.aliyun.com` (apt) for faster builds in China. Defaults to `0` (standard mirrors) for CI/CD compatibility.
+- `.github/workflows/deploy-scrapper.yml` runs `cargo test` and `cargo clippy -p scraper-service --all-targets -- -D warnings` before building the release binary — a failing test or lint blocks the deploy.
 
 ## API
+
+Full request/response/error details: see `api.md`. Summary:
+
+`/scrape` and `/ping` require `Authorization: Bearer <SCRAPER_AUTH_TOKEN>` whenever that env var is set (`401 unauthorized` otherwise); both are also capped at `MAX_CONCURRENT_REQUESTS` in-flight requests (`503 service overloaded` beyond that). `GET /metrics` serves Prometheus text-format request/latency metrics, unauthenticated.
 
 ```
 POST /scrape
@@ -121,3 +141,12 @@ Response fields:
 | `source` | string | `"og"` / `"twitter_card"` / `"json_ld"` / `"html"` / `"headless"` |
 | `cached` | boolean | Present and `true` only on cache hits |
 | `screenshot` | string | OSS URL (if OSS configured) or base64 PNG; only present for headless scrapes |
+
+```
+POST /ping
+Content-Type: application/json
+
+{ "url": "https://example.com" }
+→ { "alive": true }
+```
+Simple liveness check (`HEAD` request, status `< 500` ⇒ alive) — not cached, used by `bookmarkify-api`'s ping-log feature.

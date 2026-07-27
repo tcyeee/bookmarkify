@@ -67,6 +67,15 @@ const routes: RouteRecordRaw[] = [
           title: 'Scrapper调用日志',
         },
       },
+      {
+        name: 'BookmarkPingLog',
+        path: '/bookmark/ping-log',
+        component: () => import('#/views/bookmark/ping-log/index.vue'),
+        meta: {
+          icon: 'carbon:cloud-logging',
+          title: '书签活性检查日志',
+        },
+      },
     ],
   },
   {

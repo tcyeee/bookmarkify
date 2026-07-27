@@ -38,12 +38,12 @@ const label = computed(() => {
 })
 
 const iconClass = computed(() => {
-  if (!value.value) return 'memory:dot-hexagon-fill'
+  if (!value.value) return 'mdi:cog'
   switch (value.value.type) {
     case FunctionType.SETTING:
-      return 'memory:dot-hexagon-fill'
+      return 'mdi:cog'
     default:
-      return 'memory:dot-hexagon-fill'
+      return 'mdi:cog'
   }
 })
 

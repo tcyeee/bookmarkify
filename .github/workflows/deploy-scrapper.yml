@@ -19,6 +19,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Quality gate: a failing test or lint must block deploy, not just sit unread in
+      # the repo. Runs on the host (not in Docker) so it's cached by actions/cache and
+      # doesn't duplicate the dependency compile the Docker build stage does below.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: bookmarkify-scrapper -> target
+
+      - name: Test
+        working-directory: bookmarkify-scrapper
+        run: cargo test -p scraper-service
+
+      - name: Lint
+        working-directory: bookmarkify-scrapper
+        run: cargo clippy -p scraper-service --all-targets -- -D warnings
+
       - uses: docker/setup-buildx-action@v3
 
       # Compile the Rust binary here on the RAM-rich runner. We build the Dockerfile's
@@ -92,7 +111,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_SSH_PORT || 22 }}
-          envs: COMPOSE_B64,DOCKERFILE_B64,BIN_URL,SCRAPPER_IMAGE,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET,OSS_ENDPOINT,OSS_BASE_URL
+          envs: COMPOSE_B64,DOCKERFILE_B64,BIN_URL,SCRAPPER_IMAGE,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET,OSS_ENDPOINT,OSS_BASE_URL,SCRAPER_AUTH_TOKEN
           script: |
             set -euo pipefail
 
@@ -117,6 +136,7 @@ jobs:
             OSS_BUCKET=$OSS_BUCKET
             OSS_ENDPOINT=$OSS_ENDPOINT
             OSS_BASE_URL=$OSS_BASE_URL
+            SCRAPER_AUTH_TOKEN=$SCRAPER_AUTH_TOKEN
             EOF
 
             # Assemble the runtime image locally: apt + COPY the binary. The chromium
@@ -154,6 +174,10 @@ jobs:
           OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
           OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
           OSS_BASE_URL: ${{ secrets.OSS_BASE_URL }}
+          # Shared secret for /scrape and /ping. Set the SCRAPER_AUTH_TOKEN repo secret to
+          # enable; bookmarkify-api's caller must send the same value. Empty until set —
+          # matches how the OSS_* vars degrade to "feature disabled" when blank.
+          SCRAPER_AUTH_TOKEN: ${{ secrets.SCRAPER_AUTH_TOKEN }}
 
       # Push a WeChat notification via Server酱 once the deploy + health check pass.
       # Set the SERVERCHAN_SENDKEY repo secret to enable; without it this step is a no-op.
