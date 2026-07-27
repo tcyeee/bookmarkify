@@ -4,6 +4,7 @@
     <NuxtPage />
   </NuxtLayout>
   <CommonCommandPalette />
+  <CommonImportProgressNotice />
   <AddOneDialog />
 </template>
 <script setup lang="ts">
