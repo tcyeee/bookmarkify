@@ -168,6 +168,18 @@ export const useBookmarkStore = defineStore('homeItems', {
       }
     },
 
+    // 删除一个节点及其全部子孙（后端 deleteByIds 对 BOOKMARK_DIR 会级联删除子项，本地需保持一致）
+    removeSubtree(id: string) {
+      const node = this.nodes[id]
+      if (node?.type === HomeItemType.BOOKMARK_DIR) {
+        for (const cid of [...(this.order[id] ?? [])]) this.removeSubtree(cid)
+      }
+      this.clearResolutionWatch(id)
+      delete this.nodes[id]
+      delete this.order[id]
+      for (const k of Object.keys(this.order)) this.order[k] = this.order[k].filter((x) => x !== id)
+    },
+
     reorderLocal(parentKey: string, ids: Array<string>) {
       this.order[parentKey] = [...ids]
     },

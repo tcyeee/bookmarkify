@@ -59,7 +59,14 @@
           <BookmarkLogo :value="item" :size="28" />
           <div class="flex-1 min-w-0">
             <p class="text-sm font-medium truncate text-slate-700 dark:text-slate-200">{{ item.title || item.urlBase }}</p>
-            <p class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ item.urlFull }}</p>
+            <a
+              :href="item.urlFull"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="block text-xs text-slate-400 dark:text-slate-500 truncate hover:text-sky-500 hover:underline"
+              @click.stop
+              >{{ item.urlFull }}</a
+            >
           </div>
           <span class="w-32 shrink-0 text-center text-xs truncate text-slate-500 dark:text-slate-400 hidden sm:block">{{ item.folderName || '—' }}</span>
           <span class="w-16 shrink-0 text-center">
@@ -150,7 +157,6 @@ type FilterMode = 'all' | 'duplicate' | 'invalid'
 const { t: translate } = useI18n()
 const bookmarkStore = useBookmarkStore()
 const toastStore = useToastStore()
-const confirmStore = useConfirmStore()
 
 const PAGE_SIZE = 20
 
@@ -253,35 +259,33 @@ function toggleSelectAll() {
 async function deleteOne(item: t.BookmarkShow) {
   const key = nodeKey(item)
   if (!key) return
-  try {
-    await confirmStore.confirm(translate('bookmarkLibrary.confirmDeleteMessage', { count: 1 }), { type: 'error' })
-  } catch {
-    return
-  }
   await performDelete([key])
 }
 
 async function batchDelete() {
   const ids = [...selectedIds.value]
   if (ids.length === 0) return
-  try {
-    await confirmStore.confirm(translate('bookmarkLibrary.confirmDeleteMessage', { count: ids.length }), { type: 'error' })
-  } catch {
-    return
-  }
   await performDelete(ids)
 }
 
+// 静默删除：无需二次确认，前端立即清理，同时异步同步到后端；失败时重新拉取当前页纠正本地状态
 async function performDelete(ids: string[]) {
+  const removed = new Set(ids)
+  if (page.value) {
+    page.value = {
+      ...page.value,
+      records: page.value.records.filter((r) => !removed.has(nodeKey(r) ?? '')),
+      total: Math.max(0, page.value.total - ids.length),
+    }
+  }
+  selectedIds.value = new Set([...selectedIds.value].filter((id) => !removed.has(id)))
+
   try {
     await bookmarksDel(ids)
-    toastStore.success(translate('bookmarkLibrary.deleteSuccess', { count: ids.length }))
-    const removed = new Set(ids)
-    selectedIds.value = new Set([...selectedIds.value].filter((id) => !removed.has(id)))
-    await fetchPage()
     bookmarkStore.update().catch(() => {})
   } catch {
-    // http 层已提示
+    // http 层已提示；失败时重新拉取当前页纠正被过早清理的本地状态
+    await fetchPage()
   }
 }
 

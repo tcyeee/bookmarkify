@@ -45,8 +45,10 @@
                 <BookmarkFolderCard
                   :name="folder.name"
                   :is-root="folder.isRoot"
+                  :folder-id="folder.id"
                   :children="folder.children"
-                  @edit="openEditModal" />
+                  @edit="openEditModal"
+                  @share="onShareFolder" />
               </div>
             </div>
           </template>
@@ -199,6 +201,10 @@ const folderCards = computed(() => {
     })),
   ]
 })
+
+function onShareFolder(folderId: string) {
+  navigateTo(`/share/edit?folderId=${encodeURIComponent(folderId)}`)
+}
 
 const query = ref('')
 const suggestResults = ref<BookmarkSearchVO[]>([])
