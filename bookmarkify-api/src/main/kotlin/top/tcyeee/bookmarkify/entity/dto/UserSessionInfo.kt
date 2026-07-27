@@ -4,7 +4,7 @@ import cn.dev33.satoken.session.SaSession
 import cn.hutool.json.JSONUtil
 import com.fasterxml.jackson.annotation.JsonInclude
 import io.swagger.v3.oas.annotations.media.Schema
-import top.tcyeee.bookmarkify.entity.entity.UserEntity
+import top.tcyeee.bookmarkify.entity.entity.UserInfoEntity
 import top.tcyeee.bookmarkify.utils.StpKit
 
 /**
@@ -24,7 +24,7 @@ data class UserSessionInfo(
     @field:Schema(description = "用户是否验证") var verified: Boolean = false,
     @field:Schema(description = "用户TOKEN") var token: String,
 ) {
-    constructor(user: UserEntity, token: String) : this(
+    constructor(user: UserInfoEntity, token: String) : this(
         uid = user.id,
         nickName = user.nickName,
         email = user.email,

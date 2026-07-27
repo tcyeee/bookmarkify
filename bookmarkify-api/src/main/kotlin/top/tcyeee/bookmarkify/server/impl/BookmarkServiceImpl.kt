@@ -36,7 +36,7 @@ import top.tcyeee.bookmarkify.config.event.BookmarkParseAndResetUserItemEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseEvent
 import top.tcyeee.bookmarkify.server.IBookmarkCategoryService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
-import top.tcyeee.bookmarkify.server.IWebsiteLogoService
+import top.tcyeee.bookmarkify.server.IBookmarkLogoService
 import top.tcyeee.bookmarkify.utils.*
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
@@ -52,9 +52,9 @@ class BookmarkServiceImpl(
     private val eventPublisher: ApplicationEventPublisher,
     private val apiService: IApiService,
     private val layoutNodeMapper: UserLayoutNodeMapper,
-    private val websiteLogoService: IWebsiteLogoService,
+    private val bookmarkLogoService: IBookmarkLogoService,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
-    private val bookmarkFunctionMapper: BookmarkFunctionMapper,
+    private val layoutNodeFunctionMapper: LayoutNodeFunctionMapper,
     private val bookmarkCategoryService: IBookmarkCategoryService,
     private val pingLogMapper: BookmarkPingLogMapper,
     transactionManager: PlatformTransactionManager,
@@ -83,13 +83,13 @@ class BookmarkServiceImpl(
     @Transactional
     override fun setDefaultFunction(uid: String) =
         UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.FUNCTION).also { layoutNodeMapper.insert(it) }
-            .let { BookmarkFunctionEntity(it, uid) }.also { bookmarkFunctionMapper.insert(it) }.run {}
+            .let { LayoutNodeFunctionEntity(it, uid) }.also { layoutNodeFunctionMapper.insert(it) }.run {}
 
     override fun search(name: String): List<BookmarkSearchVO> {
         val list = ktQuery().eq(BookmarkEntity::isActivity, true).like(BookmarkEntity::appName, name).or()
             .like(BookmarkEntity::title, name).or().like(BookmarkEntity::description, name).or()
             .like(BookmarkEntity::urlHost, name).last("limit 5").list()
-        // 小图标来自 website_logo，批量取后组装
+        // 小图标来自 bookmark_logo，批量取后组装
         val logoMap = logosByBookmarkIds(list.map { it.id })
         return list.map { BookmarkSearchVO(it, logoMap[it.id]) }
     }
@@ -364,7 +364,7 @@ class BookmarkServiceImpl(
 
     override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> {
         val entityPage = baseMapper.selectPage(params.toPage(), params.toWrapper())
-        // 批量取每个书签的图标记录(website_logo)，与书签实体一起组装 VO
+        // 批量取每个书签的图标记录(bookmark_logo)，与书签实体一起组装 VO
         val logoMap = logosByBookmarkIds(entityPage.records.map { it.id })
         val page = entityPage.convert { BookmarkAdminVO(it, logoMap[it.id]) }
         // 分类回填失败(如分类表缺失/查询异常)不应拖垮整个书签列表，降级为空分类
@@ -382,14 +382,14 @@ class BookmarkServiceImpl(
         baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         // appName 仍属于 bookmark 主表
         ktUpdate().eq(BookmarkEntity::id, bookmarkId).set(BookmarkEntity::appName, params.appName).update()
-        // 图标显示设置(内边距/背景色/高清开关)落到 website_logo（与书签 1:1，upsert）
+        // 图标显示设置(内边距/背景色/高清开关)落到 bookmark_logo（与书签 1:1，upsert）
         val logo = logoOf(bookmarkId).apply {
             iconPadding = params.iconPadding
             iconBgColor = params.iconBgColor
             useHdLogo = params.useHdLogo
             updateTime = LocalDateTime.now()
         }
-        websiteLogoService.saveOrUpdate(logo)
+        bookmarkLogoService.saveOrUpdate(logo)
     }
 
     override fun adminRefetch(bookmarkId: String): BookmarkRefetchVO {
@@ -462,7 +462,7 @@ class BookmarkServiceImpl(
         log.debug("[adminApplyRefetch] 应用重新获取结果: bookmarkId=$bookmarkId, useNewTitle=${params.useNewTitle}, useNewIcon=${params.useNewIcon}, useNewLogo=${params.useNewLogo}")
 
         if (params.useNewTitle) bookmark.title = vo.title
-        // 小图标与大图标(高清 LOGO)分开应用到图标记录(website_logo)，可单独采用其中之一
+        // 小图标与大图标(高清 LOGO)分开应用到图标记录(bookmark_logo)，可单独采用其中之一
         val logo = logoOf(bookmarkId)
         val iconOrLogoChanged = params.useNewIcon || params.useNewLogo
         if (iconOrLogoChanged) {
@@ -474,7 +474,7 @@ class BookmarkServiceImpl(
             // 采用新大图标时，重抓高清 LOGO/OG 上传 OSS，并把元数据写回图标记录
             if (params.useNewLogo) applyHdLogo(logo, icons, bookmarkId)
             logo.updateTime = LocalDateTime.now()
-            websiteLogoService.saveOrUpdate(logo)
+            bookmarkLogoService.saveOrUpdate(logo)
         }
         bookmark.updateTime = LocalDateTime.now()
         baseMapper.insertOrUpdate(bookmark)
@@ -485,7 +485,7 @@ class BookmarkServiceImpl(
 
     override fun adminUpdateCategories(bookmarkId: String, categoryIds: List<String>): List<CategoryVO> {
         baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
-        bookmarkCategoryService.replaceLinks(bookmarkId, categoryIds, "MANUAL")
+        bookmarkCategoryService.replaceLinks(bookmarkId, categoryIds, CategorySource.MANUAL)
         return loadCategoryVOs(bookmarkId)
     }
 
@@ -717,8 +717,8 @@ class BookmarkServiceImpl(
         bookmark.successInit(wrapper)
         inferAndSetAppName(bookmark, previousTitle)
         baseMapper.insertOrUpdate(bookmark)
-        log.debug("[parseLocally] 元信息已保存, 开始存储图标记录(website_logo): bookmarkId=${bookmark.id}, iconCount=${wrapper.distinctIcons?.size ?: 0}")
-        // 小图标(favicon) + 高清 LOGO 一并 upsert 到 website_logo
+        log.debug("[parseLocally] 元信息已保存, 开始存储图标记录(bookmark_logo): bookmarkId=${bookmark.id}, iconCount=${wrapper.distinctIcons?.size ?: 0}")
+        // 小图标(favicon) + 高清 LOGO 一并 upsert 到 bookmark_logo
         saveIconAndLogo(
             bookmark.id,
             ChromeBookmarkParser.icoBase64(wrapper.distinctIcons, bookmark.rawUrl),
@@ -744,7 +744,7 @@ class BookmarkServiceImpl(
                     baseMapper.insertOrUpdate(it)
                     log.debug("[parseByApi] 元信息已保存: bookmarkId=${it.id}, appName=${it.appName}, parseStatus=${it.parseStatus}")
                 }
-                log.debug("[parseByApi] 开始存储图标记录(website_logo): bookmarkId=${bookmark.id}, iconCount=${icons.size}")
+                log.debug("[parseByApi] 开始存储图标记录(bookmark_logo): bookmarkId=${bookmark.id}, iconCount=${icons.size}")
                 // scrapper 已返回 base64 data URL 的 favicon，优先直用；否则回退到本地下载
                 val iconBase64 = vo.favicon?.takeIf { f -> f.isNotBlank() }
                     ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
@@ -765,41 +765,41 @@ class BookmarkServiceImpl(
         )
     }
 
-    // ────── 图标记录(website_logo, 与书签 1:1) ──────
+    // ────── 图标记录(bookmark_logo, 与书签 1:1) ──────
 
     /** 取该书签的图标记录；不存在则返回一个未持久化的新实例（带默认显示设置）。 */
-    private fun logoOf(bookmarkId: String): WebsiteLogoEntity =
-        websiteLogoService.ktQuery()
-            .eq(WebsiteLogoEntity::bookmarkId, bookmarkId)
-            .orderByDesc(WebsiteLogoEntity::height)
+    private fun logoOf(bookmarkId: String): BookmarkLogoEntity =
+        bookmarkLogoService.ktQuery()
+            .eq(BookmarkLogoEntity::bookmarkId, bookmarkId)
+            .orderByDesc(BookmarkLogoEntity::height)
             .last("limit 1")
             .one()
-            ?: WebsiteLogoEntity(bookmarkId = bookmarkId)
+            ?: BookmarkLogoEntity(bookmarkId = bookmarkId)
 
     /** 批量取一组书签的图标记录，按 bookmarkId 聚合（每书签取高度最大的一条，兼容历史多行）。 */
-    private fun logosByBookmarkIds(bookmarkIds: List<String>): Map<String, WebsiteLogoEntity> {
+    private fun logosByBookmarkIds(bookmarkIds: List<String>): Map<String, BookmarkLogoEntity> {
         if (bookmarkIds.isEmpty()) return emptyMap()
-        return websiteLogoService.ktQuery().`in`(WebsiteLogoEntity::bookmarkId, bookmarkIds).list()
+        return bookmarkLogoService.ktQuery().`in`(BookmarkLogoEntity::bookmarkId, bookmarkIds).list()
             .groupBy { it.bookmarkId }
             .mapValues { (_, list) -> list.maxByOrNull { it.height } ?: list.first() }
     }
 
     /**
-     * 把小图标(favicon) + 高清 LOGO 一并 upsert 到该书签的图标记录(website_logo)。
+     * 把小图标(favicon) + 高清 LOGO 一并 upsert 到该书签的图标记录(bookmark_logo)。
      * iconBase64 总会写入；高清 LOGO/OG 上传成功才回写其地址与文件元数据。
      */
     private fun saveIconAndLogo(bookmarkId: String, iconBase64: String?, icons: List<ManifestIcon>) {
         val logo = logoOf(bookmarkId).apply { this.iconBase64 = iconBase64 }
         applyHdLogo(logo, icons, bookmarkId)
         logo.updateTime = LocalDateTime.now()
-        websiteLogoService.saveOrUpdate(logo)
+        bookmarkLogoService.saveOrUpdate(logo)
         log.debug("[saveIconAndLogo] 图标记录已保存: bookmarkId=$bookmarkId, hasIcon=${iconBase64 != null}, width=${logo.width}")
     }
 
     /** 把 LOGO/OG 上传 OSS，成功则把高清 LOGO 的地址与文件元数据写入图标记录（失败静默忽略，不影响小图标）。 */
-    private fun applyHdLogo(logo: WebsiteLogoEntity, icons: List<ManifestIcon>, bookmarkId: String) {
+    private fun applyHdLogo(logo: BookmarkLogoEntity, icons: List<ManifestIcon>, bookmarkId: String) {
         if (icons.isEmpty()) return
-        runCatching { OssUtils.restoreWebsiteLogoAndOg(icons, bookmarkId) }
+        runCatching { OssUtils.restoreBookmarkLogoAndOg(icons, bookmarkId) }
             .onSuccess { result ->
                 result.logo?.let { meta ->
                     logo.logoUrl = result.logoUrl

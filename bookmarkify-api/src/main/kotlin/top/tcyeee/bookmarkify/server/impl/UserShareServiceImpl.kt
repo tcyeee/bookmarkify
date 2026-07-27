@@ -7,10 +7,12 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.ShareCreateParams
 import top.tcyeee.bookmarkify.entity.ShareSearchParams
 import top.tcyeee.bookmarkify.entity.SharePublicVO
 import top.tcyeee.bookmarkify.entity.ShareSharerVO
+import top.tcyeee.bookmarkify.entity.ShareUpdateParams
 import top.tcyeee.bookmarkify.entity.UserShareAdminVO
 import top.tcyeee.bookmarkify.entity.UserShareVO
 import top.tcyeee.bookmarkify.entity.entity.UserShareBookmarkEntity
@@ -20,6 +22,7 @@ import top.tcyeee.bookmarkify.mapper.UserShareBookmarkMapper
 import top.tcyeee.bookmarkify.mapper.UserShareMapper
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.server.IUserShareService
+import java.time.LocalDateTime
 
 /**
  * @author tcyeee
@@ -57,6 +60,44 @@ class UserShareServiceImpl(
             sharer = ShareSharerVO(nickName = user.nickName, avatarUrl = userService.avatarSignedUrl(share.uid)),
             bookmarks = bookmarks,
         )
+    }
+
+    override fun listMine(uid: String, pageBean: PageBean): IPage<UserShareVO> {
+        val page = baseMapper.selectPage(
+            pageBean.toPage(),
+            KtQueryWrapper(UserShareEntity::class.java).eq(UserShareEntity::uid, uid).orderByDesc(UserShareEntity::createTime),
+        )
+        return page.convert { entity ->
+            val count = userShareBookmarkMapper.selectCount(
+                KtQueryWrapper(UserShareBookmarkEntity::class.java).eq(UserShareBookmarkEntity::shareId, entity.id)
+            ).toInt()
+            UserShareVO(entity, count)
+        }
+    }
+
+    override fun cancelShare(id: String, uid: String): Boolean {
+        val share = getById(id) ?: throw CommonException(ErrorType.E122)
+        if (share.uid != uid) throw CommonException(ErrorType.E123)
+        if (share.effectiveStatus != ShareStatus.NORMAL) throw CommonException(ErrorType.E122)
+        return ktUpdate().eq(UserShareEntity::id, id)
+            .set(UserShareEntity::status, ShareStatus.CANCELLED)
+            .set(UserShareEntity::updateTime, LocalDateTime.now())
+            .update()
+    }
+
+    @Transactional(rollbackFor = [Exception::class])
+    override fun updateShare(params: ShareUpdateParams, uid: String): UserShareVO {
+        val share = getById(params.id) ?: throw CommonException(ErrorType.E122)
+        if (share.uid != uid) throw CommonException(ErrorType.E123)
+        if (share.effectiveStatus != ShareStatus.NORMAL) throw CommonException(ErrorType.E122)
+        share.note = params.note?.trim()?.takeIf { it.isNotBlank() }
+        share.expireTime = params.expireTime
+        share.updateTime = LocalDateTime.now()
+        updateById(share)
+        val count = userShareBookmarkMapper.selectCount(
+            KtQueryWrapper(UserShareBookmarkEntity::class.java).eq(UserShareBookmarkEntity::shareId, share.id)
+        ).toInt()
+        return UserShareVO(share, count)
     }
 
     override fun adminListAll(params: ShareSearchParams): IPage<UserShareAdminVO> {

@@ -1,7 +1,7 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
-import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
+import top.tcyeee.bookmarkify.entity.entity.BookmarkLogoEntity
 
 /**
  * 网站Logo Service
@@ -9,4 +9,4 @@ import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
  * @author tcyeee
  * @date 12/29/25 15:05
  */
-interface IWebsiteLogoService : IService<WebsiteLogoEntity>
+interface IBookmarkLogoService : IService<BookmarkLogoEntity>

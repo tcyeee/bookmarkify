@@ -55,7 +55,7 @@ data class ScrapeResponse(
 
     /**
      * 将 scrapper 的 logo / image 转为 ManifestIcon 列表，复用既有 OSS 存储流程
-     * （OssUtils.restoreWebsiteLogoAndOg）：
+     * （OssUtils.restoreBookmarkLogoAndOg）：
      * - image → sizes="og"（宽屏 OG 分享图）
      * - logo  → 普通 LOGO
      *

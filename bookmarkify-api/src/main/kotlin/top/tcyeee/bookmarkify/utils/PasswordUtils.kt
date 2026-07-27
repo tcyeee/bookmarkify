@@ -6,7 +6,7 @@ import java.security.MessageDigest
 /**
  * 密码哈希工具。
  *
- * 历史遗留：旧数据库中 `sys_user.password` 存放的是「客户端 MD5 后再 Base64 传输」得到的
+ * 历史遗留：旧数据库中 `user_info.password` 存放的是「客户端 MD5 后再 Base64 传输」得到的
  * 无盐 md5 十六进制串（服务端直接整列等值比较）。无盐 MD5 一旦库泄露即可被彩虹表秒破，
  * 且因为哈希发生在客户端，存储值本身就是可重放的凭据（pass-the-hash）。
  *

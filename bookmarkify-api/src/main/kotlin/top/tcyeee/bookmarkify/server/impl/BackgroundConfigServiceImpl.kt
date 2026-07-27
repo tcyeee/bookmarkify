@@ -53,7 +53,7 @@ class BackgroundConfigServiceImpl(
             backgroundGradientService.ktQuery().eq(BackgroundGradientEntity::isDefault, true).last("limit 1").one()
 
         return BackgroundConfigEntity(
-            uid = uid, type = BackgroundType.GRADIENT, backgroundLinkId = first.id
+            uid = uid, type = BackgroundType.GRADIENT, backgroundGradientId = first.id
         ).also { save(it) }
     }
 }

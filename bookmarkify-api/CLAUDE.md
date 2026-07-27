@@ -142,7 +142,7 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 ### Key Patterns
 
 1. **Dual auth realms:** `StpKit.USER` for regular users, `StpKit.ADMIN` for admin panel. Completely separate session stores.
-2. **Anonymous-first identity:** Every visitor gets a `deviceUid` cookie and auto-created `sys_user`. Users "upgrade" by verifying phone/email.
+2. **Anonymous-first identity:** Every visitor gets a `deviceUid` cookie and auto-created `user_info` row. Users "upgrade" by verifying phone/email.
 3. **Bookmark deduplication:** The `bookmark` table stores one canonical record per domain. User-specific data lives in `bookmark_user_link`.
 4. **Async parsing pipeline:** Adding a bookmark returns a loading placeholder immediately. A Spring `ApplicationEvent` is published; an `@Async` listener (`BookmarkParseEventListener`, running on the `bookmarkParseExecutor` thread pool) parses the website, uploads logos to OSS, and pushes the result via WebSocket (`HOME_ITEM_UPDATE`). Failed parses are not retried inline — `checkAll()` cron reconciles unverified bookmarks.
 5. **Desktop layout tree:** `user_layout_node` stores a tree with `parentId` (ROOT → folders → bookmarks). Sort order is a JSON map in `user_preference` to avoid bulk DB writes.
@@ -154,17 +154,16 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 
 | Table | Description |
 |---|---|
-| `sys_user` | Users (anonymous + registered, role: USER/ADMIN) |
+| `user_info` | Users (anonymous + registered, role: USER/ADMIN) |
 | `bookmark` | Canonical bookmark records (one per domain) |
 | `bookmark_user_link` | User's personal bookmark copy (title, desc, URL) |
 | `user_layout_node` | Desktop layout tree (bookmark, folder, function nodes) |
-| `bookmark_function` | System function items (e.g., Settings) |
-| `bookmark_tag` / `bookmark_tag_link` | User tags (many-to-many) |
+| `layout_node_function` | System function items attached to a layout node (e.g., Settings) |
 | `user_preference` | Per-user preferences (background, layout, sort order) |
 | `background_config` / `background_image` / `background_gradient` | Background settings |
 | `user_file` | Uploaded file records (avatar, background) |
-| `website_logo` | Logo/OG metadata for bookmarks |
-| `sms_record` | SMS send logs |
+| `bookmark_logo` | Logo/OG metadata for bookmarks |
+| `category` / `bookmark_category` | Category dictionary + bookmark↔category links |
 
 ### Async Parse Events
 

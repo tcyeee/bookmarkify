@@ -39,7 +39,7 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                                ON a.bookmark_id = b.id
                      LEFT JOIN LATERAL (
                 SELECT w.icon_base64, w.icon_padding, w.icon_bg_color, w.use_hd_logo, w.height
-                FROM website_logo w
+                FROM bookmark_logo w
                 WHERE w.bookmark_id = a.bookmark_id
                 ORDER BY (w.icon_base64 IS NOT NULL) DESC, w.height DESC
                 LIMIT 1
@@ -75,7 +75,7 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                                ON a.bookmark_id = b.id
                      LEFT JOIN LATERAL (
                 SELECT w.icon_base64, w.icon_padding, w.icon_bg_color, w.use_hd_logo, w.height
-                FROM website_logo w
+                FROM bookmark_logo w
                 WHERE w.bookmark_id = a.bookmark_id
                 ORDER BY (w.icon_base64 IS NOT NULL) DESC, w.height DESC
                 LIMIT 1

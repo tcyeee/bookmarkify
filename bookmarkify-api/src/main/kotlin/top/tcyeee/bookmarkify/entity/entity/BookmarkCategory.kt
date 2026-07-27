@@ -7,13 +7,13 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.LocalDateTime
 
-/** 网站(canonical bookmark) ↔ 分类 关联 */
+/** canonical 书签 ↔ 分类 关联 */
 @TableName("bookmark_category")
 data class BookmarkCategory(
     @TableId var id: String = IdUtil.fastUUID(),
     @field:Schema(description = "canonical 书签ID") var bookmarkId: String,
-    @field:Schema(description = "分类ID(website_category.id)") var categoryId: String,
-    @field:Schema(description = "来源") var source: String = "DEEPSEEK",
+    @field:Schema(description = "分类ID(category.id)") var categoryId: String,
+    @field:Schema(description = "来源") var source: CategorySource = CategorySource.DEEPSEEK,
 
     @JsonIgnore @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "是否删除") var deleted: Boolean = false,
@@ -21,4 +21,13 @@ data class BookmarkCategory(
     constructor(bookmarkId: String, categoryId: String) : this(
         id = IdUtil.fastUUID(), bookmarkId = bookmarkId, categoryId = categoryId,
     )
+}
+
+/** 分类关联的来源 */
+enum class CategorySource {
+    /* DeepSeek 自动推断 */
+    DEEPSEEK,
+
+    /* 管理员/用户手动指定 */
+    MANUAL,
 }

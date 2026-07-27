@@ -1,6 +1,6 @@
 package top.tcyeee.bookmarkify.entity.dto
 
-import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
+import top.tcyeee.bookmarkify.entity.entity.BookmarkLogoEntity
 
 /* 书签地址 */
 data class BookmarkUrlWrapper(
@@ -79,7 +79,7 @@ data class ImgInfo(val url: String, val size: Long, val width: Int, val height: 
 
 /**
  * 网站 LOGO 存储结果。
- * @param logo 最大 LOGO 的 website_logo 记录（无合适 LOGO 时为 null）
+ * @param logo 最大 LOGO 的 bookmark_logo 记录（无合适 LOGO 时为 null）
  * @param logoUrl 高清 LOGO 上传 OSS 后的永久地址（无 LOGO 时为 null）
  */
-data class LogoResult(val logo: WebsiteLogoEntity?, val logoUrl: String?)
+data class LogoResult(val logo: BookmarkLogoEntity?, val logoUrl: String?)

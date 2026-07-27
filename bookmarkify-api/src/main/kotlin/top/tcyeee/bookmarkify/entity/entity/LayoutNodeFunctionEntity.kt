@@ -15,8 +15,8 @@ import java.time.LocalDateTime
  * @author tcyeee
  * @date 1/12/26 12:13
  */
-@TableName("bookmark_function")
-data class BookmarkFunctionEntity(
+@TableName("layout_node_function")
+data class LayoutNodeFunctionEntity(
     @TableId val id: String = IdUtil.fastUUID(),
     @field:Max(40) @field:Schema(description = "用户ID") val uid: String,
     @field:Max(40) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,

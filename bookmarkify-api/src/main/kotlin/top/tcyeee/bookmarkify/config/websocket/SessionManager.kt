@@ -15,7 +15,7 @@ object SessionManager {
     // IllegalStateException("TEXT_PARTIAL_WRITING")，所以包一层 decorator 序列化写入。
     private const val SEND_TIME_LIMIT_MS = 5_000
     private const val BUFFER_SIZE_LIMIT = 64 * 1024
-    // key 为 "realm:uid"。USER 与 ADMIN 同属一个 sys_user id 空间，若仅用 uid 作 key，
+    // key 为 "realm:uid"。USER 与 ADMIN 同属一个 user_info id 空间，若仅用 uid 作 key，
     // 同一账号同时连 web(USER) 与管理端(ADMIN) 会互相挤掉，故按 realm 命名空间隔离。
     private val sessions = ConcurrentHashMap<String, WebSocketSession>()
 

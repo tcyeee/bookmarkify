@@ -19,13 +19,13 @@ import top.tcyeee.bookmarkify.entity.UserInfoUpdateParams
 import top.tcyeee.bookmarkify.entity.UserSearchParams
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
-import top.tcyeee.bookmarkify.entity.entity.UserEntity
+import top.tcyeee.bookmarkify.entity.entity.UserInfoEntity
 
 /**
  * @author tcyeee
  * @date 3/11/25 20:01
  */
-interface IUserService : IService<UserEntity> {
+interface IUserService : IService<UserInfoEntity> {
     fun loginOut(response: HttpServletResponse)
 
     /**
@@ -156,7 +156,7 @@ interface IUserService : IService<UserEntity> {
     /** 解绑当前账户的 GitHub 关联(带安全检查,无其他登录凭证则拒绝) */
     fun unbindGithub(uid: String): UserInfoShow
 
-    fun findByNameAndPwd(account: String, password: String): UserEntity?
+    fun findByNameAndPwd(account: String, password: String): UserInfoEntity?
 
     fun loginByAccount(params: AccountLoginParams): UserSessionInfo
 

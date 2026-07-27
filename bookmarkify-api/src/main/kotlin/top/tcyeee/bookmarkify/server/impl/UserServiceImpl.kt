@@ -53,7 +53,7 @@ class UserServiceImpl(
     private val mailUtils: MailUtils,
     private val bookmarkService: IBookmarkService,
     private val userPreferenceMapper: UserPreferenceMapper
-) : IUserService, ServiceImpl<UserMapper, UserEntity>() {
+) : IUserService, ServiceImpl<UserMapper, UserInfoEntity>() {
 
     /**
      * 获取用户信息
@@ -65,7 +65,7 @@ class UserServiceImpl(
             .let { UserInfoShow(it, it.avatarPath()) }
 
     // 返回原始 OSS 路径（如 avatar/xxx.svg），不签名，可安全持久化
-    fun UserEntity.avatarPath(): String? {
+    fun UserInfoEntity.avatarPath(): String? {
         if (StrUtil.isBlank(this.avatarFileId)) return null
         return fileMapper.selectById(this.avatarFileId)?.fullPath
     }
@@ -81,8 +81,8 @@ class UserServiceImpl(
      * @param email 绑定的邮箱
      * @return 新建用户实体
      */
-    private fun createVerifiedUser(email: String): UserEntity {
-        val userEntity = UserEntity(IdUtil.fastUUID()).apply {
+    private fun createVerifiedUser(email: String): UserInfoEntity {
+        val userEntity = UserInfoEntity(IdUtil.fastUUID()).apply {
             this.email = email
             this.verified = true
         }
@@ -122,7 +122,7 @@ class UserServiceImpl(
         val account = String(Base64.getDecoder().decode(params.account)).trim().lowercase()
         // 客户端传来的是 Base64(md5(明文))，解码后即规范凭据（md5 串），不再用它做整列等值查询
         val credential = String(Base64.getDecoder().decode(params.password))
-        val user = ktQuery().eq(UserEntity::email, account).eq(UserEntity::deleted, false).one()
+        val user = ktQuery().eq(UserInfoEntity::email, account).eq(UserInfoEntity::deleted, false).one()
             ?: throw CommonException(ErrorType.E110)
         if (user.disabled) throw CommonException(ErrorType.E110)
         if (!PasswordUtils.matches(credential, user.password)) throw CommonException(ErrorType.E110)
@@ -136,7 +136,7 @@ class UserServiceImpl(
     override fun quickLogin(): UserSessionInfo {
         if (currentEnvironment() != CurrentEnvironment.LOCAL) throw CommonException(ErrorType.E120)
         val email = "quick-login-test@bookmarkify.local"
-        val userEntity = ktQuery().eq(UserEntity::email, email).eq(UserEntity::deleted, false).one() ?: createVerifiedUser(email)
+        val userEntity = ktQuery().eq(UserInfoEntity::email, email).eq(UserInfoEntity::deleted, false).one() ?: createVerifiedUser(email)
         if (StpKit.USER.isLogin) StpKit.USER.logout()
         StpKit.USER.login(userEntity.id, true)
         return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
@@ -147,15 +147,15 @@ class UserServiceImpl(
         val newCredential = String(Base64.getDecoder().decode(params.newPassword))
         val user = getById(uid) ?: throw CommonException(ErrorType.E110)
         if (!PasswordUtils.matches(oldCredential, user.password)) throw CommonException(ErrorType.E110)
-        return ktUpdate().eq(UserEntity::id, uid)
-            .set(UserEntity::password, PasswordUtils.encode(newCredential)).update()
+        return ktUpdate().eq(UserInfoEntity::id, uid)
+            .set(UserInfoEntity::password, PasswordUtils.encode(newCredential)).update()
     }
 
-    override fun findByNameAndPwd(account: String, password: String): UserEntity? {
+    override fun findByNameAndPwd(account: String, password: String): UserInfoEntity? {
         val credential = SecureUtil.md5(password)
         // 账号(邮箱)归一化,与其他登录路径同口径
         val normalized = account.trim().lowercase()
-        val user = ktQuery().eq(UserEntity::email, normalized).eq(UserEntity::deleted, false).one()
+        val user = ktQuery().eq(UserInfoEntity::email, normalized).eq(UserInfoEntity::deleted, false).one()
             ?: return null
         if (!PasswordUtils.matches(credential, user.password)) return null
         upgradePasswordIfLegacy(user, credential)
@@ -163,10 +163,10 @@ class UserServiceImpl(
     }
 
     /** 旧的明文 md5 行在校验通过后，原地升级为带盐 BCrypt（登录即升级） */
-    private fun upgradePasswordIfLegacy(user: UserEntity, credential: String) {
+    private fun upgradePasswordIfLegacy(user: UserInfoEntity, credential: String) {
         if (PasswordUtils.needsUpgrade(user.password)) {
-            ktUpdate().eq(UserEntity::id, user.id)
-                .set(UserEntity::password, PasswordUtils.encode(credential)).update()
+            ktUpdate().eq(UserInfoEntity::id, user.id)
+                .set(UserInfoEntity::password, PasswordUtils.encode(credential)).update()
         }
     }
 
@@ -183,7 +183,7 @@ class UserServiceImpl(
         if (cacheCode != params.code.trim()) throw CommonException(ErrorType.E301)
         RedisUtils.del(RedisType.CODE_EMAIL, email)
 
-        val userEntity = ktQuery().eq(UserEntity::email, email).eq(UserEntity::deleted, false).one() ?: createVerifiedUser(email)
+        val userEntity = ktQuery().eq(UserInfoEntity::email, email).eq(UserInfoEntity::deleted, false).one() ?: createVerifiedUser(email)
         // 该接口为公开端点,正常调用时无登录态;若携带了有效旧 token 则先登出再切换账户
         if (StpKit.USER.isLogin) StpKit.USER.logout()
         StpKit.USER.login(userEntity.id, true)
@@ -203,9 +203,9 @@ class UserServiceImpl(
         val identity = verifyGoogleIdToken(params.idToken)
 
         // 1. 先按稳定唯一标识 google_id 查找已关联账户
-        val userEntity = ktQuery().eq(UserEntity::googleId, identity.googleId).eq(UserEntity::deleted, false).one()
+        val userEntity = ktQuery().eq(UserInfoEntity::googleId, identity.googleId).eq(UserInfoEntity::deleted, false).one()
         // 2. 未命中则按 Google 邮箱兑现现有账户并自动回填关联
-            ?: ktQuery().eq(UserEntity::email, identity.email).eq(UserEntity::deleted, false).one()?.also {
+            ?: ktQuery().eq(UserInfoEntity::email, identity.email).eq(UserInfoEntity::deleted, false).one()?.also {
                 it.googleId = identity.googleId
                 it.googleEmail = identity.email
                 updateById(it)
@@ -233,8 +233,8 @@ class UserServiceImpl(
     override fun loginByGithub(params: GithubLoginParams): UserSessionInfo {
         val identity = verifyGithubCode(params)
 
-        val userEntity = ktQuery().eq(UserEntity::githubId, identity.githubId).eq(UserEntity::deleted, false).one()
-            ?: ktQuery().eq(UserEntity::email, identity.email).eq(UserEntity::deleted, false).one()?.also {
+        val userEntity = ktQuery().eq(UserInfoEntity::githubId, identity.githubId).eq(UserInfoEntity::deleted, false).one()
+            ?: ktQuery().eq(UserInfoEntity::email, identity.email).eq(UserInfoEntity::deleted, false).one()?.also {
                 it.githubId = identity.githubId
                 it.githubLogin = identity.login
                 updateById(it)
@@ -262,7 +262,7 @@ class UserServiceImpl(
 
         if (!user.googleId.isNullOrBlank()) throw CommonException(ErrorType.E114)
 
-        val occupied = ktQuery().eq(UserEntity::googleId, identity.googleId).eq(UserEntity::deleted, false).one()
+        val occupied = ktQuery().eq(UserInfoEntity::googleId, identity.googleId).eq(UserInfoEntity::deleted, false).one()
         if (occupied != null) throw CommonException(ErrorType.E113)
 
         user.googleId = identity.googleId
@@ -287,9 +287,9 @@ class UserServiceImpl(
         user.googleEmail = null
         // MyBatis-Plus updateById 默认忽略 null 字段,需用 UpdateWrapper 显式置空
         ktUpdate()
-            .set(UserEntity::googleId, null)
-            .set(UserEntity::googleEmail, null)
-            .eq(UserEntity::id, uid)
+            .set(UserInfoEntity::googleId, null)
+            .set(UserInfoEntity::googleEmail, null)
+            .eq(UserInfoEntity::id, uid)
             .update()
         return UserInfoShow(user, user.avatarPath())
     }
@@ -306,7 +306,7 @@ class UserServiceImpl(
 
         if (!user.githubId.isNullOrBlank()) throw CommonException(ErrorType.E119)
 
-        val occupied = ktQuery().eq(UserEntity::githubId, identity.githubId).eq(UserEntity::deleted, false).one()
+        val occupied = ktQuery().eq(UserInfoEntity::githubId, identity.githubId).eq(UserInfoEntity::deleted, false).one()
         if (occupied != null) throw CommonException(ErrorType.E118)
 
         user.githubId = identity.githubId
@@ -328,9 +328,9 @@ class UserServiceImpl(
         user.githubLogin = null
         // MyBatis-Plus updateById 默认忽略 null 字段,需用 UpdateWrapper 显式置空
         ktUpdate()
-            .set(UserEntity::githubId, null)
-            .set(UserEntity::githubLogin, null)
-            .eq(UserEntity::id, uid)
+            .set(UserInfoEntity::githubId, null)
+            .set(UserInfoEntity::githubLogin, null)
+            .eq(UserInfoEntity::id, uid)
             .update()
         return UserInfoShow(user, user.avatarPath())
     }
@@ -479,8 +479,8 @@ class UserServiceImpl(
             // 如果查询到了，则修改其中的参数
             // 如果没有查询到，则创建对象
             ?.also { it.updateParams(params) } ?: BackgroundConfigEntity(
-            uid = uid, type = params.type, backgroundLinkId = params.backgroundId
-        )
+            uid = uid, type = params.type
+        ).also { it.setLinkId(params.backgroundId) }
         backSettingService.saveOrUpdate(entity)
 
         return backSettingService.queryShowByUid(uid)
@@ -488,7 +488,7 @@ class UserServiceImpl(
 
     override fun updateInfo(params: UserInfoUpdateParams): Boolean {
         if (params.nickName.isBlank()) return false
-        return ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::nickName, params.nickName).update()
+        return ktUpdate().eq(UserInfoEntity::id, BaseUtils.uid()).set(UserInfoEntity::nickName, params.nickName).update()
     }
 
     override fun addBacColor(params: GradientConfigParams, uid: String): Boolean {
@@ -506,7 +506,8 @@ class UserServiceImpl(
 
         backSettingService.ktUpdate().eq(BackgroundConfigEntity::uid, uid)
             .set(BackgroundConfigEntity::type, BackgroundType.GRADIENT)
-            .set(BackgroundConfigEntity::backgroundLinkId, entity.id).update()
+            .set(BackgroundConfigEntity::backgroundGradientId, entity.id)
+            .set(BackgroundConfigEntity::backgroundImageId, null).update()
         return true
     }
 
@@ -527,7 +528,8 @@ class UserServiceImpl(
         backSettingService.queryByUid(uid).apply {
             this.uid = uid
             this.type = BackgroundType.IMAGE
-            this.backgroundLinkId = bacImgEntity.id
+            this.backgroundImageId = bacImgEntity.id
+            this.backgroundGradientId = null
         }.also { backSettingService.saveOrUpdate(it) }
         return file.currentName
     }
@@ -535,7 +537,7 @@ class UserServiceImpl(
     override fun updateAvatar(multipartFile: MultipartFile, uid: String): String {
         val oldFileId = getById(uid)?.avatarFileId
         val file = fileService.updateAvatar(BaseUtils.uid(), multipartFile)
-        ktUpdate().eq(UserEntity::id, uid).set(UserEntity::avatarFileId, file.id).update()
+        ktUpdate().eq(UserInfoEntity::id, uid).set(UserInfoEntity::avatarFileId, file.id).update()
         // 新头像已关联成功后，再清理旧头像（OSS 对象 + user_file 行），避免旧文件永久孤立在存储桶中
         if (!oldFileId.isNullOrBlank()) {
             fileMapper.selectById(oldFileId)?.let { OssUtils.delete(it.fullPath) }
@@ -559,14 +561,14 @@ class UserServiceImpl(
         // 用同一身份重新登录会命中这条已注销记录,把旧数据"复活"。置空身份列后,
         // 重新登录无法命中旧记录、只会新建账户;同时释放 google_id 唯一索引,避免同一第三方账号重新注册时唯一约束冲突。
         val deleted = ktUpdate()
-            .eq(UserEntity::id, uid)
-            .set(UserEntity::deleted, true)
-            .set(UserEntity::email, null)
-            .set(UserEntity::password, null)
-            .set(UserEntity::googleId, null)
-            .set(UserEntity::googleEmail, null)
-            .set(UserEntity::githubId, null)
-            .set(UserEntity::githubLogin, null)
+            .eq(UserInfoEntity::id, uid)
+            .set(UserInfoEntity::deleted, true)
+            .set(UserInfoEntity::email, null)
+            .set(UserInfoEntity::password, null)
+            .set(UserInfoEntity::googleId, null)
+            .set(UserInfoEntity::googleEmail, null)
+            .set(UserInfoEntity::githubId, null)
+            .set(UserInfoEntity::githubLogin, null)
             .update()
         if (deleted) {
             // 注销成功后立即失效服务端会话，satoken 即时作废
@@ -577,7 +579,7 @@ class UserServiceImpl(
     }
 
     override fun updateUsername(username: String): Boolean =
-        ktUpdate().eq(UserEntity::id, BaseUtils.uid()).set(UserEntity::nickName, username).update()
+        ktUpdate().eq(UserInfoEntity::id, BaseUtils.uid()).set(UserInfoEntity::nickName, username).update()
 
     // 旧的手机号绑定/改绑实现绕过验证码，已随手机号功能一并删除。绑定/改绑统一走 verifyEmail 的验证码校验路径。
 
