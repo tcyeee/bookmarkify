@@ -87,7 +87,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_SSH_PORT || 22 }}
-          envs: COMPOSE_B64,DOCKERFILE_B64,JAR_URL,API_IMAGE,SPRING_DATASOURCE_PASSWORD,SPRING_DATA_REDIS_PASSWORD,BOOKMARKIFY_WECHAT_WORK_CORPID,BOOKMARKIFY_WECHAT_WORK_CORPSECRET,BOOKMARKIFY_DEEPSEEK_API_KEY,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET,BOOKMARKIFY_GITHUB_CLIENT_SECRET
+          envs: COMPOSE_B64,DOCKERFILE_B64,JAR_URL,API_IMAGE,SPRING_DATASOURCE_PASSWORD,SPRING_DATA_REDIS_PASSWORD,BOOKMARKIFY_WECHAT_WORK_CORPID,BOOKMARKIFY_WECHAT_WORK_CORPSECRET,BOOKMARKIFY_DEEPSEEK_API_KEY,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET,BOOKMARKIFY_GITHUB_CLIENT_SECRET,BOOKMARKIFY_SCRAPPER_AUTH_TOKEN
           script: |
             set -euo pipefail
 
@@ -116,6 +116,7 @@ jobs:
             OSS_ACCESS_KEY_SECRET=$OSS_ACCESS_KEY_SECRET
             OSS_BUCKET=$OSS_BUCKET
             BOOKMARKIFY_GITHUB_CLIENT_SECRET=$BOOKMARKIFY_GITHUB_CLIENT_SECRET
+            BOOKMARKIFY_SCRAPPER_AUTH_TOKEN=$BOOKMARKIFY_SCRAPPER_AUTH_TOKEN
             EOF
 
             # Assemble the runtime image locally: just COPY the jar onto the JRE base
@@ -157,6 +158,10 @@ jobs:
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
           OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
           BOOKMARKIFY_GITHUB_CLIENT_SECRET: ${{ secrets.BOOKMARKIFY_GITHUB_CLIENT_SECRET }}
+          # Shared secret sent as `Authorization: Bearer <token>` to bookmarkify-scrapper's
+          # /scrape and /ping. Must match the scrapper container's SCRAPER_AUTH_TOKEN
+          # (see bookmarkify-scrapper's deploy-scrapper.yml). Empty until that secret is set.
+          BOOKMARKIFY_SCRAPPER_AUTH_TOKEN: ${{ secrets.BOOKMARKIFY_SCRAPPER_AUTH_TOKEN }}
 
       # Push a WeChat notification via Server酱 once the deploy + health check pass.
       # Set the SERVERCHAN_SENDKEY repo secret to enable; without it this step is a no-op.

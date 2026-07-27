@@ -3,6 +3,10 @@ import { h } from 'vue';
 import { setupVbenVxeTable, useVbenVxeGrid } from '@vben/plugins/vxe-table';
 import ElButton from "element-plus"
 import ElImage from "element-plus"
+import {
+  getAdminGridConfigApi,
+  saveAdminGridConfigApi,
+} from '#/api/admin-grid-config';
 import { useVbenForm } from './form';
 
 setupVbenVxeTable({
@@ -13,6 +17,18 @@ setupVbenVxeTable({
         border: false,
         columnConfig: {
           resizable: true,
+        },
+        // 列宽/显隐/排序持久化到后端，按当前管理员账号 + grid id 隔离
+        // 每个表格只需指定唯一的 gridOptions.id 即可自动获得存取能力
+        customConfig: {
+          storage: true,
+          restoreStore: async ({ id }) => {
+            const res = await getAdminGridConfigApi(id);
+            return res.storeData ?? {};
+          },
+          updateStore: async ({ id, storeData }) => {
+            await saveAdminGridConfigApi(id, storeData);
+          },
         },
         minHeight: 180,
         formConfig: {

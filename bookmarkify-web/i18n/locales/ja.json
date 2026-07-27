@@ -1,0 +1,98 @@
+{
+  "settingLayout": {
+    "back": "戻る",
+    "tabs": {
+      "profile": "プロフィール",
+      "importBookmarks": "ブックマークをインポート",
+      "background": "背景",
+      "preference": "環境設定",
+      "shortcuts": "ショートカット"
+    }
+  },
+  "preferenceSettings": {
+    "title": "環境設定",
+    "loading": "設定を読み込み中...",
+    "synced": "最新の設定に同期済み",
+    "bookmarkOpenMode": {
+      "label": "ブックマークの開き方",
+      "desc": "現在のタブまたは新しいタブで開きます。",
+      "currentTab": "現在のタブ",
+      "newTab": "新しいタブ"
+    },
+    "bookmarkGap": {
+      "label": "ブックマークの間隔",
+      "desc": "コンパクト・標準・ゆったりから選択。",
+      "compact": "コンパクト",
+      "default": "標準",
+      "spacious": "ゆったり"
+    },
+    "bookmarkImageSize": {
+      "label": "ブックマーク画像サイズ",
+      "desc": "ブックマークのロゴサイズを設定します。",
+      "large": "大",
+      "medium": "中（デフォルト）",
+      "small": "小"
+    },
+    "showTitle": {
+      "label": "タイトルを表示",
+      "desc": "アイコンのみ表示するかタイトルも表示するか。"
+    },
+    "showDesktopAddEntry": {
+      "label": "デスクトップの追加ボタンを表示",
+      "desc": "デスクトップに「追加」ボタンを表示します。"
+    },
+    "language": {
+      "label": "言語",
+      "desc": "表示言語を切り替えます。"
+    }
+  },
+  "accountProfile": {
+    "verified": "認証済み",
+    "unnamedUser": "名称未設定ユーザー",
+    "basicInfo": "基本情報",
+    "nickname": "ニックネーム",
+    "nicknamePlaceholder": "ニックネームを入力してください",
+    "save": "保存",
+    "saving": "保存中...",
+    "cancel": "キャンセル",
+    "accountSecurity": "アカウントセキュリティ",
+    "email": "メール",
+    "emailUnbound": "メール未登録",
+    "googleAccount": "Google アカウント",
+    "githubAccount": "GitHub アカウント",
+    "unlinked": "未連携",
+    "accountActions": "アカウント操作",
+    "logout": "ログアウト",
+    "logoutDesc": "この端末のみログアウトします。アカウントデータには影響しません。",
+    "dangerZone": "危険な操作",
+    "deleteAccount": "アカウントを削除",
+    "deleteAccountDesc": "削除するとアカウントとデータは完全に消去され、復元できません。ご注意ください。",
+    "profileUpdateSuccess": "プロフィールを更新しました"
+  },
+  "bookmarkManage": {
+    "title": "ブックマークをインポート",
+    "desc": "Chrome からエクスポートした HTML ファイルからブックマークを一括インポートします。",
+    "importing": "インポートを開始しました。ブックマークを解析中…",
+    "loadingFile": "ファイルを読み込み中…",
+    "dropHint": "クリックして選択するか、ファイルをここにドラッグ",
+    "supportedFormats": "Chrome / Edge からエクスポートした .html ブックマークファイルに対応",
+    "chooseFile": "ファイルを選択",
+    "totalCount": "合計 {total} 件のブックマーク",
+    "duplicateCount": "、うち {count} 件は既存",
+    "willImport": "{count} 件をインポートします",
+    "cancel": "キャンセル",
+    "startImport": "インポート開始（{count} 件）",
+    "existing": "既存",
+    "howToExport": "Chrome のブックマークをエクスポートするには？",
+    "step1": "Chrome を開き、右上のメニュー → ブックマーク → ブックマークマネージャーをクリック",
+    "step2": "右上の縦三点アイコン → ブックマークをエクスポートをクリック",
+    "step3Before": "",
+    "step3Code": ".html",
+    "step3After": " ファイルとして保存してからアップロードしてください",
+    "noBookmarksFound": "ファイル内にインポート可能なブックマークが見つかりませんでした。",
+    "readFileFailed": "ファイルの読み込みに失敗しました。もう一度お試しください。",
+    "invalidFileType": "Chrome からエクスポートした HTML ブックマークファイルをアップロードしてください",
+    "importStarted": "インポートを開始しました！{count} 件がバックグラウンドで解析中です。完了後に自動更新されます。",
+    "importFailed": "インポートに失敗しました。しばらくしてから再試行してください。"
+  }
+}

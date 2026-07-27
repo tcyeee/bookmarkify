@@ -1,32 +1,19 @@
 <script lang="ts" setup>
 import type { ScrapperCallLogSearchParams, ScrapperCallLogVO } from "#/api/scrapper-call-log";
 
-import { defineAsyncComponent, onMounted, reactive, ref } from "vue";
+import { defineAsyncComponent, reactive } from "vue";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
 
 import { getAdminScrapperCallLogListApi } from "#/api/scrapper-call-log";
+import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
     import("element-plus/es/components/card/index"),
     import("element-plus/es/components/card/style/css"),
   ]).then(([res]) => res.ElCard)
-);
-
-const ElTable = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/table/index"),
-    import("element-plus/es/components/table/style/css"),
-  ]).then(([res]) => res.ElTable)
-);
-
-const ElTableColumn = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/table/index"),
-    import("element-plus/es/components/table/style/css"),
-  ]).then(([res]) => res.ElTableColumn)
 );
 
 const ElForm = defineAsyncComponent(() =>
@@ -71,13 +58,6 @@ const ElButton = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElButton)
 );
 
-const ElPagination = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/pagination/index"),
-    import("element-plus/es/components/pagination/style/css"),
-  ]).then(([res]) => res.ElPagination)
-);
-
 const ElTag = defineAsyncComponent(() =>
   Promise.all([
     import("element-plus/es/components/tag/index"),
@@ -92,64 +72,58 @@ const ElTooltip = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElTooltip)
 );
 
-const loading = ref(false);
-const tableData = ref<ScrapperCallLogVO[]>([]);
-
-const pagination = reactive({
-  currentPage: 1,
-  pageSize: 50,
-  total: 0,
-});
-
 const searchForm = reactive<Pick<ScrapperCallLogSearchParams, "urlHost" | "success">>({
   urlHost: "",
   success: undefined,
 });
 
-async function fetchData() {
-  loading.value = true;
-  try {
-    const res = await getAdminScrapperCallLogListApi({
-      urlHost: searchForm.urlHost || undefined,
-      success: searchForm.success,
-      currentPage: pagination.currentPage,
-      pageSize: pagination.pageSize,
-    });
-    tableData.value = res.records;
-    pagination.total = res.total;
-    pagination.pageSize = res.size;
-    pagination.currentPage = res.current;
-  } finally {
-    loading.value = false;
-  }
-}
-
 function handleSearch() {
-  pagination.currentPage = 1;
-  fetchData();
+  gridApi.reload();
 }
 
 function handleReset() {
   searchForm.urlHost = "";
   searchForm.success = undefined;
-  pagination.currentPage = 1;
-  fetchData();
+  gridApi.reload();
 }
 
-function handleCurrentChange(page: number) {
-  pagination.currentPage = page;
-  fetchData();
-}
+const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
+  id: "admin-scrapper-call-log",
+  columns: [
+    { type: "seq", title: "#", width: 50 },
+    { field: "urlHost", title: "域名", minWidth: 160 },
+    { field: "url", title: "请求URL", minWidth: 240, showOverflow: "tooltip" },
+    { field: "success", title: "结果", width: 90, slots: { default: "success" } },
+    { field: "httpStatus", title: "HTTP状态", width: 100 },
+    { field: "source", title: "来源", width: 120 },
+    { field: "cached", title: "缓存命中", width: 100, slots: { default: "cached" } },
+    { field: "durationMs", title: "耗时(ms)", width: 100 },
+    { field: "errorMsg", title: "错误信息", minWidth: 200, slots: { default: "errorMsg" } },
+    {
+      field: "createTime",
+      title: "调用时间",
+      width: 200,
+      formatter: ({ cellValue }) => formatDateTime(cellValue),
+    },
+  ],
+  toolbarConfig: { custom: true, refresh: true },
+  pagerConfig: { pageSize: 50 },
+  proxyConfig: {
+    ajax: {
+      query: async ({ page }) => {
+        const res = await getAdminScrapperCallLogListApi({
+          urlHost: searchForm.urlHost || undefined,
+          success: searchForm.success,
+          currentPage: page.currentPage,
+          pageSize: page.pageSize,
+        });
+        return { items: res.records, total: res.total };
+      },
+    },
+  },
+};
 
-function handleSizeChange(size: number) {
-  pagination.pageSize = size;
-  pagination.currentPage = 1;
-  fetchData();
-}
-
-onMounted(() => {
-  fetchData();
-});
+const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
 </script>
 
 <template>
@@ -177,42 +151,22 @@ onMounted(() => {
           </ElFormItem>
         </ElForm>
       </div>
-      <ElTable :data="tableData" border v-loading="loading" style="width: 100%">
-        <ElTableColumn type="index" label="#" width="50" />
-        <ElTableColumn prop="urlHost" label="域名" min-width="160" />
-        <ElTableColumn prop="url" label="请求URL" min-width="240" show-overflow-tooltip />
-        <ElTableColumn prop="success" label="结果" width="90">
-          <template #default="{ row }">
-            <ElTag v-if="row.success" type="success" size="small"> 成功 </ElTag>
-            <ElTag v-else type="danger" size="small"> 失败 </ElTag>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="httpStatus" label="HTTP状态" width="100" />
-        <ElTableColumn prop="source" label="来源" width="120" />
-        <ElTableColumn prop="cached" label="缓存命中" width="100">
-          <template #default="{ row }">
-            <ElTag v-if="row.cached" type="info" size="small"> 命中 </ElTag>
-            <span v-else>-</span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="durationMs" label="耗时(ms)" width="100" />
-        <ElTableColumn prop="errorMsg" label="错误信息" min-width="200">
-          <template #default="{ row }">
-            <ElTooltip v-if="row.errorMsg" :content="row.errorMsg" placement="top">
-              <span class="line-clamp-1">{{ row.errorMsg }}</span>
-            </ElTooltip>
-            <span v-else>-</span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="createTime" label="调用时间" width="200">
-          <template #default="{ row }">
-            {{ formatDateTime(row.createTime) }}
-          </template>
-        </ElTableColumn>
-      </ElTable>
-      <div class="mt-4 flex justify-end">
-        <ElPagination v-model:current-page="pagination.currentPage" v-model:page-size="pagination.pageSize" :page-sizes="[10, 20, 50, 100]" :total="pagination.total" layout="total, sizes, prev, pager, next, jumper" @current-change="handleCurrentChange" @size-change="handleSizeChange" />
-      </div>
+      <Grid>
+        <template #success="{ row }">
+          <ElTag v-if="row.success" type="success" size="small"> 成功 </ElTag>
+          <ElTag v-else type="danger" size="small"> 失败 </ElTag>
+        </template>
+        <template #cached="{ row }">
+          <ElTag v-if="row.cached" type="info" size="small"> 命中 </ElTag>
+          <span v-else>-</span>
+        </template>
+        <template #errorMsg="{ row }">
+          <ElTooltip v-if="row.errorMsg" :content="row.errorMsg" placement="top">
+            <span class="line-clamp-1">{{ row.errorMsg }}</span>
+          </ElTooltip>
+          <span v-else>-</span>
+        </template>
+      </Grid>
     </ElCard>
   </Page>
 </template>

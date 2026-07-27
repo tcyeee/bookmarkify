@@ -1,0 +1,98 @@
+{
+  "settingLayout": {
+    "back": "返回",
+    "tabs": {
+      "profile": "个人资料",
+      "importBookmarks": "导入书签",
+      "background": "主页背景",
+      "preference": "偏好设置",
+      "shortcuts": "快捷键"
+    }
+  },
+  "preferenceSettings": {
+    "title": "偏好设置",
+    "loading": "正在加载偏好设置...",
+    "synced": "已同步最新偏好设置",
+    "bookmarkOpenMode": {
+      "label": "书签打开方式",
+      "desc": "在当前或新标签页中打开。",
+      "currentTab": "当前标签页",
+      "newTab": "新标签页"
+    },
+    "bookmarkGap": {
+      "label": "书签间距",
+      "desc": "紧凑、默认或宽松排布。",
+      "compact": "紧凑",
+      "default": "默认",
+      "spacious": "宽松"
+    },
+    "bookmarkImageSize": {
+      "label": "书签图片大小",
+      "desc": "控制书签 Logo 显示尺寸。",
+      "large": "大",
+      "medium": "中（默认）",
+      "small": "小"
+    },
+    "showTitle": {
+      "label": "显示标题",
+      "desc": "仅展示图标或展示标题。"
+    },
+    "showDesktopAddEntry": {
+      "label": "显示桌面增加入口",
+      "desc": "在桌面展示“增加”入口按钮。"
+    },
+    "language": {
+      "label": "语言",
+      "desc": "切换界面显示语言。"
+    }
+  },
+  "accountProfile": {
+    "verified": "已验证",
+    "unnamedUser": "未命名用户",
+    "basicInfo": "基本信息",
+    "nickname": "昵称",
+    "nicknamePlaceholder": "请输入昵称",
+    "save": "保存",
+    "saving": "保存中...",
+    "cancel": "取消",
+    "accountSecurity": "账号安全",
+    "email": "邮箱",
+    "emailUnbound": "未绑定邮箱",
+    "googleAccount": "Google 账号",
+    "githubAccount": "GitHub 账号",
+    "unlinked": "未关联",
+    "accountActions": "账号操作",
+    "logout": "退出登录",
+    "logoutDesc": "仅退出当前设备登录，不影响账号数据。",
+    "dangerZone": "危险操作",
+    "deleteAccount": "注销账户",
+    "deleteAccountDesc": "注销后账号及数据将被销毁且不可恢复，请谨慎操作。",
+    "profileUpdateSuccess": "个人资料修改成功"
+  },
+  "bookmarkManage": {
+    "title": "导入书签",
+    "desc": "从 Chrome 导出的 HTML 文件中批量导入书签。",
+    "importing": "导入已开始，书签解析中…",
+    "loadingFile": "正在读取文件…",
+    "dropHint": "点击选择或拖拽文件到此处",
+    "supportedFormats": "支持 Chrome / Edge 导出的 .html 书签文件",
+    "chooseFile": "选择文件",
+    "totalCount": "共 {total} 个书签",
+    "duplicateCount": "，其中 {count} 个已有",
+    "willImport": "将导入 {count} 个",
+    "cancel": "取消",
+    "startImport": "开始导入（{count} 个）",
+    "existing": "已有",
+    "howToExport": "如何导出 Chrome 书签？",
+    "step1": "打开 Chrome，点击右上角菜单 → 书签 → 书签管理器",
+    "step2": "点击右上角三点图标 → 导出书签",
+    "step3Before": "保存为 ",
+    "step3Code": ".html",
+    "step3After": " 文件后上传即可",
+    "noBookmarksFound": "文件中没有找到可导入的书签。",
+    "readFileFailed": "读取文件失败，请重试。",
+    "invalidFileType": "请上传从 Chrome 导出的 HTML 书签文件",
+    "importStarted": "导入已开始！共 {count} 项正在后台解析，稍后会自动更新。",
+    "importFailed": "导入失败，请稍后重试。"
+  }
+}

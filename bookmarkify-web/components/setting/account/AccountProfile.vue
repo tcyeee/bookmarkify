@@ -11,7 +11,7 @@
             <h2 class="text-2xl font-semibold leading-tight">
               {{ displayNickName }}
             </h2>
-            <span class="cy-badge cy-badge-accent cy-badge-lg">已验证</span>
+            <span class="cy-badge cy-badge-accent cy-badge-lg">{{ $t('accountProfile.verified') }}</span>
           </div>
           <div class="text-gray-500 text-xl uppercase font-jersey10">
             <span>UID: {{ maskedUid }}</span>
@@ -20,33 +20,33 @@
       </div>
 
       <div class="space-y-3 mt-20">
-        <div class="text-lg font-semibold text-slate-800 dark:text-slate-100 py-3">基本信息</div>
+        <div class="text-lg font-semibold text-slate-800 dark:text-slate-100 py-3">{{ $t('accountProfile.basicInfo') }}</div>
         <ActionInput
           v-model="form.nickName"
-          label="昵称"
-          placeholder="请输入昵称"
+          :label="$t('accountProfile.nickname')"
+          :placeholder="$t('accountProfile.nicknamePlaceholder')"
           :max-length="20"
           :dirty="isDirty"
           :busy="saving"
           randomable
-          primary-text="保存"
-          primary-loading-text="保存中..."
-          secondary-text="取消"
+          :primary-text="$t('accountProfile.save')"
+          :primary-loading-text="$t('accountProfile.saving')"
+          :secondary-text="$t('accountProfile.cancel')"
           @primary="saveProfile"
           @secondary="resetForm"
           @random="randomizeNickName" />
       </div>
 
       <div class="space-y-3 mt-20">
-        <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">账号安全</div>
+        <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ $t('accountProfile.accountSecurity') }}</div>
 
         <div
           class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
           <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
-            <Icon icon="memory:email" class="size-5 text-slate-500 dark:text-slate-400" />
+            <Icon icon="mdi:email" class="size-5 text-slate-500 dark:text-slate-400" />
             <div>
-              <div class="font-medium">邮箱</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">{{ maskedEmail || '未绑定邮箱' }}</div>
+              <div class="font-medium">{{ $t('accountProfile.email') }}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ maskedEmail || $t('accountProfile.emailUnbound') }}</div>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -72,8 +72,8 @@
                 d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
             </svg>
             <div>
-              <div class="font-medium">Google 账号</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">{{ googleEmail || '未关联' }}</div>
+              <div class="font-medium">{{ $t('accountProfile.googleAccount') }}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ googleEmail || $t('accountProfile.unlinked') }}</div>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -86,8 +86,8 @@
           <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
             <IconMdiGithub class="size-8 text-slate-800 dark:text-slate-100" />
             <div>
-              <div class="font-medium">GitHub 账号</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">{{ githubLogin || '未关联' }}</div>
+              <div class="font-medium">{{ $t('accountProfile.githubAccount') }}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ githubLogin || $t('accountProfile.unlinked') }}</div>
             </div>
           </div>
           <div class="flex items-center gap-3">
@@ -98,16 +98,16 @@
 
       <!-- 帐户操作 -->
       <div class="space-y-3 mt-20">
-        <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">账号操作</div>
+        <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ $t('accountProfile.accountActions') }}</div>
 
         <!-- 退出登录 -->
         <div
           class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
           <div class="flex items-center gap-3 text-slate-800 dark:text-slate-200">
-            <Icon icon="memory:arrow-down-right-box" class="size-[22px] text-slate-500 dark:text-slate-400" />
+            <Icon icon="mdi:logout" class="size-[22px] text-slate-500 dark:text-slate-400" />
             <div>
-              <div class="font-semibold">退出登录</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">仅退出当前设备登录，不影响账号数据。</div>
+              <div class="font-semibold">{{ $t('accountProfile.logout') }}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ $t('accountProfile.logoutDesc') }}</div>
             </div>
           </div>
           <AccountLogout />
@@ -116,16 +116,16 @@
 
       <!-- 危险操作 -->
       <div class="space-y-3 mt-20">
-        <div class="text-lg font-semibold text-rose-600 dark:text-rose-300">危险操作</div>
+        <div class="text-lg font-semibold text-rose-600 dark:text-rose-300">{{ $t('accountProfile.dangerZone') }}</div>
 
         <!-- 注销账户 -->
         <div
           class="rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-rose-500/60 dark:bg-rose-500/10">
           <div class="flex items-center gap-3 text-rose-800 dark:text-rose-100">
-            <Icon icon="memory:arrow-down-right-box" class="size-[22px] text-rose-500 dark:text-rose-300" />
+            <Icon icon="mdi:logout" class="size-[22px] text-rose-500 dark:text-rose-300" />
             <div>
-              <div class="font-semibold">注销账户</div>
-              <div class="text-sm text-rose-600 dark:text-rose-200">注销后账号及数据将被销毁且不可恢复，请谨慎操作。</div>
+              <div class="font-semibold">{{ $t('accountProfile.deleteAccount') }}</div>
+              <div class="text-sm text-rose-600 dark:text-rose-200">{{ $t('accountProfile.deleteAccountDesc') }}</div>
             </div>
           </div>
           <AccountDelete />
@@ -150,6 +150,7 @@ import BindGithubModal from './BindGithubModal.vue'
 import AccountLogout from './AccountLogout.vue'
 import ActionInput from '../../common/ActionInput.vue'
 
+const { t } = useI18n()
 const authStore = useAuthStore()
 const account = computed<UserInfo | undefined>(() => authStore.account)
 // 直接读取 account.avatarUrl（持久化在 auth store），不再经 preferenceStore 中转；
@@ -176,7 +177,7 @@ const maskedEmail = computed(() => {
 })
 const googleEmail = computed(() => account.value?.googleEmail ?? null)
 const githubLogin = computed(() => account.value?.githubLogin ?? null)
-const displayNickName = computed(() => account.value?.nickName || '未命名用户')
+const displayNickName = computed(() => account.value?.nickName || t('accountProfile.unnamedUser'))
 const isDirty = computed(() => {
   const nicknameChanged = form.nickName !== (account.value?.nickName || '')
   const emailChanged = form.email !== (account.value?.email || '')
@@ -205,7 +206,7 @@ async function saveProfile() {
       email: form.email,
     })
     await authStore.refreshUserInfo()
-    useToastStore().success('个人资料修改成功')
+    useToastStore().success(t('accountProfile.profileUpdateSuccess'))
   } catch {
     // 错误已由 http 层统一提示
   } finally {

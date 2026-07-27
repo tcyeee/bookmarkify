@@ -29,11 +29,11 @@
               class="inline-flex dark:text-black/50! items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 text-lg">
               <template v-if="isLoggedIn">
                 <span>🚀 回到控制台</span>
-                <Icon icon="memory:arrow-right" class="ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
+                <Icon icon="mdi:arrow-right" class="ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
               </template>
               <template v-else>
                 <span>✨ 开始使用</span>
-                <Icon icon="memory:arrow-right" class="ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
+                <Icon icon="mdi:arrow-right" class="ml-1 size-3 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
               </template>
             </ShimmerText>
           </div>
@@ -43,7 +43,7 @@
         <div
           @click="handleScroll"
           class="relative z-10 animate-bounce flex flex-col items-center gap-5 cursor-pointer select-none">
-          <Icon icon="memory:arrow-down-bold" class="size-10 text-white/80" />
+          <Icon icon="mdi:arrow-down-bold" class="size-10 text-white/80" />
         </div>
       </div>
 
@@ -71,7 +71,7 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-250 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <Icon icon="memory:floppy-disk" class="size-10 text-current" />
+                <Icon icon="mdi:content-save" class="size-10 text-current" />
 
                 <h1 class="font-medium text-2xl">一键收藏任意页面</h1>
 
@@ -82,7 +82,7 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-500 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <Icon icon="memory:search" class="size-10 text-current" />
+                <Icon icon="mdi:magnify" class="size-10 text-current" />
 
                 <h1 class="font-medium text-2xl">智能分类与搜索</h1>
                 <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">
@@ -92,14 +92,14 @@
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-750 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <Icon icon="memory:checkbox-marked" class="size-10 text-current" />
+                <Icon icon="mdi:checkbox-marked" class="size-10 text-current" />
                 <h1 class="font-medium text-2xl">书签活性检测</h1>
                 <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">自动检测书签是否有效，及时更新书签状态。</p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
                 class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-1000 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <Icon icon="memory:cloud" class="size-10 text-current" />
+                <Icon icon="mdi:cloud" class="size-10 text-current" />
                 <h1 class="font-medium text-2xl">分享与发现</h1>
                 <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">
                   公开或私密分享收藏夹，浏览社区精选书签，一键加入自己的库。
@@ -117,7 +117,7 @@
         <button
           @click="showLoginDialog = false"
           class="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-white/40 hover:bg-white/10 hover:text-white/80 transition-all duration-200">
-          <Icon icon="memory:close" class="size-[18px]" />
+          <Icon icon="mdi:close" class="size-[18px]" />
         </button>
         <WelcomeLoginDialog @success="onLoginSuccess" />
       </div>
@@ -133,7 +133,7 @@
         class="fixed bottom-28 right-6 z-50 rounded-full hover:scale-110 transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 cursor-pointer select-none"
         aria-label="回到顶部"
         @click="backToTop">
-        <Icon icon="memory:arrow-up-circle" class="size-10 text-gray-400" />
+        <Icon icon="mdi:arrow-up-circle" class="size-10 text-gray-400" />
       </div>
     </Transition>
   </div>

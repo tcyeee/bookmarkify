@@ -2,7 +2,7 @@
   <div>
     <template v-if="node.type === HomeItemType.BOOKMARK_DIR">
       <div class="flex items-center gap-2 py-1.5" :style="indentStyle">
-        <Icon icon="memory:folder" class="size-4 text-amber-500 shrink-0" />
+        <Icon icon="mdi:folder" class="size-4 text-amber-500 shrink-0" />
         <span class="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{{ node.name || '文件夹' }}</span>
       </div>
       <BookmarkTreeRow

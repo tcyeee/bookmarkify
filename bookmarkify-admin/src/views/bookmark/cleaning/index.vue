@@ -4,7 +4,6 @@ import type { BookmarkEntity, BookmarkSearchParams } from "#/api/bookmark";
 import {
   computed,
   defineAsyncComponent,
-  onMounted,
   onUnmounted,
   reactive,
   ref,
@@ -29,6 +28,7 @@ import {
   type IngestSocketHandle,
 } from "#/api/similarIngestSocket";
 import { ElMessage } from "element-plus";
+import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 
 import BookmarkIcon from "../liveness/BookmarkIcon.vue";
 
@@ -58,20 +58,6 @@ const ElDialog = defineAsyncComponent(() =>
     import("element-plus/es/components/dialog/index"),
     import("element-plus/es/components/dialog/style/css"),
   ]).then(([res]) => res.ElDialog)
-);
-
-const ElTable = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/table/index"),
-    import("element-plus/es/components/table/style/css"),
-  ]).then(([res]) => res.ElTable)
-);
-
-const ElTableColumn = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/table/index"),
-    import("element-plus/es/components/table/style/css"),
-  ]).then(([res]) => res.ElTableColumn)
 );
 
 const ElForm = defineAsyncComponent(() =>
@@ -107,13 +93,6 @@ const ElButton = defineAsyncComponent(() =>
     import("element-plus/es/components/button/index"),
     import("element-plus/es/components/button/style/css"),
   ]).then(([res]) => res.ElButton)
-);
-
-const ElPagination = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/pagination/index"),
-    import("element-plus/es/components/pagination/style/css"),
-  ]).then(([res]) => res.ElPagination)
 );
 
 const detailVisible = ref(false);
@@ -230,7 +209,7 @@ async function checkLiveness() {
 }
 
 function syncRowLiveness(id: string, result: BookmarkLivenessResult) {
-  const row = tableData.value.find((r) => r.id === id);
+  const row = gridApi.grid?.getTableData().fullData.find((r: BookmarkEntity) => r.id === id);
   if (row) {
     row.isActivity = result.isActivity;
     row.parseStatus = result.parseStatus;
@@ -280,18 +259,9 @@ function syncRowCategories(
   id: string,
   categories: BookmarkEntity["categories"],
 ) {
-  const row = tableData.value.find((r) => r.id === id);
+  const row = gridApi.grid?.getTableData().fullData.find((r: BookmarkEntity) => r.id === id);
   if (row) row.categories = categories;
 }
-
-const loading = ref(false);
-const tableData = ref<BookmarkEntity[]>([]);
-
-const pagination = reactive({
-  currentPage: 1,
-  pageSize: 20,
-  total: 0,
-});
 
 const searchForm = reactive<Pick<BookmarkSearchParams, "name" | "status">>({
   name: "",
@@ -309,25 +279,7 @@ const statusOptions: {
   { label: "已阻止", value: "BLOCKED", type: "danger" },
 ];
 
-async function fetchData() {
-  loading.value = true;
-  try {
-    const res = await getBookmarkListApi({
-      name: searchForm.name || undefined,
-      status: searchForm.status || undefined,
-      currentPage: pagination.currentPage,
-      pageSize: pagination.pageSize,
-    });
-    tableData.value = res.records;
-    pagination.total = res.total;
-    pagination.pageSize = res.size;
-    pagination.currentPage = res.current;
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function handleRowClick(row: BookmarkEntity) {
+function handleRowClick({ row }: { row: BookmarkEntity }) {
   currentRow.value = row;
   detailVisible.value = true;
   editingCategoryIds.value = (row.categories ?? []).map((c) => c.id);
@@ -335,35 +287,52 @@ async function handleRowClick(row: BookmarkEntity) {
   similarLoaded.value = false;
   resetIngest();
   resetLiveness();
-  await loadCategoryDict();
+  loadCategoryDict();
 }
 
 function handleSearch() {
-  pagination.currentPage = 1;
-  fetchData();
+  gridApi.reload();
 }
 
 function handleReset() {
   searchForm.name = "";
   searchForm.status = undefined;
-  pagination.currentPage = 1;
-  fetchData();
+  gridApi.reload();
 }
 
-function handleCurrentChange(page: number) {
-  pagination.currentPage = page;
-  fetchData();
-}
+const gridOptions: VxeGridProps<BookmarkEntity> = {
+  id: "admin-bookmark-cleaning",
+  columns: [
+    { title: "头像", width: 80, align: "center", slots: { default: "icon" } },
+    { field: "appName", title: "App Name", minWidth: 120 },
+    { field: "title", title: "标题", minWidth: 220 },
+    { field: "urlHost", title: "域名", minWidth: 180 },
+    { field: "parseStatus", title: "状态", width: 140, slots: { default: "parseStatus" } },
+    {
+      field: "updateTime",
+      title: "更新时间",
+      width: 200,
+      formatter: ({ cellValue }) => formatDateTime(cellValue),
+    },
+  ],
+  toolbarConfig: { custom: true, refresh: true },
+  pagerConfig: {},
+  proxyConfig: {
+    ajax: {
+      query: async ({ page }) => {
+        const res = await getBookmarkListApi({
+          name: searchForm.name || undefined,
+          status: searchForm.status || undefined,
+          currentPage: page.currentPage,
+          pageSize: page.pageSize,
+        });
+        return { items: res.records, total: res.total };
+      },
+    },
+  },
+};
 
-function handleSizeChange(size: number) {
-  pagination.pageSize = size;
-  pagination.currentPage = 1;
-  fetchData();
-}
-
-onMounted(() => {
-  fetchData();
-});
+const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
 </script>
 
 <template>
@@ -396,46 +365,31 @@ onMounted(() => {
           </div>
         </ElForm>
       </div>
-      <ElTable :data="tableData" border v-loading="loading" style="width: 100%" @row-click="handleRowClick">
-        <ElTableColumn label="头像" width="80" align="center">
-          <template #default="{ row }">
-            <BookmarkIcon
-              :value="row"
-              :size="32"
-              :hd-url="row.logo?.useHdLogo ? row.logo?.logoUrl : undefined"
-              class="mx-auto"
-            />
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="appName" label="App Name" min-width="120" />
-        <ElTableColumn prop="title" label="标题" min-width="220" />
-        <ElTableColumn prop="urlHost" label="域名" min-width="180" />
-        <ElTableColumn prop="parseStatus" label="状态" width="140">
-          <template #default="{ row }">
-            <ElTag v-if="row.parseStatus === 'SUCCESS'" type="success" size="small">
-              成功
-            </ElTag>
-            <ElTag v-else-if="row.parseStatus === 'LOADING'" type="info" size="small">
-              解析中
-            </ElTag>
-            <ElTag v-else-if="row.parseStatus === 'CLOSED'" type="warning" size="small">
-              已关闭
-            </ElTag>
-            <ElTag v-else-if="row.parseStatus === 'BLOCKED'" type="danger" size="small">
-              已阻止
-            </ElTag>
-            <ElTag v-else size="small"> 未知 </ElTag>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="updateTime" label="更新时间" width="200">
-          <template #default="{ row }">
-            {{ formatDateTime(row.updateTime) }}
-          </template>
-        </ElTableColumn>
-      </ElTable>
-      <div class="mt-4 flex justify-end">
-        <ElPagination v-model:current-page="pagination.currentPage" v-model:page-size="pagination.pageSize" :page-sizes="[10, 20, 50, 100]" :total="pagination.total" layout="total, sizes, prev, pager, next, jumper" @current-change="handleCurrentChange" @size-change="handleSizeChange" />
-      </div>
+      <Grid @cell-click="handleRowClick">
+        <template #icon="{ row }">
+          <BookmarkIcon
+            :value="row"
+            :size="32"
+            :hd-url="row.logo?.useHdLogo ? row.logo?.logoUrl : undefined"
+            class="mx-auto"
+          />
+        </template>
+        <template #parseStatus="{ row }">
+          <ElTag v-if="row.parseStatus === 'SUCCESS'" type="success" size="small">
+            成功
+          </ElTag>
+          <ElTag v-else-if="row.parseStatus === 'LOADING'" type="info" size="small">
+            解析中
+          </ElTag>
+          <ElTag v-else-if="row.parseStatus === 'CLOSED'" type="warning" size="small">
+            已关闭
+          </ElTag>
+          <ElTag v-else-if="row.parseStatus === 'BLOCKED'" type="danger" size="small">
+            已阻止
+          </ElTag>
+          <ElTag v-else size="small"> 未知 </ElTag>
+        </template>
+      </Grid>
       <ElDialog
         v-model="detailVisible"
         title="书签详情"

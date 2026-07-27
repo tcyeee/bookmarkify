@@ -5,7 +5,7 @@
       class="fixed top-4 right-4 z-[9999] w-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg overflow-hidden">
       <div class="flex items-start gap-3 px-4 py-3">
         <Icon
-          :icon="store.done ? 'memory:check-circle' : 'memory:rotate-clockwise'"
+          :icon="store.done ? 'mdi:check-circle' : 'mdi:loading'"
           class="size-5 mt-0.5 shrink-0"
           :class="store.done ? 'text-emerald-500' : 'text-sky-500 animate-spin'" />
         <div class="flex-1 min-w-0">
@@ -19,7 +19,7 @@
           class="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
           aria-label="关闭"
           @click="store.dismiss()">
-          <Icon icon="memory:close" class="size-4" />
+          <Icon icon="mdi:close" class="size-4" />
         </button>
       </div>
       <div class="h-1 bg-slate-100 dark:bg-slate-700">

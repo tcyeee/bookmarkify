@@ -30,6 +30,9 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 定时重试 CLOSED 书签：ping 通后重新触发解析，结果写入 bookmark_ping_log */
     fun retryClosedBookmarks()
 
+    /** 每小时扫描一次全部 7 天未更新的书签（含已认证）做活性检查，结果写入 bookmark_ping_log */
+    fun livenessCheckStaleBookmarks()
+
     /** 添加书签并异步检查 */
     fun addOne(url: String, uid: String): UserLayoutNodeVO
 
@@ -103,9 +106,15 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 通过 scrapper 远程解析书签元信息并持久化；若书签已通过验证则直接返回已有记录 */
     fun parseBookmarkByApi(bookmark: BookmarkEntity): BookmarkEntity
 
-    /** 批量按 host 域名查询书签列表，用于为新用户初始化默认书签 */
+    /**
+     * 批量按 host 域名查询书签列表（忽略路径，一个 host 现在可能对应多条不同路径的 canonical 记录）。
+     * 用于「该域名下是否已收录过任意页面」这类域名级别的存在性判断（如相似站点推荐去重）。
+     */
     fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity>
 
-    /** 按 host 域名精确匹配单条书签，不存在时返回 null */
+    /** 按 host 域名匹配任意一条书签（忽略路径），不存在时返回 null；用于域名级别的存在性判断 */
     fun findByHost(host: String): BookmarkEntity?
+
+    /** 批量按完整 URL（host+path）精确匹配书签列表，用于为新用户初始化默认书签 */
+    fun findListByUrl(urls: List<String>): List<BookmarkEntity>
 }

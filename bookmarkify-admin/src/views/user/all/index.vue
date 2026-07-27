@@ -1,32 +1,19 @@
 <script lang="ts" setup>
 import type { UserAdminVO, UserSearchParams } from "#/api/user-manage";
 
-import { defineAsyncComponent, onMounted, reactive, ref } from "vue";
+import { defineAsyncComponent, reactive } from "vue";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
 
 import { getAdminUserListApi } from "#/api";
+import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
     import("element-plus/es/components/card/index"),
     import("element-plus/es/components/card/style/css"),
   ]).then(([res]) => res.ElCard)
-);
-
-const ElTable = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/table/index"),
-    import("element-plus/es/components/table/style/css"),
-  ]).then(([res]) => res.ElTable)
-);
-
-const ElTableColumn = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/table/index"),
-    import("element-plus/es/components/table/style/css"),
-  ]).then(([res]) => res.ElTableColumn)
 );
 
 const ElForm = defineAsyncComponent(() =>
@@ -57,13 +44,6 @@ const ElButton = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElButton)
 );
 
-const ElPagination = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/pagination/index"),
-    import("element-plus/es/components/pagination/style/css"),
-  ]).then(([res]) => res.ElPagination)
-);
-
 const ElTag = defineAsyncComponent(() =>
   Promise.all([
     import("element-plus/es/components/tag/index"),
@@ -71,61 +51,60 @@ const ElTag = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElTag)
 );
 
-const loading = ref(false);
-const tableData = ref<UserAdminVO[]>([]);
-
-const pagination = reactive({
-  currentPage: 1,
-  pageSize: 10,
-  total: 0,
-});
-
 const searchForm = reactive<Pick<UserSearchParams, "name">>({
   name: "",
 });
 
-async function fetchData() {
-  loading.value = true;
-  try {
-    const res = await getAdminUserListApi({
-      name: searchForm.name || undefined,
-      currentPage: pagination.currentPage,
-      pageSize: pagination.pageSize,
-    });
-    tableData.value = res.records;
-    pagination.total = res.total;
-    pagination.pageSize = res.size;
-    pagination.currentPage = res.current;
-  } finally {
-    loading.value = false;
-  }
-}
+const gridOptions: VxeGridProps<UserAdminVO> = {
+  id: "admin-user-all",
+  columns: [
+    { type: "seq", title: "#", width: 50 },
+    { field: "nickName", title: "昵称", minWidth: 160 },
+    { field: "deviceId", title: "设备UID", minWidth: 220 },
+    { field: "email", title: "邮箱", minWidth: 200 },
+    { field: "phone", title: "手机号", minWidth: 160 },
+    { field: "role", title: "角色", width: 140, slots: { default: "role" } },
+    { field: "verified", title: "已验证", width: 100, slots: { default: "verified" } },
+    { field: "disabled", title: "禁用", width: 100, slots: { default: "disabled" } },
+    {
+      field: "createTime",
+      title: "创建时间",
+      width: 200,
+      formatter: ({ cellValue }) => formatDateTime(cellValue),
+    },
+    {
+      field: "updateTime",
+      title: "更新时间",
+      width: 200,
+      formatter: ({ cellValue }) => formatDateTime(cellValue),
+    },
+  ],
+  toolbarConfig: { custom: true, refresh: true },
+  pagerConfig: {},
+  proxyConfig: {
+    ajax: {
+      query: async ({ page }) => {
+        const res = await getAdminUserListApi({
+          name: searchForm.name || undefined,
+          currentPage: page.currentPage,
+          pageSize: page.pageSize,
+        });
+        return { items: res.records, total: res.total };
+      },
+    },
+  },
+};
+
+const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
 
 function handleSearch() {
-  pagination.currentPage = 1;
-  fetchData();
+  gridApi.reload();
 }
 
 function handleReset() {
   searchForm.name = "";
-  pagination.currentPage = 1;
-  fetchData();
+  gridApi.reload();
 }
-
-function handleCurrentChange(page: number) {
-  pagination.currentPage = page;
-  fetchData();
-}
-
-function handleSizeChange(size: number) {
-  pagination.pageSize = size;
-  pagination.currentPage = 1;
-  fetchData();
-}
-
-onMounted(() => {
-  fetchData();
-});
 </script>
 
 <template>
@@ -147,54 +126,30 @@ onMounted(() => {
           </ElFormItem>
         </ElForm>
       </div>
-      <ElTable :data="tableData" border v-loading="loading" style="width: 100%">
-        <ElTableColumn type="index" label="#" width="50" />
-        <ElTableColumn prop="nickName" label="昵称" min-width="160" />
-        <ElTableColumn prop="deviceId" label="设备UID" min-width="220" />
-        <ElTableColumn prop="email" label="邮箱" min-width="200" />
-        <ElTableColumn prop="phone" label="手机号" min-width="160" />
-        <ElTableColumn prop="role" label="角色" width="140">
-          <template #default="{ row }">
-            <ElTag v-if="row.role === 'ADMIN'" type="danger" size="small">
-              管理员
-            </ElTag>
-            <ElTag v-else-if="row.role === 'MODERATOR'" type="warning" size="small">
-              协管
-            </ElTag>
-            <ElTag v-else-if="row.role === 'USER'" type="success" size="small">
-              普通用户
-            </ElTag>
-            <ElTag v-else type="info" size="small">
-              {{ row.role || "未知" }}
-            </ElTag>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="verified" label="已验证" width="100">
-          <template #default="{ row }">
-            <ElTag v-if="row.verified" type="success" size="small"> 已验证 </ElTag>
-            <ElTag v-else type="info" size="small"> 未验证 </ElTag>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="disabled" label="禁用" width="100">
-          <template #default="{ row }">
-            <ElTag v-if="row.disabled" type="danger" size="small"> 禁用 </ElTag>
-            <ElTag v-else type="success" size="small"> 正常 </ElTag>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="createTime" label="创建时间" width="200">
-          <template #default="{ row }">
-            {{ formatDateTime(row.createTime) }}
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="updateTime" label="更新时间" width="200">
-          <template #default="{ row }">
-            {{ formatDateTime(row.updateTime) }}
-          </template>
-        </ElTableColumn>
-      </ElTable>
-      <div class="mt-4 flex justify-end">
-        <ElPagination v-model:current-page="pagination.currentPage" v-model:page-size="pagination.pageSize" :page-sizes="[10, 20, 50, 100]" :total="pagination.total" layout="total, sizes, prev, pager, next, jumper" @current-change="handleCurrentChange" @size-change="handleSizeChange" />
-      </div>
+      <Grid>
+        <template #role="{ row }">
+          <ElTag v-if="row.role === 'ADMIN'" type="danger" size="small">
+            管理员
+          </ElTag>
+          <ElTag v-else-if="row.role === 'MODERATOR'" type="warning" size="small">
+            协管
+          </ElTag>
+          <ElTag v-else-if="row.role === 'USER'" type="success" size="small">
+            普通用户
+          </ElTag>
+          <ElTag v-else type="info" size="small">
+            {{ row.role || "未知" }}
+          </ElTag>
+        </template>
+        <template #verified="{ row }">
+          <ElTag v-if="row.verified" type="success" size="small"> 已验证 </ElTag>
+          <ElTag v-else type="info" size="small"> 未验证 </ElTag>
+        </template>
+        <template #disabled="{ row }">
+          <ElTag v-if="row.disabled" type="danger" size="small"> 禁用 </ElTag>
+          <ElTag v-else type="success" size="small"> 正常 </ElTag>
+        </template>
+      </Grid>
     </ElCard>
   </Page>
 </template>

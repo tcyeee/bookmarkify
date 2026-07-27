@@ -6,7 +6,7 @@
       @mouseleave="handleMouseLeave"
       @click="handleHomeClick">
       <Icon
-        :icon="isHover ? 'memory:apps-box-fill' : 'memory:apps-box'"
+        :icon="isHover ? 'mdi:view-grid' : 'mdi:view-grid-outline'"
         class="size-[30px] text-gray-700 transition-all duration-200" />
 
       <span class="text-gray-700 text-base setting-label" :class="{ 'setting-label--visible': isHover }"> 首页 (Esc) </span>
@@ -14,7 +14,7 @@
 
     <NuxtLink to="/setting" class="inline-flex items-center gap-2" @mouseenter="handleMouseEnter" @mouseleave="handleMouseLeave">
       <Icon
-        :icon="isHover ? 'memory:dot-hexagon-fill' : 'memory:dot-hexagon'"
+        :icon="isHover ? 'mdi:cog' : 'mdi:cog-outline'"
         class="size-[30px] text-gray-700 transition-all duration-200" />
 
       <span class="text-gray-700 text-base setting-label" :class="{ 'setting-label--visible': isHover }"> 设置 </span>

@@ -4,7 +4,7 @@
       <div class="px-4 pt-4 pb-3">
         <div class="relative">
           <Icon
-            icon="memory:search"
+            icon="mdi:magnify"
             class="size-[25px] pointer-events-none absolute inset-y-3 left-3 text-slate-400 dark:text-slate-500" />
           <Command.Input
             class="w-full rounded-lg border border-slate-200 bg-white/80 px-11 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100 dark:focus:border-sky-500 dark:focus:ring-sky-900/60"
@@ -61,7 +61,7 @@
                 </div>
                 <Icon
                   v-else-if="item.iconRight || item.submenu"
-                  :icon="item.iconRight || 'memory:chevron-right'"
+                  :icon="item.iconRight || 'mdi:chevron-right'"
                   :class="[
                     item.iconRightClass ??
                       'text-slate-300 group-hover:text-slate-400 group-aria-selected:text-slate-400 dark:text-slate-600 dark:group-hover:text-slate-400',
@@ -207,7 +207,7 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
       [
         {
           value: 'back-root',
-          iconLeft: 'memory:arrow-left-box',
+          iconLeft: 'mdi:arrow-left-box',
           label: '返回',
           run: () => {
             backToRoot()
@@ -259,7 +259,7 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         {
           value: 'pref-minimal-toggle',
           label:  '极简模式',
-          iconRight: pref.minimalMode ? 'memory:toggle-switch-off' : 'memory:toggle-switch-on',
+          iconRight: pref.minimalMode ? 'mdi:toggle-switch-off' : 'mdi:toggle-switch',
           iconRightSize: 30,
           iconRightClass: pref.minimalMode
             ? 'text-slate-400 dark:text-slate-500'
@@ -272,7 +272,7 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         {
           value: 'pref-show-title-toggle',
           label:  '标题显示',
-          iconRight: pref.showTitle ? 'memory:toggle-switch-on' : 'memory:toggle-switch-off',
+          iconRight: pref.showTitle ? 'mdi:toggle-switch' : 'mdi:toggle-switch-off',
           iconRightSize: 30,
           iconRightClass: pref.showTitle
             ? 'text-primary'
@@ -285,7 +285,7 @@ const preferenceGroupEntries = computed<[string, PaletteItem[]][]>(() => {
         {
           value: 'pref-show-desktop-add-entry-toggle',
           label: '桌面增加入口',
-          iconRight: pref.showDesktopAddEntry ? 'memory:toggle-switch-on' : 'memory:toggle-switch-off',
+          iconRight: pref.showDesktopAddEntry ? 'mdi:toggle-switch' : 'mdi:toggle-switch-off',
           iconRightSize: 30,
           iconRightClass: pref.showDesktopAddEntry
             ? 'text-primary'

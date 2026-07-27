@@ -9,7 +9,7 @@
         :class="{ 'is-active': isAddOpen }"
         title="添加书签"
         @click="openAddDialog">
-        <Icon icon="memory:plus" class="size-[22px]" />
+        <Icon icon="mdi:plus" class="size-[22px]" />
       </button>
 
       <!-- 触发按钮 -->
@@ -18,7 +18,7 @@
         :class="{ 'is-active': isOpen }"
         title="设置"
         @click="toggle">
-        <Icon icon="memory:toolbox" class="size-[22px]" />
+        <Icon icon="mdi:toolbox" class="size-[22px]" />
       </button>
     </div>
 
@@ -87,10 +87,10 @@ function openAddDialog() {
 }
 
 const tabs = [
-  { value: 0, label: '个人资料', icon: 'memory:account-box' },
-  { value: 1, label: '书签管理', icon: 'memory:application-code' },
-  { value: 2, label: '主页背景', icon: 'memory:cloud' },
-  { value: 3, label: '偏好设置', icon: 'memory:toggle-switch-off' },
+  { value: 0, label: '个人资料', icon: 'mdi:account-box' },
+  { value: 1, label: '书签管理', icon: 'mdi:application-braces' },
+  { value: 2, label: '主页背景', icon: 'mdi:cloud' },
+  { value: 3, label: '偏好设置', icon: 'mdi:toggle-switch-off' },
 ]
 
 const settingComponents = [AccountProfile, SettingBookmarkManage, BackgroundSettings, PreferenceSettings] as const

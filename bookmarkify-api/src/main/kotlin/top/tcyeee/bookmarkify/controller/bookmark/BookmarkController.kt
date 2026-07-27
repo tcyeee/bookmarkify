@@ -102,10 +102,12 @@ class BookmarksController(
     fun update(@RequestBody params: BookmarkUpdatePrams): Boolean =
         bookmarkUserLinkService.updateOne(params, BaseUtils.uid())
 
+    // 会创建 bookmark/user_layout_node/bookmark_user_link 三张表的写入，不应该用 GET 承载
+    // （历史遗留问题：GET 请求可能被浏览器预取/代理缓存/爬虫意外重放，触发非预期的写操作）
     @Throttle
-    @GetMapping("/addOne")
+    @PostMapping("/addOne")
     @Operation(summary = "通过URL添加书签")
-    fun addOne(@RequestParam url: String):UserLayoutNodeVO = bookmarkService.addOne(url, BaseUtils.uid())
+    fun addOne(@RequestParam url: String): UserLayoutNodeVO = bookmarkService.addOne(url, BaseUtils.uid())
 
     @GetMapping("/linkOne")
     @Operation(summary = "关联书签")

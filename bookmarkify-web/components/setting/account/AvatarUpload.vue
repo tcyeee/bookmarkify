@@ -14,7 +14,7 @@
           title="上传自定义头像"
           @click.stop.prevent="triggerSelect"
           :disabled="uploading">
-          <Icon icon="memory:upload" class="size-7" />
+          <Icon icon="mdi:upload" class="size-7" />
         </button>
         <button
           type="button"
@@ -22,7 +22,7 @@
           title="随机生成头像"
           @click.stop.prevent="handleRandom"
           :disabled="uploading">
-          <Icon icon="memory:rotate-clockwise" class="size-7" />
+          <Icon icon="mdi:loading" class="size-7" />
         </button>
       </div>
       <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleFileChange" />

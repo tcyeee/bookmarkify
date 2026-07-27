@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server.impl
 
+import cn.hutool.http.HttpRequest
 import cn.hutool.http.HttpUtil
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -31,6 +32,11 @@ class ApiServiceImpl(
     private val scrapperCallLogMapper: ScrapperCallLogMapper,
 ) : IApiService {
 
+    /** scrapper 侧 `SCRAPER_AUTH_TOKEN` 未配置时 `scrapperConfig.authToken` 留空，不发送该 header。 */
+    private fun HttpRequest.withScrapperAuth(): HttpRequest =
+        if (scrapperConfig.authToken.isBlank()) this
+        else header("Authorization", "Bearer ${scrapperConfig.authToken}")
+
     override fun queryWebsiteInfo(domain: String): ScrapeResponse {
         val url = buildUrl(domain)
         val startedAt = System.currentTimeMillis()
@@ -40,6 +46,7 @@ class ApiServiceImpl(
         val httpResponse = runCatching {
             HttpUtil.createPost("${scrapperConfig.baseUrl.trimEnd('/')}/scrape")
                 .header("Content-Type", "application/json")
+                .withScrapperAuth()
                 .body(objectMapper.writeValueAsString(request))
                 .timeout(60000)
                 .execute()
@@ -227,6 +234,7 @@ class ApiServiceImpl(
             val request = PingRequest(url = targetUrl)
             val httpResponse = HttpUtil.createPost("${scrapperConfig.baseUrl.trimEnd('/')}/ping")
                 .header("Content-Type", "application/json")
+                .withScrapperAuth()
                 .body(objectMapper.writeValueAsString(request))
                 .timeout(15000)
                 .execute()

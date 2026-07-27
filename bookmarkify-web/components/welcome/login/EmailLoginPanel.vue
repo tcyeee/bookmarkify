@@ -15,7 +15,7 @@
         :style="BTN_STYLE"
         :disabled="!canSend || countdown > 0 || sending"
         @click="sendCode">
-        <Icon v-if="sending" icon="memory:rotate-clockwise" class="size-4 animate-spin" />
+        <Icon v-if="sending" icon="mdi:loading" class="size-4 animate-spin" />
         {{ sending ? '发送中...' : countdown > 0 ? `${countdown}s 后可重新发送` : '发送验证码' }}
       </button>
     </template>
@@ -56,7 +56,7 @@
             type="button"
             class="relative z-20 text-white/40 hover:text-white/70 transition-colors"
             @click.stop="deleteLast">
-            <Icon icon="memory:arrow-left-box" class="size-9" />
+            <Icon icon="mdi:arrow-left-box" class="size-9" />
           </button>
         </div>
       </div>
@@ -69,7 +69,7 @@
         :style="BTN_STYLE"
         :disabled="!isCodeValid || loading"
         @click="submit">
-        <Icon v-if="loading" icon="memory:rotate-clockwise" class="size-4 animate-spin" />
+        <Icon v-if="loading" icon="mdi:loading" class="size-4 animate-spin" />
         {{ loading ? '登录中...' : '确认登录' }}
       </button>
 

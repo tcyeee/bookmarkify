@@ -19,7 +19,7 @@
         class="absolute right-3 top-1/2 -translate-y-1/2 text-white/35 hover:text-white/70 transition-colors"
         @click="showPassword = !showPassword">
         <span v-if="showPassword" class="icon--memory-eye-off icon-size-18" />
-        <Icon v-else icon="memory:eye" class="size-[18px]" />
+        <Icon v-else icon="mdi:eye" class="size-[18px]" />
       </button>
     </div>
 
@@ -30,7 +30,7 @@
       :class="BTN_CLS"
       :style="BTN_STYLE"
       :disabled="!canSubmit || loading">
-      <Icon v-if="loading" icon="memory:rotate-clockwise" class="size-4 animate-spin" />
+      <Icon v-if="loading" icon="mdi:loading" class="size-4 animate-spin" />
       {{ loading ? '登录中...' : '登录' }}
     </button>
   </form>

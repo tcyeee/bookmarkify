@@ -44,7 +44,7 @@ function onCancel() {
 }
 
 const iconName = computed(() =>
-  store.type === 'error' ? 'memory:close-circle' : store.type === 'info' ? 'memory:information' : 'memory:alert-box-fill'
+  store.type === 'error' ? 'mdi:close-circle' : store.type === 'info' ? 'mdi:information' : 'mdi:alert-box'
 )
 const iconColorClass = computed(() =>
   store.type === 'error' ? 'text-red-500' : store.type === 'info' ? 'text-sky-500' : 'text-amber-500'

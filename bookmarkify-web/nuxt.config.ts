@@ -67,7 +67,25 @@ export default defineNuxtConfig({
       routes: ['/welcome'],
     },
   },
-  modules: ['@pinia/nuxt', 'pinia-plugin-persistedstate/nuxt'],
+  modules: ['@pinia/nuxt', 'pinia-plugin-persistedstate/nuxt', '@nuxtjs/i18n'],
+  i18n: {
+    // 暂时支持中/英/日/法四种语言；策略为 no_prefix（不带 URL 前缀），
+    // 语言切换在偏好设置中完成，选择结果通过 cookie 持久化。
+    strategy: 'no_prefix',
+    defaultLocale: 'zh-CN',
+    langDir: 'locales/',
+    lazy: true,
+    locales: [
+      { code: 'zh-CN', name: '简体中文', file: 'zh-CN.json' },
+      { code: 'en', name: 'English', file: 'en.json' },
+      { code: 'ja', name: '日本語', file: 'ja.json' },
+      { code: 'fr', name: 'Français', file: 'fr.json' },
+    ],
+    detectBrowserLanguage: {
+      useCookie: true,
+      cookieKey: 'bookmarkify_locale',
+    },
+  },
   plugins: [
     '~/plugins/iconify.ts',
     '~/plugins/keyListener.ts',

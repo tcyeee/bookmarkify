@@ -1,0 +1,98 @@
+{
+  "settingLayout": {
+    "back": "Back",
+    "tabs": {
+      "profile": "Profile",
+      "importBookmarks": "Import Bookmarks",
+      "background": "Background",
+      "preference": "Preferences",
+      "shortcuts": "Shortcuts"
+    }
+  },
+  "preferenceSettings": {
+    "title": "Preferences",
+    "loading": "Loading preferences...",
+    "synced": "Preferences synced",
+    "bookmarkOpenMode": {
+      "label": "Bookmark Open Mode",
+      "desc": "Open in the current tab or a new tab.",
+      "currentTab": "Current Tab",
+      "newTab": "New Tab"
+    },
+    "bookmarkGap": {
+      "label": "Bookmark Spacing",
+      "desc": "Compact, default, or spacious layout.",
+      "compact": "Compact",
+      "default": "Default",
+      "spacious": "Spacious"
+    },
+    "bookmarkImageSize": {
+      "label": "Bookmark Icon Size",
+      "desc": "Controls the size of bookmark logos.",
+      "large": "Large",
+      "medium": "Medium (default)",
+      "small": "Small"
+    },
+    "showTitle": {
+      "label": "Show Title",
+      "desc": "Show only icons or show titles too."
+    },
+    "showDesktopAddEntry": {
+      "label": "Show Desktop Add Entry",
+      "desc": "Show the \"Add\" entry button on the desktop."
+    },
+    "language": {
+      "label": "Language",
+      "desc": "Switch the interface display language."
+    }
+  },
+  "accountProfile": {
+    "verified": "Verified",
+    "unnamedUser": "Unnamed User",
+    "basicInfo": "Basic Info",
+    "nickname": "Nickname",
+    "nicknamePlaceholder": "Enter a nickname",
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "accountSecurity": "Account Security",
+    "email": "Email",
+    "emailUnbound": "No email bound",
+    "googleAccount": "Google Account",
+    "githubAccount": "GitHub Account",
+    "unlinked": "Not linked",
+    "accountActions": "Account Actions",
+    "logout": "Log Out",
+    "logoutDesc": "Signs out of this device only; account data is unaffected.",
+    "dangerZone": "Danger Zone",
+    "deleteAccount": "Delete Account",
+    "deleteAccountDesc": "Deleting your account permanently destroys your data. Proceed with caution.",
+    "profileUpdateSuccess": "Profile updated successfully"
+  },
+  "bookmarkManage": {
+    "title": "Import Bookmarks",
+    "desc": "Bulk import bookmarks from an HTML file exported by Chrome.",
+    "importing": "Import started, parsing bookmarks…",
+    "loadingFile": "Reading file…",
+    "dropHint": "Click to choose or drag a file here",
+    "supportedFormats": "Supports .html bookmark files exported from Chrome / Edge",
+    "chooseFile": "Choose File",
+    "totalCount": "{total} bookmarks total",
+    "duplicateCount": ", {count} already exist",
+    "willImport": "{count} will be imported",
+    "cancel": "Cancel",
+    "startImport": "Start Import ({count})",
+    "existing": "Existing",
+    "howToExport": "How to export Chrome bookmarks?",
+    "step1": "Open Chrome, click the menu in the top right → Bookmarks → Bookmark Manager",
+    "step2": "Click the three-dot icon in the top right → Export Bookmarks",
+    "step3Before": "Save it as an ",
+    "step3Code": ".html",
+    "step3After": " file, then upload it",
+    "noBookmarksFound": "No importable bookmarks were found in the file.",
+    "readFileFailed": "Failed to read the file, please try again.",
+    "invalidFileType": "Please upload an HTML bookmark file exported from Chrome",
+    "importStarted": "Import started! {count} items are being parsed in the background and will update automatically.",
+    "importFailed": "Import failed, please try again later."
+  }
+}

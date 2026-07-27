@@ -22,6 +22,8 @@ services:
       OSS_BUCKET: ${OSS_BUCKET:-}
       OSS_ENDPOINT: ${OSS_ENDPOINT:-}
       OSS_BASE_URL: ${OSS_BASE_URL:-}
+      # 可选：共享密钥鉴权，设置后 /scrape、/ping 要求 Authorization: Bearer <token>
+      SCRAPER_AUTH_TOKEN: ${SCRAPER_AUTH_TOKEN:-}
       # tracing 日志过滤级别（trace/debug/info/warn/error）
       RUST_LOG: info
     restart: unless-stopped

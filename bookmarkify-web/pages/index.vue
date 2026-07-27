@@ -8,7 +8,7 @@
         <label
           class="cy-input flex items-center gap-2 w-full mb-6"
           :class="query ? 'cy-input-primary' : ''">
-          <Icon icon="memory:search" class="size-4 text-slate-400 dark:text-slate-500 shrink-0" />
+          <Icon icon="mdi:magnify" class="size-4 text-slate-400 dark:text-slate-500 shrink-0" />
           <input
             v-model="query"
             type="text"
@@ -87,7 +87,7 @@
               class="flex items-center gap-3 py-2 px-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
               <img v-if="item.logo?.iconBase64" :src="item.logo.iconBase64" class="size-5 rounded shrink-0" />
               <div v-else class="size-5 rounded bg-slate-100 dark:bg-slate-800 center shrink-0">
-                <Icon icon="memory:earth" class="size-3 text-slate-400" />
+                <Icon icon="mdi:earth" class="size-3 text-slate-400" />
               </div>
               <div class="flex flex-col overflow-hidden flex-1">
                 <span class="text-sm text-slate-700 dark:text-slate-200 truncate">
@@ -278,8 +278,8 @@ function onMyResultContextMenu(e: MouseEvent, item: UserLayoutNodeVO) {
   if (!item.typeApp) return
   ContextMenu.showContextMenu({
     items: [
-      { label: '修改', icon: h(Icon, { icon: 'memory:pencil', class: 'size-4' }), onClick: () => openEditModal(item) },
-      { label: '删除', icon: h(Icon, { icon: 'memory:trash', class: 'size-4' }), onClick: () => delMyResult(item) },
+      { label: '修改', icon: h(Icon, { icon: 'mdi:pencil', class: 'size-4' }), onClick: () => openEditModal(item) },
+      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), onClick: () => delMyResult(item) },
     ],
     x: e.x,
     y: e.y,

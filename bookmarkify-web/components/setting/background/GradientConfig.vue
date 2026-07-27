@@ -31,7 +31,7 @@
               title="编辑"
               aria-label="编辑自定义渐变"
               @click.stop="startEditPreset(preset)">
-              <Icon icon="memory:pencil" class="size-5 text-current" />
+              <Icon icon="mdi:pencil" class="size-5 text-current" />
             </button>
             <button
               type="button"
@@ -40,7 +40,7 @@
               title="删除"
               aria-label="删除自定义渐变"
               @click.stop="handleDeletePreset(preset)">
-              <Icon icon="memory:trash" class="size-5 text-current" />
+              <Icon icon="mdi:trash-can" class="size-5 text-current" />
             </button>
           </div>
         </button>

@@ -20,4 +20,8 @@ class ScheduledTasks(
     @Description("每天凌晨3点重试 CLOSED 书签：ping 通则触发重新解析，并写入 bookmark_ping_log")
     @Scheduled(cron = "0 0 3 * * ?")
     fun retryClosedBookmarks() = bookmarkService.retryClosedBookmarks()
+
+    @Description("每小时扫描一次全部7天未更新的书签（含已认证）做活性检查，并写入 bookmark_ping_log")
+    @Scheduled(cron = "0 0 * * * ?")
+    fun livenessCheckStaleBookmarks() = bookmarkService.livenessCheckStaleBookmarks()
 }

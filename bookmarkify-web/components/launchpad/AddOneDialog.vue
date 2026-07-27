@@ -230,6 +230,8 @@ function handleSuccess(res: UserLayoutNodeVO) {
     bookmarkStore.addNode(res)
   } else {
     bookmarkStore.addLoading(res)
+    // 解析结果靠 WebSocket 推送，是尽力而为的；超时未收到就主动重新拉取桌面布局兜底，避免卡死在 loading
+    bookmarkStore.watchForResolution(res.id)
   }
 }
 

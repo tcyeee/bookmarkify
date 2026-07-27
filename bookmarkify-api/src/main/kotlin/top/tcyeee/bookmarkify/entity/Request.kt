@@ -153,3 +153,18 @@ data class ScrapperCallLogSearchParams(
         return query.orderByDesc(ScrapperCallLogEntity::createTime)
     }
 }
+
+/** 管理后台书签活性检查日志查询入参 */
+data class BookmarkPingLogSearchParams(
+    var urlHost: String? = null,
+    var alive: Boolean? = null,
+) : PageBean() {
+    fun toWrapper(): Wrapper<BookmarkPingLogEntity> {
+        val query = KtQueryWrapper(BookmarkPingLogEntity::class.java)
+        if (!urlHost.isNullOrBlank()) {
+            query.like(BookmarkPingLogEntity::urlHost, urlHost)
+        }
+        alive?.let { query.eq(BookmarkPingLogEntity::alive, it) }
+        return query.orderByDesc(BookmarkPingLogEntity::createTime)
+    }
+}

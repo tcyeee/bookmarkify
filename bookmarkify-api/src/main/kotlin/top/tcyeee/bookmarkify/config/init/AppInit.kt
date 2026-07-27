@@ -45,10 +45,15 @@ class AppInit(
         }
 
         // 检查默认书签是否被写入到数据库,找到没有被写出的那一部分,然后批量写入到数据库
-        val defaultHostList = projectConfig.defaultBookmarkify.map { WebsiteParser.urlWrapper(it).urlHost }
-        val hasStoreHostList = bookmarkService.findListByHost(defaultHostList).map { it.urlHost }.toSet()
+        // 精确匹配 (host, path)，而不是只按 host：避免「该域名下已有别的路径被收录」时，
+        // 误判默认书签（域名根路径）已存在而漏建。
+        val defaultUrls = projectConfig.defaultBookmarkify
+        val hasStoreKeys = bookmarkService.findListByUrl(defaultUrls).map { it.urlHost to it.urlPath }.toSet()
 
-        (defaultHostList - hasStoreHostList).map { WebsiteParser.urlToBookmark(it) }
+        defaultUrls.filter { url ->
+            val w = WebsiteParser.urlWrapper(url)
+            (w.urlHost to (w.urlPath ?: "/")) !in hasStoreKeys
+        }.map { WebsiteParser.urlToBookmark(it) }
             // 批量插入
             .also { bookmarkMapper.insert(it) }.map { it.id }
             // 逐一发布异步解析事件

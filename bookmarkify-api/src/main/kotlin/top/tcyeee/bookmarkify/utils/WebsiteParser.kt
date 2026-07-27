@@ -57,15 +57,19 @@ object WebsiteParser {
         val url: URL = runCatching { URLUtil.toUrlForHttp(urlStr) }.getOrElse {
             throw CommonException(ErrorType.E303, "${ErrorType.E303.code()}:${it.message}")
         }
+        // canonical 书签按 (host, path) 去重（见 BookmarkServiceImpl.getOrCreateByUrl），
+        // 所以这里要把「无路径」和「根路径斜杠」等价的写法收敛成同一个 key：
+        // 空路径 -> "/"，非根路径去掉末尾斜杠，避免同一页面因为写法不同产生两条 canonical 记录。
+        val normalizedPath = url.path.ifBlank { "/" }.let { if (it.length > 1 && it.endsWith("/")) it.dropLast(1) else it }
 
         return BookmarkUrlWrapper(
             urlScheme = url.protocol,
             urlHost = url.authority,
             urlQuery = url.query,
-            urlPath = url.path,
+            urlPath = normalizedPath,
             urlRaw = urlStr,
             urlRoot = "${url.protocol}://${url.host}",
-            urlFull = "${url.protocol}://${url.host}${url.path}",
+            urlFull = "${url.protocol}://${url.host}${normalizedPath}",
         ).also { log.debug("[urlWrapper] 解析结果: scheme={}, host={}, path={}, query={}", it.urlScheme, it.urlHost, it.urlPath, it.urlQuery) }
     }
 
