@@ -188,6 +188,7 @@
     "title": "AccessToken",
     "desc": "Générez des jetons d'accès pour l'extension de navigateur. L'extension utilise un jeton pour récupérer les informations de base du site actuel (titre, favicon) — ses permissions sont totalement isolées de votre session de compte.",
     "generate": "Générer un nouveau jeton",
+    "viewDocs": "Guide d'utilisation de l'API",
     "defaultName": "Jeton sans nom",
     "columns": {
       "name": "Nom",
@@ -214,6 +215,11 @@
       "copy": "Copier",
       "copySuccess": "Copié dans le presse-papiers",
       "done": "Je l'ai sauvegardé"
+    },
+    "docsPage": {
+      "title": "Guide d'utilisation de l'API AccessToken",
+      "desc": "Destiné aux assistants IA / scripts d'automatisation : explique comment appeler l'API avec un AccessToken. Vous pouvez aussi le copier-coller pour votre assistant IA.",
+      "copy": "Copier le guide"
     }
   }
 }

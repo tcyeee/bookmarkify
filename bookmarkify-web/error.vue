@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-    <CommonHeader class="shadow-[0_2px_20px_rgba(0,0,0,0.35)]" />
+    <CommonHeader dark class="shadow-[0_2px_20px_rgba(0,0,0,0.35)]" />
 
     <main class="flex-1 px-6 py-16 flex flex-col items-center justify-center text-center gap-6">
       <img src="/images/404.png" alt="404" class="w-40" />

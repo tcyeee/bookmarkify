@@ -17,7 +17,7 @@ export default defineNuxtRouteMiddleware((to, from) => {
   // 用户控制台首页
   const consolePage = '/'
   // 受限页面列表
-  const restrictPageList = ['/', '/setting', '/bookmark/similar', '/share/edit']
+  const restrictPageList = ['/', '/setting', '/bookmark/similar', '/share/edit', '/access-token/docs']
 
   // 访问受限页面但未登录,跳转到引导页
   if (restrictPageList.includes(to.path) && !isAuthed) return navigateTo(welcomePage)
