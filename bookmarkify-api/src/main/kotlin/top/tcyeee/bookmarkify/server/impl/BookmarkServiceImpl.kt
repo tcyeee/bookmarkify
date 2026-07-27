@@ -691,8 +691,34 @@ class BookmarkServiceImpl(
         val parsed = if (projectConfig.useThirdPartyParser) parseByApi(bookmark) else parseLocally(bookmark)
         if (parsed.parseStatus == ParseStatusEnum.SUCCESS || parsed.parseStatus == ParseStatusEnum.BLOCKED) {
             bookmarkCategoryService.categorize(parsed)
+            checkNsfw(parsed)
         }
         return parsed
+    }
+
+    /** 通过 DeepSeek 判断书签是否 NSFW（成人/赌博等），结果写回 bookmark.nsfw；失败静默，不影响解析主流程。 */
+    private fun checkNsfw(bookmark: BookmarkEntity) {
+        runCatching {
+            val nsfw = apiService.inferNsfw(bookmark.title, bookmark.description, bookmark.urlHost)
+            bookmark.nsfw = nsfw
+            if (nsfw) {
+                ktUpdate().eq(BookmarkEntity::id, bookmark.id).set(BookmarkEntity::nsfw, true).update()
+            }
+        }.onFailure { log.warn("[checkNsfw] NSFW 检测失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}") }
+    }
+
+    override fun checkNsfwForAll(): Pair<Int, Int> {
+        val all = list()
+        var flagged = 0
+        all.forEach { bookmark ->
+            runCatching {
+                if (apiService.inferNsfw(bookmark.title, bookmark.description, bookmark.urlHost)) {
+                    flagged++
+                    ktUpdate().eq(BookmarkEntity::id, bookmark.id).set(BookmarkEntity::nsfw, true).update()
+                }
+            }.onFailure { log.warn("[checkNsfwForAll] NSFW 检测失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}") }
+        }
+        return all.size to flagged
     }
 
     /**

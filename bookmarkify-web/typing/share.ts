@@ -23,6 +23,7 @@ export interface ShareVO {
   note?: string
   expireTime?: string | null
   status: ShareStatus
+  rejectReason?: string | null
   bookmarkCount: number
   createTime: number
 }

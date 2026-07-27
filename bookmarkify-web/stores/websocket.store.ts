@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { SocketTypes, type SocketMessage } from '@typing'
+import { SocketTypes, type SocketMessage, type ShareStatusChangedMessage } from '@typing'
 import { useAuthStore } from './auth.store'
 
 // WebSocket 相关的 Pinia Store（负责建立连接、心跳、重连和消息分发）
@@ -29,6 +29,8 @@ export const useWebSocketStore = defineStore('socket', {
     pingIntervalValue: 5,
     // 是否输出调试日志
     debug: false,
+    // 最近一次收到的分享状态变化推送（供「我的分享」面板 watch 后就地更新，无需刷新页面）
+    lastShareStatusChange: null as ShareStatusChangedMessage['data'] | null,
   }),
 
   // WebSocket 连接、心跳及重连相关动作
@@ -97,6 +99,9 @@ export const useWebSocketStore = defineStore('socket', {
           bookmarkStore.replaceContent(message.data)
           bookmarkStore.clearResolutionWatch(message.data.id)
           useImportProgressStore().markResolved(message.data.id)
+        } else if (message.type === SocketTypes.SHARE_STATUS_CHANGED) {
+          this.lastShareStatusChange = message.data
+          useToastStore().warning(`您分享的内容未通过审核，已下架。原因：${message.data.rejectReason ?? '未知'}`)
         }
       }
     },

@@ -7,6 +7,7 @@ export interface UserShareAdminVO {
   note?: string;
   expireTime?: string | null;
   status: string;
+  rejectReason?: string | null;
   bookmarkCount: number;
   createTime: string;
 }

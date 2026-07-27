@@ -115,6 +115,13 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 按 host 域名匹配任意一条书签（忽略路径），不存在时返回 null；用于域名级别的存在性判断 */
     fun findByHost(host: String): BookmarkEntity?
 
+    /**
+     * 管理员「一键分类」批量检查全部 canonical 书签是否 NSFW(涉黄/涉赌等违规内容)，命中的直接回写 nsfw=true。
+     * 只会把 false 改成 true，不会清除已有的 nsfw 标记（避免 LLM 判断不稳定导致反复摇摆）。
+     * @return (本次扫描的书签总数, 新命中 NSFW 的书签数)
+     */
+    fun checkNsfwForAll(): Pair<Int, Int>
+
     /** 批量按完整 URL（host+path）精确匹配书签列表，用于为新用户初始化默认书签 */
     fun findListByUrl(urls: List<String>): List<BookmarkEntity>
 }

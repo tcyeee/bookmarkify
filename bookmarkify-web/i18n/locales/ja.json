@@ -153,11 +153,13 @@
     "noNote": "（コメントなし）",
     "neverExpire": "無期限",
     "expireLabel": "有効期限：{date}",
+    "rejectReasonLabel": "却下理由：{reason}",
     "status": {
       "normal": "公開中",
       "expired": "期限切れ",
       "cancelled": "公開停止済み",
-      "adminTakedown": "管理者により削除"
+      "adminTakedown": "管理者により削除",
+      "reviewRejected": "審査却下"
     },
     "loading": "共有を読み込み中…",
     "empty": "まだ共有を公開していません",

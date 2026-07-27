@@ -41,6 +41,8 @@ export interface BookmarkEntity {
   createTime: string;
   updateTime?: string;
   categories?: CategoryVO[];
+  /** 疑似涉黄/涉赌等违规内容(NSFW)，由 DeepSeek 判断 */
+  nsfw: boolean;
 }
 
 export interface BookmarkSearchParams {

@@ -29,7 +29,12 @@
           class="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
           <div class="flex-1 min-w-0">
             <p class="text-sm font-medium truncate text-slate-700 dark:text-slate-200">{{ item.note || $t('shareManage.noNote') }}</p>
-            <p class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ expireLabel(item) }}</p>
+            <p
+              v-if="item.status === ShareStatus.REVIEW_REJECTED && item.rejectReason"
+              class="text-xs text-rose-500 truncate">
+              {{ $t('shareManage.rejectReasonLabel', { reason: item.rejectReason }) }}
+            </p>
+            <p v-else class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ expireLabel(item) }}</p>
           </div>
           <span class="w-20 shrink-0 text-center text-xs text-slate-500 dark:text-slate-400 hidden sm:block">{{ item.bookmarkCount }}</span>
           <span class="w-24 shrink-0 text-center">
@@ -44,6 +49,11 @@
               <button type="button" class="cy-btn cy-btn-ghost cy-btn-xs cy-btn-circle" :title="$t('shareManage.edit')" @click="openEditDialog(item)">
                 <Icon icon="mdi:pencil-outline" class="size-4 text-slate-400 hover:text-sky-500" />
               </button>
+              <button type="button" class="cy-btn cy-btn-ghost cy-btn-xs cy-btn-circle" :title="$t('shareManage.cancel')" @click="cancelShareItem(item)">
+                <Icon icon="mdi:cancel" class="size-4 text-slate-400 hover:text-rose-500" />
+              </button>
+            </template>
+            <template v-else-if="item.status === ShareStatus.REVIEW_REJECTED">
               <button type="button" class="cy-btn cy-btn-ghost cy-btn-xs cy-btn-circle" :title="$t('shareManage.cancel')" @click="cancelShareItem(item)">
                 <Icon icon="mdi:cancel" class="size-4 text-slate-400 hover:text-rose-500" />
               </button>
@@ -110,6 +120,7 @@ const { t: translate } = useI18n()
 const toastStore = useToastStore()
 const confirmStore = useConfirmStore()
 const runtimeConfig = useRuntimeConfig()
+const websocketStore = useWebSocketStore()
 
 const PAGE_SIZE = 20
 
@@ -145,6 +156,8 @@ function statusLabel(status: t.ShareVO['status']): string {
       return translate('shareManage.status.cancelled')
     case ShareStatus.ADMIN_TAKEDOWN:
       return translate('shareManage.status.adminTakedown')
+    case ShareStatus.REVIEW_REJECTED:
+      return translate('shareManage.status.reviewRejected')
     default:
       return translate('shareManage.status.normal')
   }
@@ -236,6 +249,17 @@ async function confirmEdit() {
     editSaving.value = false
   }
 }
+
+watch(
+  () => websocketStore.lastShareStatusChange,
+  (change) => {
+    if (!change) return
+    const item = records.value.find((r) => r.id === change.id)
+    if (!item) return
+    item.status = change.status
+    item.rejectReason = change.rejectReason
+  },
+)
 
 onMounted(fetchPage)
 </script>

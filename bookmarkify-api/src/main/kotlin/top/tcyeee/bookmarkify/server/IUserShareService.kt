@@ -25,6 +25,8 @@ interface IUserShareService : IService<UserShareEntity> {
     fun cancelShare(id: String, uid: String): Boolean
     /** 修改自己发布的分享(文案/过期时间)；非本人的分享或已处于非正常状态的分享将抛出异常 */
     fun updateShare(params: ShareUpdateParams, uid: String): UserShareVO
+    /** 异步 AI 内容审核：发现违规则将分享状态回退为 REVIEW_REJECTED 并推送通知；若分享已不处于 NORMAL 状态则跳过 */
+    fun performAiReview(shareId: String)
     /** 管理端：分页查询全部分享 */
     fun adminListAll(params: ShareSearchParams): IPage<UserShareAdminVO>
     /** 管理端：强制下架某个分享 */

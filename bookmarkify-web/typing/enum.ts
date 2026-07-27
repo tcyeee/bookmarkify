@@ -31,6 +31,7 @@ export enum HomeItemType {
 
 export enum SocketTypes {
   HOME_ITEM_UPDATE = 'HOME_ITEM_UPDATE',
+  SHARE_STATUS_CHANGED = 'SHARE_STATUS_CHANGED',
 }
 
 export enum AuthStatusEnum {
@@ -79,4 +80,5 @@ export enum ShareStatus {
   EXPIRED = 'EXPIRED',
   CANCELLED = 'CANCELLED',
   ADMIN_TAKEDOWN = 'ADMIN_TAKEDOWN',
+  REVIEW_REJECTED = 'REVIEW_REJECTED',
 }

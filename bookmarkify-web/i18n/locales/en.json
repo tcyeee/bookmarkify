@@ -153,11 +153,13 @@
     "noNote": "(No note)",
     "neverExpire": "Never expires",
     "expireLabel": "Expires: {date}",
+    "rejectReasonLabel": "Reason: {reason}",
     "status": {
       "normal": "Live",
       "expired": "Expired",
       "cancelled": "Taken down",
-      "adminTakedown": "Removed by admin"
+      "adminTakedown": "Removed by admin",
+      "reviewRejected": "Rejected"
     },
     "loading": "Loading shares…",
     "empty": "You haven't published any shares yet",

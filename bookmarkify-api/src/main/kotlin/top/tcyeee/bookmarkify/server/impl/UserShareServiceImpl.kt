@@ -3,25 +3,32 @@ package top.tcyeee.bookmarkify.server.impl
 import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import top.tcyeee.bookmarkify.config.event.ShareAiReviewEvent
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.ShareCreateParams
 import top.tcyeee.bookmarkify.entity.ShareSearchParams
 import top.tcyeee.bookmarkify.entity.SharePublicVO
+import top.tcyeee.bookmarkify.entity.ShareStatusChangedVO
 import top.tcyeee.bookmarkify.entity.ShareSharerVO
 import top.tcyeee.bookmarkify.entity.ShareUpdateParams
 import top.tcyeee.bookmarkify.entity.UserShareAdminVO
 import top.tcyeee.bookmarkify.entity.UserShareVO
+import top.tcyeee.bookmarkify.entity.dto.AiReviewOutcome
 import top.tcyeee.bookmarkify.entity.entity.UserShareBookmarkEntity
 import top.tcyeee.bookmarkify.entity.entity.UserShareEntity
+import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.mapper.UserShareBookmarkMapper
 import top.tcyeee.bookmarkify.mapper.UserShareMapper
+import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.server.IUserShareService
+import top.tcyeee.bookmarkify.utils.SocketUtils
 import java.time.LocalDateTime
 
 /**
@@ -31,6 +38,8 @@ import java.time.LocalDateTime
 class UserShareServiceImpl(
     private val userShareBookmarkMapper: UserShareBookmarkMapper,
     private val userService: IUserService,
+    private val apiService: IApiService,
+    private val eventPublisher: ApplicationEventPublisher,
 ) : IUserShareService, ServiceImpl<UserShareMapper, UserShareEntity>() {
 
     @Transactional(rollbackFor = [Exception::class])
@@ -44,7 +53,35 @@ class UserShareServiceImpl(
         params.bookmarkUserLinkIds.forEachIndexed { index, linkId ->
             userShareBookmarkMapper.insert(UserShareBookmarkEntity(shareId = share.id, bookmarkUserLinkId = linkId, sort = index))
         }
+        applyRuleReview(share)
         return UserShareVO(share, params.bookmarkUserLinkIds.size)
+    }
+
+    /**
+     * 规则审核(普通审核)：分享中的书签必须都是域名类型，且都不能是疑似违规(nsfw)书签。
+     * 未通过则直接将分享状态落库为 REVIEW_REJECTED 并附上理由；通过则发布事件触发异步 AI 审核。
+     */
+    private fun applyRuleReview(share: UserShareEntity) {
+        val reason = reviewRules(share.id)
+        if (reason != null) {
+            share.status = ShareStatus.REVIEW_REJECTED
+            share.rejectReason = reason
+            share.updateTime = LocalDateTime.now()
+            updateById(share)
+        } else {
+            eventPublisher.publishEvent(ShareAiReviewEvent(share.id))
+        }
+    }
+
+    private fun reviewRules(shareId: String): String? {
+        val bookmarks = userShareBookmarkMapper.bookmarksByShareId(shareId)
+        if (bookmarks.any { it.linkType != BookmarkLinkType.DOMAIN }) {
+            return "分享中包含非域名类型的书签（本地/IP地址等），暂不支持分享"
+        }
+        if (bookmarks.any { it.nsfw }) {
+            return "分享中包含疑似违规内容的书签，无法发布"
+        }
+        return null
     }
 
     override fun viewByCode(id: String): SharePublicVO {
@@ -78,7 +115,10 @@ class UserShareServiceImpl(
     override fun cancelShare(id: String, uid: String): Boolean {
         val share = getById(id) ?: throw CommonException(ErrorType.E122)
         if (share.uid != uid) throw CommonException(ErrorType.E123)
-        if (share.effectiveStatus != ShareStatus.NORMAL) throw CommonException(ErrorType.E122)
+        // 未通过审核的分享本身就未公开可见，允许用户自行撤下以清理列表
+        if (share.effectiveStatus != ShareStatus.NORMAL && share.effectiveStatus != ShareStatus.REVIEW_REJECTED) {
+            throw CommonException(ErrorType.E122)
+        }
         return ktUpdate().eq(UserShareEntity::id, id)
             .set(UserShareEntity::status, ShareStatus.CANCELLED)
             .set(UserShareEntity::updateTime, LocalDateTime.now())
@@ -94,10 +134,31 @@ class UserShareServiceImpl(
         share.expireTime = params.expireTime
         share.updateTime = LocalDateTime.now()
         updateById(share)
+        applyRuleReview(share)
         val count = userShareBookmarkMapper.selectCount(
             KtQueryWrapper(UserShareBookmarkEntity::class.java).eq(UserShareBookmarkEntity::shareId, share.id)
         ).toInt()
         return UserShareVO(share, count)
+    }
+
+    override fun performAiReview(shareId: String) {
+        val share = getById(shareId) ?: return
+        if (share.effectiveStatus != ShareStatus.NORMAL) return
+        val bookmarks = userShareBookmarkMapper.bookmarksByShareId(shareId)
+        val rejectReason = bookmarks.firstNotNullOfOrNull { bookmark ->
+            when (val outcome = apiService.inferContentViolation(bookmark.title, bookmark.description, bookmark.urlHost ?: "")) {
+                is AiReviewOutcome.Rejected -> outcome.reason
+                AiReviewOutcome.Unavailable -> "AI 审核暂时不可用，请稍后重试"
+                AiReviewOutcome.Pass -> null
+            }
+        } ?: return
+
+        ktUpdate().eq(UserShareEntity::id, shareId)
+            .set(UserShareEntity::status, ShareStatus.REVIEW_REJECTED)
+            .set(UserShareEntity::rejectReason, rejectReason)
+            .set(UserShareEntity::updateTime, LocalDateTime.now())
+            .update()
+        SocketUtils.shareStatusChanged(share.uid, ShareStatusChangedVO(shareId, ShareStatus.REVIEW_REJECTED, rejectReason))
     }
 
     override fun adminListAll(params: ShareSearchParams): IPage<UserShareAdminVO> {

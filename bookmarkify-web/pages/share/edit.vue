@@ -73,6 +73,16 @@
           </button>
         </template>
 
+        <!-- 未通过审核 -->
+        <template v-else-if="rejectReason">
+          <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-6 text-center">
+            <Icon icon="mdi:alert-circle" class="size-10 text-rose-500 mx-auto mb-3" />
+            <p class="text-sm text-slate-600 dark:text-slate-300 mb-1">分享未通过审核，未发布</p>
+            <p class="text-sm text-rose-500 mb-4">驳回理由：{{ rejectReason }}</p>
+            <button type="button" class="cy-btn cy-btn-ghost cy-btn-sm" @click="navigateTo('/')">返回首页</button>
+          </div>
+        </template>
+
         <!-- 发布成功 -->
         <template v-else>
           <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-6 text-center">
@@ -91,7 +101,7 @@
 </template>
 
 <script lang="ts" setup>
-import { HomeItemType, type UserLayoutNodeVO } from '@typing'
+import { HomeItemType, ShareStatus, type UserLayoutNodeVO } from '@typing'
 import { shareCreate } from '@api'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
@@ -147,6 +157,7 @@ const expireDate = ref('')
 
 const publishing = ref(false)
 const published = ref(false)
+const rejectReason = ref('')
 const shareId = ref('')
 const shareUrl = computed(() => `${runtimeConfig.public.siteUrl}/share/${shareId.value}`)
 
@@ -163,6 +174,9 @@ async function publish() {
       expireTime: hasExpiry.value && expireDate.value ? `${expireDate.value}T23:59:59` : null,
     })
     shareId.value = res.id
+    if (res.status === ShareStatus.REVIEW_REJECTED) {
+      rejectReason.value = res.rejectReason || '内容不符合发布规范'
+    }
     published.value = true
   } catch (error) {
     console.error('[share/edit] 发布分享失败', error)

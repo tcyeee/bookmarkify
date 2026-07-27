@@ -2,9 +2,13 @@ import { requestClient } from '#/api/request';
 
 export interface ClassifyLinkTypeResult {
   total: number;
+  /** 同时批量检查过的书签总数(NSFW 检查) */
+  nsfwChecked: number;
+  /** 本次命中 NSFW(涉黄/涉赌等) 的书签数 */
+  nsfwFlagged: number;
 }
 
-/** 对全部书签按地址重新分类 linkType(域名/本地/IP/其他) 并批量回写 */
+/** 对全部书签按地址重新分类 linkType(域名/本地/IP/其他) 并批量回写；同时批量检查全部书签是否 NSFW */
 export async function classifyBookmarkLinkTypeApi() {
   return requestClient.post<ClassifyLinkTypeResult>(
     '/admin/website/classify-link-type',
