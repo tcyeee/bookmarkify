@@ -57,6 +57,12 @@ data class BookmarkRefetchApplyParams(
     @field:Schema(description = "是否采用新小图标") var useNewIcon: Boolean = false,
     @field:Schema(description = "是否采用新大图标(高清 LOGO)") var useNewLogo: Boolean = false,
 )
+
+/** 管理后台手动编辑书签基础信息（标题/简介） */
+data class BookmarkBasicInfoUpdateParams(
+    @field:Schema(description = "书签标题") var title: String? = null,
+    @field:Schema(description = "书签简介") var description: String? = null,
+)
 data class AdminLoginParams(val account: String, val password: String)
 data class AccountLoginParams(val account: String, val password: String)
 data class ChangePasswordParams(val oldPassword: String, val newPassword: String)
@@ -204,3 +210,8 @@ data class ShareSearchParams(
         return query.orderByDesc(UserShareEntity::createTime)
     }
 }
+
+/** 创建浏览器插件访问令牌 */
+data class AccessTokenCreateParams(
+    @field:Schema(description = "用户自定义备注，如「Chrome插件」") val name: String,
+)

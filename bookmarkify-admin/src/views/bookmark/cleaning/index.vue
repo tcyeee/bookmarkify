@@ -18,8 +18,11 @@ import {
   getBookmarkListApi,
   ingestSimilarSitesApi,
   recategorizeBookmarkApi,
+  refreshBookmarkApi,
+  updateBookmarkBasicInfoApi,
   updateBookmarkCategoriesApi,
   type BookmarkLivenessResult,
+  type BookmarkParseStatus,
   type SimilarSite,
 } from "#/api/bookmark";
 import { getCategoryListApi, type CategoryEntity } from "#/api/category";
@@ -196,6 +199,7 @@ async function checkLiveness() {
     livenessChecked.value = true;
     currentRow.value.isActivity = result.isActivity;
     currentRow.value.parseStatus = result.parseStatus;
+    currentRow.value.antiCrawlerBlocked = result.antiCrawlerBlocked;
     if (result.errorMsg) currentRow.value.parseErrMsg = result.errorMsg;
     syncRowLiveness(currentRow.value.id, result);
     ElMessage[result.success ? "success" : "warning"](
@@ -213,7 +217,55 @@ function syncRowLiveness(id: string, result: BookmarkLivenessResult) {
   if (row) {
     row.isActivity = result.isActivity;
     row.parseStatus = result.parseStatus;
+    row.antiCrawlerBlocked = result.antiCrawlerBlocked;
     if (result.errorMsg) row.parseErrMsg = result.errorMsg;
+  }
+}
+
+// ── 行内「更新」：重新抓取网站信息并直接覆盖持久化 ──
+const refreshingMap = reactive<Record<string, boolean>>({});
+
+async function handleRefresh(row: BookmarkEntity) {
+  refreshingMap[row.id] = true;
+  try {
+    const updated = await refreshBookmarkApi(row.id);
+    Object.assign(row, updated);
+    ElMessage[updated.isActivity ? "success" : "warning"](
+      updated.isActivity
+        ? "已重新抓取并更新"
+        : `重新抓取失败${updated.parseErrMsg ? `：${updated.parseErrMsg}` : ""}`,
+    );
+  } finally {
+    refreshingMap[row.id] = false;
+  }
+}
+
+// ── 行内「修改」：弹窗编辑标题 / 简介 ──
+const editDialogVisible = ref(false);
+const editingRow = ref<BookmarkEntity | null>(null);
+const editForm = reactive({ title: "", description: "" });
+const savingBasicInfo = ref(false);
+
+function handleEdit(row: BookmarkEntity) {
+  editingRow.value = row;
+  editForm.title = row.title ?? "";
+  editForm.description = row.description ?? "";
+  editDialogVisible.value = true;
+}
+
+async function handleSaveBasicInfo() {
+  if (!editingRow.value) return;
+  savingBasicInfo.value = true;
+  try {
+    const updated = await updateBookmarkBasicInfoApi(editingRow.value.id, {
+      title: editForm.title,
+      description: editForm.description,
+    });
+    Object.assign(editingRow.value, updated);
+    editDialogVisible.value = false;
+    ElMessage.success("已保存");
+  } finally {
+    savingBasicInfo.value = false;
   }
 }
 
@@ -270,16 +322,16 @@ const searchForm = reactive<Pick<BookmarkSearchParams, "name" | "status">>({
 
 const statusOptions: {
   label: string;
-  value: BookmarkSearchParams["status"];
+  value: BookmarkParseStatus;
   type: "danger" | "info" | "success" | "warning";
 }[] = [
-  { label: "解析中", value: "LOADING", type: "info" },
+  { label: "等待中", value: "PENDING", type: "info" },
   { label: "成功", value: "SUCCESS", type: "success" },
-  { label: "已关闭", value: "CLOSED", type: "warning" },
-  { label: "已阻止", value: "BLOCKED", type: "danger" },
+  { label: "抓取失败", value: "UNREACHABLE", type: "danger" },
 ];
 
-function handleRowClick({ row }: { row: BookmarkEntity }) {
+function handleRowClick({ row, column }: { row: BookmarkEntity; column: any }) {
+  if (column?.field === "rowActions") return;
   currentRow.value = row;
   detailVisible.value = true;
   editingCategoryIds.value = (row.categories ?? []).map((c) => c.id);
@@ -308,12 +360,21 @@ const gridOptions: VxeGridProps<BookmarkEntity> = {
     { field: "title", title: "标题", minWidth: 220 },
     { field: "urlHost", title: "域名", minWidth: 180 },
     { field: "parseStatus", title: "状态", width: 140, slots: { default: "parseStatus" } },
+    { field: "antiCrawlerBlocked", title: "反爬拦截", width: 90, slots: { default: "antiCrawlerBlocked" } },
     { field: "nsfw", title: "NSFW", width: 90, slots: { default: "nsfw" } },
     {
       field: "updateTime",
       title: "更新时间",
       width: 200,
       formatter: ({ cellValue }) => formatDateTime(cellValue),
+    },
+    {
+      field: "rowActions",
+      title: "操作",
+      width: 140,
+      align: "center",
+      fixed: "right",
+      slots: { default: "actions" },
     },
   ],
   toolbarConfig: { custom: true, refresh: true },
@@ -379,19 +440,32 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
           <ElTag v-if="row.parseStatus === 'SUCCESS'" type="success" size="small">
             成功
           </ElTag>
-          <ElTag v-else-if="row.parseStatus === 'LOADING'" type="info" size="small">
-            解析中
+          <ElTag v-else-if="row.parseStatus === 'PENDING'" type="info" size="small">
+            等待中
           </ElTag>
-          <ElTag v-else-if="row.parseStatus === 'CLOSED'" type="warning" size="small">
-            已关闭
-          </ElTag>
-          <ElTag v-else-if="row.parseStatus === 'BLOCKED'" type="danger" size="small">
-            已阻止
+          <ElTag v-else-if="row.parseStatus === 'UNREACHABLE'" type="danger" size="small">
+            抓取失败
           </ElTag>
           <ElTag v-else size="small"> 未知 </ElTag>
         </template>
+        <template #antiCrawlerBlocked="{ row }">
+          <ElTag v-if="row.antiCrawlerBlocked" type="warning" size="small">反爬拦截</ElTag>
+        </template>
         <template #nsfw="{ row }">
           <ElTag v-if="row.nsfw" type="danger" size="small">NSFW</ElTag>
+        </template>
+        <template #actions="{ row }">
+          <ElButton
+            link
+            type="primary"
+            :loading="refreshingMap[row.id]"
+            @click.stop="handleRefresh(row)"
+          >
+            更新
+          </ElButton>
+          <ElButton link type="primary" @click.stop="handleEdit(row)">
+            修改
+          </ElButton>
         </template>
       </Grid>
       <ElDialog
@@ -421,17 +495,17 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
                   <ElTag v-if="currentRow.parseStatus === 'SUCCESS'" type="success" size="small">
                     成功
                   </ElTag>
-                  <ElTag v-else-if="currentRow.parseStatus === 'LOADING'" type="info" size="small">
-                    解析中
+                  <ElTag v-else-if="currentRow.parseStatus === 'PENDING'" type="info" size="small">
+                    等待中
                   </ElTag>
-                  <ElTag v-else-if="currentRow.parseStatus === 'CLOSED'" type="warning" size="small">
-                    已关闭
-                  </ElTag>
-                  <ElTag v-else-if="currentRow.parseStatus === 'BLOCKED'" type="danger" size="small">
-                    已阻止
+                  <ElTag v-else-if="currentRow.parseStatus === 'UNREACHABLE'" type="danger" size="small">
+                    抓取失败
                   </ElTag>
                   <ElTag v-else size="small">
                     {{ currentRow.parseStatus || "未知" }}
+                  </ElTag>
+                  <ElTag v-if="currentRow.antiCrawlerBlocked" type="warning" size="small" class="ml-1">
+                    反爬拦截
                   </ElTag>
                   <ElTag v-if="currentRow.nsfw" type="danger" size="small" class="ml-1">
                     NSFW
@@ -658,6 +732,31 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
             查找相似网站
           </ElButton>
           <ElButton @click="detailVisible = false">关闭</ElButton>
+        </template>
+      </ElDialog>
+      <ElDialog v-model="editDialogVisible" title="修改基础信息" width="480px">
+        <ElForm :model="editForm" label-width="60px">
+          <ElFormItem label="标题">
+            <ElInput v-model="editForm.title" placeholder="书签标题" />
+          </ElFormItem>
+          <ElFormItem label="简介">
+            <ElInput
+              v-model="editForm.description"
+              type="textarea"
+              :rows="4"
+              placeholder="书签简介"
+            />
+          </ElFormItem>
+        </ElForm>
+        <template #footer>
+          <ElButton @click="editDialogVisible = false">取消</ElButton>
+          <ElButton
+            type="primary"
+            :loading="savingBasicInfo"
+            @click="handleSaveBasicInfo"
+          >
+            保存
+          </ElButton>
         </template>
       </ElDialog>
     </ElCard>

@@ -8,7 +8,8 @@
       "preference": "Preferences",
       "shortcuts": "Shortcuts",
       "bookmarkLibrary": "Bookmark Library",
-      "shareManage": "Share Management"
+      "shareManage": "Share Management",
+      "accessToken": "AccessToken"
     }
   },
   "preferenceSettings": {
@@ -181,6 +182,38 @@
     "pagination": {
       "total": "{total} shares total",
       "pageOf": "Page {current} of {total}"
+    }
+  },
+  "accessTokenManage": {
+    "title": "AccessToken",
+    "desc": "Generate access tokens for the browser extension. The extension uses a token to fetch basic info (title, favicon) for the current site — its permissions are fully isolated from your account session.",
+    "generate": "Generate new token",
+    "defaultName": "Unnamed token",
+    "columns": {
+      "name": "Name",
+      "prefix": "Prefix",
+      "lastUsedAt": "Last used",
+      "createdAt": "Created"
+    },
+    "neverUsed": "Never used",
+    "loading": "Loading tokens…",
+    "empty": "You haven't generated any tokens yet",
+    "revoke": "Revoke",
+    "revokeConfirm": "Revoke this token? Any extension using it will stop working immediately.",
+    "revokeSuccess": "Revoked",
+    "createDialog": {
+      "title": "Generate new token",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. Chrome Extension",
+      "cancel": "Cancel",
+      "confirm": "Generate"
+    },
+    "revealDialog": {
+      "title": "Token generated",
+      "warning": "This token is shown only once and can't be viewed again after closing — copy and save it now.",
+      "copy": "Copy",
+      "copySuccess": "Copied to clipboard",
+      "done": "I've saved it"
     }
   }
 }

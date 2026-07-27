@@ -201,8 +201,9 @@ data class BookmarkAdminVO(
     @field:Schema(description = "图标信息") var logo: BookmarkLogoAdminVO = BookmarkLogoAdminVO(),
 
     /* 状态信息 */
-    @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.LOADING,
+    @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.PENDING,
     @field:Schema(description = "网站是否活跃") var isActivity: Boolean = false,
+    @field:Schema(description = "抓取成功但页面疑似反爬虫/WAF挑战页,内容可能不可靠") var antiCrawlerBlocked: Boolean = false,
     @field:Schema(description = "手动认证状态") var verifyFlag: Boolean = false, // 如果该书签信息都没问题, 添加手动认证状态以后, 即可被搜索到
     @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
@@ -262,6 +263,7 @@ data class BookmarkLivenessVO(
     @field:Schema(description = "检测失败时的错误信息") var errorMsg: String? = null,
     @field:Schema(description = "检测后落库的网站活性") var isActivity: Boolean,
     @field:Schema(description = "检测后落库的解析状态") var parseStatus: ParseStatusEnum,
+    @field:Schema(description = "抓取成功但页面疑似反爬虫/WAF挑战页,内容可能不可靠") var antiCrawlerBlocked: Boolean = false,
 )
 
 /** 管理后台 DeepSeek 生成 appName 建议（不落库，供前端填入编辑框） */
@@ -427,3 +429,34 @@ data class UserShareAdminVO(
         createTime = entity.createTime,
     )
 }
+
+/** 访问令牌列表条目(不含明文 token) */
+data class AccessTokenVO(
+    @field:Schema(description = "令牌ID") var id: String,
+    @field:Schema(description = "用户自定义备注") var name: String,
+    @field:Schema(description = "展示用前缀") var tokenPrefix: String,
+    @field:Schema(description = "最近一次使用时间") var lastUsedAt: LocalDateTime? = null,
+    @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
+) {
+    constructor(entity: AccessTokenEntity) : this(
+        id = entity.id,
+        name = entity.name,
+        tokenPrefix = entity.tokenPrefix,
+        lastUsedAt = entity.lastUsedAt,
+        createTime = entity.createTime,
+    )
+}
+
+/** 创建访问令牌后的一次性返回(仅此一次包含明文 token) */
+data class AccessTokenCreatedVO(
+    @field:Schema(description = "令牌ID") var id: String,
+    @field:Schema(description = "用户自定义备注") var name: String,
+    @field:Schema(description = "明文 token，仅此一次返回，请妥善保存") var token: String,
+    @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
+)
+
+/** 插件查询网站信息的响应(/extension/site-info) */
+data class ExtensionSiteInfoVO(
+    @field:Schema(description = "网站标题") var title: String? = null,
+    @field:Schema(description = "网站图标，base64 data URL") var favicon: String? = null,
+)

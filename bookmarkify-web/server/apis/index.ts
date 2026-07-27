@@ -70,3 +70,9 @@ export const shareView = (code: string) => http.get<t.SharePublicVO>('/share/vie
 export const shareMine = (params?: t.ShareListParams) => http.post<t.BookmarkPage<t.ShareVO>>('/share/mine', params ?? {})
 export const shareCancel = (id: string) => http.post<boolean>(`/share/cancel?id=${encodeURIComponent(id)}`)
 export const shareUpdate = (params: t.ShareUpdateParams) => http.post<t.ShareVO>('/share/update', params)
+
+/* =========[ /user/access-token ]========= */
+export const accessTokenCreate = (params: t.AccessTokenCreateParams) =>
+  http.post<t.AccessTokenCreatedVO>('/user/access-token/create', params)
+export const accessTokenList = () => http.get<t.AccessTokenVO[]>('/user/access-token/list')
+export const accessTokenRevoke = (id: string) => http.post<boolean>(`/user/access-token/revoke?id=${encodeURIComponent(id)}`)

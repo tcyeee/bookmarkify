@@ -7,6 +7,9 @@ export interface CategoryVO {
   color?: string;
 }
 
+/** 书签抓取结果：PENDING(等待抓取) / SUCCESS(抓取成功) / UNREACHABLE(抓取失败,可能是暂时性故障) */
+export type BookmarkParseStatus = 'PENDING' | 'SUCCESS' | 'UNREACHABLE';
+
 export interface SimilarSite {
   name: string;
   domain: string;
@@ -35,8 +38,10 @@ export interface BookmarkEntity {
   description?: string;
   // 图标相关字段统一收拢到 logo（后端 website_logo 表）
   logo: BookmarkLogo;
-  parseStatus: 'LOADING' | 'SUCCESS' | 'CLOSED' | 'BLOCKED'; // Add other statuses as needed
+  parseStatus: BookmarkParseStatus;
   isActivity: boolean;
+  /** 抓取成功但页面疑似反爬虫/WAF挑战页，内容可能不可靠 */
+  antiCrawlerBlocked: boolean;
   parseErrMsg?: string;
   createTime: string;
   updateTime?: string;
@@ -47,7 +52,7 @@ export interface BookmarkEntity {
 
 export interface BookmarkSearchParams {
   name?: string;
-  status?: 'LOADING' | 'SUCCESS' | 'CLOSED' | 'BLOCKED';
+  status?: BookmarkParseStatus;
   currentPage?: number;
   pageSize?: number;
 }
@@ -168,12 +173,31 @@ export interface BookmarkLivenessResult {
   screenshot?: string;
   errorMsg?: string;
   isActivity: boolean;
-  parseStatus: 'LOADING' | 'SUCCESS' | 'CLOSED' | 'BLOCKED';
+  parseStatus: BookmarkParseStatus;
+  antiCrawlerBlocked: boolean;
 }
 
 /** 对某个书签进行活性检测：直接调用 scrapper 重新抓取一次，返回其给出的全部字段，并同步落库 isActivity/parseStatus */
 export async function checkBookmarkLivenessApi(bookmarkId: string) {
   return requestClient.post<BookmarkLivenessResult>(
     `/admin/bookmark/${bookmarkId}/liveness`,
+  );
+}
+
+/** 一键更新：重新抓取网站信息并直接覆盖持久化标题/简介/图标/高清 LOGO，返回更新后的书签 */
+export async function refreshBookmarkApi(bookmarkId: string) {
+  return requestClient.post<BookmarkEntity>(
+    `/admin/bookmark/${bookmarkId}/refresh`,
+  );
+}
+
+/** 手动编辑书签基础信息（标题/简介），返回更新后的书签 */
+export async function updateBookmarkBasicInfoApi(
+  bookmarkId: string,
+  data: { title?: string; description?: string },
+) {
+  return requestClient.post<BookmarkEntity>(
+    `/admin/bookmark/${bookmarkId}/update`,
+    data,
   );
 }

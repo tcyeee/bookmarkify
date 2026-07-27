@@ -5,23 +5,33 @@
       <div class="max-w-6xl mx-auto px-4 py-6">
         <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">全部书签</h1>
 
-        <label
-          class="cy-input flex items-center gap-2 w-full mb-6"
-          :class="query ? 'cy-input-primary' : ''">
-          <Icon icon="mdi:magnify" class="size-4 text-slate-400 dark:text-slate-500 shrink-0" />
-          <input
-            v-model="query"
-            type="text"
-            class="flex-1 bg-transparent focus:outline-none text-sm"
-            placeholder="搜索书签标题、描述或网址..." />
-          <button
-            v-if="query"
-            type="button"
-            class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-            @click="query = ''">
-            ✕
+        <div class="flex items-center gap-3 mb-6">
+          <label
+            class="cy-input flex items-center gap-2 flex-1"
+            :class="query ? 'cy-input-primary' : ''">
+            <Icon icon="mdi:magnify" class="size-4 text-slate-400 dark:text-slate-500 shrink-0" />
+            <input
+              v-model="query"
+              type="text"
+              class="flex-1 bg-transparent focus:outline-none text-sm"
+              placeholder="搜索书签标题、描述或网址..." />
+            <button
+              v-if="query"
+              type="button"
+              class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              @click="query = ''">
+              ✕
+            </button>
+          </label>
+          <button type="button" class="cy-btn cy-btn-primary cy-btn-sm shrink-0" @click="openAddBookmark">
+            <Icon icon="mdi:plus" class="size-4" />
+            新增书签
           </button>
-        </label>
+          <button type="button" class="cy-btn cy-btn-outline cy-btn-sm shrink-0" @click="openCreateFolderPicker">
+            <Icon icon="mdi:folder-plus-outline" class="size-4" />
+            新建文件夹
+          </button>
+        </div>
 
         <template v-if="!query">
           <template v-if="isLoadingBookmarks">
@@ -143,13 +153,62 @@
         <button @click="closeEditModal">close</button>
       </form>
     </dialog>
+
+    <dialog ref="createFolderDialogRef" class="cy-modal">
+      <div class="cy-modal-box max-w-md">
+        <div class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">新建文件夹</div>
+        <input
+          v-model="newFolderName"
+          type="text"
+          maxlength="30"
+          class="cy-input w-full mb-4"
+          placeholder="请输入文件夹名称" />
+        <div class="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-2">
+          选择至少 2 个书签放入文件夹（已选 {{ pickedBookmarkIds.size }}）
+        </div>
+        <div
+          v-if="pickableBookmarks.length === 0"
+          class="text-sm text-slate-400 dark:text-slate-500 py-6 text-center">
+          暂无可选书签
+        </div>
+        <div v-else class="max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+          <label
+            v-for="item in pickableBookmarks"
+            :key="item.id"
+            class="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+            <input
+              type="checkbox"
+              class="cy-checkbox cy-checkbox-sm"
+              :checked="pickedBookmarkIds.has(item.id)"
+              @change="togglePickedBookmark(item.id)" />
+            <BookmarkLogo :value="item.typeApp!" :size="20" />
+            <span class="text-sm text-slate-700 dark:text-slate-200 truncate flex-1">
+              {{ item.typeApp!.title || item.typeApp!.urlBase }}
+            </span>
+          </label>
+        </div>
+        <div class="cy-modal-action">
+          <button type="button" class="cy-btn cy-btn-ghost" :disabled="creatingFolder" @click="closeCreateFolderPicker">取消</button>
+          <button
+            type="button"
+            class="cy-btn cy-btn-primary"
+            :disabled="creatingFolder || !newFolderName.trim() || pickedBookmarkIds.size < 2"
+            @click="confirmCreateFolder">
+            {{ creatingFolder ? '创建中...' : '创建' }}
+          </button>
+        </div>
+      </div>
+      <form method="dialog" class="cy-modal-backdrop">
+        <button @click="closeCreateFolderPicker">close</button>
+      </form>
+    </dialog>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { h } from 'vue'
 import { HomeItemType, type UserLayoutNodeVO } from '@typing'
-import { bookmarksSearch, bookmarksLinkOne, bookmarksDel, bookmarksUpdate, bookmarksPin } from '@api'
+import { bookmarksSearch, bookmarksLinkOne, bookmarksDel, bookmarksUpdate, bookmarksPin, bookmarksCreateDir } from '@api'
 import { useDebounceFn } from '@vueuse/core'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { Icon } from '@iconify/vue'
@@ -204,6 +263,54 @@ const folderCards = computed(() => {
 
 function onShareFolder(folderId: string) {
   navigateTo(`/share/edit?folderId=${encodeURIComponent(folderId)}`)
+}
+
+// ── 搜索区工具栏：新增书签 / 新建文件夹 ──
+function openAddBookmark() {
+  useSysStore().addBookmarkDialogVisible = true
+}
+
+// 后端 /bookmark/createDir 只支持「合并至少 2 个已有书签生成新文件夹」，不支持创建空文件夹，
+// 因此这里让用户从根目录下的书签中挑选 ≥2 个再创建
+const createFolderDialogRef = ref<HTMLDialogElement | null>(null)
+const newFolderName = ref('')
+const pickedBookmarkIds = ref(new Set<string>())
+const creatingFolder = ref(false)
+
+const pickableBookmarks = computed(() => bookmarkStore.rootNodes.filter((node) => node.type === HomeItemType.BOOKMARK))
+
+function togglePickedBookmark(id: string) {
+  const next = new Set(pickedBookmarkIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  pickedBookmarkIds.value = next
+}
+
+function openCreateFolderPicker() {
+  newFolderName.value = ''
+  pickedBookmarkIds.value = new Set()
+  createFolderDialogRef.value?.showModal()
+}
+
+function closeCreateFolderPicker() {
+  createFolderDialogRef.value?.close()
+}
+
+async function confirmCreateFolder() {
+  const name = newFolderName.value.trim()
+  const ids = [...pickedBookmarkIds.value]
+  if (!name || ids.length < 2 || creatingFolder.value) return
+  creatingFolder.value = true
+  try {
+    await bookmarksCreateDir(ids, name, 0)
+    useToastStore().success('文件夹创建成功')
+    closeCreateFolderPicker()
+    await bookmarkStore.update()
+  } catch (error) {
+    console.error('[index] 新建文件夹失败', error)
+  } finally {
+    creatingFolder.value = false
+  }
 }
 
 const query = ref('')
