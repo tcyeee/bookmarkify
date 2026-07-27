@@ -188,6 +188,7 @@
     "title": "AccessToken",
     "desc": "Generate access tokens for the browser extension. The extension uses a token to fetch basic info (title, favicon) for the current site — its permissions are fully isolated from your account session.",
     "generate": "Generate new token",
+    "viewDocs": "API usage guide",
     "defaultName": "Unnamed token",
     "columns": {
       "name": "Name",
@@ -214,6 +215,11 @@
       "copy": "Copy",
       "copySuccess": "Copied to clipboard",
       "done": "I've saved it"
+    },
+    "docsPage": {
+      "title": "AccessToken API usage guide",
+      "desc": "Written for AI assistants / automation scripts — explains how to call the API with an AccessToken. You can also copy and paste it to your AI assistant.",
+      "copy": "Copy guide"
     }
   }
 }

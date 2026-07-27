@@ -1,5 +1,5 @@
 <template>
-  <div class="px-4 h-16 bg-white w-full overflow-hidden shadow flex items-center select-none">
+  <div :class="cn('px-4 h-16 w-full overflow-hidden shadow flex items-center select-none', dark ? 'bg-gray-900 text-gray-100' : 'bg-white')">
     <div class="flex items-center gap-2 cursor-pointer" @click="navigateTo('/')">
       <img src="/favicon.ico" alt="bookmarkify" class="size-[30px]" />
       <div class="font-jersey10 font-bold text-4xl">bookmarkify</div>
@@ -14,6 +14,12 @@
 </template>
 
 <script lang="ts" setup>
+import { cn } from '@utils'
+
+defineProps<{
+  dark?: boolean
+}>()
+
 const pages = [
   { name: 'welcome', path: '/welcome' },
   { name: 'index', path: '/' },

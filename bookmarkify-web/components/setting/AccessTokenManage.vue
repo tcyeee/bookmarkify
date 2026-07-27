@@ -5,10 +5,16 @@
         <h3 class="text-xl font-semibold">{{ $t('accessTokenManage.title') }}</h3>
         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t('accessTokenManage.desc') }}</p>
       </div>
-      <button type="button" class="cy-btn cy-btn-accent shrink-0" @click="openCreateDialog">
-        <Icon icon="mdi:plus" class="size-4" />
-        {{ $t('accessTokenManage.generate') }}
-      </button>
+      <div class="flex items-center gap-2 shrink-0">
+        <button type="button" class="cy-btn cy-btn-ghost" @click="navigateTo('/access-token/docs')">
+          <Icon icon="mdi:file-document-outline" class="size-4" />
+          {{ $t('accessTokenManage.viewDocs') }}
+        </button>
+        <button type="button" class="cy-btn cy-btn-accent" @click="openCreateDialog">
+          <Icon icon="mdi:plus" class="size-4" />
+          {{ $t('accessTokenManage.generate') }}
+        </button>
+      </div>
     </div>
 
     <div class="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">

@@ -188,6 +188,7 @@
     "title": "AccessToken",
     "desc": "生成用于浏览器插件的访问令牌，插件凭此令牌获取当前网站的标题与图标等基础信息，权限与你的账号会话完全隔离。",
     "generate": "生成新 Token",
+    "viewDocs": "接口使用说明",
     "defaultName": "未命名令牌",
     "columns": {
       "name": "备注",
@@ -214,6 +215,11 @@
       "copy": "复制",
       "copySuccess": "已复制到剪贴板",
       "done": "我已保存"
+    },
+    "docsPage": {
+      "title": "AccessToken 接口使用说明",
+      "desc": "本说明面向 AI 助手 / 自动化脚本，讲解如何使用 AccessToken 调用接口，也可直接复制粘贴给 AI 阅读。",
+      "copy": "复制文档"
     }
   }
 }
