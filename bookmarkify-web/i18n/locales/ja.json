@@ -7,7 +7,8 @@
       "background": "背景",
       "preference": "環境設定",
       "shortcuts": "ショートカット",
-      "bookmarkLibrary": "ブックマーク管理"
+      "bookmarkLibrary": "ブックマーク管理",
+      "shareManage": "共有管理"
     }
   },
   "preferenceSettings": {
@@ -80,6 +81,10 @@
     "chooseFile": "ファイルを選択",
     "totalCount": "合計 {total} 件のブックマーク",
     "duplicateCount": "、うち {count} 件は既存",
+    "duplicateConfirmTitle": "重複するブックマークがあります",
+    "duplicateConfirmMessage": "{count} 件のブックマークはすでに存在します。インポート時にこれらの重複を除外しますか？",
+    "duplicateConfirmSkip": "重複を除外",
+    "duplicateConfirmKeep": "すべてインポート",
     "willImport": "{count} 件をインポートします",
     "cancel": "キャンセル",
     "startImport": "インポート開始（{count} 件）",
@@ -133,6 +138,46 @@
     "createSuccess": "コレクションを作成しました",
     "pagination": {
       "total": "合計 {total} 件のブックマーク",
+      "pageOf": "{current} / {total} ページ"
+    }
+  },
+  "shareManage": {
+    "title": "共有管理",
+    "desc": "公開したブックマークコレクションを確認し、コメントや有効期限を編集したり、公開停止したりできます。",
+    "columns": {
+      "note": "コメント",
+      "bookmarks": "ブックマーク数",
+      "status": "状態",
+      "createdAt": "公開日"
+    },
+    "noNote": "（コメントなし）",
+    "neverExpire": "無期限",
+    "expireLabel": "有効期限：{date}",
+    "status": {
+      "normal": "公開中",
+      "expired": "期限切れ",
+      "cancelled": "公開停止済み",
+      "adminTakedown": "管理者により削除"
+    },
+    "loading": "共有を読み込み中…",
+    "empty": "まだ共有を公開していません",
+    "copyLink": "リンクをコピー",
+    "copySuccess": "リンクをコピーしました",
+    "edit": "編集",
+    "cancel": "公開停止",
+    "cancelConfirm": "この共有を公開停止しますか？停止後、このリンクにはアクセスできなくなります。",
+    "cancelSuccess": "公開停止しました",
+    "editSuccess": "保存しました",
+    "editDialog": {
+      "title": "共有を編集",
+      "noteLabel": "コメント",
+      "notePlaceholder": "これらのブックマークについて説明を書いてください（任意）",
+      "expiryLabel": "リンクの有効期限を設定する（デフォルトは無期限）",
+      "cancel": "キャンセル",
+      "confirm": "保存"
+    },
+    "pagination": {
+      "total": "合計 {total} 件の共有",
       "pageOf": "{current} / {total} ページ"
     }
   }

@@ -14,6 +14,7 @@ import BackgroundSettings from '~/components/setting/BackgroundSettings.vue'
 import PreferenceSettings from '~/components/setting/PreferenceSettings.vue'
 import ShortcutSettings from '~/components/setting/ShortcutSettings.vue'
 import BookmarkLibrary from '~/components/setting/BookmarkLibrary.vue'
+import ShareManage from '~/components/setting/ShareManage.vue'
 
 definePageMeta({
   middleware: 'auth',
@@ -21,7 +22,15 @@ definePageMeta({
 })
 
 const sysStore = useSysStore()
-const components = [AccountProfile, SettingBookmarkManage, BackgroundSettings, PreferenceSettings, ShortcutSettings, BookmarkLibrary] as const
+const components = [
+  AccountProfile,
+  SettingBookmarkManage,
+  BackgroundSettings,
+  PreferenceSettings,
+  ShortcutSettings,
+  BookmarkLibrary,
+  ShareManage,
+] as const
 const currentComponent = computed(() => components[sysStore.settingTabIndex] ?? components[0])
 </script>
 

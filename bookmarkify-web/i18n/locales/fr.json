@@ -7,7 +7,8 @@
       "background": "Arrière-plan",
       "preference": "Préférences",
       "shortcuts": "Raccourcis",
-      "bookmarkLibrary": "Gestion des favoris"
+      "bookmarkLibrary": "Gestion des favoris",
+      "shareManage": "Gestion des partages"
     }
   },
   "preferenceSettings": {
@@ -80,6 +81,10 @@
     "chooseFile": "Choisir un fichier",
     "totalCount": "{total} favoris au total",
     "duplicateCount": ", dont {count} déjà existants",
+    "duplicateConfirmTitle": "Doublons détectés",
+    "duplicateConfirmMessage": "{count} favoris existent déjà. Supprimer ces doublons lors de l'import ?",
+    "duplicateConfirmSkip": "Supprimer les doublons",
+    "duplicateConfirmKeep": "Tout importer",
     "willImport": "{count} seront importés",
     "cancel": "Annuler",
     "startImport": "Démarrer l'import ({count})",
@@ -133,6 +138,46 @@
     "createSuccess": "Collection créée avec succès",
     "pagination": {
       "total": "{total} favoris au total",
+      "pageOf": "Page {current} sur {total}"
+    }
+  },
+  "shareManage": {
+    "title": "Gestion des partages",
+    "desc": "Consultez toutes les collections de favoris que vous avez partagées, modifiez leur note ou leur expiration, ou retirez-les.",
+    "columns": {
+      "note": "Note",
+      "bookmarks": "Favoris",
+      "status": "Statut",
+      "createdAt": "Publié le"
+    },
+    "noNote": "(Aucune note)",
+    "neverExpire": "N'expire jamais",
+    "expireLabel": "Expire le : {date}",
+    "status": {
+      "normal": "Actif",
+      "expired": "Expiré",
+      "cancelled": "Retiré",
+      "adminTakedown": "Retiré par un administrateur"
+    },
+    "loading": "Chargement des partages…",
+    "empty": "Vous n'avez encore publié aucun partage",
+    "copyLink": "Copier le lien",
+    "copySuccess": "Lien copié",
+    "edit": "Modifier",
+    "cancel": "Retirer",
+    "cancelConfirm": "Retirer ce partage ? Le lien ne sera plus accessible.",
+    "cancelSuccess": "Retiré",
+    "editSuccess": "Enregistré",
+    "editDialog": {
+      "title": "Modifier le partage",
+      "noteLabel": "Note",
+      "notePlaceholder": "Dites quelque chose à propos de ces favoris (facultatif)",
+      "expiryLabel": "Définir une expiration du lien (par défaut : n'expire jamais)",
+      "cancel": "Annuler",
+      "confirm": "Enregistrer"
+    },
+    "pagination": {
+      "total": "{total} partages au total",
       "pageOf": "Page {current} sur {total}"
     }
   }

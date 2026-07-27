@@ -7,7 +7,8 @@
       "background": "Background",
       "preference": "Preferences",
       "shortcuts": "Shortcuts",
-      "bookmarkLibrary": "Bookmark Library"
+      "bookmarkLibrary": "Bookmark Library",
+      "shareManage": "Share Management"
     }
   },
   "preferenceSettings": {
@@ -80,6 +81,10 @@
     "chooseFile": "Choose File",
     "totalCount": "{total} bookmarks total",
     "duplicateCount": ", {count} already exist",
+    "duplicateConfirmTitle": "Duplicate bookmarks found",
+    "duplicateConfirmMessage": "{count} bookmarks already exist. Remove these duplicates during import?",
+    "duplicateConfirmSkip": "Remove duplicates",
+    "duplicateConfirmKeep": "Import all",
     "willImport": "{count} will be imported",
     "cancel": "Cancel",
     "startImport": "Start Import ({count})",
@@ -133,6 +138,46 @@
     "createSuccess": "Collection created successfully",
     "pagination": {
       "total": "{total} bookmarks total",
+      "pageOf": "Page {current} of {total}"
+    }
+  },
+  "shareManage": {
+    "title": "Share Management",
+    "desc": "View all the bookmark collections you've shared, edit their note or expiry, or take them down.",
+    "columns": {
+      "note": "Note",
+      "bookmarks": "Bookmarks",
+      "status": "Status",
+      "createdAt": "Published"
+    },
+    "noNote": "(No note)",
+    "neverExpire": "Never expires",
+    "expireLabel": "Expires: {date}",
+    "status": {
+      "normal": "Live",
+      "expired": "Expired",
+      "cancelled": "Taken down",
+      "adminTakedown": "Removed by admin"
+    },
+    "loading": "Loading shares…",
+    "empty": "You haven't published any shares yet",
+    "copyLink": "Copy link",
+    "copySuccess": "Link copied",
+    "edit": "Edit",
+    "cancel": "Take down",
+    "cancelConfirm": "Take this share down? The link will no longer be accessible.",
+    "cancelSuccess": "Taken down",
+    "editSuccess": "Saved",
+    "editDialog": {
+      "title": "Edit share",
+      "noteLabel": "Note",
+      "notePlaceholder": "Say something about these bookmarks (optional)",
+      "expiryLabel": "Set a link expiry (default: never expires)",
+      "cancel": "Cancel",
+      "confirm": "Save"
+    },
+    "pagination": {
+      "total": "{total} shares total",
       "pageOf": "Page {current} of {total}"
     }
   }

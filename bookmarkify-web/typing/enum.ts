@@ -73,3 +73,10 @@ export enum BookmarkLinkType {
   IP = 'IP',
   OTHER = 'OTHER',
 }
+
+export enum ShareStatus {
+  NORMAL = 'NORMAL',
+  EXPIRED = 'EXPIRED',
+  CANCELLED = 'CANCELLED',
+  ADMIN_TAKEDOWN = 'ADMIN_TAKEDOWN',
+}

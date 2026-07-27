@@ -213,17 +213,28 @@ async function processFile(file: File) {
     previewData.value = data
     pendingFile.value = file
 
-    // 非重复项默认勾选
-    const initial = new Set(data.items.filter((i) => !i.isDuplicate).map((i) => i.url))
-
     if (data.duplicateCount === 0) {
       // 无重复，直接导入
-      checkedUrls.value = initial
+      checkedUrls.value = new Set(data.items.map((i) => i.url))
       await startImport()
-    } else {
-      checkedUrls.value = initial
-      phase.value = 'reviewing'
+      return
     }
+
+    // 有重复项，先确认是否去除重复书签，再进入 review 面板
+    let skipDuplicates = true
+    try {
+      await useConfirmStore().confirm(translate('bookmarkManage.duplicateConfirmMessage', { count: data.duplicateCount }), {
+        title: translate('bookmarkManage.duplicateConfirmTitle'),
+        confirmText: translate('bookmarkManage.duplicateConfirmSkip'),
+        cancelText: translate('bookmarkManage.duplicateConfirmKeep'),
+        type: 'warning',
+      })
+    } catch {
+      skipDuplicates = false
+    }
+
+    checkedUrls.value = new Set(data.items.filter((i) => !skipDuplicates || !i.isDuplicate).map((i) => i.url))
+    phase.value = 'reviewing'
   } catch (error: any) {
     statusMessage.value = error?.msg || error?.message || translate('bookmarkManage.readFileFailed')
     statusType.value = 'error'

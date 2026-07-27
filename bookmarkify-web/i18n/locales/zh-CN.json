@@ -7,7 +7,8 @@
       "background": "主页背景",
       "preference": "偏好设置",
       "shortcuts": "快捷键",
-      "bookmarkLibrary": "书签管理"
+      "bookmarkLibrary": "书签管理",
+      "shareManage": "分享管理"
     }
   },
   "preferenceSettings": {
@@ -80,6 +81,10 @@
     "chooseFile": "选择文件",
     "totalCount": "共 {total} 个书签",
     "duplicateCount": "，其中 {count} 个已有",
+    "duplicateConfirmTitle": "发现重复书签",
+    "duplicateConfirmMessage": "检测到 {count} 个书签已存在，是否在导入时去除这些重复项？",
+    "duplicateConfirmSkip": "去除重复项",
+    "duplicateConfirmKeep": "全部导入",
     "willImport": "将导入 {count} 个",
     "cancel": "取消",
     "startImport": "开始导入（{count} 个）",
@@ -133,6 +138,46 @@
     "createSuccess": "集合创建成功",
     "pagination": {
       "total": "共 {total} 个书签",
+      "pageOf": "第 {current} / {total} 页"
+    }
+  },
+  "shareManage": {
+    "title": "分享管理",
+    "desc": "查看你发布过的全部分享集，可以修改分享文案与有效期，或将其下架。",
+    "columns": {
+      "note": "分享文案",
+      "bookmarks": "书签数",
+      "status": "状态",
+      "createdAt": "发布时间"
+    },
+    "noNote": "（未填写分享文案）",
+    "neverExpire": "永不过期",
+    "expireLabel": "过期时间：{date}",
+    "status": {
+      "normal": "生效中",
+      "expired": "已过期",
+      "cancelled": "已下架",
+      "adminTakedown": "已被管理员下架"
+    },
+    "loading": "正在加载分享…",
+    "empty": "还没有发布过任何分享",
+    "copyLink": "复制链接",
+    "copySuccess": "链接已复制",
+    "edit": "修改",
+    "cancel": "下架",
+    "cancelConfirm": "确定要下架这个分享吗？下架后该链接将无法访问。",
+    "cancelSuccess": "已下架",
+    "editSuccess": "修改成功",
+    "editDialog": {
+      "title": "修改分享",
+      "noteLabel": "分享文案",
+      "notePlaceholder": "写点什么介绍一下这些书签吧（可选）",
+      "expiryLabel": "设置链接有效期（默认永不失效）",
+      "cancel": "取消",
+      "confirm": "保存"
+    },
+    "pagination": {
+      "total": "共 {total} 个分享",
       "pageOf": "第 {current} / {total} 页"
     }
   }
