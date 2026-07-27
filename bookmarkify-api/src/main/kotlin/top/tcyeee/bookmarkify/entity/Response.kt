@@ -6,7 +6,6 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
-import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
@@ -27,7 +26,7 @@ data class BookmarkShow(
     @field:Schema(description = "基础url") var urlBase: String? = null,
     @field:Schema(description = "是否置顶") var pinned: Boolean = false,
     @field:Schema(description = "书签链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
-    // 图标相关字段已迁移到 website_logo，对外统一以 logo 嵌套对象输出（下面这些扁平字段仅供内部/SQL 映射用，不直接序列化）
+    // 图标相关字段已迁移到 bookmark_logo，对外统一以 logo 嵌套对象输出（下面这些扁平字段仅供内部/SQL 映射用，不直接序列化）
     @JsonIgnore @field:Schema(description = "小图标(序列化进 logo)") var iconBase64: String? = null,
     @JsonIgnore @field:Schema(description = "图片内边距(序列化进 logo)") var iconPadding: Int = 25,
     @JsonIgnore @field:Schema(description = "图标背景色(序列化进 logo)") var iconBgColor: String? = null,
@@ -49,10 +48,10 @@ data class BookmarkShow(
     val logo: BookmarkLogoShowVO
         get() = BookmarkLogoShowVO(iconBase64, iconHdUrl, iconPadding, iconBgColor)
 
-    constructor(userlink: BookmarkUserLink, bookmark: BookmarkEntity?, logo: WebsiteLogoEntity?) : this() {
+    constructor(userlink: BookmarkUserLink, bookmark: BookmarkEntity?, logo: BookmarkLogoEntity?) : this() {
         bookmark?.let { BeanUtil.copyProperties(it, this) }
         BeanUtil.copyProperties(userlink, this)
-        // 图标相关字段从 website_logo 取
+        // 图标相关字段从 bookmark_logo 取
         logo?.let {
             iconBase64 = it.iconBase64
             iconPadding = it.iconPadding
@@ -84,7 +83,7 @@ data class BookmarkLogoShowVO(
     @field:Schema(description = "图标背景色") val iconBgColor: String? = null,
 )
 
-/** 用户端「添加书签」搜索结果：基础信息 + 小图标(来自 website_logo) */
+/** 用户端「添加书签」搜索结果：基础信息 + 小图标(来自 bookmark_logo) */
 data class BookmarkSearchVO(
     @field:Schema(description = "书签ID") var id: String,
     @field:Schema(description = "书签根域名") var urlHost: String,
@@ -93,7 +92,7 @@ data class BookmarkSearchVO(
     @field:Schema(description = "书签标题") var title: String? = null,
     @field:Schema(description = "图标信息") var logo: BookmarkLogoShowVO = BookmarkLogoShowVO(),
 ) {
-    constructor(entity: BookmarkEntity, logo: WebsiteLogoEntity?) : this(
+    constructor(entity: BookmarkEntity, logo: BookmarkLogoEntity?) : this(
         id = entity.id,
         urlHost = entity.urlHost,
         urlScheme = entity.urlScheme,
@@ -102,17 +101,6 @@ data class BookmarkSearchVO(
         logo = BookmarkLogoShowVO(iconBase64 = logo?.iconBase64),
     )
 }
-
-data class HomeItemShow(
-    @field:Schema(description = "ID") var id: String,
-    @field:Schema(description = "UID") var uid: String,
-    @field:Schema(description = "序号") var sort: Int = Int.MIN_VALUE,
-    @field:Schema(description = "书签类型") var type: HomeItemType = HomeItemType.BOOKMARK,
-    @field:Schema(description = "书签信息") var typeApp: BookmarkShow? = null,
-    @field:Schema(description = "书签组信息") var typeDir: BookmarkDir? = null,
-    @field:Schema(description = "系统功能入口") var typeFuc: FunctionType? = null,
-    @JsonIgnore var bookmarkId: String? = null, // 用于新建书签时定位
-)
 
 data class UserInfoShow(
     @field:Schema(description = "UID") var uid: String,
@@ -123,7 +111,7 @@ data class UserInfoShow(
     @field:Schema(description = "已关联的 Google 邮箱(未关联为 null)") var googleEmail: String? = null,
     @field:Schema(description = "已关联的 GitHub 用户名(未关联为 null)") var githubLogin: String? = null,
 ) {
-    constructor(entity: UserEntity, avatarUrl: String?) : this(
+    constructor(entity: UserInfoEntity, avatarUrl: String?) : this(
         uid = entity.id, nickName = entity.nickName, avatarUrl = avatarUrl,
         roles = listOf(entity.role.name), googleEmail = entity.googleEmail, githubLogin = entity.githubLogin
     )
@@ -208,7 +196,7 @@ data class BookmarkAdminVO(
     @field:Schema(description = "书签标题") var title: String? = null,
     @field:Schema(description = "书签备注") var description: String? = null,
 
-    /* 图标信息（来自 website_logo，嵌套对象） */
+    /* 图标信息（来自 bookmark_logo，嵌套对象） */
     @field:Schema(description = "图标信息") var logo: BookmarkLogoAdminVO = BookmarkLogoAdminVO(),
 
     /* 状态信息 */
@@ -220,13 +208,13 @@ data class BookmarkAdminVO(
     @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
     @field:Schema(description = "命中的分类") var categories: List<CategoryVO> = emptyList(),
 ) {
-    constructor(entity: BookmarkEntity, logo: WebsiteLogoEntity?) : this(
+    constructor(entity: BookmarkEntity, logo: BookmarkLogoEntity?) : this(
         id = entity.id,
         urlHost = entity.urlHost,
         urlScheme = entity.urlScheme,
     ) {
         BeanUtil.copyProperties(entity, this)
-        // 图标信息来自 website_logo；高清 LOGO 存放在私有读 OSS 桶，库里 logoUrl 是未签名地址(直接访问会 403)，
+        // 图标信息来自 bookmark_logo；高清 LOGO 存放在私有读 OSS 桶，库里 logoUrl 是未签名地址(直接访问会 403)，
         // 这里换成限时签名地址(原图不缩放,便于后台审阅)，签名失败则置空交由前端说明。
         this.logo = BookmarkLogoAdminVO(
             iconBase64 = logo?.iconBase64,
@@ -291,7 +279,7 @@ data class UserAdminVO(
     @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
 ) {
-    constructor(entity: UserEntity) : this(
+    constructor(entity: UserInfoEntity) : this(
         id = entity.id,
         nickName = entity.nickName,
         deviceId = entity.deviceId,

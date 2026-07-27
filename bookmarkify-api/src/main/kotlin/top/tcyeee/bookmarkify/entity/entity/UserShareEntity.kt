@@ -29,6 +29,7 @@ data class UserShareEntity(
     val effectiveStatus: ShareStatus
         get() = when {
             status == ShareStatus.ADMIN_TAKEDOWN -> ShareStatus.ADMIN_TAKEDOWN
+            status == ShareStatus.CANCELLED -> ShareStatus.CANCELLED
             isExpired -> ShareStatus.EXPIRED
             else -> ShareStatus.NORMAL
         }

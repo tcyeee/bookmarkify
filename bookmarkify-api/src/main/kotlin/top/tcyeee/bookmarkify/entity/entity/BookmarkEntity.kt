@@ -41,7 +41,7 @@ data class BookmarkEntity(
     @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
     @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
 
-    // 图标相关字段（小图标/高清LOGO/内边距/背景色/高清开关）已迁移到 website_logo 表（WebsiteLogoEntity），与书签一对一。
+    // 图标相关字段（小图标/高清LOGO/内边距/背景色/高清开关）已迁移到 bookmark_logo 表（BookmarkLogoEntity），与书签一对一。
 
     /* 状态信息 */
     @JsonIgnore @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.LOADING,
@@ -86,7 +86,7 @@ data class BookmarkEntity(
         this.description = wrapper.description
         this.parseStatus = if (wrapper.antiCrawlerDetected) ParseStatusEnum.BLOCKED else ParseStatusEnum.SUCCESS
         this.updateTime = LocalDateTime.now()
-        // 小图标(iconBase64)已迁出到 website_logo，由解析层在保存元信息后单独 upsert。
+        // 小图标(iconBase64)已迁出到 bookmark_logo，由解析层在保存元信息后单独 upsert。
     }
 
     // 是否需要检查标签,这里为true,说明这个书签需要被检查了
@@ -157,8 +157,8 @@ data class BookmarkUserLink(
  * 书签图标记录：小图标(base64) + 高清LOGO + 显示设置(内边距/背景色/高清开关) + 高清LOGO文件元数据。
  * 与 bookmark 一对一（bookmark_id 唯一）。这些图标相关字段原先在 bookmark 表，现统一收拢到此表。
  */
-@TableName("website_logo")
-data class WebsiteLogoEntity(
+@TableName("bookmark_logo")
+data class BookmarkLogoEntity(
     @TableId @field:Schema(description = "图标记录ID") val id: String = IdUtil.fastUUID(),
     @field:Schema(description = "所属书签ID") var bookmarkId: String = "",
 

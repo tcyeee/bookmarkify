@@ -120,12 +120,12 @@ data class AllOfMyBookmarkParams(
 data class UserSearchParams(
     var name: String? = null,
 ) : PageBean() {
-    fun toWrapper(): Wrapper<UserEntity> {
-        val query = KtQueryWrapper(UserEntity::class.java)
+    fun toWrapper(): Wrapper<UserInfoEntity> {
+        val query = KtQueryWrapper(UserInfoEntity::class.java)
         if (!name.isNullOrBlank()) {
             query.and {
-                it.like(UserEntity::nickName, name)
-                    .or().like(UserEntity::email, name)
+                it.like(UserInfoEntity::nickName, name)
+                    .or().like(UserInfoEntity::email, name)
             }
         }
         return query
@@ -180,6 +180,13 @@ data class BookmarkPingLogSearchParams(
 /** 创建/发布一个书签分享 */
 data class ShareCreateParams(
     @field:Schema(description = "要分享的书签(bookmark_user_link.id)列表") val bookmarkUserLinkIds: List<String>,
+    @field:Schema(description = "分享文案") val note: String? = null,
+    @field:Schema(description = "过期时间(为空表示永不过期)") val expireTime: LocalDateTime? = null,
+)
+
+/** 修改自己发布的分享(文案/过期时间) */
+data class ShareUpdateParams(
+    @field:Schema(description = "分享ID") val id: String,
     @field:Schema(description = "分享文案") val note: String? = null,
     @field:Schema(description = "过期时间(为空表示永不过期)") val expireTime: LocalDateTime? = null,
 )

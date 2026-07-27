@@ -16,7 +16,7 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.ImgInfo
 import top.tcyeee.bookmarkify.entity.dto.LogoResult
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
-import top.tcyeee.bookmarkify.entity.entity.WebsiteLogoEntity
+import top.tcyeee.bookmarkify.entity.entity.BookmarkLogoEntity
 import top.tcyeee.bookmarkify.entity.enums.FileType
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -102,17 +102,17 @@ class OssUtils {
          * @param bookmarkId 书签ID(用于添加文件夹)
          * @return 返回最大的LOGO信息
          */
-        fun restoreWebsiteLogoAndOg(list: List<ManifestIcon>?, bookmarkId: String): LogoResult {
-            log.debug("[restoreWebsiteLogoAndOg] bookmarkId={}, iconCount={}", bookmarkId, list?.size)
+        fun restoreBookmarkLogoAndOg(list: List<ManifestIcon>?, bookmarkId: String): LogoResult {
+            log.debug("[restoreBookmarkLogoAndOg] bookmarkId={}, iconCount={}", bookmarkId, list?.size)
             if (list.isNullOrEmpty()) throw CommonException(ErrorType.E999)
 
             // 存储OG（og:image 宽屏分享图，与 LOGO 是两类图）：仅上传 OSS，地址不落库
             val ogs = list.filter { it.isOg() }.filterNot { it.src.isNullOrBlank() }
-            log.debug("[restoreWebsiteLogoAndOg] 找到OG图片数={}", ogs.size)
+            log.debug("[restoreBookmarkLogoAndOg] 找到OG图片数={}", ogs.size)
             if (ogs.isNotEmpty()) runCatching {
-                log.debug("[restoreWebsiteLogoAndOg] 开始存储OG: src={}", ogs.first().src)
+                log.debug("[restoreBookmarkLogoAndOg] 开始存储OG: src={}", ogs.first().src)
                 restoreImg(FileType.WEBSITE_OG, ogs.first().src!!, bookmarkId)
-            }.onFailure { log.warn("[restoreWebsiteLogoAndOg] OG存储失败: {}", it.message) }
+            }.onFailure { log.warn("[restoreBookmarkLogoAndOg] OG存储失败: {}", it.message) }
 
             // 找到最大的那个LOGO
             val maximalIcon: ManifestIcon = list
@@ -120,18 +120,18 @@ class OssUtils {
                 .filterNot { it.src.isNullOrBlank() }
                 .filterNot { it.src!!.endsWith(".ico") }
                 .maxByOrNull { it.size() } ?: run {
-                log.debug("[restoreWebsiteLogoAndOg] 未找到合适的LOGO图标, 返回空结果")
+                log.debug("[restoreBookmarkLogoAndOg] 未找到合适的LOGO图标, 返回空结果")
                 return LogoResult(logo = null, logoUrl = null)
             }
-            log.debug("[restoreWebsiteLogoAndOg] 选中最大LOGO: src={}, size={}", maximalIcon.src, maximalIcon.size())
+            log.debug("[restoreBookmarkLogoAndOg] 选中最大LOGO: src={}, size={}", maximalIcon.src, maximalIcon.size())
 
             // 存储高清 LOGO 并捕获其 OSS 永久地址
             return runCatching { restoreImg(FileType.WEBSITE_LOGO, maximalIcon.src!!, bookmarkId) }
                 .getOrElse { throw CommonException(ErrorType.E218, it.message) }
                 .let { logoInfo ->
-                    log.debug("[restoreWebsiteLogoAndOg] LOGO存储成功: url={}, width={}, height={}", logoInfo.url, logoInfo.width, logoInfo.height)
+                    log.debug("[restoreBookmarkLogoAndOg] LOGO存储成功: url={}, width={}, height={}", logoInfo.url, logoInfo.width, logoInfo.height)
                     LogoResult(
-                        logo = WebsiteLogoEntity(
+                        logo = BookmarkLogoEntity(
                             bookmarkId = bookmarkId,
                             size = logoInfo.size,
                             width = logoInfo.width,

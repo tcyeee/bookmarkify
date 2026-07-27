@@ -13,7 +13,7 @@ import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
-import top.tcyeee.bookmarkify.server.IBookmarkFunctionService
+import top.tcyeee.bookmarkify.server.ILayoutNodeFunctionService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
@@ -30,7 +30,7 @@ class UserLayoutNodeServiceImpl(
     private val preferenceService: IUserPreferenceService,
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
-    private val bookmarkFunctionService: IBookmarkFunctionService,
+    private val layoutNodeFunctionService: ILayoutNodeFunctionService,
 ) : IUserLayoutNodeService, ServiceImpl<UserLayoutNodeMapper, UserLayoutNodeEntity>() {
 
     companion object {
@@ -43,7 +43,7 @@ class UserLayoutNodeServiceImpl(
         // 查询用户的自定义标签
         val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
         // 查询用户的绑定功能
-        val bookmarkFunctionMap = bookmarkFunctionService.findByUid(uid).associateBy { it.layoutNodeId }
+        val bookmarkFunctionMap = layoutNodeFunctionService.findByUid(uid).associateBy { it.layoutNodeId }
         // 查询到用户的排序信息
         val sortMap = preferenceService.queryByUid(uid).sortMap
         // 查询到用户布局信息

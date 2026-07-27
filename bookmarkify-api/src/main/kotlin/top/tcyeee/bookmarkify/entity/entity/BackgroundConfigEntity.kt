@@ -29,12 +29,33 @@ data class BackgroundConfigEntity(
     @TableId val id: String = IdUtil.fastUUID(),
     @field:Schema(description = "用户ID") var uid: String,
     @field:Schema(description = "背景类型") var type: BackgroundType,
-    @field:Schema(description = "背景ID") var backgroundLinkId: String,
+    @field:Schema(description = "背景图片ID(background_image.id, type=IMAGE 时非空)") var backgroundImageId: String? = null,
+    @field:Schema(description = "背景渐变ID(background_gradient.id, type=GRADIENT 时非空)") var backgroundGradientId: String? = null,
     @field:Schema(description = "创建时间") var updateTime: LocalDateTime = LocalDateTime.now(),
 ) {
+    // get() 而非字段初始化: 无 backing field 不会被 MyBatis-Plus 当成数据库列扫描(同 UserFile.fullPath 写法)
+    val backgroundLinkId: String
+        get() = (if (type == BackgroundType.IMAGE) backgroundImageId else backgroundGradientId)
+            ?: error("background_config[$id] 缺少 type=$type 对应的关联ID")
+
+    /** 按当前 type 写入关联ID，并清空另一侧字段，维持"恰好一个非空"的不变量 */
+    fun setLinkId(linkId: String) {
+        when (type) {
+            BackgroundType.IMAGE -> {
+                backgroundImageId = linkId
+                backgroundGradientId = null
+            }
+
+            BackgroundType.GRADIENT -> {
+                backgroundGradientId = linkId
+                backgroundImageId = null
+            }
+        }
+    }
+
     fun updateParams(params: BackSettingParams) {
         this.type = params.type
-        this.backgroundLinkId = params.backgroundId
+        setLinkId(params.backgroundId)
         this.updateTime = LocalDateTime.now()
     }
 

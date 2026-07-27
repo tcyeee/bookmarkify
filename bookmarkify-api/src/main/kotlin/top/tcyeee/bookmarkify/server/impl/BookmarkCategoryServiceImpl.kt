@@ -8,15 +8,16 @@ import org.springframework.transaction.support.TransactionTemplate
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.entity.BookmarkCategory
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
-import top.tcyeee.bookmarkify.entity.entity.WebsiteCategory
+import top.tcyeee.bookmarkify.entity.entity.Category
+import top.tcyeee.bookmarkify.entity.entity.CategorySource
 import top.tcyeee.bookmarkify.mapper.BookmarkCategoryMapper
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkCategoryService
-import top.tcyeee.bookmarkify.server.IWebsiteCategoryService
+import top.tcyeee.bookmarkify.server.ICategoryService
 
 @Service
 class BookmarkCategoryServiceImpl(
-    private val websiteCategoryService: IWebsiteCategoryService,
+    private val categoryService: ICategoryService,
     private val apiService: IApiService,
     transactionManager: PlatformTransactionManager,
 ) : IBookmarkCategoryService, ServiceImpl<BookmarkCategoryMapper, BookmarkCategory>() {
@@ -26,7 +27,7 @@ class BookmarkCategoryServiceImpl(
 
     override fun categorize(bookmark: BookmarkEntity) {
         runCatching {
-            val categories = websiteCategoryService.activeCandidates()
+            val categories = categoryService.activeCandidates()
             if (categories.isEmpty()) {
                 logger.debug("[categorize] 字典为空，跳过: bookmarkId=${bookmark.id}")
                 return
@@ -42,21 +43,21 @@ class BookmarkCategoryServiceImpl(
             val slugToId = categories.associate { it.slug to it.id }
             val categoryIds = slugs.mapNotNull { slugToId[it] }
             if (categoryIds.isEmpty()) return
-            replaceLinks(bookmark.id, categoryIds, "DEEPSEEK")
+            replaceLinks(bookmark.id, categoryIds, CategorySource.DEEPSEEK)
             logger.debug("[categorize] 分类完成: bookmarkId=${bookmark.id}, slugs=$slugs")
         }.onFailure {
             logger.warn("[categorize] 分类失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}")
         }
     }
 
-    override fun categoriesOf(bookmarkIds: Collection<String>): Map<String, List<WebsiteCategory>> {
+    override fun categoriesOf(bookmarkIds: Collection<String>): Map<String, List<Category>> {
         if (bookmarkIds.isEmpty()) return emptyMap()
         val links = ktQuery()
             .`in`(BookmarkCategory::bookmarkId, bookmarkIds)
             .eq(BookmarkCategory::deleted, false)
             .list()
         if (links.isEmpty()) return emptyMap()
-        val catById = websiteCategoryService
+        val catById = categoryService
             .listByIds(links.map { it.categoryId }.distinct())
             .associateBy { it.id }
         return links.groupBy { it.bookmarkId }
@@ -65,7 +66,7 @@ class BookmarkCategoryServiceImpl(
 
     /** 幂等替换：物理删除旧关联，再插入新关联（避开 unique 约束与软删冲突）。
      *  用 TransactionTemplate 包住删除+插入，保证原子（@Transactional 在同 bean 自调用下会失效）。 */
-    override fun replaceLinks(bookmarkId: String, categoryIds: List<String>, source: String) {
+    override fun replaceLinks(bookmarkId: String, categoryIds: List<String>, source: CategorySource) {
         txTemplate.execute {
             ktUpdate().eq(BookmarkCategory::bookmarkId, bookmarkId).remove()
             saveBatch(categoryIds.map {

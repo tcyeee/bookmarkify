@@ -13,8 +13,8 @@ import java.time.LocalDateTime
  * @author tcyeee
  * @date 1/12/24 23:26
  */
-@TableName("sys_user")
-data class UserEntity(
+@TableName("user_info")
+data class UserInfoEntity(
     @TableId("id") var id: String,
     @field:Size(max = 200) @field:Schema(description = "昵称") var nickName: String,
     @field:Size(max = 200) @field:Schema(description = "设备UID") var deviceId: String,

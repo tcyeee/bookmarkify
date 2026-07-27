@@ -6,9 +6,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.LocalDateTime
 
-/** 网站分类字典（受控词表，预先 seed） */
-@TableName("website_category")
-data class WebsiteCategory(
+/** 书签分类字典（受控词表，预先 seed） */
+@TableName("category")
+data class Category(
     @TableId var id: String,
     @field:Schema(description = "稳定 slug，喂给 DeepSeek/未来筛选") var slug: String,
     @field:Schema(description = "分类中文展示名") var name: String,
