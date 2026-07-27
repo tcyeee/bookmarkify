@@ -266,6 +266,13 @@ object ChromeBookmarkParser {
                 log.debug("[parseBookmark] HREF缺失, 跳过该行: title={}", title)
                 return null
             }
+            // 提前用与异步解析阶段相同的校验函数过滤非法 href（javascript:/chrome:/纯文本等），
+            // 避免写入无法被 WebsiteParser 处理的数据——否则会在异步解析阶段才失败，
+            // 而该失败目前只记录日志、不回写状态，会让节点永久停留在 LOADING。
+            runCatching { WebsiteParser.urlWrapper(url) }.onFailure {
+                log.debug("[parseBookmark] HREF不是合法URL, 跳过该行: title={}, href={}", title, url)
+                return null
+            }
             val createTime = attributes["ADD_DATE"]?.toLongOrNull()?.let {
                 // Chrome 导出为秒级时间戳
                 Instant.ofEpochSecond(it).atZone(ZoneOffset.UTC).toLocalDateTime()
