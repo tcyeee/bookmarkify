@@ -95,6 +95,7 @@ export const useWebSocketStore = defineStore('socket', {
         if (message.type === SocketTypes.HOME_ITEM_UPDATE) {
           const bookmarkStore = useBookmarkStore()
           bookmarkStore.replaceContent(message.data)
+          useImportProgressStore().markResolved(message.data.id)
         }
       }
     },

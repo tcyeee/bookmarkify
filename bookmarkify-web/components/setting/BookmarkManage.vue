@@ -118,6 +118,7 @@
 
 <script lang="ts" setup>
 import { bookmarksUploadPreview, bookmarksUpload } from '@api'
+import { HomeItemType } from '@typing'
 import type * as t from '@typing'
 
 type Phase = 'idle' | 'loading' | 'reviewing' | 'importing'
@@ -237,6 +238,8 @@ async function startImport() {
   try {
     const nodes = await bookmarksUpload(pendingFile.value, skipUrls)
     bookmarkStore.addImportLoadingBatch(nodes)
+    const loadingIds = nodes.filter((n) => n.type === HomeItemType.BOOKMARK_LOADING).map((n) => n.id)
+    useImportProgressStore().startBatch(loadingIds)
     statusMessage.value = `导入已开始！共 ${nodes.length} 项正在后台解析，稍后会自动更新。`
     statusType.value = 'success'
     phase.value = 'idle'
