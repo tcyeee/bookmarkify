@@ -8,6 +8,7 @@ import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkImportPreviewVO
+import top.tcyeee.bookmarkify.entity.BookmarkPinParams
 import top.tcyeee.bookmarkify.entity.BookmarkSearchVO
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
@@ -101,6 +102,12 @@ class BookmarksController(
     @Operation(summary = "修改")
     fun update(@RequestBody params: BookmarkUpdatePrams): Boolean =
         bookmarkUserLinkService.updateOne(params, BaseUtils.uid())
+
+    @Throttle
+    @PostMapping("/pin")
+    @Operation(summary = "置顶/取消置顶")
+    fun pin(@RequestBody params: BookmarkPinParams): Boolean =
+        bookmarkUserLinkService.setPinned(params.linkId, params.pinned, BaseUtils.uid())
 
     // 会创建 bookmark/user_layout_node/bookmark_user_link 三张表的写入，不应该用 GET 承载
     // （历史遗留问题：GET 请求可能被浏览器预取/代理缓存/爬虫意外重放，触发非预期的写操作）

@@ -11,9 +11,9 @@
       class="bg-white flex justify-center items-center"
       :class="{ 'inactive-logo': isInactive }"
       :style="[logoSizeStyle, logoStyle]">
-      <!-- 优先使用高清图 -->
+      <!-- 优先使用高清图（仅在调用方显式要求时，如置顶区域） -->
       <img
-        v-if="props.value.logo?.iconHdUrl && !hdError"
+        v-if="props.preferHd && props.value.logo?.iconHdUrl && !hdError"
         :key="`hd-${props.value.logo?.iconHdUrl}`"
         :src="props.value.logo?.iconHdUrl"
         alt=""
@@ -50,7 +50,7 @@
 import { computed, ref, watch } from 'vue'
 import type { BookmarkShow } from '@typing'
 
-const props = defineProps<{ value: BookmarkShow; size?: number }>()
+const props = defineProps<{ value: BookmarkShow; size?: number; preferHd?: boolean }>()
 
 // 无图标 / 加载失败时的兜底图标（灰色地球，内联 SVG 避免依赖静态资源）
 const FALLBACK_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -83,7 +83,7 @@ const offlineBadgeStyle = computed(() => {
 })
 // 判定是否需走 base64 分支
 const shouldUseBase64 = computed(
-  () => (!props.value.logo?.iconHdUrl || hdError.value) && !iconError.value && !!props.value.logo?.iconBase64,
+  () => (!props.preferHd || !props.value.logo?.iconHdUrl || hdError.value) && !iconError.value && !!props.value.logo?.iconBase64,
 )
 const devOutlineColor = computed(() => backgroundColor.value || '#ffffff')
 // base64 时叠加主色与淡白蒙版

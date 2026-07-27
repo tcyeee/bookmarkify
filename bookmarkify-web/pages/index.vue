@@ -35,15 +35,21 @@
           <template v-else-if="bookmarkStore.rootNodes.length === 0">
             <div class="text-sm text-slate-400 dark:text-slate-500 py-10 text-center">暂无书签</div>
           </template>
-          <div v-else class="columns-1 md:columns-2 xl:columns-3 gap-4">
-            <div v-for="folder in folderCards" :key="folder.id" class="mb-4 break-inside-avoid">
-              <BookmarkFolderCard
-                :name="folder.name"
-                :is-root="folder.isRoot"
-                :children="folder.children"
-                @edit="openEditModal" />
+          <template v-else>
+            <div v-if="bookmarkStore.pinnedNodes.length" class="mb-6">
+              <div class="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-2">置顶</div>
+              <PinnedBookmarkGrid :nodes="bookmarkStore.pinnedNodes" @edit="openEditModal" />
             </div>
-          </div>
+            <div class="columns-1 md:columns-2 xl:columns-3 gap-4">
+              <div v-for="folder in folderCards" :key="folder.id" class="mb-4 break-inside-avoid">
+                <BookmarkFolderCard
+                  :name="folder.name"
+                  :is-root="folder.isRoot"
+                  :children="folder.children"
+                  @edit="openEditModal" />
+              </div>
+            </div>
+          </template>
         </template>
 
         <template v-else>
@@ -141,7 +147,7 @@
 <script lang="ts" setup>
 import { h } from 'vue'
 import { HomeItemType, type UserLayoutNodeVO } from '@typing'
-import { bookmarksSearch, bookmarksLinkOne, bookmarksDel, bookmarksUpdate } from '@api'
+import { bookmarksSearch, bookmarksLinkOne, bookmarksDel, bookmarksUpdate, bookmarksPin } from '@api'
 import { useDebounceFn } from '@vueuse/core'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { Icon } from '@iconify/vue'
@@ -274,11 +280,28 @@ async function delMyResult(item: UserLayoutNodeVO) {
   }
 }
 
+async function toggleMyResultPinned(item: UserLayoutNodeVO) {
+  if (!item.typeApp) return
+  const next = !item.typeApp.pinned
+  try {
+    await bookmarksPin(item.typeApp.bookmarkUserLinkId, next)
+    bookmarkStore.setPinnedLocal(item.id, next)
+    useToastStore().success(next ? '已置顶' : '已取消置顶')
+  } catch (error) {
+    console.error('[index] 置顶状态切换失败', error)
+  }
+}
+
 function onMyResultContextMenu(e: MouseEvent, item: UserLayoutNodeVO) {
   if (!item.typeApp) return
   ContextMenu.showContextMenu({
     items: [
       { label: '修改', icon: h(Icon, { icon: 'mdi:pencil', class: 'size-4' }), onClick: () => openEditModal(item) },
+      {
+        label: item.typeApp.pinned ? '取消置顶' : '置顶',
+        icon: h(Icon, { icon: item.typeApp.pinned ? 'mdi:pin-off' : 'mdi:pin', class: 'size-4' }),
+        onClick: () => toggleMyResultPinned(item),
+      },
       { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), onClick: () => delMyResult(item) },
     ],
     x: e.x,
