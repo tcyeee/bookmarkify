@@ -15,6 +15,7 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
  */
 import com.baomidou.mybatisplus.core.metadata.IPage
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
+import top.tcyeee.bookmarkify.entity.BookmarkLivenessVO
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchVO
@@ -61,6 +62,9 @@ interface IBookmarkService : IService<BookmarkEntity> {
 
     /** 管理员「重新获取」：重新解析网站标题与图标但不落库，暂存抓取结果供后续应用，返回预览数据 */
     fun adminRefetch(bookmarkId: String): BookmarkRefetchVO
+
+    /** 管理员「书签检测」：直接调用 scrapper 重新抓取一次，回传其给出的全部字段，并同步落库 isActivity/parseStatus */
+    fun adminCheckLiveness(bookmarkId: String): BookmarkLivenessVO
 
     /** 管理员应用「重新获取」的结果：按选择采用新标题/新图标并持久化（采用新图标会重抓高清 LOGO 到 OSS） */
     fun adminApplyRefetch(bookmarkId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO

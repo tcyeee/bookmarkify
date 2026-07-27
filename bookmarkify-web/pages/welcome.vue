@@ -112,21 +112,19 @@
     </div>
 
     <!-- 登录弹窗 -->
-    <el-dialog
-      v-model="showLoginDialog"
-      width="440px"
-      :show-close="false"
-      :close-on-click-modal="true"
-      class="welcome-login-dialog">
-      <template #header="{ close }">
+    <dialog ref="loginDialogRef" class="cy-modal">
+      <div class="cy-modal-box welcome-login-modal-box relative max-w-[440px] w-full">
         <button
-          @click="close"
+          @click="showLoginDialog = false"
           class="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-white/40 hover:bg-white/10 hover:text-white/80 transition-all duration-200">
           <Icon icon="memory:close" class="size-[18px]" />
         </button>
-      </template>
-      <WelcomeLoginDialog @success="onLoginSuccess" />
-    </el-dialog>
+        <WelcomeLoginDialog @success="onLoginSuccess" />
+      </div>
+      <form method="dialog" class="cy-modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
 
     <!-- 回到顶部 -->
     <Transition name="fade-up">
@@ -155,6 +153,24 @@ definePageMeta({ middleware: 'auth', layout: 'explore' })
 const authStore = useAuthStore()
 const isLoggedIn = computed(() => authStore.authStatus === AuthStatusEnum.AUTHED)
 const showLoginDialog = ref(false)
+const loginDialogRef = ref<HTMLDialogElement | null>(null)
+
+watch(showLoginDialog, (visible) => {
+  if (!loginDialogRef.value) return
+  if (visible) loginDialogRef.value.showModal()
+  else loginDialogRef.value.close()
+})
+
+function handleLoginDialogClose() {
+  showLoginDialog.value = false
+}
+
+onMounted(() => {
+  loginDialogRef.value?.addEventListener('close', handleLoginDialogClose)
+})
+onBeforeUnmount(() => {
+  loginDialogRef.value?.removeEventListener('close', handleLoginDialogClose)
+})
 
 async function onLoginSuccess() {
   showLoginDialog.value = false
@@ -242,7 +258,7 @@ const backToTop = () => {
 }
 
 /* 登录弹窗深色玻璃态覆盖 */
-:deep(.welcome-login-dialog) {
+.welcome-login-modal-box {
   border-radius: 20px;
   overflow: hidden;
   background: rgba(11, 18, 32, 0.88);
@@ -253,12 +269,6 @@ const backToTop = () => {
     0 0 0 1px rgba(255, 255, 255, 0.04) inset,
     0 25px 60px -12px rgba(0, 0, 0, 0.7),
     0 0 80px -20px rgba(99, 102, 241, 0.2);
-}
-:deep(.welcome-login-dialog .el-dialog__header) {
-  padding: 0;
-  margin: 0;
-}
-:deep(.welcome-login-dialog .el-dialog__body) {
   padding: 28px 28px 32px;
   color: inherit;
 }

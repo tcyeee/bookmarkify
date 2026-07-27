@@ -9,9 +9,16 @@
 }
 
 /* 受 auth 中间件保护的页面为纯客户端渲染（见 nuxt.config routeRules），JS 水合前是空壳。
-   给 html 一个与品牌主题色一致的深色底，避免水合前出现刺眼的白屏闪烁。 */
+   给 html 一个与品牌主题色一致的深色底，避免水合前出现刺眼的白屏闪烁。
+   浅色模式下改用浅灰底，对齐 /setting 等浅色页面的真实背景，避免深→浅的强对比闪屏。 */
 html {
   background-color: #0f172a;
+}
+
+@media (prefers-color-scheme: light) {
+  html {
+    background-color: #f3f4f6;
+  }
 }
 
 @font-face {

@@ -2,6 +2,7 @@ import { createApp, watchEffect } from 'vue';
 
 import { registerAccessDirective } from '@vben/access';
 import { registerLoadingDirective } from '@vben/common-ui';
+import { setupI18n } from '@vben/locales';
 import { preferences } from '@vben/preferences';
 import { initStores } from '@vben/stores';
 import '@vben/styles';
@@ -33,6 +34,10 @@ async function bootstrap(namespace: string) {
   //   zIndex: 2000,
   // });
   const app = createApp(App);
+
+  // 应用本身不提供语言切换 UI（无 i18n 需求），但共享的 @vben/request 等核心包内部
+  // 用 $t() 拼错误提示文案，不加载消息的话这些提示会直接显示原始 key，故仅加载中文
+  await setupI18n(app, { defaultLocale: 'zh-CN' });
 
   // 注册Element Plus提供的v-loading指令
   app.directive('loading', ElLoading.directive);

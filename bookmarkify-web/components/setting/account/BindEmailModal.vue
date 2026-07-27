@@ -191,7 +191,7 @@ async function submit() {
   authStore
     .loginWithEmail({ email: form.email, code: form.emailCode })
     .then(() => {
-      ElNotification.success({ message: '邮箱绑定成功' })
+      useToastStore().success('邮箱绑定成功')
       emit('success', form.email.trim())
       closeDialog()
     })
@@ -262,7 +262,7 @@ async function sendEmailCode() {
   sending.value = true
   try {
     tagCode.value = await captchaSendEmail({ email: form.email })
-    ElNotification.success({ message: '已发送邮箱验证码' })
+    useToastStore().success('已发送邮箱验证码')
     step.value = 2
     startCountdown()
     await nextTick()

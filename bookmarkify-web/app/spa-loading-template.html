@@ -1,0 +1,140 @@
+<script>
+  /* 必须在任何内容渲染前跑：同步补上 app.vue 里 usePreferredDark() + useHead(bodyAttrs) 要做的事，
+     否则下面复用的 Tailwind dark: 类（依赖 body.dark / [data-theme=dark]，见 app.css 的 @custom-variant）
+     在挂载前不会生效，会导致深色模式下颜色和挂载后突然跳变。*/
+  (function () {
+    var isDark = matchMedia('(prefers-color-scheme: dark)').matches
+    document.body.classList.toggle('dark', isDark)
+    document.body.setAttribute('data-theme', isDark ? 'dark' : 'light')
+    if (location.pathname === '/setting') {
+      document.getElementById('__nuxt-loader')?.classList.add('is-setting')
+    }
+  })()
+</script>
+
+<style>
+  /* Nuxt 自动把本文件内容包进 <div id="__nuxt-loader">…</div>，挂载后自动移除，无需手动处理。 */
+  #__nuxt-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    background: #0f172a;
+    overflow: hidden;
+  }
+  @media (prefers-color-scheme: light) {
+    #__nuxt-loader { background: #f3f4f6; }
+  }
+
+  /* 默认只显示纯色占位；只有 /setting 会被上面的脚本打上 is-setting，展示骨架屏 */
+  #__nuxt-loader .skel-setting { display: none; }
+  #__nuxt-loader.is-setting .skel-setting { display: block; height: 100%; }
+
+  /* 头部直接复用真实 Header 的 Tailwind/DaisyUI 类名（构建时已生成），
+     挂载后 Vue 换上一模一样的 DOM，视觉上不会有任何跳变。 */
+  .skel-icon {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    background: currentColor;
+    opacity: 0.15;
+  }
+
+  .skel-body {
+    height: 100%;
+    padding: 112px 24px 0;
+    display: flex;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+  .skel-inner {
+    width: 100%;
+    max-width: clamp(960px, 80vw, 1280px);
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+  }
+  .skel-sidebar {
+    width: 272px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .skel-block {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #e5e7eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    .skel-block { background: #1e293b; }
+  }
+  .skel-back { height: 48px; }
+  .skel-card {
+    height: 220px;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-sizing: border-box;
+  }
+  .skel-item {
+    height: 20px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    .skel-item { background: rgba(255, 255, 255, 0.08); }
+  }
+  .skel-item:nth-child(1) { width: 70%; }
+  .skel-item:nth-child(2) { width: 55%; }
+  .skel-item:nth-child(3) { width: 62%; }
+  .skel-item:nth-child(4) { width: 45%; }
+  .skel-main { flex: 1; min-height: 70vh; }
+
+  .skel-block::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+    animation: skel-shimmer 1.5s infinite;
+  }
+  @media (prefers-color-scheme: dark) {
+    .skel-block::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent); }
+  }
+  @keyframes skel-shimmer {
+    100% { transform: translateX(100%); }
+  }
+</style>
+
+<div class="skel-setting">
+  <div
+    class="fixed top-0 z-10 w-full transition-transform duration-300 backdrop-blur bg-white/80 dark:bg-slate-950/80 border-b border-white/20 dark:border-slate-800 text-gray-900 dark:text-slate-100 px-4 h-16 overflow-hidden shadow flex items-center select-none">
+    <div class="flex items-center gap-2">
+      <span class="skel-icon" aria-hidden="true"></span>
+      <div class="font-jersey10 font-bold text-4xl">bookmarkify</div>
+    </div>
+    <nav class="ml-auto flex items-center gap-2">
+      <a href="/welcome" class="cy-btn cy-btn-link cy-btn-sm no-underline">welcome</a>
+      <a href="/" class="cy-btn cy-btn-link cy-btn-sm no-underline">index</a>
+      <a href="/setting" class="cy-btn cy-btn-link cy-btn-sm no-underline">setting</a>
+    </nav>
+  </div>
+
+  <div class="skel-body">
+    <div class="skel-inner">
+      <div class="skel-sidebar">
+        <div class="skel-block skel-back"></div>
+        <div class="skel-block skel-card">
+          <div class="skel-item"></div>
+          <div class="skel-item"></div>
+          <div class="skel-item"></div>
+          <div class="skel-item"></div>
+        </div>
+      </div>
+      <div class="skel-block skel-main"></div>
+    </div>
+  </div>
+</div>

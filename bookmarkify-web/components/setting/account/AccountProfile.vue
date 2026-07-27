@@ -4,7 +4,7 @@
       <div
         class="rounded-2xl bg-linear-to-br from-slate-200 via-slate-300 to-gray-200 text-slate-800 p-6 sm:p-8 flex flex-col gap-6 sm:flex-row sm:items-center dark:from-slate-800 dark:via-slate-900 dark:to-slate-900 dark:text-slate-100">
         <div class="shrink-0">
-          <AvatarUpload :avatar-path="avatarUrl" @update="handleAvatarUpdate" />
+          <AvatarUpload :avatar-path="avatarUrl" />
         </div>
         <div class="flex-1 space-y-3">
           <div class="flex flex-wrap items-center gap-3">
@@ -204,7 +204,7 @@ async function saveProfile() {
       email: form.email,
     })
     await authStore.refreshUserInfo()
-    ElNotification.success({ message: '个人资料修改成功' })
+    useToastStore().success('个人资料修改成功')
   } catch {
     // 错误已由 http 层统一提示
   } finally {
@@ -222,11 +222,6 @@ function randomizeNickName() {
   let next = randomNickName()
   while (next === form.nickName) next = randomNickName()
   form.nickName = next
-}
-
-async function handleAvatarUpdate(avatarPath: string) {
-  // 头像上传成功后，更新用户信息中的头像路径
-  await authStore.refreshUserInfo()
 }
 
 function handleEmailBindSuccess(email: string) {

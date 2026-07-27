@@ -25,7 +25,7 @@ This document defines the specialized agent roles for working on the Bookmarkify
 - **Prefer DaisyUI components** (https://daisyui.com) for all UI elements — use `cy-btn`, `cy-badge`, `cy-alert`, `cy-tooltip`, etc. before reaching for raw Tailwind or custom CSS
 - Dark mode: respect `.dark` class and `data-theme` attribute
 - UI text must be in Chinese (Simplified) — the app targets Chinese users
-- Use Element Plus `ElMessage` for toast notifications
+- Use `useToastStore().success/error/warning/info()` for toast notifications (no UI library — DaisyUI + native HTML only)
 - Import types from `@typing`, stores from `@stores`, APIs from `@api`
 
 **Key files to understand first:**
@@ -83,7 +83,7 @@ This document defines the specialized agent roles for working on the Bookmarkify
 - Use `http.withDebounce()` for endpoints that may be called rapidly
 - Token is sent via `satoken` HTTP header (not Authorization)
 - Response codes: 0 = success, 101 = token expired (triggers auto re-login), 1xx = show error, 3xx = silent reject
-- Centralized error display via `ElMessage.error()`
+- Centralized error display via `useToastStore().error()`
 - All request/response types defined in `typing/` and barrel-exported from `typing/index.ts`
 
 **Key files:**
@@ -161,7 +161,7 @@ This document defines the specialized agent roles for working on the Bookmarkify
 All agents should define TypeScript types in `typing/` and export them from `typing/index.ts`. Use the `t` namespace import pattern (`import * as t from '@typing'`) when accessing types across modules.
 
 ### Error Handling
-Use `ElMessage.error()` for user-facing errors. The HTTP client handles API-level errors centrally — individual components should not duplicate error toasts for API calls.
+Use `useToastStore().error()` for user-facing errors. The HTTP client handles API-level errors centrally — individual components should not duplicate error toasts for API calls.
 
 ### Reactivity
 When updating store state that contains nested objects or arrays, always create new object references. Direct mutation of nested properties will not trigger Vue reactivity. The bookmark store's `updateOneBookmarkCell()` demonstrates the correct pattern.

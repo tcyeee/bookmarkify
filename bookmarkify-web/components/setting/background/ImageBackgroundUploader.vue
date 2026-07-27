@@ -39,13 +39,13 @@ function validateSelectedFile(file: File | null | undefined): file is File {
   if (!file) return false
 
   if (!file.type.startsWith('image/')) {
-    ElMessage.error('请选择图片文件')
+    useToastStore().error('请选择图片文件')
     resetFileInput()
     return false
   }
 
   if (file.size > imageConfig.maxImageSize) {
-    ElMessage.error(`图片大小不能超过 ${maxSizeMB.value}MB`)
+    useToastStore().error(`图片大小不能超过 ${maxSizeMB.value}MB`)
     resetFileInput()
     return false
   }
@@ -69,7 +69,7 @@ async function uploadSelectedFile() {
   preferenceStore.setImageBackgroundUploading(true)
   try {
     await uploadBacPic(selectedFile.value)
-    ElNotification.success({ message: '背景上传成功' })
+    useToastStore().success('背景上传成功')
 
     resetFileInput()
     await Promise.all([preferenceStore.refreshBackgroundConfig(), authStore.refreshUserInfo()])

@@ -51,10 +51,6 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const emit = defineEmits<{
-  (e: 'update', avatarPath: string): void
-}>()
-
 const authStore = useAuthStore()
 const fileInputRef = ref<HTMLInputElement>()
 const previewUrl = ref<string | null>(null)
@@ -98,14 +94,14 @@ function handleFileChange(event: Event) {
 
   // 验证文件类型
   if (!file.type.startsWith('image/')) {
-    ElMessage.error('请选择图片文件')
+    useToastStore().error('请选择图片文件')
     return
   }
 
   // 验证文件大小
   if (file.size > imageConfig.maxImageSize) {
     const maxSizeMB = imageConfig.maxImageSize / (1024 * 1024)
-    ElMessage.error(`图片大小不能超过 ${maxSizeMB}MB`)
+    useToastStore().error(`图片大小不能超过 ${maxSizeMB}MB`)
     return
   }
 
@@ -125,9 +121,8 @@ async function handleUpload() {
 
   uploading.value = true
   try {
-    const avatarPath = await uploadAvatar(selectedFile.value)
-    emit('update', avatarPath)
-    ElNotification.success({ message: '头像上传成功' })
+    await uploadAvatar(selectedFile.value)
+    useToastStore().success('头像上传成功')
 
     // 重置状态
     previewUrl.value = null

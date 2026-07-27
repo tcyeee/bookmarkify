@@ -6,13 +6,12 @@ import type {
 import { generateAccessible } from '@vben/access';
 import { preferences } from '@vben/preferences';
 
-import { ElMessage } from 'element-plus';
-
-import { getAllMenusApi } from '#/api';
 import { BasicLayout, IFrameView } from '#/layouts';
 
 const forbiddenComponent = () => import('#/views/_core/fallback/forbidden.vue');
 
+// preferences.app.accessMode 固定为 'frontend'（单管理员账号，无需后端下发动态菜单/角色），
+// 路由权限完全按前端静态路由表 + 当前用户 roles 过滤生成
 async function generateAccess(options: GenerateMenuAndRoutesOptions) {
   const pageMap: ComponentRecordType = import.meta.glob('../views/**/*.vue');
 
@@ -23,13 +22,6 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
 
   return await generateAccessible(preferences.app.accessMode, {
     ...options,
-    fetchMenuListAsync: async () => {
-      ElMessage({
-        duration: 1500,
-        message: '加载菜单中...',
-      });
-      return await getAllMenusApi();
-    },
     // 可以指定没有权限跳转403页面
     forbiddenComponent,
     // 如果 route.meta.menuVisibleWithForbidden = true

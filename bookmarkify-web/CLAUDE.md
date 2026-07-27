@@ -11,7 +11,7 @@ The backend (Kotlin/Spring Boot) lives at `../bookmarkify-api/` on port 8001 (lo
 ## Tech Stack
 
 - **Framework:** Nuxt 4.2 (Vue 3, SSR/SPA hybrid), Vite, TypeScript 5.9
-- **Styling:** Tailwind CSS 4 + DaisyUI 5 (prefix `cy-`) + Element Plus 2.11 + Sass
+- **Styling:** Tailwind CSS 4 + DaisyUI 5 (prefix `cy-`) + Sass. No component library — element-plus was fully removed; all UI is DaisyUI/native HTML.
 - **State:** Pinia 3 + `pinia-plugin-persistedstate` (Option Store syntax)
 - **Package manager:** pnpm (Node 18+)
 - **Notable libs:** @atlaskit/pragmatic-drag-and-drop (drag-and-drop grid), GSAP, Typed.js, Lenis, @vueuse/core, vue-command-palette, @imengyu/vue3-context-menu, @iconify/vue
@@ -59,7 +59,7 @@ All API calls go through the static `http` class in `server/apis/http.ts`. Endpo
 - Auto-injects `satoken` header
 - On response code `101` (token expired), it logs the user out (`authStore.logout()`) and redirects to `/welcome` — there is no silent re-login/retry
 - `http.withDebounce()` deduplicates in-flight requests within a 600ms window
-- Response shape: `Result<T> { code, msg, data, ok }` — `code === 0` is success, `1xx` shows an error toast via `ElMessage.error()`, `3xx` rejects silently
+- Response shape: `Result<T> { code, msg, data, ok }` — `code === 0` is success, `1xx` shows an error toast via `useToastStore().error()`, `3xx` rejects silently
 - Components should not duplicate API error toasts; the client handles them centrally
 
 ### Background rendering & preferences
@@ -94,7 +94,8 @@ Pinia stores, `@vueuse/core` composables, and Vue components are auto-imported b
 - **Types:** Define in `typing/`, barrel-export from `typing/index.ts`. Cross-module type access uses `import * as t from '@typing'`.
 - **DaisyUI:** the prefix is `cy-` (e.g. `cy-btn`, `cy-modal`, `cy-tooltip`, `cy-alert`). Prefer DaisyUI components over raw Tailwind / custom CSS when one fits. Themes: `light` (default), `dark` (prefers-dark), `cupcake`. Dark mode toggles `.dark` on `<body>` and `data-theme="dark"`.
 - **Class composition:** use `cn()` from `@utils` (`twMerge(clsx(...))`).
-- **Toasts:** Element Plus `ElMessage.error/success/info` — do not roll a custom toast.
+- **Toasts:** `useToastStore().success/error/warning/info(message)` (`stores/toast.store.ts`, rendered by `components/common/ToastHost.vue`, mounted once in `app.vue`) — a small DaisyUI-based (`cy-toast`/`cy-alert`) replacement for element-plus's `ElMessage`/`ElNotification`. Do not reintroduce a UI library for this.
+- **Confirm dialogs:** `useConfirmStore().confirm(message, { title?, confirmText?, cancelText?, type? })` (`stores/confirm.store.ts` + `components/common/ConfirmDialog.vue`) returns a `Promise<void>` that resolves on confirm and rejects on cancel/Esc/backdrop-click — the same `try { await ... } catch { return }` shape element-plus's `ElMessageBox.confirm` used.
 - **Prettier:** 130 char width, single quotes, no semicolons, bracket same line.
 
 ## Plugins (load order in `nuxt.config.ts`)

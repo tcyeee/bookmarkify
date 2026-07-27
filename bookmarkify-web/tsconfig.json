@@ -14,5 +14,6 @@
   "vueCompilerOptions": {
     "globalTypesPath": "./.nuxt/volar.d.ts"
   },
-  "extends": "./.nuxt/tsconfig.json"
+  "extends": "./.nuxt/tsconfig.json",
+  "exclude": ["archive/**/*"]
 }

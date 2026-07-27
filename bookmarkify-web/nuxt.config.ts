@@ -1,4 +1,5 @@
 import tailwindcss from '@tailwindcss/vite'
+import Icons from 'unplugin-icons/vite'
 import { resolve } from 'path'
 
 const siteUrl = process.env.NUXT_PUBLIC_SITE_URL || 'https://bookmarkify.cc'
@@ -66,7 +67,7 @@ export default defineNuxtConfig({
       routes: ['/welcome'],
     },
   },
-  modules: ['@pinia/nuxt', '@element-plus/nuxt', 'pinia-plugin-persistedstate/nuxt'],
+  modules: ['@pinia/nuxt', 'pinia-plugin-persistedstate/nuxt'],
   plugins: [
     '~/plugins/iconify.ts',
     '~/plugins/keyListener.ts',
@@ -75,7 +76,9 @@ export default defineNuxtConfig({
     '~/plugins/analytics.client.ts',
   ],
   vite: {
-    plugins: [tailwindcss()],
+    // 按需从 @iconify-json/* 打包图标（如 mdi），只编译代码中实际用到的图标，
+    // 避免像 memory 图标集那样把整套 icon 集合全量塞进运行时 bundle。
+    plugins: [tailwindcss(), Icons({ compiler: 'vue3' })],
     // 生产构建剔除调试日志（保留 console.warn/error 以便线上排障）
     esbuild: {
       pure: process.env.NODE_ENV === 'production' ? ['console.log', 'console.debug'] : [],
@@ -91,10 +94,7 @@ export default defineNuxtConfig({
     },
   },
   build: {
-    transpile: ['dayjs', 'element-plus'],
-  },
-  elementPlus: {
-    /** Options */
+    transpile: ['dayjs'],
   },
   css: ['~/assets/css/app.css', '~/assets/css/common.scss', '~/assets/css/icon.scss'],
   devtools: { enabled: true },

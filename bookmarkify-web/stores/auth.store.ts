@@ -1,6 +1,15 @@
 import { defineStore } from 'pinia'
 import { AuthStatusEnum, type EmailVerifyParams, type LoginParams, type UserInfo } from '@typing'
-import { authLoginByAccount, authLoginByGithub, authLoginByGoogle, authLogout, captchaVerifyEmail, queryUserInfo, uploadAvatar } from '@api'
+import {
+  authLoginByAccount,
+  authLoginByGithub,
+  authLoginByGoogle,
+  authLogout,
+  authQuickLogin,
+  captchaVerifyEmail,
+  queryUserInfo,
+  uploadAvatar,
+} from '@api'
 import { generateDefaultAvatarFile, md5 } from '@utils'
 import { usePreferenceStore } from './preference.store'
 
@@ -57,6 +66,18 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    // 测试环境快捷登录：免密码登录固定测试账号，仅本地环境后端会响应（生产环境后端会拒绝）
+    async loginWithQuickLogin(): Promise<UserInfo> {
+      try {
+        const result = await authQuickLogin()
+        this.account = { ...this.account, ...result }
+        if (import.meta.client) useNuxtApp().$track('login-quick')
+        return result
+      } catch (err: any) {
+        return Promise.reject(err)
+      }
+    },
+
     async loginWithGithub(code: string, redirectUri: string): Promise<UserInfo> {
       try {
         // GitHub 授权码登录/注册，成功后合并到当前账号信息
@@ -79,10 +100,10 @@ export const useAuthStore = defineStore('auth', {
       } catch (err: any) {
         if (err.code == 202) {
           await this.logout()
-          if (import.meta.client) ElMessage.error('登录已过期,请重新登录')
+          if (import.meta.client) useToastStore().error('登录已过期,请重新登录')
           throw err
         }
-        if (import.meta.client) ElMessage.error(err.message || '刷新用户信息失败')
+        if (import.meta.client) useToastStore().error(err.message || '刷新用户信息失败')
         throw err
       }
     },

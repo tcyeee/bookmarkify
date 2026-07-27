@@ -4,6 +4,8 @@
     <NuxtPage />
   </NuxtLayout>
   <CommonCommandPalette />
+  <CommonToastHost />
+  <CommonConfirmDialog />
   <CommonImportProgressNotice />
   <AddOneDialog />
 </template>

@@ -32,36 +32,9 @@ pnpm dev
 | `pnpm preview`   | 预览构建产物        |
 | `pnpm typecheck` | TypeScript 类型检查 |
 
-| `pnpm run remove-mock` | 移除 Mock 服务 |
-
-## Mock 服务（已包含）
-
-本仓库 **已包含** `apps/backend-mock`（Nitro Mock）。`pnpm dev` 时会随 Vite 插件启动 Mock API：
-
-- Mock 基址：**http://localhost:5320/api**
-- 开关：根目录 `.env.development` → `VITE_NITRO_MOCK=true`
-
-### 移除 Mock 服务
-
-本仓库附带 [`scripts/remove-mock.mjs`](./scripts/remove-mock.mjs)。不再需要 Mock 时：
-
-1. 运行 `pnpm run remove-mock`（或 `node scripts/remove-mock.mjs`）
-2. 执行 `pnpm install` 后 `pnpm dev`，对接真实后端（修改 `VITE_GLOB_API_URL` 等）
-
-也可手动：在 `.env.development` 设置 `VITE_NITRO_MOCK=false` 并删除 `apps/backend-mock/`。
-
-若不再需要该脚本，删除 `scripts/remove-mock.mjs` 并从 `package.json` 移除 `remove-mock` 命令即可。
-
-## API 参考（OpenAPI）
-
-已从 upstream `backend-mock` 路由生成 **OpenAPI 3.0** 清单（仅作接口参考，不含 handler 实现）：
-
-- 文件：[`docs/mock-api.openapi.json`](./docs/mock-api.openapi.json)
-- 默认 Mock 基址：**http://localhost:5320/api**
-
-导入 Apifox：项目设置 → 导入 → OpenAPI → 选择上述 JSON 文件。
-
 ## 其他说明
+
+- Mock 服务（`apps/backend-mock`，Nitro Mock）已移除，`pnpm dev` 直接对接真实后端，见根目录 `.env.development` 的 `VITE_GLOB_API_URL`。
 
 - 未选中的其他 `apps/web-*` 模板不会出现在本仓库。
 - 需要更新 vben 基线时，可使用 create-vben-admin 指定新的 upstream ref 重新生成，或手动合并 upstream 变更。

@@ -6,12 +6,13 @@
     class="cy-btn cy-btn-neutral w-full max-w-[320px] gap-2"
     :disabled="loading"
     @click="onClick">
-    <Icon icon="mdi:github" class="size-5" />
+    <IconMdiGithub class="size-5" />
     <span>{{ loading ? '授权中…' : '使用 GitHub 登录' }}</span>
   </button>
 </template>
 
 <script lang="ts" setup>
+import IconMdiGithub from '~icons/mdi/github'
 import { useAuthStore } from '@stores/auth.store'
 
 const emit = defineEmits<{ (e: 'success'): void }>()
@@ -29,7 +30,7 @@ async function onClick() {
     emit('success')
   } catch (err: any) {
     // 用户取消等本地错误在这里提示；后端 1xx 业务错误由 http 客户端统一弹窗
-    if (err?.message && err.message !== '已取消 GitHub 授权') ElMessage.error(err.message)
+    if (err?.message && err.message !== '已取消 GitHub 授权') useToastStore().error(err.message)
   } finally {
     loading.value = false
   }

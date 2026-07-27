@@ -150,7 +150,7 @@ async function sendCode() {
   try {
     tagCode.value = await captchaSendEmail({ email: form.email })
     sysStore.startEmailCountdown()
-    ElNotification.success({ message: '已发送邮箱验证码' })
+    useToastStore().success('已发送邮箱验证码')
     step.value = 2
     await nextTick()
     codeInputRef.value?.focus()

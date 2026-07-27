@@ -24,6 +24,16 @@
       <GoogleLoginButton />
       <GithubLoginButton @success="onSuccess" />
     </div>
+
+    <!-- 测试环境快捷登录：仅本地开发环境显示，免密码登录固定测试账号 -->
+    <div v-if="isDev" class="mt-4 text-center">
+      <button
+        type="button"
+        class="text-xs text-white/25 underline decoration-dotted underline-offset-2 hover:text-white/50 transition-colors"
+        @click="quickLogin">
+        测试环境登录
+      </button>
+    </div>
   </div>
 </template>
 
@@ -40,6 +50,7 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore()
 const selectedMethod = ref<'email' | 'password'>('email')
+const isDev = import.meta.dev
 
 // 验证码步骤：进入验证码输入后隐藏头部与登录方式 Tab
 const verifyStep = ref(1)
@@ -49,5 +60,14 @@ watch(selectedMethod, () => (verifyStep.value = 1))
 async function onSuccess() {
   await authStore.postLoginSetup()
   emit('success')
+}
+
+async function quickLogin() {
+  try {
+    await authStore.loginWithQuickLogin()
+    await onSuccess()
+  } catch {
+    // 失败原因（如非本地环境）由 http 客户端统一弹出错误提示，这里无需重复处理
+  }
 }
 </script>
