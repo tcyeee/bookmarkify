@@ -5,8 +5,10 @@ import cn.hutool.core.util.IdUtil
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.entity.*
+import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.HomeItemType
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
+import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 import top.tcyeee.bookmarkify.utils.OssUtils
 import java.time.LocalDateTime
@@ -24,6 +26,7 @@ data class BookmarkShow(
     @field:Schema(description = "完整url") var urlFull: String? = null,
     @field:Schema(description = "基础url") var urlBase: String? = null,
     @field:Schema(description = "是否置顶") var pinned: Boolean = false,
+    @field:Schema(description = "书签链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
     // 图标相关字段已迁移到 website_logo，对外统一以 logo 嵌套对象输出（下面这些扁平字段仅供内部/SQL 映射用，不直接序列化）
     @JsonIgnore @field:Schema(description = "小图标(序列化进 logo)") var iconBase64: String? = null,
     @JsonIgnore @field:Schema(description = "图片内边距(序列化进 logo)") var iconPadding: Int = 25,
@@ -34,8 +37,10 @@ data class BookmarkShow(
     @JsonIgnore @field:Schema(description = "大图尺寸") var hdSize: Int = 0,
     @JsonIgnore @field:Schema(description = "Host(用于拿不到name的情况下最后显示Title)") var urlHost: String? = null,
     @JsonIgnore @field:Schema(description = "在有manifest的情况下,替换title") var appName: String? = null,
-    @JsonIgnore @field:Schema(description = "用户桌面排布ID") var layoutNodeId: String? = null,
+    @field:Schema(description = "用户桌面排布节点ID(书签管理页批量删除/移入文件夹等操作使用此ID，而非 bookmarkUserLinkId)") var layoutNodeId: String? = null,
     @JsonIgnore @field:Schema(description = "大图标OSS地址,带权限(序列化进 logo)") var iconHdUrl: String? = null,
+    @field:Schema(description = "所属文件夹节点ID，无所属文件夹时为 null") var folderId: String? = null,
+    @field:Schema(description = "所属文件夹名称，无所属文件夹时为 null") var folderName: String? = null,
 ) {
     // 高清渲染：管理员开关开启，或书签本身被用户置顶（置顶区域始终尝试用高清图），且存在达标高清图时才用高清
     val isHd: Boolean get() = (useHdLogo || pinned) && hdSize > 0
@@ -362,4 +367,62 @@ data class BookmarkPingLogVO(
     ) {
         BeanUtil.copyProperties(entity, this)
     }
+}
+
+/** 分享人信息(用于分享公开查看页) */
+data class ShareSharerVO(
+    @field:Schema(description = "分享人昵称") var nickName: String,
+    @field:Schema(description = "分享人头像签名地址") var avatarUrl: String? = null,
+)
+
+/** 发布分享后返回给分享人自己的结果 */
+data class UserShareVO(
+    @field:Schema(description = "分享ID(即公开链接后缀)") var id: String,
+    @field:Schema(description = "分享文案") var note: String? = null,
+    @field:Schema(description = "过期时间(为空表示永不过期)") var expireTime: LocalDateTime? = null,
+    @field:Schema(description = "分享状态") var status: ShareStatus = ShareStatus.NORMAL,
+    @field:Schema(description = "包含的书签数量") var bookmarkCount: Int = 0,
+    @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
+) {
+    constructor(entity: UserShareEntity, bookmarkCount: Int) : this(
+        id = entity.id,
+        note = entity.note,
+        expireTime = entity.expireTime,
+        status = entity.effectiveStatus,
+        bookmarkCount = bookmarkCount,
+        createTime = entity.createTime,
+    )
+}
+
+/** 分享公开查看页(无需登录即可访问) */
+data class SharePublicVO(
+    @field:Schema(description = "分享ID") var id: String,
+    @field:Schema(description = "分享文案") var note: String? = null,
+    @field:Schema(description = "过期时间(为空表示永不过期)") var expireTime: LocalDateTime? = null,
+    @field:Schema(description = "分享状态") var status: ShareStatus = ShareStatus.NORMAL,
+    @field:Schema(description = "分享人信息") var sharer: ShareSharerVO,
+    @field:Schema(description = "分享的书签列表") var bookmarks: List<BookmarkShow> = emptyList(),
+)
+
+/** 管理后台分享列表条目 */
+data class UserShareAdminVO(
+    @field:Schema(description = "分享ID") var id: String,
+    @field:Schema(description = "分享人用户ID") var uid: String,
+    @field:Schema(description = "分享人昵称") var nickName: String,
+    @field:Schema(description = "分享文案") var note: String? = null,
+    @field:Schema(description = "过期时间(为空表示永不过期)") var expireTime: LocalDateTime? = null,
+    @field:Schema(description = "分享状态") var status: ShareStatus = ShareStatus.NORMAL,
+    @field:Schema(description = "包含的书签数量") var bookmarkCount: Int = 0,
+    @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
+) {
+    constructor(entity: UserShareEntity, nickName: String, bookmarkCount: Int) : this(
+        id = entity.id,
+        uid = entity.uid,
+        nickName = nickName,
+        note = entity.note,
+        expireTime = entity.expireTime,
+        status = entity.effectiveStatus,
+        bookmarkCount = bookmarkCount,
+        createTime = entity.createTime,
+    )
 }

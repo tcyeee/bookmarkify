@@ -6,7 +6,8 @@
       "importBookmarks": "ブックマークをインポート",
       "background": "背景",
       "preference": "環境設定",
-      "shortcuts": "ショートカット"
+      "shortcuts": "ショートカット",
+      "bookmarkLibrary": "ブックマーク管理"
     }
   },
   "preferenceSettings": {
@@ -94,5 +95,47 @@
     "invalidFileType": "Chrome からエクスポートした HTML ブックマークファイルをアップロードしてください",
     "importStarted": "インポートを開始しました！{count} 件がバックグラウンドで解析中です。完了後に自動更新されます。",
     "importFailed": "インポートに失敗しました。しばらくしてから再試行してください。"
+  },
+  "bookmarkLibrary": {
+    "title": "ブックマーク管理",
+    "desc": "全ブックマークと所属フォルダを一覧表示し、重複や失効リンクを絞り込み、一括削除やコレクション作成ができます。",
+    "searchPlaceholder": "タイトルまたはメモで検索",
+    "filters": {
+      "all": "すべて",
+      "duplicate": "重複ブックマーク",
+      "invalid": "失効リンク"
+    },
+    "columns": {
+      "bookmark": "ブックマーク",
+      "folder": "所属フォルダ",
+      "status": "状態"
+    },
+    "status": {
+      "invalid": "失効"
+    },
+    "loading": "ブックマークを読み込み中…",
+    "empty": {
+      "all": "ブックマークはまだありません",
+      "duplicate": "重複ブックマークは見つかりませんでした",
+      "invalid": "失効リンクは見つかりませんでした"
+    },
+    "deleteOne": "このブックマークを削除",
+    "selectedCount": "{count} 件選択中",
+    "batchDelete": "選択項目を削除",
+    "createCollection": "コレクションを作成",
+    "createCollectionHint": "コレクションを作成するには2件以上選択してください",
+    "confirmDeleteMessage": "選択した {count} 件のブックマークを削除しますか？この操作は取り消せません。",
+    "deleteSuccess": "{count} 件のブックマークを削除しました",
+    "createDialog": {
+      "title": "コレクションを作成",
+      "placeholder": "コレクション（フォルダ）名を入力してください",
+      "cancel": "キャンセル",
+      "confirm": "作成"
+    },
+    "createSuccess": "コレクションを作成しました",
+    "pagination": {
+      "total": "合計 {total} 件のブックマーク",
+      "pageOf": "{current} / {total} ページ"
+    }
   }
 }

@@ -6,7 +6,9 @@ import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
+import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.utils.BaseUtils
+import java.time.LocalDateTime
 
 data class UserPreferenceUpdateParams(
     @field:Schema(description = "主页背景配置ID") var backgroundConfigId: String? = null,
@@ -93,9 +95,11 @@ data class MoveNodeParams(
 
 data class AllOfMyBookmarkParams(
     var uid: String = BaseUtils.uid(),
-    var name: String? = null
+    var name: String? = null,
+    @field:Schema(description = "仅返回重复书签(同一站点被本用户添加了多次)") var duplicatesOnly: Boolean = false,
+    @field:Schema(description = "仅返回失效书签(链接存活检测失败)") var invalidOnly: Boolean = false,
 ) : PageBean() {
-    fun toWrapper(): Wrapper<BookmarkUserLink> {
+    fun toWrapper(restrictBookmarkIds: Set<String>? = null): Wrapper<BookmarkUserLink> {
         val query = KtQueryWrapper(BookmarkUserLink::class.java)
         query.eq(BookmarkUserLink::uid, uid)
             .eq(BookmarkUserLink::deleted, false)
@@ -105,6 +109,7 @@ data class AllOfMyBookmarkParams(
                     .or().like(BookmarkUserLink::description, name)
             }
         }
+        if (restrictBookmarkIds != null) query.`in`(BookmarkUserLink::bookmarkId, restrictBookmarkIds)
         return query
     }
 }
@@ -167,5 +172,26 @@ data class BookmarkPingLogSearchParams(
         }
         alive?.let { query.eq(BookmarkPingLogEntity::alive, it) }
         return query.orderByDesc(BookmarkPingLogEntity::createTime)
+    }
+}
+
+/** 创建/发布一个书签分享 */
+data class ShareCreateParams(
+    @field:Schema(description = "要分享的书签(bookmark_user_link.id)列表") val bookmarkUserLinkIds: List<String>,
+    @field:Schema(description = "分享文案") val note: String? = null,
+    @field:Schema(description = "过期时间(为空表示永不过期)") val expireTime: LocalDateTime? = null,
+)
+
+/** 管理后台分享查询入参 */
+data class ShareSearchParams(
+    var uid: String? = null,
+    var status: ShareStatus? = null,
+) : PageBean() {
+    fun toWrapper(): Wrapper<UserShareEntity> {
+        val query = KtQueryWrapper(UserShareEntity::class.java)
+        if (!uid.isNullOrBlank()) query.eq(UserShareEntity::uid, uid)
+        // EXPIRED 为计算值，不落库，按状态筛选时管理端只区分 正常/已被管理员下架
+        if (status != null && status != ShareStatus.EXPIRED) query.eq(UserShareEntity::status, status)
+        return query.orderByDesc(UserShareEntity::createTime)
     }
 }

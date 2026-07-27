@@ -74,6 +74,7 @@ const tabs = computed(() => [
   { value: 2, label: t('settingLayout.tabs.background'), icon: 'mdi:cloud' },
   { value: 3, label: t('settingLayout.tabs.preference'), icon: 'mdi:toggle-switch-off' },
   // { value: 4, label: t('settingLayout.tabs.shortcuts'), icon: 'mdi:console' },
+  { value: 5, label: t('settingLayout.tabs.bookmarkLibrary'), icon: 'mdi:bookmark-multiple' },
 ])
 const indicatorStyle = ref<CSSProperties>({
   transform: 'translate3d(0, 0, 0)',

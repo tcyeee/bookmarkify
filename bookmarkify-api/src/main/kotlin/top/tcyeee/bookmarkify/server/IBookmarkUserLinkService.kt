@@ -20,4 +20,10 @@ interface IBookmarkUserLinkService : IService<BookmarkUserLink> {
     fun resetBookmarkId(uid: String, userLinkId: String, bookmarkId: String): Boolean
     /** 返回用户所有未删除书签的完整 URL 集合，用于导入时重复检测 */
     fun urlsByUid(uid: String): Set<String>
+    /** 返回用户所有未删除书签关联的 bookmarkId 集合 */
+    fun bookmarkIdsByUid(uid: String): Set<String>
+    /** 返回用户被添加了多次的 bookmarkId 集合(同一站点收藏了 ≥2 次)，用于"重复书签"筛选 */
+    fun duplicateBookmarkIds(uid: String): Set<String>
+    /** 管理端：按 urlFull 重新计算全部书签的 linkType(域名/本地/IP/其他) 并批量回写，返回处理总数 */
+    fun reclassifyAllLinkTypes(): Int
 }

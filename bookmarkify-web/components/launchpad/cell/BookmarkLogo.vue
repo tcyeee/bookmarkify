@@ -2,7 +2,7 @@
   <!-- 外层容器：卡片圆角与开发态提示 -->
   <div
     :class="[
-      'relative w-app h-app rounded-[22%] bg-gray-100 center shadow overflow-hidden',
+      'relative w-app h-app rounded-[22%] bg-gray-100 center overflow-hidden',
       isDev ? 'dev-outline dev-shrink' : '',
     ]"
     :style="isDev ? { '--dev-outline-color': devOutlineColor } : undefined">
@@ -11,9 +11,11 @@
       class="bg-white flex justify-center items-center"
       :class="{ 'inactive-logo': isInactive }"
       :style="[logoSizeStyle, logoStyle]">
+      <!-- 本地/IP 类型书签：后端不抓取信息，仅展示统一的 mdi 圆圈图标 -->
+      <Icon v-if="isPlainCircle" icon="mdi:circle" class="text-slate-300" :style="circleIconStyle" />
       <!-- 优先使用高清图（仅在调用方显式要求时，如置顶区域） -->
       <img
-        v-if="props.preferHd && props.value.logo?.iconHdUrl && !hdError"
+        v-else-if="props.preferHd && props.value.logo?.iconHdUrl && !hdError"
         :key="`hd-${props.value.logo?.iconHdUrl}`"
         :src="props.value.logo?.iconHdUrl"
         alt=""
@@ -48,7 +50,8 @@
 
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
-import type { BookmarkShow } from '@typing'
+import { Icon } from '@iconify/vue'
+import { BookmarkLinkType, type BookmarkShow } from '@typing'
 
 const props = defineProps<{ value: BookmarkShow; size?: number; preferHd?: boolean }>()
 
@@ -63,6 +66,15 @@ const iconError = ref(false)
 const backgroundColor = ref('#ffffff')
 const shouldUpscale = ref(false)
 const logoSize = computed(() => props.size ?? 80)
+
+// 本地(localhost/127.0.0.1)或纯 IP 地址类型的书签：后端不抓取网站信息，前端仅展示统一的 mdi 圆圈图标
+const isPlainCircle = computed(
+  () => props.value.linkType === BookmarkLinkType.LOCAL || props.value.linkType === BookmarkLinkType.IP,
+)
+const circleIconStyle = computed(() => ({
+  width: `${Math.round(logoSize.value * 0.55)}px`,
+  height: `${Math.round(logoSize.value * 0.55)}px`,
+}))
 
 // 自定义背景色（管理台设置）：存在则直接铺该色
 const customBgColor = computed(() => props.value.logo?.iconBgColor || '')
@@ -102,9 +114,9 @@ const logoStyle = computed(() => {
       }
     : undefined
 })
-// base64 尺寸：随外部 size 同步，保持原有比例
+// base64 尺寸：随外部 size 同步，保持原有比例（填充比例调高，减少空白留边）
 const base64PixelSize = computed(() => {
-  const base = logoSize.value * (shouldUpscale.value ? 0.6 : 0.4)
+  const base = logoSize.value * (shouldUpscale.value ? 0.82 : 0.68)
   // 内边距按比例收缩(相对图标尺寸),避免小格子下被绝对像素减成负值而塌成 4px
   const shrink = 1 - Math.min(Math.max(effectivePadding.value, 0), 35) / 100
   return Math.max(4, Math.round(base * shrink))

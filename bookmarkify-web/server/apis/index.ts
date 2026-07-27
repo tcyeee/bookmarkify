@@ -27,7 +27,7 @@ export const bookmarksUpload = (file: File, skipUrls: string[]) =>
   http.uploadWithForm<t.UserLayoutNodeVO[]>('/bookmark/upload', file, { skipUrls })
 export const bookmarksList = (params?: t.BookmarkListParams) =>
   http.post<t.BookmarkPage<t.BookmarkShow>>('/bookmark/list', params ?? {})
-export const bookmarksCreateDir = (nodeIds: [string, string], name: string, sort: number) =>
+export const bookmarksCreateDir = (nodeIds: string[], name: string, sort: number) =>
   http.post<t.UserLayoutNodeVO>('/bookmark/createDir', { nodeIds, name, sort })
 export const bookmarksRenameDir = (nodeId: string, name: string) =>
   http.post<boolean>('/bookmark/renameDir', { nodeId, name })

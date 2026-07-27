@@ -6,7 +6,8 @@
       "importBookmarks": "导入书签",
       "background": "主页背景",
       "preference": "偏好设置",
-      "shortcuts": "快捷键"
+      "shortcuts": "快捷键",
+      "bookmarkLibrary": "书签管理"
     }
   },
   "preferenceSettings": {
@@ -94,5 +95,47 @@
     "invalidFileType": "请上传从 Chrome 导出的 HTML 书签文件",
     "importStarted": "导入已开始！共 {count} 项正在后台解析，稍后会自动更新。",
     "importFailed": "导入失败，请稍后重试。"
+  },
+  "bookmarkLibrary": {
+    "title": "书签管理",
+    "desc": "查看你的全部书签及所属文件夹，一键筛选重复或失效书签，支持批量删除与创建集合。",
+    "searchPlaceholder": "按标题或备注搜索",
+    "filters": {
+      "all": "全部",
+      "duplicate": "重复书签",
+      "invalid": "失效书签"
+    },
+    "columns": {
+      "bookmark": "书签",
+      "folder": "所属文件夹",
+      "status": "状态"
+    },
+    "status": {
+      "invalid": "失效"
+    },
+    "loading": "正在加载书签…",
+    "empty": {
+      "all": "还没有任何书签",
+      "duplicate": "没有发现重复书签",
+      "invalid": "没有发现失效书签"
+    },
+    "deleteOne": "删除该书签",
+    "selectedCount": "已选 {count} 项",
+    "batchDelete": "批量删除",
+    "createCollection": "创建集合",
+    "createCollectionHint": "至少选择 2 个书签才能创建集合",
+    "confirmDeleteMessage": "确定要删除选中的 {count} 个书签吗？此操作不可撤销。",
+    "deleteSuccess": "已删除 {count} 个书签",
+    "createDialog": {
+      "title": "创建集合",
+      "placeholder": "请输入集合（文件夹）名称",
+      "cancel": "取消",
+      "confirm": "创建"
+    },
+    "createSuccess": "集合创建成功",
+    "pagination": {
+      "total": "共 {total} 个书签",
+      "pageOf": "第 {current} / {total} 页"
+    }
   }
 }

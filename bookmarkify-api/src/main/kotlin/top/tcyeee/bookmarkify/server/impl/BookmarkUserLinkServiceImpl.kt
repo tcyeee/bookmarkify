@@ -5,8 +5,10 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
 import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
+import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
+import top.tcyeee.bookmarkify.utils.WebsiteParser
 
 /**
  * @author tcyeee
@@ -63,4 +65,36 @@ class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<Bookma
             .list()
             .map { it.urlFull }
             .toHashSet()
+
+    override fun bookmarkIdsByUid(uid: String): Set<String> =
+        ktQuery()
+            .eq(BookmarkUserLink::uid, uid)
+            .eq(BookmarkUserLink::deleted, false)
+            .list()
+            .mapNotNull { it.bookmarkId }
+            .toHashSet()
+
+    override fun duplicateBookmarkIds(uid: String): Set<String> =
+        ktQuery()
+            .eq(BookmarkUserLink::uid, uid)
+            .eq(BookmarkUserLink::deleted, false)
+            .list()
+            .mapNotNull { it.bookmarkId }
+            .groupingBy { it }
+            .eachCount()
+            .filterValues { it > 1 }
+            .keys
+
+    @Transactional(rollbackFor = [Exception::class])
+    override fun reclassifyAllLinkTypes(): Int {
+        val all = ktQuery().eq(BookmarkUserLink::deleted, false).list()
+        // 按重新计算出的类型分组，每组一条 UPDATE ... WHERE id IN (...)，避免逐条更新
+        all.groupBy { link ->
+            runCatching { WebsiteParser.classifyLinkType(WebsiteParser.urlWrapper(link.urlFull).urlHost) }
+                .getOrDefault(BookmarkLinkType.OTHER)
+        }.forEach { (type, links) ->
+            ktUpdate().`in`(BookmarkUserLink::id, links.map { it.id }).set(BookmarkUserLink::linkType, type).update()
+        }
+        return all.size
+    }
 }
