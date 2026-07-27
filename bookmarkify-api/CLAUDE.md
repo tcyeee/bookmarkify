@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **ORM:** MyBatis-Plus 3.5.15
 - **Cache/Session:** Redis (Spring Data Redis)
 - **Async:** Spring `@Async` + `ApplicationEvent` (in-process background parsing; no message broker)
-- **Auth:** Sa-Token 1.40.0 (dual realm: USER + ADMIN)
+- **Auth:** Sa-Token 1.40.0 (dual realm: USER + ADMIN), plus Google/GitHub OAuth login
 - **Object Storage:** Alibaba Cloud OSS
 - **SMS:** Alibaba Cloud SMS
 - **Email:** WeChat Work API (not SMTP)
@@ -53,7 +53,8 @@ src/main/kotlin/top/tcyeee/bookmarkify/
 │   ├── Response.kt                   # All response VOs
 │   ├── dto/                          # Internal DTOs (BookmarkWrapper, UserSessionInfo)
 │   ├── entity/                       # Database entities (MyBatis-Plus @TableName)
-│   └── enums/                        # Enum types
+│   ├── enums/                        # Enum types
+│   └── json/                         # Types stored as JSON columns (e.g. BookmarkDir)
 ├── mapper/                           # MyBatis-Plus BaseMapper interfaces
 ├── server/                           # Service interfaces (I*Service)
 │   └── impl/                         # Service implementations
@@ -79,8 +80,12 @@ src/main/resources/
 # Run (dev profile)
 ./gradlew bootRun --args='--spring.profiles.active=dev'
 
-# Tests — JUnit5 is wired up in build.gradle but src/test/ does not exist yet
+# Run all tests
 ./gradlew test
+
+# Run a single test class / method
+./gradlew test --tests "top.tcyeee.bookmarkify.utils.PasswordUtilsTest"
+./gradlew test --tests "*PasswordUtilsTest.bcrypt roundtrip matches*"
 
 # Show resolved dependency tree (useful when bumping versions)
 ./gradlew dependencies
@@ -105,7 +110,7 @@ clears the previous deploy's jar from OSS. TCR is no longer involved.
 
 ## Environment Variables
 
-Required variables (see `.evn.local.example`):
+Required variables (see local `.env`, gitignored):
 
 | Variable | Purpose |
 |---|---|
@@ -116,6 +121,9 @@ Required variables (see `.evn.local.example`):
 | `BOOKMARKIFY_ALIYUN_OSS_*` | Aliyun OSS (endpoint, keys, bucket, domain) |
 | `BOOKMARKIFY_SCRAPPER_BASE_URL` | Self-hosted bookmarkify-scrapper base URL (replaced Iframely) |
 | `BOOKMARKIFY_DEEPSEEK_API_KEY` | DeepSeek LLM (app-name inference) |
+| `BOOKMARKIFY_GOOGLE_CLIENT_ID` | Google OAuth login |
+| `BOOKMARKIFY_GITHUB_CLIENT_ID/SECRET` | GitHub OAuth login |
+| `BOOKMARKIFY_LOG_DIR` | Log file output directory |
 
 ## Architecture
 
@@ -180,7 +188,7 @@ In-process Spring events (`config/event/`), dispatched by `BookmarkParseEventLis
 - **Error codes:** Defined in `config/exception/ErrorType.kt` (E101–E999)
 - **Logging:** `LoggingExtensions.kt` provides `logger()` delegate for any class
 - **User context:** `BaseUtils.uid()` and `BaseUtils.user()` retrieve current user from Sa-Token session
-- **No tests exist** — `src/test/` directory is absent
+- **Tests:** minimal coverage in `src/test/kotlin/` (currently a handful of unit tests for parsing/password utils) — this is not a fully tested codebase, don't assume behavior is spec'd by tests
 
 ## API Endpoint Groups
 
@@ -197,8 +205,7 @@ In-process Spring events (`config/event/`), dispatched by `BookmarkParseEventLis
 ## Important Notes
 
 - The `bin/` directory contains compiled class output — do not edit files there
-- `TestController.kt` exists but its body is commented out (kept as scratch / dead code)
+- `TestController.kt` (`/test/**`, `@SaIgnore`) is a live scratch endpoint for manually triggering parses — not covered by real tests, don't build on it
 - `HomeItem` / `HomeItemMapper` (and `HomeItemServiceImpl.kt`) are legacy — superseded by the `UserLayoutNode` system; avoid extending them in new work
 - The `server/` package (not `service/`) holds service interfaces — keep this naming when adding services
 - Admin login credentials default to `tcyeee@outlook.com` / `admin` in config
-- `AGENTS.md` in this repo defines role-scoped guidance (Backend / Async / DB / Auth / Infra / File Storage); consult it when a task fits one of those scopes

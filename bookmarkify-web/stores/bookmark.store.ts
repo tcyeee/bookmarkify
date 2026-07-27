@@ -192,7 +192,9 @@ export const useBookmarkStore = defineStore('homeItems', {
     },
   },
 
-  // persist: true 默认即 localStorage，且不依赖自动注入的 piniaPluginPersistedstate 全局
-  // （后者在某些求值时机会报 "not defined"）。与 auth.store 写法一致。
-  persist: true,
+  // 显式指定 localStorage：裸 `persist: true` 在本项目未配置模块级 storage 时，
+  // pinia-plugin-persistedstate 会回退到 cookies（单条 ~4KB 上限），书签树（含内嵌
+  // base64 图标）写入必然静默失败/截断，导致缓存永远无法在 F5 后存活。与
+  // preference.store 写法保持一致。
+  persist: { storage: piniaPluginPersistedstate.localStorage() },
 })

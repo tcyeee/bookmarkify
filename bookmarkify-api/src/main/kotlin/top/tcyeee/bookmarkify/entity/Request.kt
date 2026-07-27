@@ -19,6 +19,10 @@ data class UserPreferenceUpdateParams(
     @field:Schema(description = "翻页方式") var pageMode: PageTurnMode = PageTurnMode.VERTICAL_SCROLL,
 )
 
+data class AdminGridConfigSaveParams(
+    @field:Schema(description = "列配置(vxe-table CustomStoreData)") val storeData: Any? = null,
+)
+
 data class BackSettingParams(
     @field:Schema(description = "背景类型：GRADIENT / IMAGE") val type: BackgroundType,
     @field:Schema(description = "背景ID") val backgroundId: String,

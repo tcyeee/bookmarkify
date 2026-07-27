@@ -17,4 +17,12 @@ export const overridesPreferences = defineOverridesPreferences({
     companySiteLink: 'https://bookmarkify.cc',
     date: '2026',
   },
+  tabbar: {
+    enable: false,
+  },
+  widget: {
+    fullscreen: false,
+    globalSearch: false,
+    notification: false,
+  },
 });

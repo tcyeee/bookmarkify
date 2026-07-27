@@ -41,6 +41,8 @@ Copy `.env.example` to `.env`:
 | `NUXT_API_BASE` | Backend REST URL | `http://127.0.0.1:8001` |
 | `NUXT_WS_BASE` | Backend WebSocket URL | `ws://localhost:8001` |
 | `NUXT_PUBLIC_SITE_URL` | Public site URL (SEO/canonical) | `https://bookmarkify.cc` |
+| `NUXT_PUBLIC_GOOGLE_CLIENT_ID` | Google OAuth client ID | — |
+| `NUXT_PUBLIC_GITHUB_CLIENT_ID` | GitHub OAuth client ID | — |
 
 ## Architecture (the parts that span files)
 
@@ -64,6 +66,12 @@ All API calls go through the static `http` class in `server/apis/http.ts`. Endpo
 
 ### Background rendering & preferences
 `preference.store.ts` drives grid cell size (60/80/100px), gap mode, page-turn behavior, title visibility, and link-open target. Background images are converted to DataURL and cached in `localStorage` for instant paint; gradients are pure CSS `linear-gradient` (no image files). Background rendering happens in `layouts/launch.vue`.
+
+### OAuth login (Google + GitHub)
+The site is a static SPA with no server, so both flows run entirely client-side. **Google** (`composables/useGoogleOAuth.ts`): classic OAuth2 implicit flow (`response_type=id_token`) — full-page redirect to Google, credential returns via URL hash to `pages/auth/google/callback.vue`, `state`/`nonce` round-tripped through `sessionStorage` (not usable for a popup since implicit-flow redirects can't reliably `postMessage` cross-origin before unload). **GitHub** (`composables/useGithubOAuth.ts`): authorization-code flow via a popup window — `pages/auth/github/callback.vue` `postMessage`s the code back to the opener (checked against `location.origin` and a `state` value), and the caller exchanges it through the backend. Callback pages are the only consumers of these composables.
+
+### Bookmark import progress notification
+Bulk-adding bookmarks creates a batch of `BOOKMARK_LOADING` placeholder nodes; `stores/importProgress.store.ts` (`persist: false`) tracks the batch (`pendingIds`, `total`/`resolved`) independent of the bookmark tree itself. `stores/websocket.store.ts` calls `markResolved(nodeId)` on each `HOME_ITEM_UPDATE`, and `components/common/ImportProgressNotice.vue` (mounted globally, like the toast host) renders a persistent top-right progress notification while `active` is true, auto-dismissing 4s after the batch completes. `components/setting/BookmarkManage.vue` is the primary place that starts a batch via `startBatch()`.
 
 ### Layouts
 - `launch.vue` — main app (background + launchpad)
@@ -100,7 +108,7 @@ Pinia stores, `@vueuse/core` composables, and Vue components are auto-imported b
 
 ## Plugins (load order in `nuxt.config.ts`)
 
-`iconify.ts` → `keyListener.ts` → `contextMenu.ts` → `auth.ts`. The auth plugin runs last because it depends on the WebSocket connection and key listener being ready.
+`iconify.ts` → `keyListener.ts` → `contextMenu.ts` → `auth.ts` → `analytics.client.ts`. The auth plugin runs before analytics because analytics only needs the router; it does not depend on auth state.
 
 ## Notes
 
@@ -108,3 +116,5 @@ Pinia stores, `@vueuse/core` composables, and Vue components are auto-imported b
 - `pages/market.vue` is a stub; not yet implemented.
 - `AGENTS.md` documents per-domain agent roles (UI, state, API, styling, auth) with deeper conventions for each — useful when scoping a task to one area.
 - `api.md` describes the backend API surface this client consumes.
+- `/` and `/setting` are forced client-only (`routeRules: { ssr: false }` in `nuxt.config.ts`) because login state only lives in client `localStorage` — SSR/prerender can't read it, so the `auth` middleware would redirect the prerendered HTML to `/welcome` and cause a flash on refresh. `/welcome` stays SSR/prerendered for landing-page SEO and is explicitly listed under `nitro.prerender.routes` since the SPA-ified `/` can no longer be crawled to discover it.
+- Analytics is self-hosted GoatCounter, proxied same-origin through nginx as `/count.js` + `/count` (no third-party domain exposed). All tracking goes through `plugins/analytics.client.ts`; call `useNuxtApp().$track('event-name')` from business code rather than touching `window.goatcounter` directly. No-ops in dev.
