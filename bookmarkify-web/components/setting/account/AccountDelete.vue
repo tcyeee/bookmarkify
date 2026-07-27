@@ -76,7 +76,7 @@ async function accountDel() {
   try {
     await accountDelete(boundEmail.value || undefined)
     closeDelDialog()
-    ElMessage.success('账号已注销')
+    useToastStore().success('账号已注销')
     // 账号已销毁，服务端会话失效：跳过 /auth/logout，仅做本地状态同步并跳转 /welcome
     await authStore.logout(true)
   } catch {

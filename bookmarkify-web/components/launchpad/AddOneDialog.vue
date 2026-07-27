@@ -47,7 +47,7 @@
           <span v-else-if="data.input" class="text-amber-500 font-semibold">请检查链接格式</span>
         </div>
 
-        <transition name="el-fade-in">
+        <transition name="fade">
           <div v-if="data.notice" class="cy-chat cy-chat-start">
             <div class="cy-chat-bubble shadow-sm">{{ data.notice }}</div>
           </div>
@@ -62,7 +62,7 @@
             </div>
           </div>
 
-          <transition name="el-fade-in" mode="out-in">
+          <transition name="fade" mode="out-in">
             <div v-if="searchResults.length">
               <div
                 v-for="item in searchResults"
@@ -246,3 +246,14 @@ function isUrl(url: string): boolean {
   return pattern.test(url)
 }
 </script>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

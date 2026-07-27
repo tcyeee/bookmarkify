@@ -1,7 +1,6 @@
 package top.tcyeee.bookmarkify.entity.entity
 
 import cn.hutool.core.util.IdUtil
-import com.baomidou.mybatisplus.annotation.TableField
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
@@ -30,7 +29,9 @@ data class UserFile(
     @field:Schema(description = "文件当前名称") val currentName: String,   // eg: 019b86fd-74af-7058-829f-3f580c54c1e8
     @field:Schema(description = "文件后缀") val suffix: String,        // eg: png
 ) : Serializable {
-    @field:TableField(exist = false) val fullPath: String = "${type.folder}/$currentName.$suffix"
+    // get() 而非字段初始化: 保证无论 MyBatis-Plus 如何反射构造该对象都能正确取值,
+    // 同时无 backing field 天然不会被 TableInfoHelper 当成数据库列扫描到,无需 @TableField(exist = false)
+    val fullPath: String get() = "${type.folder}/$currentName.$suffix"
 
     /**
      * 初始化默认背景图像

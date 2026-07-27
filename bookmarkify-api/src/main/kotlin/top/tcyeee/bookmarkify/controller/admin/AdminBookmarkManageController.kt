@@ -8,6 +8,7 @@ import top.tcyeee.bookmarkify.entity.AppNameSuggestVO
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkCategoriesParams
 import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
+import top.tcyeee.bookmarkify.entity.BookmarkLivenessVO
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
@@ -98,12 +99,10 @@ class AdminBookmarkManageController(
         return ResponseEntity.ok().build()
     }
 
-    // 对某个书签进行活性检测
-    @GetMapping("/{bookmarkId}/check")
-    fun checkBookmarkActive(@PathVariable bookmarkId: Long): ResponseEntity<Map<String, Any>> {
-        // 实现书签活性检测的逻辑
-        return ResponseEntity.ok(mapOf("active" to true))
-    }
+    // 对某个书签进行活性检测：直接调用 scrapper 重新抓取一次，回传其给出的全部字段，并同步落库 isActivity/parseStatus
+    @PostMapping("/{bookmarkId}/liveness")
+    fun checkBookmarkLiveness(@PathVariable bookmarkId: String): BookmarkLivenessVO =
+        bookmarkService.adminCheckLiveness(bookmarkId)
 
     /* 书签集管理 */
 

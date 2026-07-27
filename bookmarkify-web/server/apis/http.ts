@@ -1,5 +1,6 @@
 import type { Result } from '@typing'
 import { useAuthStore } from '@stores/auth.store'
+import { useToastStore } from '@stores/toast.store'
 
 export default class http {
   private static PENDING_DEBOUNCE_MS = 600
@@ -29,19 +30,25 @@ export default class http {
   }
 
   static uploadWithForm<T = unknown>(path: string, file: File, extra: Record<string, string | string[]>): Promise<T> {
-    return this.uploadFormData<T>(path, (form) => {
-      form.append('file', file)
-      for (const [key, value] of Object.entries(extra)) {
-        if (Array.isArray(value)) {
-          value.forEach((v) => form.append(key, v))
-        } else {
-          form.append(key, value)
+    return this.uploadFormData<T>(
+      path,
+      (form) => {
+        form.append('file', file)
+        for (const [key, value] of Object.entries(extra)) {
+          if (Array.isArray(value)) {
+            value.forEach((v) => form.append(key, v))
+          } else {
+            form.append(key, value)
+          }
         }
-      }
-    })
+      },
+      fileIdentity(file),
+    )
   }
 
-  static async uploadFormData<T = unknown>(path: string, buildForm: (form: FormData) => void): Promise<T> {
+  // dedupeKey 需能区分"同一接口的不同文件",否则同一 600ms 窗口内连续上传不同文件(如换头像后立刻再上传一次)
+  // 会被误判为重复请求,后一次直接复用前一次的缓存结果,新文件根本不会被发送到服务端。
+  static async uploadFormData<T = unknown>(path: string, buildForm: (form: FormData) => void, dedupeKey = ''): Promise<T> {
     const authStore = useAuthStore()
 
     // 上传是受保护操作,未登录直接登出并跳转欢迎页
@@ -65,18 +72,21 @@ export default class http {
           body: formData,
         })
         const data = (await response.json()) as Result<T>
-        return (await handleResult(data)) as T
+        return (await handleResult(data, `UPLOAD::${path}`)) as T
       } catch (error) {
-        if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
+        if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) {
+          console.error(`[API] 网络错误 UPLOAD::${path}`, error)
+          useToastStore().error(`Oops,网络错误(UPLOAD ${path}),请重试`)
+        }
         return Promise.reject(error)
       }
     }
 
-    return this.withDebounce(`UPLOAD:${url}`, exec)
+    return this.withDebounce(`UPLOAD:${url}:${dedupeKey}`, exec)
   }
 
   static async uploadFile<T = unknown>(path: string, file: File): Promise<T> {
-    return this.uploadFormData<T>(path, (form) => form.append('file', file))
+    return this.uploadFormData<T>(path, (form) => form.append('file', file), fileIdentity(file))
   }
 
   static async start<T = unknown>(path: string, method: string, params?: any): Promise<T> {
@@ -105,9 +115,12 @@ export default class http {
         const text = await response.text()
         if (!text) return null as T
         const data = JSON.parse(text) as Result<T>
-        return (await handleResult(data)) as T
+        return (await handleResult(data, `${method}::${path}`)) as T
       } catch (error) {
-        if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
+        if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) {
+          console.error(`[API] 网络错误 ${method}::${path}`, error)
+          useToastStore().error(`Oops,网络错误(${method} ${path}),请重试`)
+        }
         return Promise.reject(error)
       }
     }
@@ -116,8 +129,13 @@ export default class http {
   }
 }
 
-// 对返回结果进行检查
-async function handleResult<T>(result: Result<T>): Promise<T> {
+// 文件身份标识，用于让上传请求的去重 key 区分不同文件(避免连续上传不同文件被误判为重复请求)
+function fileIdentity(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`
+}
+
+// 对返回结果进行检查；requestLabel 形如 "GET::/user/info"，用于让报错能定位到具体请求
+async function handleResult<T>(result: Result<T>, requestLabel: string): Promise<T> {
   if (result.ok) return result.data
 
   // token 失效(101):登出并跳转欢迎页,不再静默重新登录
@@ -129,12 +147,15 @@ async function handleResult<T>(result: Result<T>): Promise<T> {
 
   // 如果result.code是“1”开头，则需要提示
   if (result.code.toString().startsWith('1')) {
-    if (import.meta.client) ElMessage.error(`Oops, ${result.msg}`)
+    if (import.meta.client) useToastStore().error(`Oops, ${result.msg}`)
     return Promise.reject(result)
   }
   // 如果result.code是”3”开头,则不提示,直接返回
   if (result.code.toString().startsWith('3')) return Promise.reject(result)
 
-  if (import.meta.client) ElMessage.error(`Oops,网络错误,请重试`)
+  if (import.meta.client) {
+    console.error(`[API] 未知响应码 ${requestLabel}`, result)
+    useToastStore().error(`Oops,网络错误(${requestLabel}),请重试`)
+  }
   return Promise.reject(result)
 }

@@ -187,7 +187,7 @@ function handleFileChange(event: Event) {
 
 async function processFile(file: File) {
   if (!file.name.endsWith('.html') && !file.name.endsWith('.htm')) {
-    ElMessage.warning('请上传从 Chrome 导出的 HTML 书签文件')
+    useToastStore().warning('请上传从 Chrome 导出的 HTML 书签文件')
     if (fileInputRef.value) fileInputRef.value.value = ''
     return
   }

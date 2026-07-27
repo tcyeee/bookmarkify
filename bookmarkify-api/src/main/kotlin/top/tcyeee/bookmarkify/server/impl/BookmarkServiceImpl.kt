@@ -322,6 +322,52 @@ class BookmarkServiceImpl(
         return BookmarkRefetchVO(title = vo.title, iconBase64 = iconBase64, logoUrl = logoUrl)
     }
 
+    override fun adminCheckLiveness(bookmarkId: String): BookmarkLivenessVO {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        log.debug("[adminCheckLiveness] 管理员触发书签活性检测: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
+        return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
+            onSuccess = { vo ->
+                bookmark.apply {
+                    isActivity = true
+                    parseStatus = ParseStatusEnum.SUCCESS
+                    parseErrMsg = null
+                    updateTime = LocalDateTime.now()
+                }
+                baseMapper.updateById(bookmark)
+                log.debug("[adminCheckLiveness] 检测成功: bookmarkId=$bookmarkId, source=${vo.source}")
+                BookmarkLivenessVO(
+                    success = true,
+                    title = vo.title,
+                    description = vo.description,
+                    image = vo.image,
+                    favicon = vo.favicon,
+                    logo = vo.logo,
+                    source = vo.source,
+                    cached = vo.cached,
+                    screenshot = vo.screenshot,
+                    isActivity = true,
+                    parseStatus = ParseStatusEnum.SUCCESS,
+                )
+            },
+            onFailure = { e ->
+                bookmark.apply {
+                    isActivity = false
+                    parseStatus = ParseStatusEnum.CLOSED
+                    parseErrMsg = e.message
+                    updateTime = LocalDateTime.now()
+                }
+                baseMapper.updateById(bookmark)
+                log.debug("[adminCheckLiveness] 检测失败: bookmarkId=$bookmarkId, err=${e.message}")
+                BookmarkLivenessVO(
+                    success = false,
+                    errorMsg = e.message,
+                    isActivity = false,
+                    parseStatus = ParseStatusEnum.CLOSED,
+                )
+            },
+        )
+    }
+
     override fun adminApplyRefetch(bookmarkId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         val vo = RedisUtils.get<ScrapeResponse>(RedisType.BOOKMARK_REFETCH, bookmarkId)

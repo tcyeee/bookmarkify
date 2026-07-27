@@ -30,7 +30,12 @@ class UserController(private val userService: IUserService) {
 
     @GetMapping("avatar-url")
     @Operation(summary = "获取当前用户头像签名 URL（1 小时有效，按需调用，请勿持久化）")
-    fun avatarUrl(): String? = userService.avatarSignedUrl(BaseUtils.uid())
+    fun avatarUrl(): ResultWrapper {
+        // 显式包 ResultWrapper：GlobalExceptionHandler.beforeBodyWrite 对裸 String 返回值不做包装，
+        // 直接透传会破坏前端统一的 Result<T>{code,msg,data,ok} 解析(同 LoginController.sendEmail 的处理方式)。
+        val url = userService.avatarSignedUrl(BaseUtils.uid()) ?: return ResultWrapper.ok()
+        return ResultWrapper.ok(url)
+    }
 
     @PostMapping("updateInfo")
     @Operation(summary = "修改用户信息")

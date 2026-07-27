@@ -7,6 +7,7 @@ export const captchaSendEmail = (params: t.CaptchaEmailParams) => http.post<stri
 export const captchaVerifyEmail = (params: t.EmailVerifyParams) => http.post<t.UserInfo>('/auth/captcha/verifyEmail', params)
 export const authLoginByAccount = (params: t.LoginParams) => http.post<t.UserInfo>('/auth/login', params)
 export const authLoginByGoogle = (params: t.GoogleLoginParams) => http.post<t.UserInfo>('/auth/google', params)
+export const authQuickLogin = () => http.get<t.UserInfo>('/auth/quickLogin')
 
 /* =========[ /bookmark ]========= */
 export const bookmarksShowAll = () => http.post<t.UserLayoutNodeVO>('/bookmark/query')

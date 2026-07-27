@@ -19,11 +19,15 @@
         :disabled="loading || disabled || !clientId">
         <span>{{ loading ? '关联中...' : '关联谷歌' }}</span>
       </button>
-      <!-- 官方按钮透明覆盖在上层，宽度贴合自定义按钮并裁剪溢出 -->
+      <!-- 官方按钮透明覆盖在上层，宽度贴合自定义按钮并裁剪溢出；
+           悬停/聚焦时才懒加载 GIS 脚本，避免设置页一打开就对 Google 发起必然请求 -->
       <div
         ref="btnRef"
         class="absolute inset-0 flex items-center justify-center overflow-hidden opacity-0"
-        :class="{ 'pointer-events-none': loading || disabled }" />
+        :class="{ 'pointer-events-none': loading || disabled }"
+        @mouseenter="ensureGoogleButtonRendered"
+        @focusin="ensureGoogleButtonRendered"
+        @touchstart.passive="ensureGoogleButtonRendered" />
     </div>
 
     <p v-if="errorMsg" class="text-right text-xs text-red-400">{{ errorMsg }}</p>
@@ -45,6 +49,7 @@ const btnRef = ref<HTMLElement>()
 const loading = ref(false)
 const errorMsg = ref('')
 const gisInited = ref(false)
+const rendered = ref(false)
 
 const GSI_SRC = 'https://accounts.google.com/gsi/client'
 
@@ -79,7 +84,7 @@ async function handleCredential(response: { credential?: string }) {
   try {
     const result = await bindGoogle(response.credential)
     authStore.account = { ...authStore.account, ...result } as any
-    ElNotification.success({ message: 'Google 关联成功' })
+    useToastStore().success('Google 关联成功')
     emit('success')
   } catch (err: any) {
     // http 客户端已对 1xx 业务码统一弹窗，这里仅做兜底提示
@@ -116,11 +121,19 @@ async function renderGoogleButton() {
   }
 }
 
+// 悬停/聚焦/触摸到覆盖层时才真正加载 GIS 脚本并渲染官方按钮；只触发一次
+async function ensureGoogleButtonRendered() {
+  if (rendered.value || props.googleEmail) return
+  rendered.value = true
+  await renderGoogleButton()
+}
+
 async function handleUnbind() {
   try {
-    await ElMessageBox.confirm('解绑后将无法用此 Google 账号登录，确定解绑吗？', '解绑 Google', {
-      confirmButtonText: '解绑',
-      cancelButtonText: '取消',
+    await useConfirmStore().confirm('解绑后将无法用此 Google 账号登录，确定解绑吗？', {
+      title: '解绑 Google',
+      confirmText: '解绑',
+      cancelText: '取消',
       type: 'warning',
     })
   } catch {
@@ -130,7 +143,7 @@ async function handleUnbind() {
   try {
     const result = await unbindGoogle()
     authStore.account = { ...authStore.account, ...result } as any
-    ElNotification.success({ message: '已解绑 Google' })
+    useToastStore().success('已解绑 Google')
     emit('success')
   } catch {
     // http 客户端已统一提示
@@ -139,19 +152,12 @@ async function handleUnbind() {
   }
 }
 
-onMounted(() => {
-  if (!import.meta.client) return
-  // 未关联时渲染官方按钮承接点击；已关联时无需渲染
-  if (!props.googleEmail) renderGoogleButton()
-})
-
-// 解绑成功后切回未关联态，需要补渲染官方按钮
+// 解绑成功后切回未关联态，重置懒加载标记，等用户再次悬停/聚焦时才补渲染官方按钮
 watch(
   () => props.googleEmail,
-  async (val) => {
+  (val) => {
     if (val) return
-    await nextTick()
-    renderGoogleButton()
+    rendered.value = false
   },
 )
 </script>

@@ -160,6 +160,9 @@ interface IUserService : IService<UserEntity> {
 
     fun loginByAccount(params: AccountLoginParams): UserSessionInfo
 
+    /** 测试环境快捷登录：仅本地环境（ENV=local）开放，登录/自动创建固定测试账号 */
+    fun quickLogin(): UserSessionInfo
+
     fun changePassword(uid: String, params: ChangePasswordParams): Boolean
 
     fun adminListAll(params: UserSearchParams): IPage<UserAdminVO>

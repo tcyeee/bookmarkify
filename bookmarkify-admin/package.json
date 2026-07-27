@@ -11,8 +11,7 @@
     "dev": "pnpm vite --mode development",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit --skipLibCheck",
-    "postinstall": "pnpm -r run stub --if-present",
-    "remove-mock": "node scripts/remove-mock.mjs"
+    "postinstall": "pnpm -r run stub --if-present"
   },
   "imports": {
     "#/*": "./src/*"

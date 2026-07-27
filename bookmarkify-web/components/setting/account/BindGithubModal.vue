@@ -37,10 +37,10 @@ async function handleBind() {
     const { code, redirectUri } = await requestGithubCode()
     const result = await bindGithub(code, redirectUri)
     authStore.account = { ...authStore.account, ...result } as any
-    ElNotification.success({ message: 'GitHub 关联成功' })
+    useToastStore().success('GitHub 关联成功')
     emit('success')
   } catch (err: any) {
-    if (err?.message && err.message !== '已取消 GitHub 授权') ElMessage.error(err.message)
+    if (err?.message && err.message !== '已取消 GitHub 授权') useToastStore().error(err.message)
   } finally {
     loading.value = false
   }
@@ -48,9 +48,10 @@ async function handleBind() {
 
 async function handleUnbind() {
   try {
-    await ElMessageBox.confirm('解绑后将无法用此 GitHub 账号登录，确定解绑吗？', '解绑 GitHub', {
-      confirmButtonText: '解绑',
-      cancelButtonText: '取消',
+    await useConfirmStore().confirm('解绑后将无法用此 GitHub 账号登录，确定解绑吗？', {
+      title: '解绑 GitHub',
+      confirmText: '解绑',
+      cancelText: '取消',
       type: 'warning',
     })
   } catch {
@@ -60,7 +61,7 @@ async function handleUnbind() {
   try {
     const result = await unbindGithub()
     authStore.account = { ...authStore.account, ...result } as any
-    ElNotification.success({ message: '已解绑 GitHub' })
+    useToastStore().success('已解绑 GitHub')
     emit('success')
   } catch {
     // http 客户端已统一提示

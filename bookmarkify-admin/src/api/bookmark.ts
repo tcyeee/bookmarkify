@@ -152,3 +152,26 @@ export async function generateAppNameApi(bookmarkId: string) {
     `/admin/bookmark/${bookmarkId}/appname/generate`,
   );
 }
+
+/** 书签检测结果：直接调用 scrapper 重新抓取拿到的全部原始字段，附带检测后落库的活性状态 */
+export interface BookmarkLivenessResult {
+  success: boolean;
+  title?: string;
+  description?: string;
+  image?: string;
+  favicon?: string;
+  logo?: string;
+  source?: string;
+  cached?: boolean;
+  screenshot?: string;
+  errorMsg?: string;
+  isActivity: boolean;
+  parseStatus: 'LOADING' | 'SUCCESS' | 'CLOSED' | 'BLOCKED';
+}
+
+/** 对某个书签进行活性检测：直接调用 scrapper 重新抓取一次，返回其给出的全部字段，并同步落库 isActivity/parseStatus */
+export async function checkBookmarkLivenessApi(bookmarkId: string) {
+  return requestClient.post<BookmarkLivenessResult>(
+    `/admin/bookmark/${bookmarkId}/liveness`,
+  );
+}

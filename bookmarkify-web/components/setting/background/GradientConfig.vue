@@ -147,7 +147,7 @@ async function applyPresetBackground(preset: GradientPreset) {
     }
 
     preferenceStore.upsertPreferenceBackground(updatedSetting)
-    ElNotification.success({ message: '已应用预设背景' })
+    useToastStore().success('已应用预设背景')
   } catch {
     // 错误已由 http 层统一提示
   } finally {
@@ -195,7 +195,7 @@ function startEditPreset(preset: GradientPreset) {
 async function handleDeletePreset(preset: GradientPreset) {
   if (preset.isSystem || !preset.id) return
   try {
-    await ElMessageBox.confirm('确认删除这个自定义渐变吗？', '提示', { type: 'warning' })
+    await useConfirmStore().confirm('确认删除这个自定义渐变吗？', { title: '提示', type: 'warning' })
   } catch {
     return
   }
@@ -211,7 +211,7 @@ async function handleDeletePreset(preset: GradientPreset) {
       }
     }
 
-    ElNotification.success({ message: '已删除自定义渐变' })
+    useToastStore().success('已删除自定义渐变')
   } catch {
     // 错误已由 http 层统一提示
   }
@@ -241,7 +241,7 @@ async function handleCustomSave() {
         gradientDirection.value = customDirection.value
       }
 
-      ElNotification.success({ message: '自定义渐变已更新' })
+      useToastStore().success('自定义渐变已更新')
     } else {
       await updateBacColor({
         colors: customColors.value,
@@ -255,7 +255,7 @@ async function handleCustomSave() {
       }
       gradientColors.value = [...customColors.value]
       gradientDirection.value = customDirection.value
-      ElNotification.success({ message: '自定义渐变已保存' })
+      useToastStore().success('自定义渐变已保存')
     }
 
     preferenceStore.upsertPreferenceBackground({
@@ -295,7 +295,7 @@ async function handleCustomReset() {
     }
 
     preferenceStore.upsertPreferenceBackground(setting ?? null)
-    ElNotification.success({ message: '已恢复默认背景' })
+    useToastStore().success('已恢复默认背景')
   } catch {
     // 错误已由 http 层统一提示
   } finally {

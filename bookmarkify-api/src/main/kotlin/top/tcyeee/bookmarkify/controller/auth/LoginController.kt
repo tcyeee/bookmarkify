@@ -64,4 +64,10 @@ class LoginController(private val userService: UserServiceImpl) {
     @PostMapping("/github")
     @Operation(summary = "用 GitHub 授权码登录（GitHub 账号不存在则注册）")
     fun loginByGithub(@RequestBody params: GithubLoginParams): UserSessionInfo = userService.loginByGithub(params)
+
+    @Throttle(byIp = true)
+    @SaIgnore
+    @GetMapping("/quickLogin")
+    @Operation(summary = "测试环境快捷登录，仅本地环境（ENV=local）开放，免密码登录固定测试账号")
+    fun quickLogin(): UserSessionInfo = userService.quickLogin()
 }

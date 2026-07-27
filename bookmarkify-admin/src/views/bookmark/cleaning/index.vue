@@ -14,11 +14,13 @@ import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
 
 import {
+  checkBookmarkLivenessApi,
   findSimilarSitesApi,
   getBookmarkListApi,
   ingestSimilarSitesApi,
   recategorizeBookmarkApi,
   updateBookmarkCategoriesApi,
+  type BookmarkLivenessResult,
   type SimilarSite,
 } from "#/api/bookmark";
 import { getCategoryListApi, type CategoryEntity } from "#/api/category";
@@ -196,6 +198,46 @@ async function oneClickIngest() {
 
 onUnmounted(() => closeIngestSocket());
 
+// ── 书签检测：直接调用 scrapper 重新抓取一次，展示其给出的全部字段 ──
+const checkingLiveness = ref(false);
+const livenessChecked = ref(false);
+const livenessResult = ref<BookmarkLivenessResult | null>(null);
+
+function resetLiveness() {
+  livenessChecked.value = false;
+  livenessResult.value = null;
+}
+
+async function checkLiveness() {
+  if (!currentRow.value) return;
+  checkingLiveness.value = true;
+  try {
+    const result = await checkBookmarkLivenessApi(currentRow.value.id);
+    livenessResult.value = result;
+    livenessChecked.value = true;
+    currentRow.value.isActivity = result.isActivity;
+    currentRow.value.parseStatus = result.parseStatus;
+    if (result.errorMsg) currentRow.value.parseErrMsg = result.errorMsg;
+    syncRowLiveness(currentRow.value.id, result);
+    ElMessage[result.success ? "success" : "warning"](
+      result.success
+        ? "检测完成，网站存活"
+        : `检测完成，网站不可访问${result.errorMsg ? `：${result.errorMsg}` : ""}`,
+    );
+  } finally {
+    checkingLiveness.value = false;
+  }
+}
+
+function syncRowLiveness(id: string, result: BookmarkLivenessResult) {
+  const row = tableData.value.find((r) => r.id === id);
+  if (row) {
+    row.isActivity = result.isActivity;
+    row.parseStatus = result.parseStatus;
+    if (result.errorMsg) row.parseErrMsg = result.errorMsg;
+  }
+}
+
 async function loadCategoryDict() {
   if (categoryDict.value.length === 0) {
     categoryDict.value = await getCategoryListApi();
@@ -292,6 +334,7 @@ async function handleRowClick(row: BookmarkEntity) {
   similarSites.value = [];
   similarLoaded.value = false;
   resetIngest();
+  resetLiveness();
   await loadCategoryDict();
 }
 
@@ -397,7 +440,10 @@ onMounted(() => {
         v-model="detailVisible"
         title="书签详情"
         width="640px"
-        @close="resetIngest"
+        @close="
+          resetIngest();
+          resetLiveness();
+        "
       >
         <div v-if="currentRow" class="space-y-4 text-sm">
           <!-- 卡片一：基础信息 -->
@@ -583,8 +629,67 @@ onMounted(() => {
               </ElButton>
             </div>
           </ElCard>
+
+          <!-- 卡片四：书签检测（点击操作栏按钮后出现，直接展示 scrapper 返回的全部字段） -->
+          <ElCard v-if="livenessChecked" shadow="never" class="detail-card">
+            <template #header>
+              <span class="font-medium">检测结果</span>
+            </template>
+            <div v-if="livenessResult" class="space-y-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <ElTag :type="livenessResult.success ? 'success' : 'danger'" size="small">
+                  {{ livenessResult.success ? "存活" : "不可访问" }}
+                </ElTag>
+                <span v-if="livenessResult.source" class="text-gray-500">
+                  来源：{{ livenessResult.source }}
+                </span>
+                <ElTag v-if="livenessResult.cached" type="info" size="small">
+                  命中缓存
+                </ElTag>
+              </div>
+              <div v-if="livenessResult.title" class="flex">
+                <span class="w-20 text-gray-500">新标题</span>
+                <span class="flex-1 break-all">{{ livenessResult.title }}</span>
+              </div>
+              <div v-if="livenessResult.description" class="flex">
+                <span class="w-20 text-gray-500">新描述</span>
+                <span class="flex-1 break-all">{{ livenessResult.description }}</span>
+              </div>
+              <div v-if="livenessResult.errorMsg" class="flex">
+                <span class="w-20 text-gray-500">错误信息</span>
+                <span class="flex-1 break-all text-red-500">{{ livenessResult.errorMsg }}</span>
+              </div>
+              <div
+                v-if="livenessResult.favicon || livenessResult.logo || livenessResult.image || livenessResult.screenshot"
+                class="flex flex-wrap gap-4 pt-1"
+              >
+                <div v-if="livenessResult.favicon" class="flex flex-col items-center gap-1">
+                  <img :src="livenessResult.favicon" alt="favicon" class="h-10 w-10 rounded border object-contain" />
+                  <span class="text-xs text-gray-400">favicon</span>
+                </div>
+                <div v-if="livenessResult.logo" class="flex flex-col items-center gap-1">
+                  <img :src="livenessResult.logo" alt="logo" class="h-10 w-10 rounded border object-contain" />
+                  <span class="text-xs text-gray-400">logo</span>
+                </div>
+                <div v-if="livenessResult.image" class="flex flex-col items-center gap-1">
+                  <img :src="livenessResult.image" alt="image" class="h-16 w-28 rounded border object-cover" />
+                  <span class="text-xs text-gray-400">image</span>
+                </div>
+                <div v-if="livenessResult.screenshot" class="flex flex-col items-center gap-1">
+                  <img :src="livenessResult.screenshot" alt="screenshot" class="h-16 w-28 rounded border object-cover" />
+                  <span class="text-xs text-gray-400">screenshot</span>
+                </div>
+              </div>
+            </div>
+          </ElCard>
         </div>
         <template #footer>
+          <ElButton
+            :loading="checkingLiveness"
+            @click="checkLiveness"
+          >
+            检测活性
+          </ElButton>
           <ElButton
             :loading="loadingSimilar"
             @click="findSimilar"

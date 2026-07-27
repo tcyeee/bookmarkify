@@ -29,10 +29,13 @@ import top.tcyeee.bookmarkify.mapper.UserPreferenceMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
+import top.tcyeee.bookmarkify.utils.CurrentEnvironment
 import top.tcyeee.bookmarkify.utils.MailUtils
+import top.tcyeee.bookmarkify.utils.OssUtils
 import top.tcyeee.bookmarkify.utils.PasswordUtils
 import top.tcyeee.bookmarkify.utils.RedisUtils
 import top.tcyeee.bookmarkify.utils.StpKit
+import top.tcyeee.bookmarkify.utils.currentEnvironment
 
 
 /**
@@ -127,6 +130,16 @@ class UserServiceImpl(
         StpKit.USER.logout()
         StpKit.USER.login(user.id, true)
         return user.authVO(StpKit.USER.tokenValue).writeToSession()
+    }
+
+    /** 测试环境快捷登录：仅本地环境（ENV=local）开放，登录/自动创建固定测试账号，免密码 */
+    override fun quickLogin(): UserSessionInfo {
+        if (currentEnvironment() != CurrentEnvironment.LOCAL) throw CommonException(ErrorType.E120)
+        val email = "quick-login-test@bookmarkify.local"
+        val userEntity = ktQuery().eq(UserEntity::email, email).eq(UserEntity::deleted, false).one() ?: createVerifiedUser(email)
+        if (StpKit.USER.isLogin) StpKit.USER.logout()
+        StpKit.USER.login(userEntity.id, true)
+        return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
     }
 
     override fun changePassword(uid: String, params: ChangePasswordParams): Boolean {
@@ -520,8 +533,14 @@ class UserServiceImpl(
     }
 
     override fun updateAvatar(multipartFile: MultipartFile, uid: String): String {
+        val oldFileId = getById(uid)?.avatarFileId
         val file = fileService.updateAvatar(BaseUtils.uid(), multipartFile)
         ktUpdate().eq(UserEntity::id, uid).set(UserEntity::avatarFileId, file.id).update()
+        // 新头像已关联成功后，再清理旧头像（OSS 对象 + user_file 行），避免旧文件永久孤立在存储桶中
+        if (!oldFileId.isNullOrBlank()) {
+            fileMapper.selectById(oldFileId)?.let { OssUtils.delete(it.fullPath) }
+            fileMapper.deleteById(oldFileId)
+        }
         return file.currentName
     }
 

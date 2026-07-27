@@ -293,6 +293,15 @@ class OssUtils {
                 .also { log.debug("[upload] OSS存储成功: bucket={}, path={}", bucket, path) }
 
         /**
+         * 删除OSS对象（用于替换旧文件，如头像/背景图重新上传后清理旧文件）
+         * 失败仅记录警告，不抛异常：不应因清理旧文件失败而影响主流程（新文件已上传成功）
+         */
+        fun delete(path: String) {
+            runCatching { ossClient.deleteObject(bucket, path) }
+                .onFailure { log.warn("[delete] OSS对象删除失败: bucket={}, path={}, error={}", bucket, path, it.message) }
+        }
+
+        /**
          * 生成带缩放样式的限时访问链接
          *
          * @param objectName OSS对象名（不含域名）

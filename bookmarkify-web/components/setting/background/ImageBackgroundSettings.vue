@@ -148,7 +148,7 @@ async function selectImagePreset(preset: ImagePreset) {
     const setting = await selectBackground({ type: BackgroundType.IMAGE, backgroundId: preset.id })
     preferenceStore.upsertPreferenceBackground(setting)
     selectedImageId.value = extractImageId(setting.bacImgFile) ?? setting.backgroundLinkId ?? preset.id
-    ElNotification.success({ message: '已应用图片背景' })
+    useToastStore().success('已应用图片背景')
 
   } catch {
     // 错误已由 http 层统一提示

@@ -247,6 +247,22 @@ data class BookmarkRefetchVO(
     @field:Schema(description = "新解析的高清LOGO签名地址(私有桶,未抓到为 null)") var logoUrl: String? = null,
 )
 
+/** 管理后台「书签检测」结果：直接调用 scrapper 拿到的全部原始字段，附带检测后落库的活性状态 */
+data class BookmarkLivenessVO(
+    @field:Schema(description = "本次检测是否成功抓到数据") var success: Boolean,
+    @field:Schema(description = "新解析的页面标题") var title: String? = null,
+    @field:Schema(description = "新解析的页面描述") var description: String? = null,
+    @field:Schema(description = "新解析的OG主图URL") var image: String? = null,
+    @field:Schema(description = "新解析的网站图标(base64 data URL)") var favicon: String? = null,
+    @field:Schema(description = "新解析的网站LOGO URL") var logo: String? = null,
+    @field:Schema(description = "数据来源：og/twitter_card/json_ld/html/headless") var source: String? = null,
+    @field:Schema(description = "是否命中scrapper缓存") var cached: Boolean? = null,
+    @field:Schema(description = "截图(仅headless模式，OSS URL或base64)") var screenshot: String? = null,
+    @field:Schema(description = "检测失败时的错误信息") var errorMsg: String? = null,
+    @field:Schema(description = "检测后落库的网站活性") var isActivity: Boolean,
+    @field:Schema(description = "检测后落库的解析状态") var parseStatus: ParseStatusEnum,
+)
+
 /** 管理后台 DeepSeek 生成 appName 建议（不落库，供前端填入编辑框） */
 data class AppNameSuggestVO(
     @field:Schema(description = "DeepSeek 推断的书签简称(可能为空)") var appName: String? = null,
