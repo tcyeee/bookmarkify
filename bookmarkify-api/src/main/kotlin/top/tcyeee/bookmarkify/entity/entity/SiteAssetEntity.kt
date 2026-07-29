@@ -92,6 +92,7 @@ data class SitePageMetaEntity(
  */
 @TableName("site_display_pref")
 data class SiteDisplayPrefEntity(
+    @TableId var id: String = IdUtil.fastUUID(),
     @field:Schema(description = "所属书签ID") var bookmarkId: String = "",
     @field:Schema(description = "展示模式") var displayMode: DisplayMode = DisplayMode.TILE,
     @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
