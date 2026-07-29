@@ -15,6 +15,7 @@
         :key="`hd-${props.value.logo?.iconHdUrl}`"
         :src="props.value.logo?.iconHdUrl"
         alt=""
+        draggable="false"
         @error="onHdError"
       />
       <!-- base64 图：可按尺寸放大 -->
@@ -24,10 +25,11 @@
         :style="base64Style"
         :src="base64Src"
         alt=""
+        draggable="false"
         @error="onIconError"
       />
       <!-- 最终兜底：灰色地球（内联 SVG，与管理台一致） -->
-      <img v-else :style="fallbackStyle" :src="FALLBACK_ICON" alt="" />
+      <img v-else :style="fallbackStyle" :src="FALLBACK_ICON" alt="" draggable="false" />
     </div>
     <!-- 不可访问 / 不支持 SSL：整体覆盖同一层灰色蒙版，居中叠加白色标识（断网 / 感叹号）以区分两种状态 -->
     <div
