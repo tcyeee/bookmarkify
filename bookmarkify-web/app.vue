@@ -6,7 +6,6 @@
   <CommonCommandPalette />
   <CommonToastHost />
   <CommonConfirmDialog />
-  <CommonImportProgressNotice />
   <AddOneDialog />
 </template>
 <script setup lang="ts">

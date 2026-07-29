@@ -85,7 +85,15 @@
 
     <!-- 分页 -->
     <div class="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
-      <span>{{ $t('bookmarkLibrary.pagination.total', { total: page?.total ?? 0 }) }}</span>
+      <div class="flex items-center gap-3">
+        <span>{{ $t('bookmarkLibrary.pagination.total', { total: page?.total ?? 0 }) }}</span>
+        <label class="flex items-center gap-1.5 shrink-0">
+          <span class="whitespace-nowrap">{{ $t('bookmarkLibrary.pagination.pageSize') }}</span>
+          <select v-model.number="pageSize" class="cy-select cy-select-bordered cy-select-xs">
+            <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }}</option>
+          </select>
+        </label>
+      </div>
       <div v-if="totalPages > 1" class="flex items-center gap-2">
         <button type="button" class="cy-btn cy-btn-ghost cy-btn-sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">
           <Icon icon="mdi:chevron-left" class="size-4" />
@@ -158,11 +166,12 @@ const { t: translate } = useI18n()
 const bookmarkStore = useBookmarkStore()
 const toastStore = useToastStore()
 
-const PAGE_SIZE = 20
+const pageSizeOptions = [10, 20, 50, 100]
 
 const keyword = ref('')
 const filterMode = ref<FilterMode>('all')
 const currentPage = ref(1)
+const pageSize = ref(20)
 const loading = ref(false)
 const page = ref<t.BookmarkPage<t.BookmarkShow> | null>(null)
 // 以 layoutNodeId 作为选中集合的键：这是批量删除/创建集合两个后端接口实际接受的 ID
@@ -179,7 +188,7 @@ const filters = computed(() => [
 ])
 
 const records = computed(() => page.value?.records ?? [])
-const totalPages = computed(() => (page.value ? Math.max(1, Math.ceil(page.value.total / PAGE_SIZE)) : 1))
+const totalPages = computed(() => (page.value ? Math.max(1, Math.ceil(page.value.total / pageSize.value)) : 1))
 const allChecked = computed(() => records.value.length > 0 && records.value.every((r) => isSelected(r)))
 
 const emptyText = computed(() => {
@@ -203,7 +212,7 @@ async function fetchPage() {
     const res = await bookmarksList({
       name: keyword.value.trim() || undefined,
       currentPage: currentPage.value,
-      pageSize: PAGE_SIZE,
+      pageSize: pageSize.value,
       duplicatesOnly: filterMode.value === 'duplicate',
       invalidOnly: filterMode.value === 'invalid',
     })
@@ -224,6 +233,11 @@ const debouncedSearch = useDebounceFn(() => {
 }, 400)
 
 watch(keyword, debouncedSearch)
+
+watch(pageSize, () => {
+  currentPage.value = 1
+  fetchPage()
+})
 
 function setFilter(mode: FilterMode) {
   if (filterMode.value === mode) return
@@ -268,7 +282,8 @@ async function batchDelete() {
   await performDelete(ids)
 }
 
-// 静默删除：无需二次确认，前端立即清理，同时异步同步到后端；失败时重新拉取当前页纠正本地状态
+// 静默删除：无需二次确认，前端立即本地清理去掉被删条目，避免等待网络的空窗期；
+// 请求完成后（无论成功失败）都重新拉取当前页，用服务端结果（重复/失效标记、total 等联动状态）纠正本地状态
 async function performDelete(ids: string[]) {
   const removed = new Set(ids)
   if (page.value) {
@@ -282,9 +297,15 @@ async function performDelete(ids: string[]) {
 
   try {
     await bookmarksDel(ids)
-    bookmarkStore.update().catch(() => {})
+    // layoutNodeId 即桌面树节点 id：直接本地摘除，避免额外一次 update() 网络请求失败被吞掉导致首页残留
+    for (const id of ids) bookmarkStore.removeNode(id)
   } catch {
-    // http 层已提示；失败时重新拉取当前页纠正被过早清理的本地状态
+    // http 层已提示
+  } finally {
+    // 若当前页因删除清空，且不是第一页，回退一页再拉取
+    if (currentPage.value > 1 && page.value && page.value.records.length === 0) {
+      currentPage.value -= 1
+    }
     await fetchPage()
   }
 }

@@ -139,7 +139,8 @@
     "createSuccess": "Collection created successfully",
     "pagination": {
       "total": "{total} bookmarks total",
-      "pageOf": "Page {current} of {total}"
+      "pageOf": "Page {current} of {total}",
+      "pageSize": "Per page"
     }
   },
   "shareManage": {

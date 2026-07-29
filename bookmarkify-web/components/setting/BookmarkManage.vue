@@ -255,7 +255,6 @@ async function startImport() {
     const nodes = await bookmarksUpload(pendingFile.value, skipUrls)
     bookmarkStore.addImportLoadingBatch(nodes)
     const loadingIds = nodes.filter((n) => n.type === HomeItemType.BOOKMARK_LOADING).map((n) => n.id)
-    useImportProgressStore().startBatch(loadingIds)
     // 批量导入同样只靠 WebSocket 推送解除 loading，逐项注册超时兜底（放宽到 60s：导入批量大时
     // 解析队列本身排队更久，避免和正常排队耗时打架产生误报式的重新拉取）
     loadingIds.forEach((id) => bookmarkStore.watchForResolution(id, 60000))

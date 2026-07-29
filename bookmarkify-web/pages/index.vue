@@ -50,9 +50,11 @@
               <div class="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-2">置顶</div>
               <PinnedBookmarkGrid :nodes="bookmarkStore.pinnedNodes" @edit="openEditModal" />
             </div>
-            <div class="columns-1 md:columns-2 xl:columns-3 gap-4">
-              <div v-for="folder in folderCards" :key="folder.id" class="mb-4 break-inside-avoid">
+            <div class="flex justify-center gap-4">
+              <div v-for="(column, i) in folderColumns" :key="i" class="flex flex-col gap-4 w-full max-w-[420px]">
                 <BookmarkFolderCard
+                  v-for="folder in column"
+                  :key="folder.id"
                   :name="folder.name"
                   :is-root="folder.isRoot"
                   :folder-id="folder.id"
@@ -209,7 +211,7 @@
 import { h } from 'vue'
 import { HomeItemType, type UserLayoutNodeVO } from '@typing'
 import { bookmarksSearch, bookmarksLinkOne, bookmarksDel, bookmarksUpdate, bookmarksPin, bookmarksCreateDir } from '@api'
-import { useDebounceFn } from '@vueuse/core'
+import { useDebounceFn, useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { Icon } from '@iconify/vue'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
@@ -261,6 +263,28 @@ const folderCards = computed(() => {
   ]
 })
 
+// 卡片宽度固定为 420px，列数随窗口宽度变化，但列宽和列间距保持固定，不随窗口拉伸
+const breakpoints = useBreakpoints(breakpointsTailwind)
+const isXl = breakpoints.greaterOrEqual('xl')
+const isMd = breakpoints.between('md', 'xl')
+const columnCount = computed(() => (isXl.value ? 3 : isMd.value ? 2 : 1))
+
+// 按「已放入子项数量」贪心分配到最短的一列，模拟瀑布流的高度均衡效果
+const folderColumns = computed(() => {
+  const count = columnCount.value
+  const columns: (typeof folderCards.value)[number][][] = Array.from({ length: count }, () => [])
+  const heights = new Array(count).fill(0)
+  for (const folder of folderCards.value) {
+    let shortest = 0
+    for (let i = 1; i < count; i++) {
+      if (heights[i]! < heights[shortest]!) shortest = i
+    }
+    columns[shortest]!.push(folder)
+    heights[shortest] += folder.children.length + 1
+  }
+  return columns
+})
+
 function onShareFolder(folderId: string) {
   navigateTo(`/share/edit?folderId=${encodeURIComponent(folderId)}`)
 }
@@ -277,7 +301,9 @@ const newFolderName = ref('')
 const pickedBookmarkIds = ref(new Set<string>())
 const creatingFolder = ref(false)
 
-const pickableBookmarks = computed(() => bookmarkStore.rootNodes.filter((node) => node.type === HomeItemType.BOOKMARK))
+const pickableBookmarks = computed(() =>
+  bookmarkStore.rootNodes.filter((node) => node.type === HomeItemType.BOOKMARK && node.typeApp),
+)
 
 function togglePickedBookmark(id: string) {
   const next = new Set(pickedBookmarkIds.value)

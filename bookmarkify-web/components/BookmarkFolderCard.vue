@@ -1,6 +1,5 @@
 <template>
-  <div
-    class="group w-full max-w-[420px] mx-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-4">
+  <div class="group w-full rounded-lg bg-slate-50 dark:bg-slate-800/40 p-4">
     <div class="flex items-center gap-2 mb-2">
       <Icon
         :icon="isRoot ? 'mdi:home-variant' : 'mdi:folder'"

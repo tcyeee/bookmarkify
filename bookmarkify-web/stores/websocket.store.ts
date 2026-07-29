@@ -98,7 +98,6 @@ export const useWebSocketStore = defineStore('socket', {
           const bookmarkStore = useBookmarkStore()
           bookmarkStore.replaceContent(message.data)
           bookmarkStore.clearResolutionWatch(message.data.id)
-          useImportProgressStore().markResolved(message.data.id)
         } else if (message.type === SocketTypes.SHARE_STATUS_CHANGED) {
           this.lastShareStatusChange = message.data
           useToastStore().warning(`您分享的内容未通过审核，已下架。原因：${message.data.rejectReason ?? '未知'}`)
