@@ -81,7 +81,7 @@ bookmarkify-web ──── REST+WS ────► bookmarkify-api ◄── R
 Key flows:
 - **Adding a bookmark:** Web → API stores a `BOOKMARK_LOADING` placeholder → publishes a Spring `ApplicationEvent` → an `@Async` listener triggers `/scrape` on the scrapper → result saved and pushed to the browser via WebSocket (`HOME_ITEM_UPDATE`).
 - **Auth:** Every visitor gets an anonymous session via `/auth/track`. The `satoken` cookie/header is used on all requests — not `Authorization`. Registered users "upgrade" the anonymous session.
-- **Storage:** Files (avatars, icons, social images, screenshots) go to Alibaba Cloud OSS. The bucket is **private-read** — stored URLs are unsigned and 403 on direct access, so anything served to a browser must go through `OssUtils.signWithResize` / `resizeAndSignImg`, which also does the per-display-mode resizing.
+- **Storage:** Files (avatars, icons, social images, screenshots) go to Alibaba Cloud OSS. The bucket is **private-read** — what's stored in the DB is an **object key**, never a usable URL, so anything served to a browser must go through **`OssUtils.signAsset`**, which signs it and applies the per-display-mode resize. `signAsset` also accepts the legacy full URLs still present in older `site_asset` rows. The scrapper writes bytes but owns none of this: it returns `storageKey`, and the domain / signing / resizing are all API policy — see `docs/oss-architecture.md`.
 
 ## Site Assets & the Scrapper Contract
 
@@ -98,6 +98,12 @@ Concretely, the scrapper's response contains `extractor` — *which tag/field th
 | `extractor` (fact — where it came from) | scrapper | `LINK_ICON`, `APPLE_TOUCH_ICON`, `MANIFEST_ICON`, `JSON_LD_ORG_LOGO`, `OG_IMAGE` |
 | `role` (policy — what we use it for) | API | `FAVICON`, `LOGO`, `SOCIAL`, `SCREENSHOT` |
 | `quality` (policy — how much we trust it) | API | `TRUSTED`, `DEGRADED` |
+| `storageKey` (fact — where the bytes landed) | scrapper | `scrapper/asset/<sha256>.png` |
+| the URL a browser gets (policy — domain, signature, resize) | API | `OssUtils.signAsset` |
+
+The last row is the same rule applied to storage: the scrapper reports *which key it wrote*, never a
+usable URL. Domain, presigning and per-mode resizing are the API's deployment concerns and would
+otherwise leak into a service that has no business knowing them. See `docs/oss-architecture.md`.
 
 ### Data model
 

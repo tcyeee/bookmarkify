@@ -30,7 +30,13 @@ data class SiteAssetEntity(
 
     @field:Schema(description = "声明中的原始地址,可能是相对路径") var originUrl: String = "",
     @field:Schema(description = "解析后的绝对地址") var resolvedUrl: String = "",
-    @field:Schema(description = "落对象存储后的永久地址") var storageUrl: String? = null,
+    /**
+     * 落对象存储后的引用。**两种形态并存**：新写入的是 scrapper 返回的 object key（不含域名），
+     * 存量数据是改造前写入的完整 URL。统一交给 `OssUtils.signAsset` 分流，无需数据迁移。
+     * 列名保持 `storage_url` 不变，避免动 DDL 与后台接口字段名。
+     */
+    @field:Schema(description = "落对象存储后的 object key（存量数据可能是完整 URL）")
+    var storageUrl: String? = null,
 
     @field:Schema(description = "真实像素宽") var width: Int? = null,
     @field:Schema(description = "真实像素高") var height: Int? = null,
@@ -56,11 +62,8 @@ data class SiteAssetEntity(
         else -> minOf(width ?: 0, height ?: 0)
     }
 
-    /** 能否真正渲染：要么有 OSS 地址，要么有可直连的原始地址，且没出错 */
+    /** 能否真正渲染：要么落了对象存储，要么有可直连的原始地址，且没出错 */
     fun renderable(): Boolean = errorMsg == null && (storageUrl != null || resolvedUrl.isNotBlank())
-
-    /** 优先用 OSS 永久地址，回退到源站直连地址 */
-    fun displayUrl(): String = storageUrl ?: resolvedUrl
 }
 
 /**

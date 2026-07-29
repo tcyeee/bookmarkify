@@ -111,7 +111,7 @@ object SiteAssetIngestor {
             extractor = a.extractor.name,
             originUrl = a.originUrl.take(1000),
             resolvedUrl = a.resolvedUrl.take(1000),
-            storageUrl = a.storageUrl?.take(1000),
+            storageUrl = a.storageKey?.take(1000),
             width = a.width,
             height = a.height,
             byteSize = a.byteSize,
@@ -130,7 +130,7 @@ object SiteAssetIngestor {
      */
     private fun screenshotAsset(bookmarkId: String, response: ScrapeResponse): List<SiteAssetEntity> {
         val shot = response.screenshot ?: return emptyList()
-        val url = shot.storageUrl ?: return emptyList() // 只内联未落存储的截图不入库
+        val url = shot.storageKey ?: return emptyList() // 只内联未落存储的截图不入库
         return listOf(
             SiteAssetEntity(
                 bookmarkId = bookmarkId,

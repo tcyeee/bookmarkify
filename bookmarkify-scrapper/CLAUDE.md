@@ -39,11 +39,11 @@ docker-compose up -d
 | `HEADLESS_IDLE_WAIT_SECS` | 10 | Layer 2 network-idle wait for JS rendering |
 | `CACHE_TTL_SECS` | 3600 | Cache entry lifetime |
 | `PROXY_URL` | (optional) | HTTP proxy URL, e.g. `http://127.0.0.1:7890` (or `http://clash:7890` in prod). Applies to Layer 1 (reqwest), Layer 2 (headless Chrome `--proxy-server`), **and** the OSS upload client (`oss.rs` builds its own `reqwest::Client` that also reads this var). |
-| `OSS_ACCESS_KEY_ID` | (optional) | Alibaba Cloud Access Key ID. All five OSS_* vars must be set to enable OSS upload. |
+| `OSS_ACCESS_KEY_ID` | (optional) | Alibaba Cloud Access Key ID. The first four OSS_* vars must all be set to enable OSS upload. |
 | `OSS_ACCESS_KEY_SECRET` | (optional) | Alibaba Cloud Access Key Secret |
 | `OSS_BUCKET` | (optional) | OSS bucket name |
 | `OSS_ENDPOINT` | (optional) | OSS endpoint, e.g. `oss-cn-hangzhou.aliyuncs.com` |
-| `OSS_BASE_URL` | (optional) | Public URL prefix for returned OSS links, e.g. `https://<bucket>.oss-cn-hangzhou.aliyuncs.com` |
+| `OSS_KEY_PREFIX` | (optional) | Common prefix for all object keys, default `scrapper`. The bucket's `PutObject` grant and lifecycle rule are scoped to it |
 | `SSRF_ALLOW_PRIVATE` | (optional) | Set to `1` to disable SSRF protection (allow targets resolving to private/loopback/link-local addresses). Unset → protection is **on** by default. |
 | `SCRAPER_AUTH_TOKEN` | (optional) | Shared secret for `/scrape` and `/ping`: when set, requests must send `Authorization: Bearer <token>` (constant-time compared) or get `401`. Unset (default) → those routes are unauthenticated. `/health` and `/metrics` never require it. `bookmarkify-api` sends this via `bookmarkify.scrapper.auth-token` / `BOOKMARKIFY_SCRAPPER_AUTH_TOKEN`, which must match. |
 | `MAX_CONCURRENT_REQUESTS` | 32 | Caps in-flight `/scrape` + `/ping` requests; beyond this, `load_shed` fails fast with `503` instead of queuing. |
@@ -107,7 +107,7 @@ Errors are JSON `{"error": "<type>", "detail": "<optional>"}`. Status mapping: `
 - Requests are signed with Aliyun OSS's V1 scheme by hand: `Authorization: OSS <key_id>:<base64(hmac_sha1(secret, string_to_sign))>` (`sign_hmac_sha1_base64`), PUT straight to the virtual-hosted-style URL `https://{bucket}.{endpoint}/{key}`. This replaced the `oss-rust-sdk` crate, which was unmaintained, built its own untimeoutable/unproxyable client, and dragged in a whole second major version of `reqwest` plus two extra `base64` versions as transitive dependencies — removing it also made the `quick-xml` future-incompat warning `cargo build` used to print go away (it was `oss-rust-sdk`'s dependency, not ours).
 - `upload_assets()` concurrently uploads OG image, logo, and screenshot; replaces URLs in `ScrapeResult`.
 - Favicon is **never** uploaded to OSS — always fetched and returned as a base64 `data:` URL.
-- OSS object keys are SHA-256 of the source URL, so the same source always maps to the same key (no deduplication check, unconditional PUT). All keys live under the `bookmarkify/scrapper/{og,logo,screenshots}/` prefix (`OSS_PREFIX` in `oss.rs`).
+- OSS object keys are SHA-256 of the source URL, so the same source always maps to the same key (no deduplication check, unconditional PUT). All keys live under the `OSS_KEY_PREFIX` (default `scrapper`) prefix. Upload returns the **object key**, not a URL — the domain, signing and resizing are the caller's policy.
 - `sign_hmac_sha1_base64` has a known-answer test against RFC 2202 test case 1 — worth keeping if this ever gets refactored, since a silent signing bug would fail every OSS upload without necessarily erroring loudly (Aliyun returns a plain `403` for a bad signature, same as for a lot of other misconfigurations).
 
 ## Deployment Notes

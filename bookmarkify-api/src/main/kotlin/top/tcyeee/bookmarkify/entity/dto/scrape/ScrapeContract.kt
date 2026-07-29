@@ -145,7 +145,7 @@ enum class AssetDownload {
     /** 取回正文并以 data: URL 内联在 dataUrl 字段 */
     INLINE,
 
-    /** 取回正文并上传 OSS，返回 storageUrl；scrapper 未配置 OSS 时自动降级为 PROBE */
+    /** 取回正文并上传 OSS，返回 storageKey；scrapper 未配置 OSS 时自动降级为 PROBE */
     UPLOAD,
 }
 
@@ -407,8 +407,13 @@ data class Asset(
      */
     val contentHash: String? = null,
 
-    /** 上传 OSS 后的永久地址，download = UPLOAD 时才有 */
-    val storageUrl: String? = null,
+    /**
+     * 上传 OSS 后的 **object key**（不含域名），download = UPLOAD 时才有。
+     *
+     * scrapper 刻意不返回完整 URL：域名、签名、按展示模式缩放都是本服务的策略。
+     * 要给浏览器用必须先过 [OssUtils.signAsset][top.tcyeee.bookmarkify.utils.OssUtils.signAsset]。
+     */
+    val storageKey: String? = null,
     /** data: 内联，download = INLINE 时才有 */
     val dataUrl: String? = null,
 
@@ -491,8 +496,8 @@ data class Alternate(val url: String, val hreflang: String? = null, val media: S
 /** 页面截图 */
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class Screenshot(
-    /** 上传 OSS 后的地址；scrapper 未配置 OSS 时为空，转用 [dataUrl] */
-    val storageUrl: String? = null,
+    /** 上传 OSS 后的 object key（不含域名）；scrapper 未配置 OSS 时为空，转用 [dataUrl] */
+    val storageKey: String? = null,
     val dataUrl: String? = null,
     val width: Int = 0,
     val height: Int = 0,

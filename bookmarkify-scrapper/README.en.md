@@ -63,7 +63,7 @@ PROXY_URL=http://127.0.0.1:7890 ./target/release/scraper-service
 # With OSS upload enabled
 OSS_ACCESS_KEY_ID=xxx OSS_ACCESS_KEY_SECRET=xxx \
 OSS_BUCKET=my-bucket OSS_ENDPOINT=oss-cn-hangzhou.aliyuncs.com \
-OSS_BASE_URL=https://my-bucket.oss-cn-hangzhou.aliyuncs.com \
+OSS_KEY_PREFIX=scrapper \
 ./target/release/scraper-service
 ```
 
@@ -86,7 +86,7 @@ The service listens on `0.0.0.0:3000` by default.
 | `OSS_ACCESS_KEY_SECRET` | | — | Alibaba Cloud Access Key Secret |
 | `OSS_BUCKET` | | — | OSS bucket name |
 | `OSS_ENDPOINT` | | — | OSS region endpoint, e.g. `oss-cn-hangzhou.aliyuncs.com` |
-| `OSS_BASE_URL` | | — | Public URL prefix for returned links, e.g. `https://<bucket>.oss-cn-hangzhou.aliyuncs.com` |
+| `OSS_KEY_PREFIX` | | `scrapper` | Common prefix for all object keys. The bucket's `PutObject` grant and lifecycle rule are written against it — change both together |
 | `RUST_LOG` | | `info` | Tracing filter, e.g. `debug` / `info` / `warn` |
 
 ## API Reference

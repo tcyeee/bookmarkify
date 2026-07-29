@@ -111,7 +111,7 @@
       "mime": "image/png",
       "isVector": false,
       "contentHash": "sha256:1122334455667788990011223344556677889900112233445566778899001122",
-      "storageUrl": "https://cdn.bookmarkify.cc/asset/11/22/1122334455667788.png"
+      "storageKey": "scrapper/asset/1122334455667788990011223344556677889900112233445566778899001122.png"
     },
     {
       "extractor": "OG_IMAGE",

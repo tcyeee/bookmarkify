@@ -453,10 +453,9 @@ class BookmarkServiceImpl(
         val iconUrl = vo.faviconUrl
         // 预览与应用之间用 Redis 暂存完整抓取结果，确保「所见即所存」且避免应用时再抓一次造成漂移
         RedisUtils.set(RedisType.BOOKMARK_REFETCH, bookmarkId, vo)
-        // 高清 LOGO：scrapper 与 API 共用同一私有读 OSS 桶，vo.logo 是未签名地址(浏览器直连会 403)，
-        // 用 API 的 OSS 客户端换成限时签名地址(同桶同密钥，签名有效)。未抓到/签名失败则为 null，交由前端说明。
+        // vo.logoUrl / vo.faviconUrl 已在 ScrapeResponseExt 里过了 OssUtils.signAsset，
+        // 这里不能再签一次(会把签名 query 当成 key 的一部分)。未抓到则为 null，交由前端说明。
         val logoUrl = vo.logoUrl?.takeIf { it.isNotBlank() }
-            ?.let { runCatching { OssUtils.resizeAndSignImg(it, 0, 0) }.getOrNull() ?: it }
         log.debug("[adminRefetch] 重新获取完成并已暂存: bookmarkId=$bookmarkId, newTitle=${vo.title}, hasLogo=${logoUrl != null}")
         return BookmarkRefetchVO(title = vo.title, iconUrl = iconUrl, logoUrl = logoUrl)
     }
@@ -940,10 +939,8 @@ class BookmarkServiceImpl(
                 role = a.role,
                 extractor = a.extractor,
                 quality = a.quality,
-                // 私有读桶里的地址直连会 403，后台预览换成不缩放的签名地址
-                url = a.storageUrl?.takeIf { it.isNotBlank() }
-                    ?.let { runCatching { OssUtils.resizeAndSignImg(it, 0, 0) }.getOrNull() ?: it }
-                    ?: a.resolvedUrl,
+                // 私有读桶里的对象直连会 403，后台预览换成不缩放的签名地址
+                url = OssUtils.signAsset(a.storageUrl) ?: a.resolvedUrl,
                 resolvedUrl = a.resolvedUrl,
                 width = a.width,
                 height = a.height,

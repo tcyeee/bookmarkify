@@ -81,7 +81,12 @@ class SiteAssetIngestorTest {
         assertEquals(AssetRole.LOGO, manifestIcon.role)
         assertEquals(AssetQuality.TRUSTED, manifestIcon.quality)
         assertEquals(512, manifestIcon.width)
-        assertEquals("https://cdn.bookmarkify.cc/asset/11/22/1122334455667788.png", manifestIcon.storageUrl)
+        // 落库的是 scrapper 返回的 object key，不是完整 URL —— 域名与签名归 API 所有，
+        // 由 OssUtils.signAsset 在展示时才拼上（见 docs/oss-architecture.md）
+        assertEquals(
+            "scrapper/asset/1122334455667788990011223344556677889900112233445566778899001122.png",
+            manifestIcon.storageUrl,
+        )
     }
 
     @Test
