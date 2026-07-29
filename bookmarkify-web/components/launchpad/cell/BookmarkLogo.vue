@@ -21,6 +21,7 @@
       />
       <!-- 首字母色块：该站没有够格的图（monogram），硬把 32px 的 favicon 拉到 72px 只会更难看 -->
       <div v-else class="monogram" :style="monogramStyle">{{ monogramChar }}</div>
+    </div>
 
     <!-- 不可访问 / 不支持 SSL：整体覆盖同一层灰色蒙版，居中叠加白色标识（断网 / 感叹号）以区分两种状态 -->
     <div
