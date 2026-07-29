@@ -21,10 +21,17 @@ export interface BookmarkFunctionVO {
   type: FunctionType,
 }
 
-// 书签图标信息（后端 website_logo 表，嵌套在 BookmarkShow.logo）
+// 书签图标：服务端按展示模式选好的单一结果（后端 BookmarkLogoShowVO）
+// 挑哪张是服务端策略（AssetRolePolicy），前端只负责渲染，不再自己在多个图位间取舍
 export interface BookmarkLogo {
-  iconBase64?: string
-  iconHdUrl?: string
+  // 已签名并按模式缩放的地址；monogram 为 true 时为空
+  url?: string
+  // 这张图实际是什么
+  role?: 'FAVICON' | 'LOGO' | 'SOCIAL' | 'SCREENSHOT'
+  quality?: 'TRUSTED' | 'DEGRADED'
+  isVector?: boolean
+  // true = 该站没有够格的图，应渲染首字母色块而非硬拉伸小图
+  monogram?: boolean
   iconPadding?: number
   iconBgColor?: string
 }

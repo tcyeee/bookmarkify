@@ -29,22 +29,10 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                b.is_activity                                AS isActivity,
                b.url_host                                   AS urlHost,
                b.app_name                                   AS appName,
-               b.nsfw                                        AS nsfw,
-               wl.icon_base64                               AS iconBase64,
-               COALESCE(wl.icon_padding, 25)                AS iconPadding,
-               wl.icon_bg_color                             AS iconBgColor,
-               COALESCE(wl.use_hd_logo, FALSE)              AS useHdLogo,
-               CASE WHEN wl.height >= 150 THEN wl.height ELSE 0 END AS hdSize
+               b.nsfw                                        AS nsfw
             FROM bookmark_user_link a
                      LEFT JOIN bookmark b
                                ON a.bookmark_id = b.id
-                     LEFT JOIN LATERAL (
-                SELECT w.icon_base64, w.icon_padding, w.icon_bg_color, w.use_hd_logo, w.height
-                FROM bookmark_logo w
-                WHERE w.bookmark_id = a.bookmark_id
-                ORDER BY (w.icon_base64 IS NOT NULL) DESC, w.height DESC
-                LIMIT 1
-                ) wl ON TRUE
             where a.uid = #{uid}
             """
     )
@@ -66,22 +54,10 @@ interface BookmarkUserLinkMapper : BaseMapper<BookmarkUserLink> {
                b.is_activity                                AS isActivity,
                b.url_host                                   AS urlHost,
                b.app_name                                   AS appName,
-               b.nsfw                                        AS nsfw,
-               wl.icon_base64                               AS iconBase64,
-               COALESCE(wl.icon_padding, 25)                AS iconPadding,
-               wl.icon_bg_color                             AS iconBgColor,
-               COALESCE(wl.use_hd_logo, FALSE)              AS useHdLogo,
-               CASE WHEN wl.height >= 180 THEN wl.height ELSE 0 END AS hdSize
+               b.nsfw                                        AS nsfw
             FROM bookmark_user_link a
                      LEFT JOIN bookmark b
                                ON a.bookmark_id = b.id
-                     LEFT JOIN LATERAL (
-                SELECT w.icon_base64, w.icon_padding, w.icon_bg_color, w.use_hd_logo, w.height
-                FROM bookmark_logo w
-                WHERE w.bookmark_id = a.bookmark_id
-                ORDER BY (w.icon_base64 IS NOT NULL) DESC, w.height DESC
-                LIMIT 1
-                ) wl ON TRUE
             where a.id = #{id}
             limit 1
             """

@@ -1,5 +1,13 @@
 package top.tcyeee.bookmarkify.controller.admin
 
+import top.tcyeee.bookmarkify.entity.dto.scrape.cached
+import top.tcyeee.bookmarkify.entity.dto.scrape.description
+import top.tcyeee.bookmarkify.entity.dto.scrape.faviconUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.logoUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.primarySource
+import top.tcyeee.bookmarkify.entity.dto.scrape.screenshotUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.socialUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.title
 import cn.dev33.satoken.annotation.SaCheckRole
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -48,12 +56,12 @@ class AdminWebsiteController(
                     success = true,
                     title = vo.title,
                     description = vo.description,
-                    image = vo.image,
-                    favicon = vo.favicon,
-                    logo = vo.logo,
-                    source = vo.source,
+                    image = vo.socialUrl,
+                    favicon = vo.faviconUrl,
+                    logo = vo.logoUrl,
+                    source = vo.primarySource,
                     cached = vo.cached,
-                    screenshot = vo.screenshot,
+                    screenshot = vo.screenshotUrl,
                     synced = synced,
                 )
             },

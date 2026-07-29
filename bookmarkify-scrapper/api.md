@@ -23,72 +23,207 @@ bookmarkify-scrapper 对外暴露 REST API，供上游 `bookmarkify-api` 调用�
 
 ## POST /scrape
 
-解析指定 URL 的网页元数据，可选无头浏览器渲染。
+抓取指定 URL，返回页面元数据、图片资源声明与传输层事实。
+
+契约的核心约定只有一条：
+
+> **scrapper 只报告事实（页面声明了什么），不做业务解释（这些事实该当什么用）。**
+
+所以响应里只有 `extractor`（这张图**从哪个标签/字段拿到的**），没有 role / logo / favicon
+之类的用途判定 —— "apple-touch-icon 算不算 LOGO"是调用方的策略，不是网页的事实。调用方改
+判定规则时无需改动 scrapper，也无需重抓。
+
+契约定义见 `crates/scraper-service/src/contract.rs`，调用方侧的镜像见
+`bookmarkify-api/.../entity/dto/scrape/ScrapeContract.kt`，两侧共读的样例见仓库根目录
+`contract/scrape-response.sample.json`（两端的测试都会反序列化它，任一侧改动都会同时变红）。
 
 ### 请求
 
-```http
+除 `url` 外全部可省略，省略即取下表默认值。**请求体启用了 `deny_unknown_fields`：多发一个
+字段会被整体拒绝（`422`）**，这是刻意的——避免字段名拼错后被静默忽略成默认值。
+
+```jsonc
 POST /scrape
 Content-Type: application/json
 
 {
-  "url": "https://example.com",
-  "headless": false
+  "url": "https://example.com",                 // 必填
+
+  "render": {
+    "mode": "AUTO",                             // AUTO(默认) | HTTP | HEADLESS
+    "timeoutMs": 15000,                         // 省略则用服务端环境变量
+    "waitUntil": "LOAD",                        // LOAD(默认) | DOM_CONTENT_LOADED | NETWORK_IDLE，仅 headless
+    "viewport": { "width": 1280, "height": 720, "dpr": 2 },  // 仅 headless
+    "userAgent": "...",                         // 省略则用桌面 Chrome UA
+    "locale": "zh-CN",                          // 覆盖 Accept-Language
+    "colorScheme": "DARK"                       // LIGHT | DARK，抓暗色 LOGO 用，仅 headless
+  },
+
+  "extract": {                                  // 各模块独立开关，关掉可省下解析与网络开销
+    "meta": true, "assets": true, "manifest": true,
+    "jsonld": true, "opengraph": true, "twitter": true,
+    "feeds": false, "alternates": false, "text": false
+  },
+
+  "assets": {
+    "download": "PROBE",                        // NONE | PROBE(默认) | INLINE | UPLOAD
+    "maxBytes": 2097152,                        // 单张上限，超出记该张 error
+    "maxCount": 20                              // 超出部分仍出现在 assets[] 但不发请求
+  },
+
+  "screenshot": { "enabled": false, "fullPage": false, "format": "WEBP", "quality": 80 },
+  "cache":  { "mode": "DEFAULT", "maxAgeS": 86400 },   // DEFAULT | BYPASS | ONLY_IF_CACHED
+  "robots": { "respect": true }
 }
 ```
 
-| 字段 | 类型 | 必填 | 默认 | 说明 |
-|------|------|------|------|------|
-| `url` | string | ✅ | — | 目标网页 URL，仅支持 `http` / `https` |
-| `headless` | boolean | ❌ | `false` | `true` 强制使用无头浏览器（Layer 2）；`false` 先尝试 Layer 1，`title` 为空时自动回退到 Layer 2 |
+#### `render.mode`
+
+| 取值 | 行为 |
+|---|---|
+| `AUTO`（默认） | 先走 Layer 1 普通 HTTP；未拿到 `<title>`（常见于纯 JS 渲染页）自动回退 Layer 2 无头浏览器，并在 `diagnostics.warnings` 留一条记录 |
+| `HTTP` | 只走 Layer 1，失败即失败，不回退 |
+| `HEADLESS` | 直接走 Layer 2 |
+
+`screenshot.enabled = true` 时隐含要走 Layer 2（截图只有无头浏览器能出），`AUTO` 会被提升为 `HEADLESS`。
+
+#### `assets.download`
+
+三种下载模式**都会取回正文** —— `contentHash` 与真实像素尺寸都必须读到字节才能算。区别只在
+拿到之后怎么处置：
+
+| 模式 | 取回正文 | 正文去向 | 产出字段 |
+|---|---|---|---|
+| `NONE` | 否 | —— | 仅 `declared.*` |
+| `PROBE`（默认） | 是 | 算完即丢 | `width` / `height` / `mime` / `byteSize` / `contentHash` |
+| `INLINE` | 是 | 编码进 `dataUrl` | 同上 + `dataUrl` |
+| `UPLOAD` | 是 | 传对象存储 | 同上 + `storageUrl`；服务端未配置 OSS 时自动降级为 `PROBE` |
+
+图标普遍只有几 KB，`PROBE` 的带宽代价很低，换来的是调用方判定"这张图够不够大、能不能当
+LOGO 用"以及跨 `extractor` 去重所需的全部依据。
+
+#### `cache.mode`
+
+| 取值 | 行为 |
+|---|---|
+| `DEFAULT` | 命中则用缓存，否则实时抓 |
+| `BYPASS` | 无视正/负缓存强制重抓并覆盖缓存。**管理后台的"重试"必须传这个** —— 否则重试可能直接命中缓存，等于没试 |
+| `ONLY_IF_CACHED` | 只用缓存，未命中直接 `404 CACHE_MISS`，不发起任何网络请求 |
 
 ### 响应 · `200 OK`
 
-```json
+`Option::None` 与空集合一律省略，载荷保持紧凑。原始块（`jsonld` / `opengraph` / `twitter` /
+`manifest.raw`）原样透传，不做筛选或合并。
+
+```jsonc
 {
-  "title": "Example Domain",
-  "description": "This domain is for use in illustrative examples.",
-  "image": "https://example.com/og-image.png",
-  "favicon": "data:image/png;base64,iVBORw0KGgo...",
-  "logo": "https://example.com/logo-180x180.png",
-  "source": "og",
-  "cached": true,
-  "screenshot": "https://oss.example.com/bookmarkify/scrapper/screenshots/xxx.png"
+  "request": { /* 回显实际生效的参数（含服务端兜底后的值），便于排障与归档 */ },
+
+  "fetch": {
+    "finalUrl": "https://example.com/page",     // 跟完重定向后的地址，相对路径均以它为基准
+    "redirectChain": [{ "url": "http://example.com/start", "status": 301 }],
+    "httpStatus": 200,
+    "layerUsed": "HTTP",                        // HTTP | HEADLESS —— AUTO 时告诉你实际走了哪层
+    "fromCache": false,
+    "contentType": "text/html; charset=utf-8",
+    "charset": "utf-8",
+    "byteSize": 48213,
+    "timingMs": { "total": 421 }
+  },
+
+  "meta": {
+    "title": "…", "description": "…",
+    "siteName": "…",                            // og:site_name / manifest.name
+    "shortName": "…",                           // manifest.short_name —— 图标下方短文案的唯一标准来源
+    "canonicalUrl": "…", "lang": "en", "themeColor": "#123456",
+    "author": "…", "publishedAt": "…", "robots": "…", "keywords": ["…"],
+
+    // 出处**下沉到字段级**：title 可能来自 OG 而 description 回落到 meta[name]，
+    // 二者本就可以不同源。旧契约用单一 source 把它们压扁成一个值，那个值一直在说谎。
+    "sources": {
+      "title":       { "extractor": "OG",        "rawKey": "og:title" },
+      "description": { "extractor": "META_NAME", "rawKey": "description" },
+      "shortName":   { "extractor": "MANIFEST",  "rawKey": "short_name" }
+    }
+  },
+
+  "assets": [{
+    "extractor": "APPLE_TOUCH_ICON",            // 事实（出处），不是判定（用途）
+    "declared": { "rel": "apple-touch-icon", "sizes": "180x180", "type": "image/png" },
+    "originUrl": "/touch.png",                  // 声明原值，可能是相对路径
+    "resolvedUrl": "https://example.com/touch.png",
+    "width": 180, "height": 180, "byteSize": 8123, "mime": "image/png",
+    "isVector": false,
+    "contentHash": "sha256:…",                  // 跨 extractor 去重 / 判定"没有独立 LOGO"
+    "storageUrl": null, "dataUrl": null,
+    "error": null                               // 单张失败隔离在此，不影响其余图片与整次抓取
+  }],
+
+  "manifest":   { "url": "…/site.webmanifest", "raw": { /* 原样透传 */ } },
+  "jsonld":     [ /* 全部 JSON-LD 节点，@graph 已展开 */ ],
+  "opengraph":  { "title": "…", "site_name": "…" },   // 键已去掉 og: 前缀
+  "twitter":    { "card": "summary_large_image" },    // 键已去掉 twitter: 前缀
+  "feeds":      [ /* extract.feeds = true 时才有 */ ],
+  "alternates": [ /* extract.alternates = true 时才有 */ ],
+  "text":       "…",                                  // extract.text = true 时才有
+  "screenshot": { "storageUrl": "…", "width": 1280, "height": 720, "format": "PNG" },
+
+  "diagnostics": {
+    "warnings": ["manifest: fetch failed: 404"],      // 非致命问题
+    "antiCrawler": { "detected": false },             // 命中时 meta 内容可能不可靠
+    "robots": null                                    // robots.txt 判定尚未实现，省略而非谎报
+  }
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `title` | string \| null | 页面标题 |
-| `description` | string \| null | 页面描述 |
-| `image` | string \| null | 封面图 URL（OG image 优先）；配置 OSS 时替换为 OSS URL |
-| `favicon` | string \| null | 网站图标，**始终**以 base64 `data:` URL 返回（从不上传 OSS）；下载上限 2 MB |
-| `logo` | string \| null | 网站 Logo URL，来源优先级：JSON-LD `logo` → `apple-touch-icon` → 最大尺寸 `icon`；配置 OSS 时替换为 OSS URL |
-| `source` | string | 元数据来源：`og` \| `twitter_card` \| `json_ld` \| `html` \| `headless` |
-| `cached` | boolean | **仅命中缓存时出现**且恒为 `true`；实时抓取时省略该字段 |
-| `screenshot` | string | **仅无头模式下出现**；配置 OSS 时为公网 URL，否则为 base64 编码的 PNG 数据 |
+#### `assets[].extractor` 取值
 
-> **资源非致命降级**：`image` / `logo` / `favicon` / `screenshot` 任一资源的下载或 OSS 上传失败时，对应字段会被置为 `null`（或退回原始 URL）并记录告警日志，**不会**使整个请求失败。
+只描述**出处**。用途（role）与质量分级由调用方的映射表决定。
+
+| 取值 | 来源 |
+|---|---|
+| `LINK_ICON` | `<link rel="icon">` / `rel="shortcut icon"` |
+| `LINK_MASK_ICON` | `<link rel="mask-icon">`（Safari 固定标签页矢量图） |
+| `APPLE_TOUCH_ICON` | `<link rel="apple-touch-icon">` |
+| `FAVICON_ICO_FALLBACK` | 页面一个 icon 都没声明时，对 `/favicon.ico` 的约定式兜底探测 |
+| `MANIFEST_ICON` | Web App Manifest 的 `icons[]` |
+| `MS_TILE_IMAGE` | `<meta name="msapplication-TileImage">` |
+| `JSON_LD_ORG_LOGO` | JSON-LD `Organization.logo` —— 唯一语义明确的品牌 LOGO |
+| `JSON_LD_IMAGE` | JSON-LD `image` |
+| `OG_IMAGE` | `<meta property="og:image">` |
+| `TWITTER_IMAGE` | `<meta name="twitter:image">` |
+
+页面声明的**每一张**都独立成条，不做择优。同一张图被多个 `extractor` 命中时 `contentHash`
+相同 —— 这正是"该站没有独立 LOGO，`apple-touch-icon` 只是 favicon 换个名字"的判据，调用方
+据此可以让大图场景走首字母色块，而不是把 32px 的 favicon 拉伸到 72px。
+
+#### `meta.sources[].extractor` 取值
+
+`OG` / `TWITTER_CARD` / `JSON_LD` / `MANIFEST` / `META_NAME` / `TITLE_TAG` / `HTML_ATTR` / `LINK_TAG`。
 
 ### 错误响应
 
-错误响应体统一为 `{"error": "<类型>", "detail": "<可选详情>"}`，`detail` 仅在有附加信息时出现。
+统一为 `{"error": "<机器可读码>", "detail": "<可选详情>", "fetch": {…}}`，`detail` 与 `fetch`
+仅在有附加信息时出现。`error` 是**稳定的大写常量**，可直接用于分支判断。
 
 | HTTP 状态码 | `error` | 触发条件 |
 |-------------|---------|----------|
-| `401` | `unauthorized` | 配置了 `SCRAPER_AUTH_TOKEN` 但请求未带 / 带错 `Authorization: Bearer <token>` |
-| `403` | `forbidden target` | 目标命中 SSRF 防护（解析到私有 / 回环 / 链路本地地址） |
-| `422` | `invalid url` | URL 格式非法（非 http/https 或无法解析） |
-| `502` | `fetch failed` | Layer 1 网络请求失败 |
-| `502` | `headless failed` | Layer 2 无头浏览器抓取失败 |
-| `502` | `scrape failed recently, retry after 60s` | 命中**负缓存**：该 URL 60 秒内刚失败过，直接拒绝以避免重复触发高开销抓取 |
-| `503` | `service overloaded` | 并发中的 `/scrape` + `/ping` 请求数超过 `MAX_CONCURRENT_REQUESTS`，快速失败而非排队 |
-| `504` | `timeout` | 抓取超时（Layer 1 见 `REQUEST_TIMEOUT_SECS`，Layer 2 见 `HEADLESS_TIMEOUT_SECS`） |
+| `401` | `UNAUTHORIZED` | 配置了 `SCRAPER_AUTH_TOKEN` 但请求未带 / 带错 `Authorization: Bearer <token>` |
+| `403` | `FORBIDDEN_TARGET` | 目标命中 SSRF 防护（解析到私有 / 回环 / 链路本地地址） |
+| `404` | `CACHE_MISS` | `cache.mode = ONLY_IF_CACHED` 且未命中 |
+| `422` | `INVALID_URL` | URL 格式非法（非 http/https 或无法解析） |
+| `422` | *(axum 纯文本)* | 请求体含未知字段或类型不符（`deny_unknown_fields`），响应体非 JSON |
+| `502` | `FETCH_FAILED` | Layer 1 网络请求失败 |
+| `502` | `HEADLESS_FAILED` | Layer 2 无头浏览器抓取失败 |
+| `502` | `RECENTLY_FAILED` | 命中**负缓存**：该 URL 60 秒内刚失败过。`cache.mode = BYPASS` 可绕过 |
+| `503` | `OVERLOADED` | 并发中的 `/scrape` + `/ping` 超过 `MAX_CONCURRENT_REQUESTS`，快速失败而非排队 |
+| `503` | `OSS_FAILED` | 对象存储上传失败 |
+| `504` | `TIMEOUT` | 抓取超时（Layer 1 见 `REQUEST_TIMEOUT_SECS`，Layer 2 见 `HEADLESS_TIMEOUT_SECS`） |
 
 ```json
 {
-  "error": "forbidden target",
-  "detail": "host resolves to private address 10.0.0.5"
+  "error": "FORBIDDEN_TARGET",
+  "detail": "host resolves to blocked address 10.0.0.5"
 }
 ```
 
@@ -167,21 +302,32 @@ axum_http_requests_duration_seconds_bucket{method="GET",status="200",endpoint="/
 
 ## 解析策略
 
-不指定 `headless`（或 `headless=false`）时，Layer 1（普通 HTTP）按以下优先级提取元数据，成功即返回：
+元数据提取是**逐字段独立回落**的，各字段的实际出处记录在 `meta.sources[字段名]` 里：
 
-1. **Open Graph** — `og:title`、`og:description`、`og:image`
-2. **Twitter Card** — `twitter:title`、`twitter:description`、`twitter:image`
-3. **JSON-LD** — 结构化数据中的 `name` / `description` / `image`
-4. **HTML 回退** — `<title>` + `<meta name="description">`
+| 字段 | 回落顺序 |
+|---|---|
+| `title` | `og:title` → `twitter:title` → JSON-LD `name` → `<title>` |
+| `description` | `og:description` → `twitter:description` → JSON-LD `description` → `meta[name=description]` |
+| `siteName` | `og:site_name` → JSON-LD `publisher` → manifest `name` |
+| `shortName` | manifest `short_name`（唯一来源） |
+| `themeColor` | `meta[name=theme-color]` → manifest `theme_color` |
 
-Layer 1 未获取到 `title` 时（常见于纯 JS 渲染页面），自动回退至 Layer 2（headless Chrome），此时 `source` 返回 `headless`，并附带 `screenshot` 字段。`headless=true` 时跳过 Layer 1，直接走 Layer 2。
+**这与旧版按 og / twitter_card / json_ld / html 分四个互斥分支、整体上报一个 `source` 的做法
+不同。** 旧做法在分支内部本就会混用来源（OG 分支里 `og:description` 缺失时会回落到
+`meta[name=description]`），却仍整体上报 `"og"` —— 那个字段一直在说谎，现已移除。
+
+图片方面，页面声明的每一张都会返回，标注其 `extractor`，不做择优。`<link rel="manifest">`
+存在时会**额外发一次请求**拉取 Web App Manifest（`extract.manifest = false` 可关闭），其
+`icons[]` 展开为 `MANIFEST_ICON` 资产，`name` / `short_name` / `theme_color` 回填进 `meta`
+（只填空缺，不覆盖页面自己声明的值；`shortName` 除外，它只可能来自 manifest）。
 
 ---
 
 ## 缓存语义
 
-- **正向缓存**：成功结果以规范化 URL（小写主机、排序查询参数、去除 fragment）为键写入内存缓存，命中时响应携带 `"cached": true`。容量 10,000 条，TTL 由 `CACHE_TTL_SECS` 控制（默认 3600s）。
-- **负向缓存**：`timeout` / `fetch failed` / `headless failed` 会将 URL 标记为近期失败（TTL 60s），期间重复请求直接返回 `502 scrape failed recently, retry after 60s`。`invalid url` 与 `forbidden target` 不写入负缓存。
+- **正向缓存**：成功结果以规范化 URL（小写主机、排序查询参数、去除 fragment）为键写入内存缓存，命中时响应的 `fetch.fromCache` 为 `true`，且 `request` 块回显的是**本次**请求参数而非当初写入缓存的那次。容量 10,000 条，TTL 由 `CACHE_TTL_SECS` 控制（默认 3600s）。
+- **负向缓存**：`TIMEOUT` / `FETCH_FAILED` / `HEADLESS_FAILED` 会将 URL 标记为近期失败（TTL 60s），期间重复请求直接返回 `502 RECENTLY_FAILED`。`INVALID_URL` 与 `FORBIDDEN_TARGET` 不写入负缓存。
+- **绕过**：`cache.mode = BYPASS` 同时绕过正向与负向缓存并覆盖正向缓存。缓存键只按 URL，不含请求参数，因此缓存里存的是"当次参数下的产物"——参数不同需要重取时请用 `BYPASS`。
 
 ---
 
@@ -195,10 +341,29 @@ curl -X POST http://localhost:3000/scrape \
 ```
 
 ```bash
-# 强制使用无头浏览器（适用于 JS 渲染页面）
+# 强制使用无头浏览器（适用于 JS 渲染页面）并要截图
 curl -X POST http://localhost:3000/scrape \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://huaban.com/", "headless": true}'
+  -d '{"url": "https://huaban.com/",
+       "render": {"mode": "HEADLESS"},
+       "screenshot": {"enabled": true}}'
+```
+
+```bash
+# 管理后台"重试"：绕过缓存强制重抓，并把图标传到对象存储
+curl -X POST http://localhost:3000/scrape \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://github.com",
+       "cache": {"mode": "BYPASS"},
+       "assets": {"download": "UPLOAD"}}'
+```
+
+```bash
+# 只要文字元数据，省掉图片与 manifest 的额外请求
+curl -X POST http://localhost:3000/scrape \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://github.com",
+       "extract": {"assets": false, "manifest": false, "jsonld": false}}'
 ```
 
 ```bash

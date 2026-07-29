@@ -15,10 +15,11 @@ import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekMessage
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekRequest
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekResponse
+import top.tcyeee.bookmarkify.entity.dto.NsfwCheckResult
 import top.tcyeee.bookmarkify.entity.dto.PingRequest
 import top.tcyeee.bookmarkify.entity.dto.PingResponse
-import top.tcyeee.bookmarkify.entity.dto.ScrapeRequest
-import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
+import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
+import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.ScrapperCallLogEntity
 import top.tcyeee.bookmarkify.mapper.ScrapperCallLogMapper
@@ -38,10 +39,11 @@ class ApiServiceImpl(
         if (scrapperConfig.authToken.isBlank()) this
         else header("Authorization", "Bearer ${scrapperConfig.authToken}")
 
-    override fun queryWebsiteInfo(domain: String): ScrapeResponse {
-        val url = buildUrl(domain)
+    override fun queryWebsiteInfo(domain: String): ScrapeResponse = scrape(domain, ScrapeRequest(url = buildUrl(domain)))
+
+    override fun scrape(domain: String, request: ScrapeRequest): ScrapeResponse {
+        val url = request.url.takeIf { it.isNotBlank() } ?: buildUrl(domain)
         val startedAt = System.currentTimeMillis()
-        val request = ScrapeRequest(url = url)
 
         // scrapper 可能回退到无头浏览器（HEADLESS_TIMEOUT + IDLE_WAIT），超时给足 60s
         val httpResponse = runCatching {
@@ -58,7 +60,8 @@ class ApiServiceImpl(
 
         val body = httpResponse.body()
         if (!httpResponse.isOk) {
-            // 错误响应体形如 {"error":"timeout","detail":"..."}
+            // 错误响应体形如 {"error":"FETCH_FAILED","detail":"..."}；deny_unknown_fields
+            // 命中时 axum 返回的是纯文本，解析不出 error 字段也不能炸
             val msg = runCatching { objectMapper.readTree(body).path("error").asText(null) }.getOrNull()
                 ?: "scrapper 返回 ${httpResponse.status}"
             logScrapperCall(url, startedAt, success = false, httpStatus = httpResponse.status, errorMsg = msg)
@@ -73,7 +76,10 @@ class ApiServiceImpl(
 
         logScrapperCall(
             url, startedAt, success = true, httpStatus = httpResponse.status,
-            source = scrapeResponse.source, cached = scrapeResponse.cached,
+            // 调用日志沿用"命中来源"这一列，取标题的出处作为代表；契约里出处是逐字段的，
+            // 单列存不下全部，完整信息在 scrape_snapshot 里
+            source = scrapeResponse.meta?.sources?.get("title")?.extractor?.name,
+            cached = scrapeResponse.fetch.fromCache,
         )
         return scrapeResponse
     }
@@ -113,7 +119,7 @@ class ApiServiceImpl(
                     role = "system",
                     content = """
                         你是一个网站简称提取助手。根据用户提供的网站标题，提取最简洁的品牌名或产品名。
-                        规则：只返回简称本身，不要任何解释、标点或额外文字；无法判断时返回空字符串。
+                        规则：只返回简称本身，不要任何解释、标点或额外文字；无法判断时只返回 NONE 这一个词，不要输出"空字符串"等描述性文字。
                         示例：
                         - "小红书 - 你的生活兴趣社区" → 小红书
                         - "Bilibili - 弹幕视频网" → Bilibili
@@ -137,7 +143,10 @@ class ApiServiceImpl(
         return runCatching {
             objectMapper.readValue<DeepSeekResponse>(responseBody)
                 .choices?.firstOrNull()?.message?.content
-                ?.trim()?.takeIf { it.isNotBlank() }
+                // 模型偶尔会把"无法判断时返回空字符串"的指令误当作要输出的内容，直接吐出"空字符串"这几个字
+                // 而非真正的空响应，导致该字面量被当作合法简称存入 appName 并覆盖真实标题。这里除了空白，
+                // 额外过滤掉约定的哨兵词 NONE 以及历史上曾被污染的字面量"空字符串"，双重兜底。
+                ?.trim()?.takeIf { it.isNotBlank() && it != "NONE" && it != "空字符串" }
         }.getOrNull()
     }
 
@@ -244,11 +253,12 @@ class ApiServiceImpl(
         }.getOrElse { false }
     }
 
-    override fun inferNsfw(title: String?, description: String?, host: String): Boolean {
+    override fun inferNsfw(title: String?, description: String?, host: String): NsfwCheckResult {
         val systemPrompt = """
             你是一个网站内容安全审核助手。根据用户给出的网站信息，判断该网站是否可能涉及
             成人色情、赌博博彩、或其他明显违法违规内容。
-            规则：只返回 yes 或 no，不要任何解释、标点或额外文字；信息不足或无法判断时返回 no。
+            规则：如果不涉及，只返回 no；如果涉及，返回一个不超过15个字的简短理由（例如：疑似成人色情内容、
+            疑似赌博博彩内容），不要任何解释、标点或额外文字；信息不足或无法判断时返回 no。
         """.trimIndent()
         val userContent = "host: $host\ntitle: ${title ?: ""}\ndescription: ${description ?: ""}"
 
@@ -257,7 +267,7 @@ class ApiServiceImpl(
                 DeepSeekMessage(role = "system", content = systemPrompt),
                 DeepSeekMessage(role = "user", content = userContent),
             ),
-            maxTokens = 5,
+            maxTokens = 30,
         )
 
         val responseBody = runCatching {
@@ -268,14 +278,18 @@ class ApiServiceImpl(
                 .timeout(10000)
                 .execute()
                 .body()
-        }.getOrNull() ?: return false
+        }.getOrNull() ?: return NsfwCheckResult(false)
 
         val raw = runCatching {
             objectMapper.readValue<DeepSeekResponse>(responseBody)
                 .choices?.firstOrNull()?.message?.content
-        }.getOrNull() ?: return false
+        }.getOrNull()?.trim() ?: return NsfwCheckResult(false)
 
-        return raw.trim().lowercase().startsWith("y")
+        return if (raw.isBlank() || raw.lowercase().startsWith("no")) {
+            NsfwCheckResult(false)
+        } else {
+            NsfwCheckResult(true, raw)
+        }
     }
 
     override fun inferContentViolation(title: String?, description: String?, host: String): AiReviewOutcome {

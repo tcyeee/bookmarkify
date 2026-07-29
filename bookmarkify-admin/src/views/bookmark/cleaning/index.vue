@@ -33,6 +33,8 @@ import {
 import { ElMessage } from "element-plus";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 
+import BookmarkAssetCell from "../BookmarkAssetCell.vue";
+import { faviconOf, logoOf, socialOf } from "../siteAsset";
 import BookmarkIcon from "../liveness/BookmarkIcon.vue";
 
 const ElCard = defineAsyncComponent(() =>
@@ -355,7 +357,11 @@ function handleReset() {
 const gridOptions: VxeGridProps<BookmarkEntity> = {
   id: "admin-bookmark-cleaning",
   columns: [
-    { title: "头像", width: 80, align: "center", slots: { default: "icon" } },
+    // 头像拆成三类图分别展示：favicon(小图标 base64) / logo(高清 LOGO) / og(宽屏分享图)，缺哪张一眼可见。
+    // field 指到各自的数据来源，既是真实取值路径，也让列自定义(customConfig.storage)有稳定唯一的 key
+    { field: "assets", title: "favicon", width: 80, slots: { default: "favicon" } },
+    { field: "assets", title: "logo", width: 80, slots: { default: "logo" } },
+    { field: "assets", title: "社交图", width: 90, slots: { default: "og" } },
     { field: "appName", title: "App Name", minWidth: 120 },
     { field: "title", title: "标题", minWidth: 220 },
     { field: "urlHost", title: "域名", minWidth: 180 },
@@ -372,7 +378,6 @@ const gridOptions: VxeGridProps<BookmarkEntity> = {
       field: "rowActions",
       title: "操作",
       width: 140,
-      align: "center",
       fixed: "right",
       slots: { default: "actions" },
     },
@@ -428,13 +433,14 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
         </ElForm>
       </div>
       <Grid @cell-click="handleRowClick">
-        <template #icon="{ row }">
-          <BookmarkIcon
-            :value="row"
-            :size="32"
-            :hd-url="row.logo?.useHdLogo ? row.logo?.logoUrl : undefined"
-            class="mx-auto"
-          />
+        <template #favicon="{ row }">
+          <BookmarkAssetCell :src="faviconOf(row)" />
+        </template>
+        <template #logo="{ row }">
+          <BookmarkAssetCell :src="logoOf(row)" />
+        </template>
+        <template #og="{ row }">
+          <BookmarkAssetCell :src="socialOf(row)" wide />
         </template>
         <template #parseStatus="{ row }">
           <ElTag v-if="row.parseStatus === 'SUCCESS'" type="success" size="small">
@@ -487,9 +493,9 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
               <!-- 左：头像 + 状态 + 活跃 -->
               <div class="flex w-32 flex-col items-center gap-3">
                 <BookmarkIcon
-                  :value="currentRow"
+                  :src="logoOf(currentRow) ?? faviconOf(currentRow)"
                   :size="64"
-                  :hd-url="currentRow.logo?.useHdLogo ? currentRow.logo?.logoUrl : undefined"
+                  
                 />
                 <div>
                   <ElTag v-if="currentRow.parseStatus === 'SUCCESS'" type="success" size="small">

@@ -111,7 +111,7 @@
               v-for="item in suggestResults"
               :key="item.id"
               class="flex items-center gap-3 py-2 px-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
-              <img v-if="item.logo?.iconBase64" :src="item.logo.iconBase64" class="size-5 rounded shrink-0" />
+              <img v-if="item.logo?.url" :src="item.logo.url" class="size-5 rounded shrink-0" />
               <div v-else class="size-5 rounded bg-slate-100 dark:bg-slate-800 center shrink-0">
                 <Icon icon="mdi:earth" class="size-3 text-slate-400" />
               </div>
@@ -230,7 +230,7 @@ interface BookmarkSearchVO {
   urlScheme: string
   appName?: string
   title?: string
-  logo?: { iconBase64?: string }
+  logo?: { url?: string }
 }
 
 const bookmarkStore = useBookmarkStore()

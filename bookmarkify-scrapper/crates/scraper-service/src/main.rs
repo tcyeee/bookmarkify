@@ -1,6 +1,9 @@
 mod cache;
+mod contract;
+mod extract;
 mod headless;
 mod oss;
+mod pipeline;
 mod scraper;
 
 use axum::{
@@ -18,6 +21,21 @@ use std::{env, sync::Arc, time::{Duration, Instant}};
 use subtle::ConstantTimeEq;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
+
+/// 串行化所有会读写 `SSRF_ALLOW_PRIVATE` 的测试。
+///
+/// 该开关是进程级环境变量，而单元测试默认并行跑：一部分用例要求它**不存在**（验证
+/// SSRF 拦截生效），端到端用例又必须把它打开才能访问本机测试服务器。两者并行就会互相
+/// 掀桌子，所以统一在这把锁下排队。
+#[cfg(test)]
+static ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// 取 [`ENV_LOCK`]。用 tokio 的异步互斥而非 `std::sync::Mutex`：后者跨 `.await`
+/// 持有时，在多线程 runtime 下可能把整个 worker 线程连同锁一起阻塞住。
+#[cfg(test)]
+async fn env_guard() -> tokio::sync::MutexGuard<'static, ()> {
+    ENV_LOCK.lock().await
+}
 
 /// 全局应用状态，通过 `Arc` 在所有请求处理器之间共享。
 #[derive(Clone)]
@@ -84,6 +102,10 @@ async fn main() {
 
     let mut client_builder = reqwest::Client::builder()
         .dns_resolver(Arc::new(scraper::SsrfSafeResolver::new(proxy_host)))
+        // 必须关掉自动跟随：`scraper::fetch_html` 手动逐跳跟随，才能把整条重定向链
+        // 报进 `fetch.redirectChain`，并让每一跳都重新过一次 SSRF 校验。开着自动跟随
+        // 会让那个循环永远看不到 3xx，`finalUrl` 也会停留在初始 URL 上。
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(timeout_secs));
 
     if let Some(url) = proxy_url {
@@ -232,55 +254,12 @@ async fn auth_middleware(State(state): State<AppState>, req: Request, next: Next
     } else {
         (
             StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse { error: "unauthorized".to_string(), detail: None }),
+            Json(contract::ErrorResponse { error: "UNAUTHORIZED".to_string(), detail: None, fetch: None }),
         )
             .into_response()
     }
 }
 
-
-/// POST /scrape 的请求体结构。
-#[derive(Deserialize)]
-struct ScrapeRequest {
-    /// 目标 URL，必填
-    url: String,
-    /// 是否强制使用无头浏览器（Layer 2）。默认为 `false`：先尝试普通 HTTP，
-    /// 若 Layer 1 未获取到标题则自动回退到 Layer 2。
-    headless: Option<bool>,
-}
-
-/// POST /scrape 的成功响应体结构。
-#[derive(Serialize)]
-struct ScrapeResponse {
-    /// 页面标题
-    title: Option<String>,
-    /// 页面描述
-    description: Option<String>,
-    /// 页面主图 URL
-    image: Option<String>,
-    /// 网站图标（base64 data URL）
-    favicon: Option<String>,
-    /// 网站 Logo URL（有 OSS 时为 OSS URL，否则为原始 URL）
-    logo: Option<String>,
-    /// 数据来源标识（"og" / "twitter_card" / "json_ld" / "html" / "headless"）
-    source: String,
-    /// 命中缓存时为 `Some(true)`，实时抓取时省略此字段
-    #[serde(skip_serializing_if = "Option::is_none")]
-    cached: Option<bool>,
-    /// 截图：OSS 上传后为 URL，否则为 base64 编码的 PNG 数据（仅 headless 模式下存在）
-    #[serde(skip_serializing_if = "Option::is_none")]
-    screenshot: Option<String>,
-}
-
-/// 错误响应体结构。
-#[derive(Serialize)]
-struct ErrorResponse {
-    /// 错误类型描述
-    error: String,
-    /// 可选的详细错误信息（如网络错误消息）
-    #[serde(skip_serializing_if = "Option::is_none")]
-    detail: Option<String>,
-}
 
 /// POST /ping 的请求体结构。
 #[derive(Deserialize)]
@@ -308,7 +287,7 @@ async fn ping_handler(
         Err(_) => {
             return (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                Json(ErrorResponse { error: "invalid url".to_string(), detail: None }),
+                Json(contract::ErrorResponse { error: "INVALID_URL".to_string(), detail: None, fetch: None }),
             )
                 .into_response();
         }
@@ -317,7 +296,7 @@ async fn ping_handler(
     if !matches!(url.scheme(), "http" | "https") {
         return (
             StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ErrorResponse { error: "invalid url".to_string(), detail: None }),
+            Json(contract::ErrorResponse { error: "INVALID_URL".to_string(), detail: None, fetch: None }),
         )
             .into_response();
     }
@@ -352,9 +331,10 @@ async fn ping_handler(
 async fn handle_overload(_err: tower::BoxError) -> Response {
     (
         StatusCode::SERVICE_UNAVAILABLE,
-        Json(ErrorResponse {
-            error: "service overloaded".to_string(),
+        Json(contract::ErrorResponse {
+            error: "OVERLOADED".to_string(),
             detail: Some("too many concurrent scrape requests, retry shortly".to_string()),
+            fetch: None,
         }),
     )
         .into_response()
@@ -369,52 +349,36 @@ fn base64_encode(bytes: &[u8]) -> String {
     STANDARD.encode(bytes)
 }
 
-async fn favicon_to_base64(url: Option<&str>, http: &reqwest::Client) -> Option<String> {
-    let url = url?;
-    let parsed = reqwest::Url::parse(url).ok()?;
-    // SSRF pre-flight: reject private/loopback targets before making the request.
-    // The shared client's SsrfSafeResolver also enforces this at the DNS level,
-    // but the pre-flight gives a clean early return rather than a connection error.
-    scraper::validate_target_host(&parsed).await.ok()?;
-    let referer = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
-    let response = http.get(url).header("Referer", &referer).send().await.ok()?.error_for_status().ok()?;
-    let content_type = response
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        // Strip control characters (e.g. \t) to prevent data-URI injection
-        .map(|s| s.chars().take_while(|c| !c.is_ascii_control()).collect::<String>())
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "image/png".to_string());
-    let bytes = scraper::read_body_capped(response, scraper::MAX_FAVICON_BYTES)
-        .await
-        .map_err(|e| tracing::warn!("favicon download failed for {url}: {e}"))
-        .ok()?;
-    use base64::{engine::general_purpose::STANDARD, Engine};
-    Some(format!("data:{content_type};base64,{}", STANDARD.encode(&bytes)))
-}
-
-/// POST /scrape 主处理器：协调缓存查询、普通抓取和无头抓取的完整流程。
+/// POST /scrape 主处理器：按请求参数编排取回、提取、富化三个阶段。
 ///
 /// ## 处理流程
-/// 1. **缓存命中**：若 URL 在缓存中存在，直接返回缓存结果（`cached: true`）
-/// 2. **headless=true**：直接调用无头浏览器抓取（Layer 2）
-/// 3. **headless=false（默认）**：
-///    - 先调用普通 HTTP 抓取（Layer 1）
-///    - 若 Layer 1 返回的 `title` 为 `None`（JS 渲染页面），自动回退到 Layer 2
-/// 4. 抓取成功后将结果写入缓存，再返回给客户端
+/// 1. **负缓存**：近期失败过的 URL 直接拒绝，避免重复触发高开销的 headless
+/// 2. **缓存**：按 `cache.mode` 决定命中 / 绕过 / 只读缓存
+/// 3. **取回 HTML**：按 `render.mode` 走 Layer 1、Layer 2 或"L1 无标题则回退 L2"
+/// 4. **提取**：[`extract::extract_page`] 从 HTML 得出元数据与图片**声明**
+/// 5. **富化**：拉 manifest 回填 `shortName` 与 `MANIFEST_ICON`；按 `assets.download`
+///    取回图片正文算出真实尺寸 / `contentHash`
+///
+/// 各阶段的局部失败一律降级为 `diagnostics.warnings`，不让增量信息拖垮整次抓取。
 ///
 /// ## 响应状态码
 /// | 状态 | 含义 |
 /// |---|---|
 /// | 200 | 成功（含缓存命中） |
+/// | 403 | SSRF 拦截 / robots 禁止 |
+/// | 404 | `cache.mode = ONLY_IF_CACHED` 且未命中 |
 /// | 422 | URL 格式非法 |
-/// | 504 | 抓取超时 |
 /// | 502 | 网络请求失败或无头浏览器失败 |
+/// | 504 | 抓取超时 |
 async fn scrape_handler(
     State(state): State<AppState>,
-    Json(body): Json<ScrapeRequest>,
+    Json(body): Json<contract::ScrapeRequest>,
 ) -> Response {
+    use contract::{
+        CacheMode, Diagnostics, FetchInfo, ImageFormat, RenderMode,
+        ScrapeResponse, Screenshot, Timing,
+    };
+
     let start = Instant::now();
     let domain = reqwest::Url::parse(&body.url)
         .ok()
@@ -422,146 +386,370 @@ async fn scrape_handler(
         .unwrap_or_else(|| body.url.clone());
 
     // 近期失败的 URL 直接拒绝，防止重复触发高开销的 headless 抓取
-    if state.cache.get_error(&body.url).await {
+    if body.cache.mode != CacheMode::Bypass && state.cache.get_error(&body.url).await {
         tracing::info!(domain, "scrape rejected: recently failed (negative cache hit)");
-        return (
+        return error_response(
             StatusCode::BAD_GATEWAY,
-            Json(ErrorResponse {
-                error: "scrape failed recently, retry after 60s".to_string(),
-                detail: None,
-            }),
-        )
-            .into_response();
+            "RECENTLY_FAILED",
+            Some("scrape failed recently, retry after 60s".to_string()),
+        );
     }
 
-    // 优先返回缓存结果，避免重复抓取
-    if let Some(cached) = state.cache.get(&body.url).await {
-        let screenshot = cached.screenshot_url.clone().or_else(|| {
-            cached.screenshot_bytes.as_ref().map(|b| base64_encode(b))
-        });
-        tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), source = cached.source, "cache hit");
-        return Json(ScrapeResponse {
-            title: cached.title.clone(),
-            description: cached.description.clone(),
-            image: cached.image.clone(),
-            favicon: cached.favicon.clone(),
-            logo: cached.logo.clone(),
-            source: cached.source.clone(),
-            cached: Some(true),
-            screenshot,
-        })
-        .into_response();
+    // BYPASS 强制重抓（管理后台"重试"走这条，否则重试可能直接命中缓存等于没试）
+    if body.cache.mode != CacheMode::Bypass {
+        if let Some(cached) = state.cache.get(&body.url).await {
+            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "cache hit");
+            let mut hit = (*cached).clone();
+            hit.fetch.from_cache = true;
+            // 回显本次请求，而不是当初把它写进缓存的那次
+            hit.request = body;
+            return Json(hit).into_response();
+        }
+    }
+    if body.cache.mode == CacheMode::OnlyIfCached {
+        return error_response(StatusCode::NOT_FOUND, "CACHE_MISS", None);
     }
 
-    let result = if body.headless.unwrap_or(false) {
-        tracing::info!(domain, "scraping (layer2/headless)");
-        headless::scrape_headless(&body.url, state.headless_timeout_secs, state.headless_idle_wait_secs).await
+    // ── 阶段 1：取回 HTML ──────────────────────────────────────────────────
+    let viewport = body.render.viewport.map(|v| (v.width, v.height));
+    let want_screenshot = body.screenshot.enabled;
+    // 截图只有无头浏览器能出，请求截图即隐含要走 Layer 2
+    let effective_mode = if want_screenshot && body.render.mode == RenderMode::Auto {
+        RenderMode::Headless
     } else {
-        tracing::info!(domain, "scraping (layer1)");
-        match scraper::scrape(&body.url, &state.client).await {
-            Ok(r) if r.title.is_none() => {
-                tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "layer1 no title, falling back to layer2");
-                headless::scrape_headless(&body.url, state.headless_timeout_secs, state.headless_idle_wait_secs).await
+        body.render.mode
+    };
+
+    let mut warnings: Vec<String> = Vec::new();
+    let fetched = match effective_mode {
+        RenderMode::Headless => {
+            tracing::info!(domain, "scraping (layer2/headless)");
+            headless::capture_headless(
+                &body.url,
+                state.headless_timeout_secs,
+                state.headless_idle_wait_secs,
+                viewport,
+                want_screenshot,
+            )
+            .await
+            .map(|c| Fetched::from_headless(&body.url, c))
+        }
+        RenderMode::Http => {
+            tracing::info!(domain, "scraping (layer1)");
+            scraper::fetch_html(
+                &body.url,
+                &state.client,
+                body.render.user_agent.as_deref(),
+                body.render.locale.as_deref(),
+            )
+            .await
+            .map(Fetched::from_http)
+        }
+        RenderMode::Auto => {
+            tracing::info!(domain, "scraping (layer1, auto-fallback)");
+            match scraper::fetch_html(
+                &body.url,
+                &state.client,
+                body.render.user_agent.as_deref(),
+                body.render.locale.as_deref(),
+            )
+            .await
+            {
+                // Layer 1 拿不到标题基本意味着页面靠 JS 渲染，回退 Layer 2
+                Ok(cap) if !html_has_title(&cap.html) => {
+                    tracing::info!(
+                        domain,
+                        elapsed_ms = start.elapsed().as_millis(),
+                        "layer1 no title, falling back to layer2"
+                    );
+                    warnings.push("layer1 produced no title, fell back to headless".to_string());
+                    headless::capture_headless(
+                        &body.url,
+                        state.headless_timeout_secs,
+                        state.headless_idle_wait_secs,
+                        viewport,
+                        want_screenshot,
+                    )
+                    .await
+                    .map(|c| Fetched::from_headless(&body.url, c))
+                }
+                other => other.map(Fetched::from_http),
             }
-            other => other,
         }
     };
 
-    match result {
-        Ok(r) => {
-            // If OSS is configured, upload assets concurrently. Asset failures (image,
-            // logo, screenshot, favicon) are non-fatal: fields are set to None or the
-            // original URL with a warning rather than failing the whole request.
-            let r = if let Some(oss) = &state.oss {
-                oss.upload_assets(r, &body.url, &state.client).await
-            } else {
-                let favicon_b64 = favicon_to_base64(r.favicon.as_deref(), &state.client).await;
-                // Pre-encode screenshot once so subsequent cache hits don't re-encode.
-                let mut r = scraper::ScrapeResult { favicon: favicon_b64, ..r };
-                if let Some(bytes) = r.screenshot_bytes.take() {
-                    r.screenshot_url = Some(base64_encode(&bytes));
-                }
-                r
+    let fetched = match fetched {
+        Ok(f) => f,
+        Err(e) => {
+            if !matches!(
+                e,
+                scraper::ScrapeError::InvalidUrl | scraper::ScrapeError::ForbiddenTarget(_)
+            ) {
+                state.cache.set_error(&body.url).await;
+            }
+            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "scrape failed: {e:?}");
+            return scrape_error_response(e);
+        }
+    };
+
+    // ── 阶段 2：纯提取 ────────────────────────────────────────────────────
+    let mut extracted = extract::extract_page(&fetched.html, &fetched.final_url, &body.extract);
+
+    // ── 阶段 3：网络富化 ──────────────────────────────────────────────────
+    let mut manifest_block = None;
+    if let Some(manifest_url) = extracted.manifest_url.clone() {
+        match pipeline::fetch_manifest(&manifest_url, &fetched.final_url, &state.client).await {
+            Ok((block, icons, mmeta)) => {
+                // manifest 是 shortName 的唯一标准来源，也是多尺寸 icons 的正统出处
+                apply_manifest_meta(&mut extracted.meta, mmeta);
+                extracted.assets.extend(icons);
+                manifest_block = Some(block);
+            }
+            Err(e) => warnings.push(format!("manifest: {e}")),
+        }
+    }
+
+    let (assets, asset_warnings) = pipeline::process_assets(
+        std::mem::take(&mut extracted.assets),
+        &body.assets,
+        &state.client,
+        state.oss.as_deref(),
+    )
+    .await;
+    warnings.extend(asset_warnings);
+
+    // 截图：有 OSS 传 OSS，没有则内联 data URL
+    let screenshot = match fetched.screenshot_bytes {
+        Some(bytes) if !bytes.is_empty() => {
+            let (w, h) = pipeline::image_dimensions(&bytes).unwrap_or((0, 0));
+            let byte_size = Some(bytes.len() as u64);
+            let mut shot = Screenshot {
+                storage_url: None,
+                data_url: None,
+                width: w,
+                height: h,
+                // spider 侧固定输出 PNG；format 参数目前只影响调用方预期，不做转码
+                format: ImageFormat::Png,
+                byte_size,
             };
-
-            let screenshot = r.screenshot_url.clone().or_else(|| {
-                r.screenshot_bytes.as_ref().map(|b| base64_encode(b))
-            });
-
-            let r = Arc::new(r);
-            state.cache.set(&body.url, Arc::clone(&r)).await;
-
-            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), source = r.source, "scraped ok");
-
-            Json(ScrapeResponse {
-                title: r.title.clone(),
-                description: r.description.clone(),
-                image: r.image.clone(),
-                favicon: r.favicon.clone(),
-                logo: r.logo.clone(),
-                source: r.source.clone(),
-                cached: None,
-                screenshot,
-            })
-            .into_response()
+            match state.oss.as_deref() {
+                Some(oss) => {
+                    let key = oss::OssClient::screenshot_key(&body.url);
+                    match oss.upload_bytes(&key, &bytes, "image/png").await {
+                        Ok(url) => shot.storage_url = Some(url),
+                        Err(e) => {
+                            warnings.push(format!("screenshot upload failed: {e:?}"));
+                            shot.data_url = Some(format!("data:image/png;base64,{}", base64_encode(&bytes)));
+                        }
+                    }
+                }
+                None => {
+                    shot.data_url = Some(format!("data:image/png;base64,{}", base64_encode(&bytes)))
+                }
+            }
+            Some(shot)
         }
+        _ => None,
+    };
 
-        Err(scraper::ScrapeError::InvalidUrl) => {
-            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "scrape failed: invalid url");
-            (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                Json(ErrorResponse { error: "invalid url".to_string(), detail: None }),
-            )
-                .into_response()
+    // ── 组装响应 ─────────────────────────────────────────────────────────
+    let fetch = FetchInfo {
+        final_url: fetched.final_url.to_string(),
+        redirect_chain: fetched
+            .redirects
+            .into_iter()
+            .map(|(url, status)| contract::Redirect { url, status })
+            .collect(),
+        http_status: fetched.http_status,
+        layer_used: fetched.layer,
+        from_cache: false,
+        content_type: fetched.content_type,
+        charset: fetched.charset,
+        byte_size: Some(fetched.byte_size),
+        // TLS 细节需要连接层钩子，reqwest 当前不透出；留空而不是编造
+        tls: None,
+        timing_ms: Timing { total: start.elapsed().as_millis() as u64, ..Default::default() },
+    };
+
+    let mut response = ScrapeResponse::new(body.clone(), fetch);
+    response.meta = body.extract.meta.then_some(extracted.meta);
+    response.assets = assets;
+    response.manifest = manifest_block;
+    response.jsonld = extracted.jsonld;
+    response.opengraph = extracted.opengraph;
+    response.twitter = extracted.twitter;
+    response.feeds = extracted.feeds;
+    response.alternates = extracted.alternates;
+    response.text = body.extract.text.then(|| html_to_text(&fetched.html));
+    response.screenshot = screenshot;
+    response.diagnostics = Diagnostics {
+        warnings,
+        anti_crawler: extracted.anti_crawler,
+        robots: None, // robots.txt 判定尚未实现，按契约省略而不是谎报 allowed
+    };
+
+    tracing::info!(
+        domain,
+        elapsed_ms = start.elapsed().as_millis(),
+        assets = response.assets.len(),
+        layer = ?response.fetch.layer_used,
+        "scraped ok"
+    );
+
+    // 只缓存实打实抓到的结果；download 模式不同产出不同，但 key 只按 URL，
+    // 因此缓存里存的是"当次参数下的产物"，BYPASS 可随时覆盖。
+    state.cache.set(&body.url, Arc::new(response.clone())).await;
+
+    Json(response).into_response()
+}
+
+/// 两条取回路径的统一产物，抹平 Layer 1 / Layer 2 的差异。
+struct Fetched {
+    html: String,
+    final_url: reqwest::Url,
+    redirects: Vec<(String, u16)>,
+    http_status: u16,
+    content_type: Option<String>,
+    charset: Option<String>,
+    byte_size: u64,
+    layer: contract::RenderLayer,
+    screenshot_bytes: Option<Vec<u8>>,
+}
+
+impl Fetched {
+    fn from_http(c: scraper::HttpCapture) -> Self {
+        Self {
+            byte_size: c.byte_size,
+            html: c.html,
+            final_url: c.final_url,
+            redirects: c.redirects,
+            http_status: c.http_status,
+            content_type: c.content_type,
+            charset: c.charset,
+            layer: contract::RenderLayer::Http,
+            screenshot_bytes: None,
         }
+    }
 
-        Err(scraper::ScrapeError::ForbiddenTarget(msg)) => {
-            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), %msg, "scrape failed: forbidden target");
-            (
-                StatusCode::FORBIDDEN,
-                Json(ErrorResponse { error: "forbidden target".to_string(), detail: Some(msg) }),
-            )
-                .into_response()
+    fn from_headless(requested_url: &str, c: headless::HeadlessCapture) -> Self {
+        let final_url = reqwest::Url::parse(requested_url)
+            .unwrap_or_else(|_| reqwest::Url::parse("https://invalid.local/").unwrap());
+        Self {
+            byte_size: c.html.len() as u64,
+            html: c.html,
+            final_url,
+            // Chrome 内部的跳转不经过我们，拿不到链路；留空而不是编造
+            redirects: Vec::new(),
+            http_status: 200,
+            content_type: Some("text/html".to_string()),
+            charset: Some("utf-8".to_string()),
+            layer: contract::RenderLayer::Headless,
+            screenshot_bytes: c.screenshot_bytes,
         }
+    }
+}
 
-        Err(scraper::ScrapeError::Timeout) => {
-            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "scrape failed: timeout");
-            state.cache.set_error(&body.url).await;
-            (
-                StatusCode::GATEWAY_TIMEOUT,
-                Json(ErrorResponse { error: "timeout".to_string(), detail: None }),
-            )
-                .into_response()
+/// 把 manifest 的 name / short_name / theme_color 回填进已提取的元数据。
+///
+/// **只填空缺**，不覆盖页面自己声明的值：页面级的 `og:site_name` 比站点级的
+/// `manifest.name` 更贴近当前页。唯一例外是 `shortName` —— 它只可能来自 manifest。
+fn apply_manifest_meta(meta: &mut contract::PageMeta, m: pipeline::ManifestMeta) {
+    use contract::{MetaExtractor, MetaSource};
+    let note = |meta: &mut contract::PageMeta, field: &str, key: &str| {
+        meta.sources.insert(
+            field.to_string(),
+            MetaSource { extractor: MetaExtractor::Manifest, raw_key: Some(key.to_string()) },
+        );
+    };
+    if let Some(short) = m.short_name {
+        meta.short_name = Some(short);
+        note(meta, "shortName", "short_name");
+    }
+    if meta.site_name.is_none() {
+        if let Some(name) = m.name {
+            meta.site_name = Some(name);
+            note(meta, "siteName", "name");
         }
-
-        Err(scraper::ScrapeError::FetchFailed(msg)) => {
-            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), %msg, "scrape failed: fetch error");
-            state.cache.set_error(&body.url).await;
-            (
-                StatusCode::BAD_GATEWAY,
-                Json(ErrorResponse { error: "fetch failed".to_string(), detail: Some(msg) }),
-            )
-                .into_response()
+    }
+    if meta.theme_color.is_none() {
+        if let Some(color) = m.theme_color {
+            meta.theme_color = Some(color);
+            note(meta, "themeColor", "theme_color");
         }
+    }
+}
 
-        Err(scraper::ScrapeError::HeadlessFailed(msg)) => {
-            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), %msg, "scrape failed: headless error");
-            state.cache.set_error(&body.url).await;
-            (
-                StatusCode::BAD_GATEWAY,
-                Json(ErrorResponse { error: "headless failed".to_string(), detail: Some(msg) }),
-            )
-                .into_response()
+/// Layer 1 是否拿到了非空 `<title>` —— 决定 AUTO 模式要不要回退无头浏览器。
+fn html_has_title(html: &str) -> bool {
+    let opts = contract::ExtractOptions {
+        meta: true,
+        assets: false,
+        manifest: false,
+        jsonld: false,
+        opengraph: true,
+        twitter: true,
+        feeds: false,
+        alternates: false,
+        text: false,
+    };
+    let base = reqwest::Url::parse("https://placeholder.local/").expect("static url");
+    extract::extract_page(html, &base, &opts)
+        .meta
+        .title
+        .is_some_and(|t| !t.trim().is_empty())
+}
+
+/// 极简正文抽取：去掉 script/style 后取文本节点。仅在 `extract.text = true` 时调用。
+fn html_to_text(html: &str) -> String {
+    use ::scraper::{Html, Selector};
+    let doc = Html::parse_document(html);
+    let Ok(body_sel) = Selector::parse("body") else { return String::new() };
+    let Some(body) = doc.select(&body_sel).next() else { return String::new() };
+    let drop_sel = Selector::parse("script, style, noscript").ok();
+    let mut drops: Vec<_> = Vec::new();
+    if let Some(sel) = &drop_sel {
+        drops = doc.select(sel).map(|e| e.id()).collect();
+    }
+    let mut out = String::new();
+    for node in body.descendants() {
+        if drops.iter().any(|d| *d == node.id()) {
+            continue;
         }
+        if let Some(text) = node.value().as_text() {
+            let t = text.trim();
+            if !t.is_empty() {
+                if !out.is_empty() {
+                    out.push(' ');
+                }
+                out.push_str(t);
+            }
+        }
+    }
+    out
+}
 
-        Err(scraper::ScrapeError::OssFailed(msg)) => {
-            // upload_assets no longer propagates OssFailed (asset failures are non-fatal).
-            // This arm satisfies exhaustive matching; it cannot be reached in practice.
-            (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse { error: "oss upload failed".to_string(), detail: Some(msg) }),
-            )
-                .into_response()
+fn error_response(status: StatusCode, code: &str, detail: Option<String>) -> Response {
+    (
+        status,
+        Json(contract::ErrorResponse { error: code.to_string(), detail, fetch: None }),
+    )
+        .into_response()
+}
+
+fn scrape_error_response(e: scraper::ScrapeError) -> Response {
+    use scraper::ScrapeError as E;
+    match e {
+        E::InvalidUrl => error_response(StatusCode::UNPROCESSABLE_ENTITY, "INVALID_URL", None),
+        E::ForbiddenTarget(msg) => {
+            error_response(StatusCode::FORBIDDEN, "FORBIDDEN_TARGET", Some(msg))
+        }
+        E::Timeout => error_response(StatusCode::GATEWAY_TIMEOUT, "TIMEOUT", None),
+        E::FetchFailed(msg) => error_response(StatusCode::BAD_GATEWAY, "FETCH_FAILED", Some(msg)),
+        E::HeadlessFailed(msg) => {
+            error_response(StatusCode::BAD_GATEWAY, "HEADLESS_FAILED", Some(msg))
+        }
+        E::OssFailed(msg) => {
+            error_response(StatusCode::SERVICE_UNAVAILABLE, "OSS_FAILED", Some(msg))
         }
     }
 }
@@ -573,15 +761,240 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tower::ServiceExt;
 
+    /// 构造一条最小可用的缓存条目，供只关心"缓存/鉴权是否放行"的用例复用。
+    fn cached_response(title: &str) -> Arc<contract::ScrapeResponse> {
+        use contract::{FetchInfo, PageMeta, RenderLayer, Timing};
+        let request: contract::ScrapeRequest =
+            serde_json::from_str(r#"{"url":"https://example.com"}"#).unwrap();
+        let fetch = FetchInfo {
+            final_url: "https://example.com/".to_string(),
+            redirect_chain: Vec::new(),
+            http_status: 200,
+            layer_used: RenderLayer::Http,
+            from_cache: false,
+            content_type: None,
+            charset: None,
+            byte_size: None,
+            tls: None,
+            timing_ms: Timing { total: 1, ..Default::default() },
+        };
+        let mut resp = contract::ScrapeResponse::new(request, fetch);
+        resp.meta = Some(PageMeta { title: Some(title.to_string()), ..Default::default() });
+        Arc::new(resp)
+    }
+
     fn test_state() -> AppState {
         AppState {
-            client: reqwest::Client::new(),
+            // 与 main() 一致关掉自动跟随，否则 fetch_html 的手动跟随拿不到 3xx
+            client: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .expect("test client"),
             headless_timeout_secs: 5,
             headless_idle_wait_secs: 1,
             cache: Arc::new(ScrapeCache::new(3600)),
             oss: None,
             auth_token: None,
         }
+    }
+
+    /// 起一个极简 HTTP/1.1 测试服务器，返回监听地址。
+    ///
+    /// 只为端到端验证"取回 → 提取 → manifest → 资产富化"这条完整链路，因此手写而非
+    /// 引入 wiremock 之类的测试依赖（本 crate 一贯克制依赖）。
+    async fn spawn_test_site() -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        // 16x8 的合法 PNG：只有文件头是真的，足够 image_dimensions 读出尺寸
+        let mut png: Vec<u8> = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        png.extend_from_slice(&[0, 0, 0, 13]);
+        png.extend_from_slice(b"IHDR");
+        png.extend_from_slice(&16u32.to_be_bytes());
+        png.extend_from_slice(&8u32.to_be_bytes());
+        png.extend_from_slice(&[8, 6, 0, 0, 0]);
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let base = format!("http://{addr}");
+
+        let html = format!(
+            r#"<html lang="en"><head>
+<title>Fallback Title</title>
+<meta property="og:title" content="OG Title"/>
+<meta name="description" content="From meta name"/>
+<link rel="icon" sizes="16x16" href="/icon.png"/>
+<link rel="apple-touch-icon" href="/icon.png"/>
+<link rel="manifest" href="/site.webmanifest"/>
+<script type="application/ld+json">{{"@type":"Organization","logo":"{base}/icon.png"}}</script>
+</head><body>hello</body></html>"#
+        );
+        // r## 而非 r#：主题色里的 "# 会提前闭合 r#"…"# 字面量
+        let manifest = r##"{"name":"Full Name","short_name":"Shorty","theme_color":"#123456",
+            "icons":[{"src":"/icon.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]}"##;
+
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else { break };
+                let (html, manifest, png) = (html.clone(), manifest.to_string(), png.clone());
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 2048];
+                    let Ok(n) = sock.read(&mut buf).await else { return };
+                    let req = String::from_utf8_lossy(&buf[..n]);
+                    let path = req.split_whitespace().nth(1).unwrap_or("/").to_string();
+
+                    let resp: Vec<u8> = match path.as_str() {
+                        // 用一跳 302 验证 redirectChain 与 finalUrl
+                        "/start" => b"HTTP/1.1 302 Found\r\nLocation: /page\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec(),
+                        "/page" => format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{html}",
+                            html.len()
+                        )
+                        .into_bytes(),
+                        "/site.webmanifest" => format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/manifest+json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{manifest}",
+                            manifest.len()
+                        )
+                        .into_bytes(),
+                        "/icon.png" => {
+                            let mut r = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                png.len()
+                            )
+                            .into_bytes();
+                            r.extend_from_slice(&png);
+                            r
+                        }
+                        _ => b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec(),
+                    };
+                    let _ = sock.write_all(&resp).await;
+                    let _ = sock.shutdown().await;
+                });
+            }
+        });
+
+        base
+    }
+
+    /// 端到端跑通整条链路，并逐条验证本次重构的核心承诺。
+    #[tokio::test]
+    async fn end_to_end_scrape_produces_full_contract() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let base = spawn_test_site().await;
+
+        let app = build_router(test_state(), 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({
+                "url": format!("{base}/start"),
+                "render": { "mode": "HTTP" },
+                "assets": { "download": "PROBE" }
+            }),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        assert_eq!(status, StatusCode::OK, "body: {json}");
+
+        // 1. 手动跟随重定向：链路可见，finalUrl 是跳转后的地址
+        assert_eq!(json["fetch"]["finalUrl"], format!("{base}/page"));
+        assert_eq!(json["fetch"]["redirectChain"][0]["status"], 302);
+        assert_eq!(json["fetch"]["layerUsed"], "HTTP");
+        assert_eq!(json["fetch"]["httpStatus"], 200);
+
+        // 2. 字段级出处：title 来自 OG，description 回落到 meta[name]，两者如实分开记录
+        assert_eq!(json["meta"]["title"], "OG Title");
+        assert_eq!(json["meta"]["sources"]["title"]["extractor"], "OG");
+        assert_eq!(json["meta"]["description"], "From meta name");
+        assert_eq!(json["meta"]["sources"]["description"]["extractor"], "META_NAME");
+
+        // 3. manifest 被真的抓了：shortName 回填，且出处标成 MANIFEST
+        assert_eq!(json["meta"]["shortName"], "Shorty");
+        assert_eq!(json["meta"]["sources"]["shortName"]["extractor"], "MANIFEST");
+        assert_eq!(json["manifest"]["raw"]["name"], "Full Name");
+
+        // 4. 每张声明独立成条，且带出处而非用途
+        let assets = json["assets"].as_array().expect("assets 应为数组");
+        let kinds: Vec<&str> = assets.iter().map(|a| a["extractor"].as_str().unwrap()).collect();
+        for expected in ["LINK_ICON", "APPLE_TOUCH_ICON", "JSON_LD_ORG_LOGO", "MANIFEST_ICON"] {
+            assert!(kinds.contains(&expected), "缺少 {expected}，实际: {kinds:?}");
+        }
+        assert!(assets.iter().all(|a| a.get("role").is_none()), "响应里不该出现 role");
+
+        // 5. PROBE 取回了正文：真实尺寸覆盖了声明的 sizes，并算出 contentHash
+        let link_icon = assets.iter().find(|a| a["extractor"] == "LINK_ICON").unwrap();
+        assert_eq!(link_icon["width"], 16);
+        assert_eq!(link_icon["height"], 8);
+        assert_eq!(link_icon["mime"], "image/png");
+        let hash = link_icon["contentHash"].as_str().unwrap();
+        assert!(hash.starts_with("sha256:"));
+        // PROBE 不保留正文
+        assert!(link_icon.get("dataUrl").is_none());
+        assert!(link_icon.get("storageUrl").is_none());
+
+        // 6. 同一张图被多个 extractor 命中时 hash 相同 —— 这正是"该站没有独立 LOGO"的判据
+        let apple = assets.iter().find(|a| a["extractor"] == "APPLE_TOUCH_ICON").unwrap();
+        assert_eq!(apple["contentHash"].as_str().unwrap(), hash);
+        // 声明的 512x512 是假的，实测应以真实像素为准
+        let manifest_icon = assets.iter().find(|a| a["extractor"] == "MANIFEST_ICON").unwrap();
+        assert_eq!(manifest_icon["declared"]["sizes"], "512x512");
+        assert_eq!(manifest_icon["width"], 16, "真实尺寸应覆盖声明值");
+        assert_eq!(manifest_icon["declared"]["purpose"], "maskable");
+
+        // 7. 原始块原样透传
+        assert_eq!(json["opengraph"]["title"], "OG Title");
+        assert_eq!(json["jsonld"][0]["@type"], "Organization");
+    }
+
+    /// BYPASS 必须无视缓存重抓 —— 管理后台"重试"依赖这个语义
+    #[tokio::test]
+    async fn cache_bypass_ignores_a_cached_entry() {
+        let state = test_state();
+        state.cache.set("https://example.com/cached", cached_response("Stale")).await;
+        let app = build_router(state, 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({"url": "https://example.com/cached", "cache": {"mode": "BYPASS"}}),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        // 没命中缓存就会真的去抓 example.com，测试环境下必然失败 —— 失败本身即证明绕过了缓存
+        assert_ne!(status, StatusCode::OK, "BYPASS 不应命中缓存: {json}");
+    }
+
+    /// ONLY_IF_CACHED 未命中时应 404，且绝不发起网络请求
+    #[tokio::test]
+    async fn only_if_cached_misses_with_404() {
+        let app = build_router(test_state(), 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({"url": "https://example.com/never", "cache": {"mode": "ONLY_IF_CACHED"}}),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(json["error"], "CACHE_MISS");
+    }
+
+    /// 请求体里的未知字段必须被拒绝，而不是静默当成默认值
+    #[tokio::test]
+    async fn legacy_headless_field_is_rejected() {
+        let app = build_router(test_state(), 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({"url": "https://example.com/", "headless": true}),
+            None,
+        );
+        let (status, _) = call(app, req).await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "旧的 headless 字段应被 deny_unknown_fields 拒绝"
+        );
     }
 
     fn json_request(method: &str, uri: &str, body: serde_json::Value, bearer: Option<&str>) -> Request {
@@ -599,10 +1012,14 @@ mod tests {
         let response = app.oneshot(req).await.unwrap();
         let status = response.status();
         let bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+        // axum 的 Json 提取器被拒时返回的是纯文本而非 JSON（如 deny_unknown_fields
+        // 命中），此时退化成字符串，让只关心状态码的用例不必为此炸掉
         let json = if bytes.is_empty() {
             serde_json::Value::Null
         } else {
-            serde_json::from_slice(&bytes).unwrap()
+            serde_json::from_slice(&bytes).unwrap_or_else(|_| {
+                serde_json::Value::String(String::from_utf8_lossy(&bytes).into_owned())
+            })
         };
         (status, json)
     }
@@ -632,17 +1049,18 @@ mod tests {
         let req = json_request("POST", "/scrape", serde_json::json!({"url": "not-a-url"}), None);
         let (status, json) = call(app, req).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(json["error"], "invalid url");
+        assert_eq!(json["error"], "INVALID_URL");
     }
 
     #[tokio::test]
     async fn scrape_forbidden_target_returns_403() {
+        let _env = env_guard().await;
         std::env::remove_var("SSRF_ALLOW_PRIVATE");
         let app = build_router(test_state(), 32);
         let req = json_request("POST", "/scrape", serde_json::json!({"url": "http://127.0.0.1/"}), None);
         let (status, json) = call(app, req).await;
         assert_eq!(status, StatusCode::FORBIDDEN);
-        assert_eq!(json["error"], "forbidden target");
+        assert_eq!(json["error"], "FORBIDDEN_TARGET");
     }
 
     #[tokio::test]
@@ -653,29 +1071,19 @@ mod tests {
         let req = json_request("POST", "/scrape", serde_json::json!({"url": "https://example.com/flaky"}), None);
         let (status, json) = call(app, req).await;
         assert_eq!(status, StatusCode::BAD_GATEWAY);
-        assert!(json["error"].as_str().unwrap().contains("retry after 60s"));
+        assert_eq!(json["error"], "RECENTLY_FAILED");
     }
 
     #[tokio::test]
     async fn scrape_cache_hit_returns_cached_result() {
         let state = test_state();
-        let result = Arc::new(scraper::ScrapeResult {
-            title: Some("Cached Title".to_string()),
-            description: None,
-            image: None,
-            favicon: None,
-            logo: None,
-            source: "og".to_string(),
-            screenshot_bytes: None,
-            screenshot_url: None,
-        });
-        state.cache.set("https://example.com/cached", result).await;
+        state.cache.set("https://example.com/cached", cached_response("Cached Title")).await;
         let app = build_router(state, 32);
         let req = json_request("POST", "/scrape", serde_json::json!({"url": "https://example.com/cached"}), None);
         let (status, json) = call(app, req).await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(json["title"], "Cached Title");
-        assert_eq!(json["cached"], true);
+        assert_eq!(json["meta"]["title"], "Cached Title");
+        assert_eq!(json["fetch"]["fromCache"], true);
     }
 
     #[tokio::test]
@@ -686,7 +1094,7 @@ mod tests {
         let req = json_request("POST", "/scrape", serde_json::json!({"url": "https://example.com/"}), None);
         let (status, json) = call(app, req).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
-        assert_eq!(json["error"], "unauthorized");
+        assert_eq!(json["error"], "UNAUTHORIZED");
     }
 
     #[tokio::test]
@@ -714,16 +1122,7 @@ mod tests {
             .cache
             .set(
                 "https://example.com/authed",
-                Arc::new(scraper::ScrapeResult {
-                    title: Some("Authed".to_string()),
-                    description: None,
-                    image: None,
-                    favicon: None,
-                    logo: None,
-                    source: "html".to_string(),
-                    screenshot_bytes: None,
-                    screenshot_url: None,
-                }),
+                cached_response("Authed"),
             )
             .await;
         let app = build_router(state, 32);
@@ -735,7 +1134,7 @@ mod tests {
         );
         let (status, json) = call(app, req).await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(json["title"], "Authed");
+        assert_eq!(json["meta"]["title"], "Authed");
     }
 
     #[tokio::test]
@@ -744,7 +1143,7 @@ mod tests {
         let req = json_request("POST", "/ping", serde_json::json!({"url": "not-a-url"}), None);
         let (status, json) = call(app, req).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(json["error"], "invalid url");
+        assert_eq!(json["error"], "INVALID_URL");
     }
 
     /// Regression test for an SSRF gap found in review: `ping_handler` used to rely
@@ -756,6 +1155,7 @@ mod tests {
     /// it's blocked pre-flight rather than just refused for some other reason.
     #[tokio::test]
     async fn ping_blocks_loopback_ip_literal_and_never_connects() {
+        let _env = env_guard().await;
         std::env::remove_var("SSRF_ALLOW_PRIVATE");
 
         let hits = Arc::new(AtomicUsize::new(0));

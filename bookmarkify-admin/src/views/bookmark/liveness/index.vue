@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { faviconOf, logoOf, prefOf } from "../siteAsset";
 import type { BookmarkEntity, BookmarkRefetchResult } from "#/api/bookmark";
 
 import { computed, defineAsyncComponent, onMounted, ref } from "vue";
@@ -137,9 +138,9 @@ const iconDirty = computed(() => {
   const item = detailItem.value;
   if (!item) return false;
   return (
-    editPadding.value !== item.logo.iconPadding ||
-    normColor(editBgColor.value) !== normColor(item.logo.iconBgColor) ||
-    editUseHdLogo.value !== (item.logo.useHdLogo ?? false) ||
+    editPadding.value !== prefOf(item.displayPrefs, 'TILE').iconPadding ||
+    normColor(editBgColor.value) !== normColor(prefOf(item.displayPrefs, 'TILE').iconBgColor) ||
+    editUseHdLogo.value !== (false) ||
     (editAppName.value.trim() || "") !== (item.appName || "")
   );
 });
@@ -164,10 +165,10 @@ function openDetail(row: BookmarkEntity) {
   // 图标内边距范围 0~15，缺省值 10
   editPadding.value = Math.min(
     PADDING_MAX,
-    Math.max(PADDING_MIN, row.logo.iconPadding ?? PADDING_DEFAULT),
+    Math.max(PADDING_MIN, prefOf(row.displayPrefs, 'TILE').iconPadding ?? PADDING_DEFAULT),
   );
-  editBgColor.value = row.logo.iconBgColor ?? null;
-  editUseHdLogo.value = row.logo.useHdLogo ?? false;
+  editBgColor.value = prefOf(row.displayPrefs, 'TILE').iconBgColor ?? null;
+  editUseHdLogo.value = false;
   editAppName.value = row.appName ?? "";
   oldLogoError.value = false;
   newLogoError.value = false;
@@ -245,21 +246,35 @@ async function saveIcon() {
         useNewLogo: chooseLogo.value === "new",
       });
       item.title = updated.title;
-      item.logo = updated.logo;
+      item.assets = updated.assets;
+      item.displayPrefs = updated.displayPrefs;
       refetchResult.value = null;
     }
     // 2. 保存图标设置（内边距 / 背景色 / 高清图开关 / 书签简称）
     if (iconDirty.value) {
       const nextAppName = editAppName.value.trim() || null;
       await updateBookmarkIconApi(item.id, {
+        displayMode: "TILE",
         iconPadding: editPadding.value,
         iconBgColor: editBgColor.value || null,
-        useHdLogo: editUseHdLogo.value,
         appName: nextAppName,
       });
-      item.logo.iconPadding = editPadding.value;
-      item.logo.iconBgColor = editBgColor.value || undefined;
-      item.logo.useHdLogo = editUseHdLogo.value;
+      // 本地回填：displayPrefs 里没有该模式时补一条，保证下次读取拿到刚保存的值
+      const pref = item.displayPrefs?.find((p) => p.displayMode === "TILE");
+      if (pref) {
+        pref.iconPadding = editPadding.value;
+        pref.iconBgColor = editBgColor.value || undefined;
+      } else {
+        item.displayPrefs = [
+          ...(item.displayPrefs ?? []),
+          {
+            displayMode: "TILE",
+            iconPadding: editPadding.value,
+            iconBgColor: editBgColor.value || undefined,
+            monogram: false,
+          },
+        ];
+      }
       item.appName = nextAppName || undefined;
     }
     ElMessage.success("已保存");
@@ -326,9 +341,9 @@ onMounted(() => {
             @dragstart.prevent
           >
             <BookmarkIcon
-              :value="item"
+              :src="logoOf(item) ?? faviconOf(item)"
               :size="72"
-              :hd-url="item.logo.useHdLogo ? item.logo.logoUrl : undefined"
+              :hd-url="logoOf(item)"
             />
             <div class="title">{{ displayName(item) }}</div>
           </div>
@@ -370,11 +385,11 @@ onMounted(() => {
                   class="preview-size-item"
                 >
                   <BookmarkIcon
-                    :value="detailItem"
+                    :src="logoOf(detailItem) ?? faviconOf(detailItem)"
                     :size="s.value"
                     :padding="editPadding"
                     :bg-color="editBgColor ?? undefined"
-                    :hd-url="editUseHdLogo ? detailItem.logo.logoUrl : undefined"
+                    :hd-url="editUseHdLogo ? logoOf(detailItem) : undefined"
                   />
                   <span class="preview-size-tag">{{ s.label }}</span>
                 </div>
@@ -415,21 +430,21 @@ onMounted(() => {
                     @click="editUseHdLogo = false"
                   >
                     <div class="source-thumb">
-                      <BookmarkIcon :value="detailItem" :size="48" />
+                      <BookmarkIcon :src="logoOf(detailItem) ?? faviconOf(detailItem)" :size="48" />
                     </div>
                     <span class="source-tag">小图</span>
                   </div>
                   <div
                     :class="[
                       'source-option',
-                      { active: editUseHdLogo, disabled: !detailItem.logo.logoUrl },
+                      { active: editUseHdLogo, disabled: !logoOf(detailItem) },
                     ]"
-                    @click="detailItem.logo.logoUrl && (editUseHdLogo = true)"
+                    @click="logoOf(detailItem) && (editUseHdLogo = true)"
                   >
                     <div class="source-thumb">
                       <img
-                        v-if="detailItem.logo.logoUrl"
-                        :src="detailItem.logo.logoUrl"
+                        v-if="logoOf(detailItem)"
+                        :src="logoOf(detailItem)"
                         class="source-thumb-img"
                         alt="高清图标"
                         draggable="false"
@@ -439,7 +454,7 @@ onMounted(() => {
                     <span class="source-tag">高清</span>
                   </div>
                 </div>
-                <span v-if="!detailItem.logo.logoUrl" class="edit-hint">
+                <span v-if="!logoOf(detailItem)" class="edit-hint">
                   未获取到高清 LOGO
                 </span>
               </div>
@@ -516,7 +531,7 @@ onMounted(() => {
                 ]"
                 @click="chooseIcon = 'old'"
               >
-                <BookmarkIcon :value="detailItem" :size="52" />
+                <BookmarkIcon :src="logoOf(detailItem) ?? faviconOf(detailItem)" :size="52" />
                 <span class="compare-tag">旧</span>
               </div>
               <div
@@ -527,10 +542,7 @@ onMounted(() => {
                 @click="chooseIcon = 'new'"
               >
                 <BookmarkIcon
-                  :value="{
-                    ...detailItem,
-                    logo: { ...detailItem.logo, iconBase64: refetchResult.iconBase64 },
-                  }"
+                  :src="refetchResult.iconUrl"
                   :size="52"
                 />
                 <span class="compare-tag is-new">新</span>
@@ -551,8 +563,8 @@ onMounted(() => {
               >
                 <div class="logo-thumb">
                   <img
-                    v-if="detailItem.logo.logoUrl && !oldLogoError"
-                    :src="detailItem.logo.logoUrl"
+                    v-if="logoOf(detailItem) && !oldLogoError"
+                    :src="logoOf(detailItem)"
                     class="logo-thumb-img"
                     alt="旧高清 LOGO"
                     draggable="false"

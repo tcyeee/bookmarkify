@@ -18,14 +18,47 @@ export interface SimilarSite {
   exists?: boolean;
 }
 
-/** 书签图标信息（后端 website_logo 表，与书签一对一） */
-export interface BookmarkLogo {
-  iconBase64?: string;
-  logoUrl?: string;
-  maximalLogoSize: number;
+/** 图片用途：由后端从 scrapper 报告的 extractor 推导而来 */
+export type AssetRole = 'FAVICON' | 'LOGO' | 'SCREENSHOT' | 'SOCIAL';
+/** 可信度：TRUSTED=来源语义明确；DEGRADED=借用其它用途的图凑数 */
+export type AssetQuality = 'DEGRADED' | 'TRUSTED';
+/** 展示模式：TILE=大图+短名，LIST=小图+全名 */
+export type DisplayMode = 'LIST' | 'TILE';
+
+/** 单张图片资产（site_asset，一行一图） */
+export interface SiteAsset {
+  id: string;
+  /** 用途(后端推导) */
+  role: AssetRole;
+  /** 出处(scrapper 报告的事实)，如 LINK_ICON / MANIFEST_ICON / OG_IMAGE */
+  extractor: string;
+  quality: AssetQuality;
+  /** 可直接预览的地址(私有桶已签名) */
+  url?: string;
+  resolvedUrl: string;
+  width?: number;
+  height?: number;
+  byteSize?: number;
+  mime?: string;
+  isVector: boolean;
+  contentHash?: string;
+  isPrimary: boolean;
+  /** 与本书签其它资产字节相同 —— 说明该站没有独立 LOGO */
+  duplicateOfOther: boolean;
+  errorMsg?: string;
+}
+
+/** 某展示模式下的图标设置（site_display_pref，按 书签×模式 分行） */
+export interface SiteDisplayPref {
+  displayMode: DisplayMode;
   iconPadding: number;
   iconBgColor?: string;
-  useHdLogo: boolean;
+  /** 人工钉死的资产ID，覆盖自动选择 */
+  pinnedAssetId?: string;
+  /** 该模式下实际会渲染的地址 */
+  previewUrl?: string;
+  /** true 表示该模式下会走首字母色块 */
+  monogram: boolean;
 }
 
 export interface BookmarkEntity {
@@ -36,8 +69,10 @@ export interface BookmarkEntity {
   appName?: string;
   title?: string;
   description?: string;
-  // 图标相关字段统一收拢到 logo（后端 website_logo 表）
-  logo: BookmarkLogo;
+  // 该书签声明的全部图片资产（一行一图），后台刻意展示全部以便排查
+  assets: SiteAsset[];
+  // 各展示模式下的图标设置
+  displayPrefs: SiteDisplayPref[];
   parseStatus: BookmarkParseStatus;
   isActivity: boolean;
   /** 抓取成功但页面疑似反爬虫/WAF挑战页，内容可能不可靠 */
@@ -79,9 +114,12 @@ export async function updateBookmarkIconApi(
   bookmarkId: string,
   data: {
     appName?: null | string;
+    /** 显示设置按展示模式分行：大图的内边距/背景色与列表行互不影响 */
+    displayMode: DisplayMode;
     iconBgColor?: null | string;
     iconPadding: number;
-    useHdLogo: boolean;
+    /** 人工钉死用哪张图；为空表示走自动选择 */
+    pinnedAssetId?: null | string;
   },
 ) {
   return requestClient.post<void>(`/admin/bookmark/${bookmarkId}/icon`, data);
@@ -89,7 +127,8 @@ export async function updateBookmarkIconApi(
 
 /** 重新获取预览结果：重新解析得到的网站标题、小图标与高清 LOGO（不落库） */
 export interface BookmarkRefetchResult {
-  iconBase64?: string;
+  /** 新解析的网站图标地址 */
+  iconUrl?: string;
   /** scrapper 新解析的高清 LOGO 地址，未抓到为空 */
   logoUrl?: string;
   title?: string;

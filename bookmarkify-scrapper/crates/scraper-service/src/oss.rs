@@ -2,10 +2,7 @@ use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
 
-use crate::scraper::{
-    read_body_capped, validate_target_host, validate_url_scheme, ScrapeError, MAX_FAVICON_BYTES,
-    MAX_IMAGE_BYTES,
-};
+use crate::scraper::ScrapeError;
 
 /// Common OSS key prefix for all scrapper-produced assets. A single bucket
 /// lifecycle rule on this prefix can later be used to auto-expire temporary images.
@@ -15,12 +12,6 @@ const OSS_PREFIX: &str = "bookmarkify/scrapper";
 /// MAX_IMAGE_BYTES (10MB) and OSS is a separate leg from the page scrape itself.
 const UPLOAD_TIMEOUT_SECS: u64 = 30;
 
-fn url_origin(url: &str) -> String {
-    reqwest::Url::parse(url)
-        .ok()
-        .map(|u| format!("{}://{}", u.scheme(), u.host_str().unwrap_or("")))
-        .unwrap_or_default()
-}
 
 /// Aliyun OSS V1 (HMAC-SHA1) request signature, base64-encoded.
 /// See https://help.aliyun.com/document_detail/31951.html — `Authorization: OSS
@@ -92,7 +83,7 @@ impl OssClient {
     /// 失败时按指数退避重试最多 3 次；每次尝试的超时由 `self.http` 的构建配置
     /// （`UPLOAD_TIMEOUT_SECS`）保证，无需在这里再包一层。
     /// Returns the full public URL on success.
-    async fn upload_bytes(
+    pub async fn upload_bytes(
         &self,
         key: &str,
         bytes: &[u8],
@@ -166,185 +157,6 @@ impl OssClient {
         Ok(format!("{}/{}", self.base_url, key))
     }
 
-    /// Uploads OG image, logo, and screenshot bytes to OSS concurrently.
-    /// Favicon is never uploaded to OSS — it is always fetched and returned as a base64 data URL.
-    /// `page_url` is the original scraped URL — used as the key seed for the screenshot.
-    /// All asset failures (SSRF block, non-image content-type, download error, OSS error) are
-    /// non-fatal: the corresponding field is set to None with a warning rather than failing the
-    /// whole request. This prevents a hotlink-protected CDN from causing a 503 on an otherwise
-    /// successful scrape.
-    pub async fn upload_assets(
-        &self,
-        mut result: crate::scraper::ScrapeResult,
-        page_url: &str,
-        http: &reqwest::Client,
-    ) -> crate::scraper::ScrapeResult {
-        let screenshot_bytes = result.screenshot_bytes.take();
-        let image_url = result.image.clone();
-        let logo_url = result.logo.clone();
-        let favicon_url = result.favicon.clone();
-
-        let screenshot_key = Self::screenshot_key(page_url);
-        let screenshot_fut = async {
-            match screenshot_bytes {
-                Some(bytes) => self
-                    .upload_bytes(&screenshot_key, &bytes, "image/png")
-                    .await
-                    .map(Some),
-                None => Ok(None),
-            }
-        };
-
-        let (screenshot_result, image_result, logo_result, favicon_result) = tokio::join!(
-            screenshot_fut,
-            self.upload_url_asset(image_url.as_deref(), "og", http),
-            self.upload_url_asset(logo_url.as_deref(), "logo", http),
-            Self::fetch_as_base64(favicon_url.as_deref(), http),
-        );
-
-        result.screenshot_url = match screenshot_result {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::warn!("screenshot upload failed for {page_url}: {e:?}");
-                None
-            }
-        };
-        result.image = match image_result {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::warn!("image upload failed for {page_url}: {e:?}");
-                None
-            }
-        };
-        result.logo = match logo_result {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::warn!("logo upload failed for {page_url}: {e:?}");
-                None
-            }
-        };
-        result.favicon = match favicon_result {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::warn!("favicon download failed for {page_url}: {e:?}");
-                None
-            }
-        };
-
-        result
-    }
-
-    /// Downloads the image at `url` and returns it as a base64 data URL (`data:<mime>;base64,...`).
-    /// Returns `None` if `url` is `None` or download fails — favicon errors are non-fatal.
-    async fn fetch_as_base64(
-        url: Option<&str>,
-        http: &reqwest::Client,
-    ) -> Result<Option<String>, ScrapeError> {
-        let url = match url {
-            Some(u) => u,
-            None => return Ok(None),
-        };
-
-        // SSRF pre-flight: reject private/loopback favicon URLs extracted from scraped HTML.
-        // The shared client's SsrfSafeResolver enforces this at the DNS level too.
-        let parsed = reqwest::Url::parse(url)
-            .map_err(|_| ScrapeError::OssFailed(format!("invalid favicon URL: {url}")))?;
-        validate_url_scheme(&parsed).map_err(|_| {
-            ScrapeError::OssFailed(format!("unsupported favicon URL scheme: {url}"))
-        })?;
-        validate_target_host(&parsed)
-            .await
-            .map_err(|e| ScrapeError::OssFailed(format!("SSRF check failed for favicon: {e:?}")))?;
-
-        let referer = url_origin(url);
-
-        let response = http
-            .get(url)
-            .header("Referer", &referer)
-            .send()
-            .await
-            .map_err(|e| ScrapeError::OssFailed(format!("favicon download failed: {e}")))?
-            .error_for_status()
-            .map_err(|e| ScrapeError::OssFailed(format!("favicon download failed: {e}")))?;
-
-        let content_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            // Strip control characters (e.g. \t) to prevent data-URI injection
-            .map(|s| {
-                s.chars()
-                    .take_while(|c| !c.is_ascii_control())
-                    .collect::<String>()
-            })
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| "image/png".to_string());
-
-        let bytes = read_body_capped(response, MAX_FAVICON_BYTES)
-            .await
-            .map_err(|e| ScrapeError::OssFailed(format!("favicon read failed: {e}")))?;
-
-        use base64::{engine::general_purpose::STANDARD, Engine};
-        let b64 = STANDARD.encode(&bytes);
-        Ok(Some(format!("data:{content_type};base64,{b64}")))
-    }
-
-    /// Downloads the image at `url` (with a Referer header to bypass hotlink protection),
-    /// then uploads to OSS. Returns `None` if `url` is `None`; `Some(oss_url)` on success.
-    pub(crate) async fn upload_url_asset(
-        &self,
-        url: Option<&str>,
-        folder: &str,
-        http: &reqwest::Client,
-    ) -> Result<Option<String>, ScrapeError> {
-        let url = match url {
-            Some(u) => u,
-            None => return Ok(None),
-        };
-
-        // SSRF pre-flight: reject private/loopback asset URLs extracted from scraped HTML.
-        // The shared client's SsrfSafeResolver enforces this at the DNS level too.
-        let parsed = reqwest::Url::parse(url)
-            .map_err(|_| ScrapeError::OssFailed(format!("invalid asset URL: {url}")))?;
-        validate_url_scheme(&parsed)
-            .map_err(|_| ScrapeError::OssFailed(format!("unsupported asset URL scheme: {url}")))?;
-        validate_target_host(&parsed)
-            .await
-            .map_err(|e| ScrapeError::OssFailed(format!("SSRF check failed for asset: {e:?}")))?;
-
-        let referer = url_origin(url);
-
-        let response = http
-            .get(url)
-            .header("Referer", &referer)
-            .send()
-            .await
-            .map_err(|e| ScrapeError::OssFailed(format!("image download failed: {e}")))?
-            .error_for_status()
-            .map_err(|e| ScrapeError::OssFailed(format!("image download failed: {e}")))?;
-
-        let content_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("image/png")
-            .to_string();
-
-        // Reject non-image responses (e.g. HTML login walls that return 200)
-        if !content_type.starts_with("image/") {
-            return Err(ScrapeError::OssFailed(format!(
-                "unexpected content type for asset {url}: {content_type}"
-            )));
-        }
-
-        let bytes = read_body_capped(response, MAX_IMAGE_BYTES)
-            .await
-            .map_err(|e| ScrapeError::OssFailed(format!("image read failed: {e}")))?;
-
-        let key = Self::asset_key(url, folder, Some(&content_type));
-        let oss_url = self.upload_bytes(&key, &bytes, &content_type).await?;
-        Ok(Some(oss_url))
-    }
 }
 
 fn ext_from_content_type(ct: &str) -> &str {

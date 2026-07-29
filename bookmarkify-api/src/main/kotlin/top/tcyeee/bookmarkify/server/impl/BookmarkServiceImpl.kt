@@ -13,6 +13,24 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.async.AsyncConfig
+import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
+import top.tcyeee.bookmarkify.entity.dto.scrape.CacheOptions
+import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
+import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
+import top.tcyeee.bookmarkify.entity.dto.scrape.applyTo
+import top.tcyeee.bookmarkify.entity.dto.scrape.cached
+import top.tcyeee.bookmarkify.entity.dto.scrape.description
+import top.tcyeee.bookmarkify.entity.dto.scrape.faviconUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.logoUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.primarySource
+import top.tcyeee.bookmarkify.entity.dto.scrape.screenshotUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.shortName
+import top.tcyeee.bookmarkify.entity.dto.scrape.socialUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.title
+import top.tcyeee.bookmarkify.entity.enums.DisplayMode
+import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
+import top.tcyeee.bookmarkify.server.asset.SiteAssetWriter
+import top.tcyeee.bookmarkify.server.asset.SiteDisplayPrefService
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
@@ -21,7 +39,6 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
-import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarIngestUpdate
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.*
@@ -37,7 +54,6 @@ import top.tcyeee.bookmarkify.config.event.BookmarkParseAndResetUserItemEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseEvent
 import top.tcyeee.bookmarkify.server.IBookmarkCategoryService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
-import top.tcyeee.bookmarkify.server.IBookmarkLogoService
 import top.tcyeee.bookmarkify.utils.*
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
@@ -53,7 +69,9 @@ class BookmarkServiceImpl(
     private val eventPublisher: ApplicationEventPublisher,
     private val apiService: IApiService,
     private val layoutNodeMapper: UserLayoutNodeMapper,
-    private val bookmarkLogoService: IBookmarkLogoService,
+    private val siteAssetResolver: SiteAssetResolver,
+    private val siteAssetWriter: SiteAssetWriter,
+    private val siteDisplayPrefService: SiteDisplayPrefService,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val layoutNodeFunctionMapper: LayoutNodeFunctionMapper,
     private val bookmarkCategoryService: IBookmarkCategoryService,
@@ -91,8 +109,8 @@ class BookmarkServiceImpl(
         val list = ktQuery().eq(BookmarkEntity::isActivity, true).like(BookmarkEntity::appName, name).or()
             .like(BookmarkEntity::title, name).or().like(BookmarkEntity::description, name).or()
             .like(BookmarkEntity::urlHost, name).last("limit 5").list()
-        // 小图标来自 bookmark_logo，批量取后组装
-        val logoMap = logosByBookmarkIds(list.map { it.id })
+        // 搜索结果是小图 + 全名的形态，按 LIST 模式解析图标
+        val logoMap = siteAssetResolver.resolveBatch(list.map { it.id }, DisplayMode.LIST)
         return list.map { BookmarkSearchVO(it, logoMap[it.id]) }
     }
 
@@ -124,7 +142,8 @@ class BookmarkServiceImpl(
         val bookmarkIds: List<String> = result.records.mapNotNull { it.bookmarkId }
         val bookmarkEntityMap =
             if (bookmarkIds.isEmpty()) emptyMap() else baseMapper.selectByIds(bookmarkIds).associateBy { it.id }
-        val logoMap = logosByBookmarkIds(bookmarkIds)
+        // 前台桌面是大图 + 短名的形态，按 TILE 模式解析图标
+        val logoMap = siteAssetResolver.resolveBatch(bookmarkIds, DisplayMode.TILE)
 
         // 所属文件夹：布局节点(layoutNodeId) -> 父节点(parentId) -> 父节点名称，两次批量查询避免 N+1
         val layoutNodeIds = result.records.map { it.layoutNodeId }
@@ -398,9 +417,8 @@ class BookmarkServiceImpl(
 
     override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> {
         val entityPage = baseMapper.selectPage(params.toPage(), params.toWrapper())
-        // 批量取每个书签的图标记录(bookmark_logo)，与书签实体一起组装 VO
-        val logoMap = logosByBookmarkIds(entityPage.records.map { it.id })
-        val page = entityPage.convert { BookmarkAdminVO(it, logoMap[it.id]) }
+        // 列表页不逐条展开资产（那会 N+1），资产明细在详情接口里给
+        val page = entityPage.convert { BookmarkAdminVO(it) }
         // 分类回填失败(如分类表缺失/查询异常)不应拖垮整个书签列表，降级为空分类
         runCatching {
             val catMap = bookmarkCategoryService.categoriesOf(page.records.map { it.id })
@@ -416,31 +434,31 @@ class BookmarkServiceImpl(
         baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         // appName 仍属于 bookmark 主表
         ktUpdate().eq(BookmarkEntity::id, bookmarkId).set(BookmarkEntity::appName, params.appName).update()
-        // 图标显示设置(内边距/背景色/高清开关)落到 bookmark_logo（与书签 1:1，upsert）
-        val logo = logoOf(bookmarkId).apply {
-            iconPadding = params.iconPadding
-            iconBgColor = params.iconBgColor
-            useHdLogo = params.useHdLogo
-            updateTime = LocalDateTime.now()
-        }
-        bookmarkLogoService.saveOrUpdate(logo)
+        // 显示设置按（书签 × 展示模式）分行：72px 大图上的内边距/背景色，与 16px 列表行
+        // 完全是两回事，不该互相影响
+        siteDisplayPrefService.save(
+            bookmarkId = bookmarkId,
+            mode = params.displayMode,
+            iconPadding = params.iconPadding,
+            iconBgColor = params.iconBgColor,
+            pinnedAssetId = params.pinnedAssetId,
+        )
     }
 
     override fun adminRefetch(bookmarkId: String): BookmarkRefetchVO {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         log.debug("[adminRefetch] 管理员重新获取书签元信息: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
         // 仅预览，不落库：重新抓取一次，拿到新的标题与小图标
-        val vo = apiService.queryWebsiteInfo(bookmark.rawUrl)
-        val iconBase64 = vo.favicon?.takeIf { it.isNotBlank() }
-            ?: ChromeBookmarkParser.icoBase64(vo.toManifestIcons(bookmark.rawUrl), bookmark.rawUrl)
+        val vo = apiService.scrape(bookmark.rawUrl, ScrapeRequest(url = bookmark.rawUrl, cache = CacheOptions(mode = CacheMode.BYPASS)))
+        val iconUrl = vo.faviconUrl
         // 预览与应用之间用 Redis 暂存完整抓取结果，确保「所见即所存」且避免应用时再抓一次造成漂移
         RedisUtils.set(RedisType.BOOKMARK_REFETCH, bookmarkId, vo)
         // 高清 LOGO：scrapper 与 API 共用同一私有读 OSS 桶，vo.logo 是未签名地址(浏览器直连会 403)，
         // 用 API 的 OSS 客户端换成限时签名地址(同桶同密钥，签名有效)。未抓到/签名失败则为 null，交由前端说明。
-        val logoUrl = vo.logo?.takeIf { it.isNotBlank() }
-            ?.let { runCatching { OssUtils.resizeAndSignImg(it, 0, 0) }.getOrNull() }
+        val logoUrl = vo.logoUrl?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { OssUtils.resizeAndSignImg(it, 0, 0) }.getOrNull() ?: it }
         log.debug("[adminRefetch] 重新获取完成并已暂存: bookmarkId=$bookmarkId, newTitle=${vo.title}, hasLogo=${logoUrl != null}")
-        return BookmarkRefetchVO(title = vo.title, iconBase64 = iconBase64, logoUrl = logoUrl)
+        return BookmarkRefetchVO(title = vo.title, iconUrl = iconUrl, logoUrl = logoUrl)
     }
 
     override fun adminCheckLiveness(bookmarkId: String): BookmarkLivenessVO {
@@ -455,17 +473,17 @@ class BookmarkServiceImpl(
                     updateTime = LocalDateTime.now()
                 }
                 baseMapper.updateById(bookmark)
-                log.debug("[adminCheckLiveness] 检测成功: bookmarkId=$bookmarkId, source=${vo.source}")
+                log.debug("[adminCheckLiveness] 检测成功: bookmarkId=$bookmarkId, source=${vo.primarySource}")
                 BookmarkLivenessVO(
                     success = true,
                     title = vo.title,
                     description = vo.description,
-                    image = vo.image,
-                    favicon = vo.favicon,
-                    logo = vo.logo,
-                    source = vo.source,
+                    image = vo.socialUrl,
+                    favicon = vo.faviconUrl,
+                    logo = vo.logoUrl,
+                    source = vo.primarySource,
                     cached = vo.cached,
-                    screenshot = vo.screenshot,
+                    screenshot = vo.screenshotUrl,
                     isActivity = true,
                     parseStatus = ParseStatusEnum.SUCCESS,
                 )
@@ -496,32 +514,22 @@ class BookmarkServiceImpl(
         log.debug("[adminApplyRefetch] 应用重新获取结果: bookmarkId=$bookmarkId, useNewTitle=${params.useNewTitle}, useNewIcon=${params.useNewIcon}, useNewLogo=${params.useNewLogo}")
 
         if (params.useNewTitle) bookmark.title = vo.title
-        // 小图标与大图标(高清 LOGO)分开应用到图标记录(bookmark_logo)，可单独采用其中之一
-        val logo = logoOf(bookmarkId)
-        val iconOrLogoChanged = params.useNewIcon || params.useNewLogo
-        if (iconOrLogoChanged) {
-            val icons = vo.toManifestIcons(bookmark.rawUrl)
-            if (params.useNewIcon) {
-                logo.iconBase64 = vo.favicon?.takeIf { it.isNotBlank() }
-                    ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
-            }
-            // 采用新大图标时，重抓高清 LOGO/OG 上传 OSS，并把元数据写回图标记录
-            if (params.useNewLogo) applyHdLogo(logo, icons, bookmarkId)
-            logo.updateTime = LocalDateTime.now()
-            bookmarkLogoService.saveOrUpdate(logo)
+        // 资产是整体替换的：图标与 LOGO 同源于一次抓取，没法只采用其中一半而保持一致，
+        // 因此只要任一开关打开就整批落库（细粒度取舍改由 site_display_pref.pinnedAssetId 表达）
+        if (params.useNewIcon || params.useNewLogo) {
+            siteAssetWriter.persist(bookmarkId, bookmark.rawUrl, vo, 0)
         }
         bookmark.updateTime = LocalDateTime.now()
         baseMapper.insertOrUpdate(bookmark)
         RedisUtils.del(RedisType.BOOKMARK_REFETCH, bookmarkId)
         log.debug("[adminApplyRefetch] 应用完成: bookmarkId=$bookmarkId, title=${bookmark.title}")
-        return BookmarkAdminVO(bookmark, logo)
+        return adminDetail(bookmarkId)
     }
 
     override fun adminRefresh(bookmarkId: String): BookmarkAdminVO {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         log.debug("[adminRefresh] 管理员一键更新书签信息: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
-        val logo = logoOf(bookmarkId)
-        runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
+        runCatching { apiService.scrape(bookmark.rawUrl, ScrapeRequest(url = bookmark.rawUrl, cache = CacheOptions(mode = CacheMode.BYPASS))) }.fold(
             onSuccess = { vo ->
                 bookmark.apply {
                     title = vo.title
@@ -531,12 +539,7 @@ class BookmarkServiceImpl(
                     parseErrMsg = null
                     updateTime = LocalDateTime.now()
                 }
-                val icons = vo.toManifestIcons(bookmark.rawUrl)
-                logo.iconBase64 = vo.favicon?.takeIf { it.isNotBlank() }
-                    ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
-                applyHdLogo(logo, icons, bookmarkId)
-                logo.updateTime = LocalDateTime.now()
-                bookmarkLogoService.saveOrUpdate(logo)
+                siteAssetWriter.persist(bookmarkId, bookmark.rawUrl, vo, 0)
                 log.debug("[adminRefresh] 更新成功: bookmarkId=$bookmarkId, title=${bookmark.title}")
             },
             onFailure = { e ->
@@ -550,7 +553,7 @@ class BookmarkServiceImpl(
             },
         )
         baseMapper.updateById(bookmark)
-        return BookmarkAdminVO(bookmark, logo)
+        return adminDetail(bookmarkId)
     }
 
     override fun adminSyncFromExternalScrape(url: String, vo: ScrapeResponse): Boolean {
@@ -565,13 +568,7 @@ class BookmarkServiceImpl(
             parseErrMsg = null
             updateTime = LocalDateTime.now()
         }
-        val logo = logoOf(bookmark.id)
-        val icons = vo.toManifestIcons(bookmark.rawUrl)
-        logo.iconBase64 = vo.favicon?.takeIf { it.isNotBlank() }
-            ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
-        applyHdLogo(logo, icons, bookmark.id)
-        logo.updateTime = LocalDateTime.now()
-        bookmarkLogoService.saveOrUpdate(logo)
+        siteAssetWriter.persist(bookmark.id, bookmark.rawUrl, vo, 0)
         baseMapper.updateById(bookmark)
         log.debug("[adminSyncFromExternalScrape] 同步完成: bookmarkId=${bookmark.id}, title=${bookmark.title}")
         return true
@@ -584,7 +581,7 @@ class BookmarkServiceImpl(
         bookmark.updateTime = LocalDateTime.now()
         baseMapper.updateById(bookmark)
         log.debug("[adminUpdateBasicInfo] 管理员手动更新基础信息: bookmarkId=$bookmarkId, title=${bookmark.title}")
-        return BookmarkAdminVO(bookmark, logoOf(bookmarkId))
+        return adminDetail(bookmarkId)
     }
 
     override fun adminUpdateCategories(bookmarkId: String, categoryIds: List<String>): List<CategoryVO> {
@@ -799,13 +796,17 @@ class BookmarkServiceImpl(
         return parsed
     }
 
-    /** 通过 DeepSeek 判断书签是否 NSFW（成人/赌博等），结果写回 bookmark.nsfw；失败静默，不影响解析主流程。 */
+    /** 通过 DeepSeek 判断书签是否 NSFW（成人/赌博等），结果(含理由)写回 bookmark.nsfw/nsfwReason；失败静默，不影响解析主流程。 */
     private fun checkNsfw(bookmark: BookmarkEntity) {
         runCatching {
-            val nsfw = apiService.inferNsfw(bookmark.title, bookmark.description, bookmark.urlHost)
-            bookmark.nsfw = nsfw
-            if (nsfw) {
-                ktUpdate().eq(BookmarkEntity::id, bookmark.id).set(BookmarkEntity::nsfw, true).update()
+            val result = apiService.inferNsfw(bookmark.title, bookmark.description, bookmark.urlHost)
+            bookmark.nsfw = result.nsfw
+            bookmark.nsfwReason = result.reason
+            if (result.nsfw) {
+                ktUpdate().eq(BookmarkEntity::id, bookmark.id)
+                    .set(BookmarkEntity::nsfw, true)
+                    .set(BookmarkEntity::nsfwReason, result.reason)
+                    .update()
             }
         }.onFailure { log.warn("[checkNsfw] NSFW 检测失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}") }
     }
@@ -815,9 +816,13 @@ class BookmarkServiceImpl(
         var flagged = 0
         all.forEach { bookmark ->
             runCatching {
-                if (apiService.inferNsfw(bookmark.title, bookmark.description, bookmark.urlHost)) {
+                val result = apiService.inferNsfw(bookmark.title, bookmark.description, bookmark.urlHost)
+                if (result.nsfw) {
                     flagged++
-                    ktUpdate().eq(BookmarkEntity::id, bookmark.id).set(BookmarkEntity::nsfw, true).update()
+                    ktUpdate().eq(BookmarkEntity::id, bookmark.id)
+                        .set(BookmarkEntity::nsfw, true)
+                        .set(BookmarkEntity::nsfwReason, result.reason)
+                        .update()
                 }
             }.onFailure { log.warn("[checkNsfwForAll] NSFW 检测失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}") }
         }
@@ -845,13 +850,8 @@ class BookmarkServiceImpl(
         bookmark.successInit(wrapper)
         inferAndSetAppName(bookmark, previousTitle)
         baseMapper.insertOrUpdate(bookmark)
-        log.debug("[parseLocally] 元信息已保存, 开始存储图标记录(bookmark_logo): bookmarkId=${bookmark.id}, iconCount=${wrapper.distinctIcons?.size ?: 0}")
-        // 小图标(favicon) + 高清 LOGO 一并 upsert 到 bookmark_logo
-        saveIconAndLogo(
-            bookmark.id,
-            ChromeBookmarkParser.icoBase64(wrapper.distinctIcons, bookmark.rawUrl),
-            wrapper.distinctIcons ?: emptyList()
-        )
+        // 本地解析路径（Jsoup）不产出契约资产，图标改由 scrapper 路径统一落 site_asset；
+        // 这里只保住主表的文字信息，避免两套解析各写一份互相打架
         log.debug("[parseLocally] 本地解析全部完成: bookmarkId=${bookmark.id}, parseStatus=${bookmark.parseStatus}, appName=${bookmark.appName}")
         return bookmark
     }
@@ -863,21 +863,18 @@ class BookmarkServiceImpl(
         log.debug("[parseByApi] 开始远程解析(scrapper): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
-                val icons = vo.toManifestIcons(bookmark.rawUrl)
-                log.debug("[parseByApi] scrapper 返回成功: bookmarkId=${bookmark.id}, title=${vo.title}, source=${vo.source}, iconCount=${icons.size}")
-                // 填充基础信息 + iconBase64 + DeepSeek 简称推断，保存一次
+                log.debug("[parseByApi] scrapper 返回成功: bookmarkId=${bookmark.id}, title=${vo.title}, source=${vo.primarySource}, assets=${vo.assets.size}")
                 val previousTitle = bookmark.title
-                vo.entity(bookmark).also {
-                    inferAndSetAppName(it, previousTitle)
+                vo.applyTo(bookmark).also {
+                    // 简称优先用 manifest.short_name（W3C 就是为"图标下方空间受限"定义的），
+                    // 拿不到才退回 DeepSeek 推断
+                    it.appName = vo.shortName?.takeIf { n -> n.isNotBlank() }
+                    if (it.appName.isNullOrBlank()) inferAndSetAppName(it, previousTitle)
                     baseMapper.insertOrUpdate(it)
-                    log.debug("[parseByApi] 元信息已保存: bookmarkId=${it.id}, appName=${it.appName}, parseStatus=${it.parseStatus}")
                 }
-                log.debug("[parseByApi] 开始存储图标记录(bookmark_logo): bookmarkId=${bookmark.id}, iconCount=${icons.size}")
-                // scrapper 已返回 base64 data URL 的 favicon，优先直用；否则回退到本地下载
-                val iconBase64 = vo.favicon?.takeIf { f -> f.isNotBlank() }
-                    ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
-                saveIconAndLogo(bookmark.id, iconBase64, icons)
-                log.debug("[parseByApi] 第三方API解析全部完成: bookmarkId=${bookmark.id}")
+                // 快照 + 元数据 + 资产一次落库
+                siteAssetWriter.persist(bookmark.id, bookmark.rawUrl, vo, 0)
+                log.debug("[parseByApi] 第三方API解析全部完成: bookmarkId=${bookmark.id}, assets=${vo.assets.size}")
                 bookmark
             },
             onFailure = { e ->
@@ -893,51 +890,66 @@ class BookmarkServiceImpl(
         )
     }
 
-    // ────── 图标记录(bookmark_logo, 与书签 1:1) ──────
-
-    /** 取该书签的图标记录；不存在则返回一个未持久化的新实例（带默认显示设置）。 */
-    private fun logoOf(bookmarkId: String): BookmarkLogoEntity =
-        bookmarkLogoService.ktQuery()
-            .eq(BookmarkLogoEntity::bookmarkId, bookmarkId)
-            .orderByDesc(BookmarkLogoEntity::height)
-            .last("limit 1")
-            .one()
-            ?: BookmarkLogoEntity(bookmarkId = bookmarkId)
-
-    /** 批量取一组书签的图标记录，按 bookmarkId 聚合（每书签取高度最大的一条，兼容历史多行）。 */
-    private fun logosByBookmarkIds(bookmarkIds: List<String>): Map<String, BookmarkLogoEntity> {
-        if (bookmarkIds.isEmpty()) return emptyMap()
-        return bookmarkLogoService.ktQuery().`in`(BookmarkLogoEntity::bookmarkId, bookmarkIds).list()
-            .groupBy { it.bookmarkId }
-            .mapValues { (_, list) -> list.maxByOrNull { it.height } ?: list.first() }
-    }
+    // ────── 管理后台：书签详情组装 ──────
 
     /**
-     * 把小图标(favicon) + 高清 LOGO 一并 upsert 到该书签的图标记录(bookmark_logo)。
-     * iconBase64 总会写入；高清 LOGO/OG 上传成功才回写其地址与文件元数据。
+     * 组装管理后台的书签详情：主表字段 + **全部**图片资产 + 各展示模式的设置。
+     *
+     * 刻意返回全部资产而非仅选中的那张 —— 排查"这站为什么用了张丑图"时需要看到它到底
+     * 声明了哪些图、各自出处是什么、有没有互相撞 hash。
      */
-    private fun saveIconAndLogo(bookmarkId: String, iconBase64: String?, icons: List<ManifestIcon>) {
-        val logo = logoOf(bookmarkId).apply { this.iconBase64 = iconBase64 }
-        applyHdLogo(logo, icons, bookmarkId)
-        logo.updateTime = LocalDateTime.now()
-        bookmarkLogoService.saveOrUpdate(logo)
-        log.debug("[saveIconAndLogo] 图标记录已保存: bookmarkId=$bookmarkId, hasIcon=${iconBase64 != null}, width=${logo.width}")
-    }
+    private fun adminDetail(bookmarkId: String): BookmarkAdminVO {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        val vo = BookmarkAdminVO(bookmark)
 
-    /** 把 LOGO/OG 上传 OSS，成功则把高清 LOGO 的地址与文件元数据写入图标记录（失败静默忽略，不影响小图标）。 */
-    private fun applyHdLogo(logo: BookmarkLogoEntity, icons: List<ManifestIcon>, bookmarkId: String) {
-        if (icons.isEmpty()) return
-        runCatching { OssUtils.restoreBookmarkLogoAndOg(icons, bookmarkId) }
-            .onSuccess { result ->
-                result.logo?.let { meta ->
-                    logo.logoUrl = result.logoUrl
-                    logo.width = meta.width
-                    logo.height = meta.height
-                    logo.size = meta.size
-                    logo.suffix = meta.suffix
-                }
-            }
-            .onFailure { log.warn("[applyHdLogo] 高清 LOGO 上传失败: bookmarkId=$bookmarkId, err=${it.message}") }
+        val assets = siteAssetResolver.assetsOf(bookmarkId)
+        // 出现次数 >1 的 hash 说明同一张图被多个 extractor 共用，据此在后台标出
+        // "该站没有独立 LOGO"，省得人工逐张比对
+        val dupHashes = assets.mapNotNull { it.contentHash }
+            .groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+
+        vo.assets = assets.map { a ->
+            SiteAssetAdminVO(
+                id = a.id,
+                role = a.role,
+                extractor = a.extractor,
+                quality = a.quality,
+                // 私有读桶里的地址直连会 403，后台预览换成不缩放的签名地址
+                url = a.storageUrl?.takeIf { it.isNotBlank() }
+                    ?.let { runCatching { OssUtils.resizeAndSignImg(it, 0, 0) }.getOrNull() ?: it }
+                    ?: a.resolvedUrl,
+                resolvedUrl = a.resolvedUrl,
+                width = a.width,
+                height = a.height,
+                byteSize = a.byteSize,
+                mime = a.mime,
+                isVector = a.isVector,
+                contentHash = a.contentHash,
+                isPrimary = a.isPrimary,
+                duplicateOfOther = a.contentHash != null && a.contentHash in dupHashes,
+                errorMsg = a.errorMsg,
+            )
+        }
+
+        vo.displayPrefs = DisplayMode.entries.map { mode ->
+            val pref = siteDisplayPrefService.find(bookmarkId, mode)
+            val resolved = siteAssetResolver.resolveOne(bookmarkId, mode)
+            SiteDisplayPrefVO(
+                displayMode = mode,
+                iconPadding = pref?.iconPadding ?: 25,
+                iconBgColor = pref?.iconBgColor,
+                pinnedAssetId = pref?.pinnedAssetId,
+                previewUrl = resolved.url,
+                monogram = resolved.monogram,
+            )
+        }
+
+        runCatching {
+            vo.categories = bookmarkCategoryService.categoriesOf(listOf(bookmarkId))[bookmarkId]
+                .orEmpty().map { CategoryVO(it.id, it.slug, it.name, it.color) }
+        }.onFailure { log.warn("[adminDetail] 分类回填失败(忽略): ${it.message}") }
+
+        return vo
     }
 
     // ────── 私有工具 ──────

@@ -35,6 +35,11 @@ spring:
       max-request-size: 50MB    # 单次请求总大小50MB
       file-size-threshold: 2MB  # 可选：内存缓存阈值
       enabled: true             # 可选：开启上传支持
+  jackson:
+    deserialization:
+      # scrapper 是解耦的通用服务，会持续新增 extractor 等枚举取值。遇到不认识的取值时
+      # 回落到该枚举标了 @JsonEnumDefaultValue 的 UNKNOWN 常量，而不是整个响应解析失败。
+      read-unknown-enum-values-using-default-value: true
 
 bookmarkify:
   wechat:

@@ -1,13 +1,15 @@
 <script lang="ts" setup>
 import type { ScrapperCallLogSearchParams, ScrapperCallLogVO } from "#/api/scrapper-call-log";
 
-import { defineAsyncComponent, reactive } from "vue";
+import { defineAsyncComponent, reactive, ref } from "vue";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
 
 import { getAdminScrapperCallLogListApi } from "#/api/scrapper-call-log";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
+
+import ScrapeResultDialog from "./ScrapeResultDialog.vue";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
@@ -77,6 +79,39 @@ const searchForm = reactive<Pick<ScrapperCallLogSearchParams, "urlHost" | "succe
   success: undefined,
 });
 
+// ── 书签解析对话框：失败行点"重试"后重新调用 scrapper 并展示其返回的全部信息 ──
+const parseDialogVisible = ref(false);
+const parseUrl = ref("");
+
+function handleRetry(row: ScrapperCallLogVO) {
+  parseUrl.value = row.url;
+  parseDialogVisible.value = true;
+}
+
+// 日志表未存 favicon，直接按域名取站点根目录的 favicon.ico，加载失败时换成兜底地球图标
+const FALLBACK_FAVICON = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`
+)}`;
+
+function faviconOf(urlHost: string) {
+  return urlHost ? `https://${urlHost}/favicon.ico` : FALLBACK_FAVICON;
+}
+
+function onFaviconError(event: Event) {
+  const img = event.target as HTMLImageElement;
+  // 已经是兜底图还报错就不再重置，避免 error 事件死循环
+  if (img.src !== FALLBACK_FAVICON) img.src = FALLBACK_FAVICON;
+}
+
+/** 来源枚举释义，鼠标悬浮在"来源"表头时展示 */
+const SOURCE_LEGEND: Array<[string, string]> = [
+  ["og", "命中 Open Graph 标签(og:title/og:description/og:image)，优先级最高"],
+  ["twitter_card", "无 OG，命中 Twitter Card 标签(twitter:title 等)"],
+  ["json_ld", "无 OG/Twitter，命中页面 JSON-LD 结构化数据(name/description/image)"],
+  ["html", "以上均未命中，回退到 <title> 标签与 meta[name=description]"],
+  ["headless", "普通 HTTP 抓取失败，由无头浏览器渲染后抓取，并附带页面截图"],
+];
+
 function handleSearch() {
   gridApi.reload();
 }
@@ -91,11 +126,11 @@ const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
   id: "admin-scrapper-call-log",
   columns: [
     { type: "seq", title: "#", width: 50 },
-    { field: "urlHost", title: "域名", minWidth: 160 },
+    { field: "urlHost", title: "域名", minWidth: 180, slots: { default: "urlHost" } },
     { field: "url", title: "请求URL", minWidth: 240, showOverflow: "tooltip" },
     { field: "success", title: "结果", width: 90, slots: { default: "success" } },
     { field: "httpStatus", title: "HTTP状态", width: 100 },
-    { field: "source", title: "来源", width: 120 },
+    { field: "source", title: "来源", width: 120, slots: { header: "sourceHeader" } },
     { field: "cached", title: "缓存命中", width: 100, slots: { default: "cached" } },
     { field: "durationMs", title: "耗时(ms)", width: 100 },
     { field: "errorMsg", title: "错误信息", minWidth: 200, slots: { default: "errorMsg" } },
@@ -105,6 +140,7 @@ const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
       width: 200,
       formatter: ({ cellValue }) => formatDateTime(cellValue),
     },
+    { title: "操作", width: 90, fixed: "right", slots: { default: "action" } },
   ],
   toolbarConfig: { custom: true, refresh: true },
   pagerConfig: { pageSize: 50 },
@@ -152,6 +188,40 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
         </ElForm>
       </div>
       <Grid>
+        <template #urlHost="{ row }">
+          <span class="inline-flex items-center justify-end gap-1.5">
+            <img
+              :src="faviconOf(row.urlHost)"
+              alt=""
+              class="h-4 w-4 shrink-0 rounded-sm object-contain"
+              @error="onFaviconError"
+            />
+            <span class="truncate">{{ row.urlHost }}</span>
+          </span>
+        </template>
+        <template #sourceHeader="{ column }">
+          <ElTooltip placement="top">
+            <template #content>
+              <div class="max-w-md space-y-1 text-xs leading-relaxed">
+                <div class="font-medium">命中来源(scrapper 解析元数据的实际出处)</div>
+                <div v-for="[key, desc] in SOURCE_LEGEND" :key="key">
+                  <span class="font-mono">{{ key }}</span>
+                  ：{{ desc }}
+                </div>
+                <div class="text-gray-300">抓取失败时该列为空</div>
+              </div>
+            </template>
+            <span class="cursor-help underline decoration-dotted underline-offset-4">
+              {{ column.title }}
+            </span>
+          </ElTooltip>
+        </template>
+        <template #action="{ row }">
+          <ElButton v-if="!row.success" link type="primary" size="small" @click="handleRetry(row)">
+            重试
+          </ElButton>
+          <span v-else>-</span>
+        </template>
         <template #success="{ row }">
           <ElTag v-if="row.success" type="success" size="small"> 成功 </ElTag>
           <ElTag v-else type="danger" size="small"> 失败 </ElTag>
@@ -168,5 +238,7 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
         </template>
       </Grid>
     </ElCard>
+
+    <ScrapeResultDialog v-model="parseDialogVisible" :url="parseUrl" />
   </Page>
 </template>

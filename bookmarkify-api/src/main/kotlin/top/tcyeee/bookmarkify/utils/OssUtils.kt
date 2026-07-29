@@ -16,7 +16,6 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.ImgInfo
 import top.tcyeee.bookmarkify.entity.dto.LogoResult
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
-import top.tcyeee.bookmarkify.entity.entity.BookmarkLogoEntity
 import top.tcyeee.bookmarkify.entity.enums.FileType
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -106,13 +105,13 @@ class OssUtils {
             log.debug("[restoreBookmarkLogoAndOg] bookmarkId={}, iconCount={}", bookmarkId, list?.size)
             if (list.isNullOrEmpty()) throw CommonException(ErrorType.E999)
 
-            // 存储OG（og:image 宽屏分享图，与 LOGO 是两类图）：仅上传 OSS，地址不落库
+            // 存储OG（og:image 宽屏分享图，与 LOGO 是两类图）：上传失败不影响 LOGO 主流程，地址回传由调用方落库
             val ogs = list.filter { it.isOg() }.filterNot { it.src.isNullOrBlank() }
             log.debug("[restoreBookmarkLogoAndOg] 找到OG图片数={}", ogs.size)
-            if (ogs.isNotEmpty()) runCatching {
+            val ogUrl = if (ogs.isEmpty()) null else runCatching {
                 log.debug("[restoreBookmarkLogoAndOg] 开始存储OG: src={}", ogs.first().src)
-                restoreImg(FileType.WEBSITE_OG, ogs.first().src!!, bookmarkId)
-            }.onFailure { log.warn("[restoreBookmarkLogoAndOg] OG存储失败: {}", it.message) }
+                restoreImg(FileType.WEBSITE_OG, ogs.first().src!!, bookmarkId).url
+            }.onFailure { log.warn("[restoreBookmarkLogoAndOg] OG存储失败: {}", it.message) }.getOrNull()
 
             // 找到最大的那个LOGO
             val maximalIcon: ManifestIcon = list
@@ -121,7 +120,7 @@ class OssUtils {
                 .filterNot { it.src!!.endsWith(".ico") }
                 .maxByOrNull { it.size() } ?: run {
                 log.debug("[restoreBookmarkLogoAndOg] 未找到合适的LOGO图标, 返回空结果")
-                return LogoResult(logo = null, logoUrl = null)
+                return LogoResult(logoUrl = null, ogUrl = ogUrl)
             }
             log.debug("[restoreBookmarkLogoAndOg] 选中最大LOGO: src={}, size={}", maximalIcon.src, maximalIcon.size())
 
@@ -130,16 +129,7 @@ class OssUtils {
                 .getOrElse { throw CommonException(ErrorType.E218, it.message) }
                 .let { logoInfo ->
                     log.debug("[restoreBookmarkLogoAndOg] LOGO存储成功: url={}, width={}, height={}", logoInfo.url, logoInfo.width, logoInfo.height)
-                    LogoResult(
-                        logo = BookmarkLogoEntity(
-                            bookmarkId = bookmarkId,
-                            size = logoInfo.size,
-                            width = logoInfo.width,
-                            height = logoInfo.height,
-                            suffix = FileUtil.extName(logoInfo.url) ?: "png",
-                        ),
-                        logoUrl = logoInfo.url
-                    )
+                    LogoResult(logoUrl = logoInfo.url, ogUrl = ogUrl)
                 }
         }
 
@@ -219,7 +209,7 @@ class OssUtils {
          * 若 [parsedUrl] 指向本服务自己的 OSS（自定义域名或默认 OSS 域名），返回其对象 key；否则返回 null。
          * 命中时可直接用 SDK 读取，绕开自定义域名公网 HTTPS 的证书校验问题。
          */
-        private fun ownOssObjectKey(parsedUrl: java.net.URL): String? {
+        fun ownOssObjectKey(parsedUrl: java.net.URL): String? {
             val host = parsedUrl.host?.lowercase()?.takeIf { it.isNotBlank() } ?: return null
             val ownHosts = listOfNotNull(customDomain.takeIf { it.isNotBlank() }, domain)
                 .mapNotNull { runCatching { URI(it).host?.lowercase() }.getOrNull() }

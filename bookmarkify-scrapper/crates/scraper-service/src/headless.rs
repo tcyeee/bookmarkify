@@ -5,7 +5,16 @@ use spider::website::Website;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
-use crate::scraper::{parse_metadata, validate_target_host, validate_url_scheme, ScrapeError, ScrapeResult};
+use crate::scraper::{validate_target_host, validate_url_scheme, ScrapeError};
+
+/// 无头抓取的产物。元数据解析统一交给 [`crate::extract`]，与 Layer 1 走同一条路径 ——
+/// 两层的差别只应该是"HTML 怎么拿到的"，不该各自解析一遍。
+#[derive(Debug)]
+pub struct HeadlessCapture {
+    pub html: String,
+    /// PNG 截图字节；Chrome 未返回截图时为 None
+    pub screenshot_bytes: Option<Vec<u8>>,
+}
 
 /// 全局互斥锁，保证同一时刻只有一个无头 Chrome 操作在运行。
 ///
@@ -22,13 +31,22 @@ static HEADLESS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 /// - `timeout_secs`：整个无头抓取流程的最大等待时间（秒），对应 `HEADLESS_TIMEOUT_SECS`
 /// - `idle_wait_secs`：网络空闲等待时间（秒），用于等待 JS 渲染完成，对应 `HEADLESS_IDLE_WAIT_SECS`
 ///
+/// - `viewport`：视口宽高与像素比；`None` 时用 Chrome 默认视口
+/// - `want_screenshot`：为 false 时跳过截图，省下一次编码与传输
+///
 /// # 返回
-/// 成功时返回 `Ok(ScrapeResult)`，`source` 字段固定为 `"headless"`，
-/// 并附带 `screenshot_bytes`；失败时返回对应的 `ScrapeError`：
+/// 成功时返回 `Ok(HeadlessCapture)`（渲染后的 HTML + 可选截图）；失败时返回对应的
+/// `ScrapeError`：
 /// - `InvalidUrl`：URL 格式非法
 /// - `Timeout`：超过 `timeout_secs` 仍未完成
 /// - `HeadlessFailed`：Chrome 未返回页面或页面 HTML 为空
-pub async fn scrape_headless(url: &str, timeout_secs: u64, idle_wait_secs: u64) -> Result<ScrapeResult, ScrapeError> {
+pub async fn capture_headless(
+    url: &str,
+    timeout_secs: u64,
+    idle_wait_secs: u64,
+    viewport: Option<(u32, u32)>,
+    want_screenshot: bool,
+) -> Result<HeadlessCapture, ScrapeError> {
     let parsed = reqwest::Url::parse(url).map_err(|_| ScrapeError::InvalidUrl)?;
     validate_url_scheme(&parsed)?;
     validate_target_host(&parsed).await?;
@@ -52,13 +70,16 @@ pub async fn scrape_headless(url: &str, timeout_secs: u64, idle_wait_secs: u64) 
         }
     }
 
-    // 配置截图：在内存中返回字节，不写入磁盘
-    let screenshot_config = ScreenShotConfig::new(
-        ScreenshotParams::new(Default::default(), Some(true), None),
-        true,  // return bytes in page.screenshot_bytes
-        false, // do not save to disk
-        None,
-    );
+    // 配置截图：在内存中返回字节，不写入磁盘。不要截图时整个配置传 None，
+    // 让 Chrome 省掉一次全页渲染与 PNG 编码。
+    let screenshot_config = want_screenshot.then(|| {
+        ScreenShotConfig::new(
+            ScreenshotParams::new(Default::default(), Some(true), None),
+            true,  // return bytes in page.screenshot_bytes
+            false, // do not save to disk
+            None,
+        )
+    });
 
     // 复用 PROXY_URL 环境变量：非空时让无头 Chrome 也走代理。
     // spider 据此为 Chrome 拼出 --proxy-server 启动参数（见 spider features/chrome.rs），
@@ -79,7 +100,11 @@ pub async fn scrape_headless(url: &str, timeout_secs: u64, idle_wait_secs: u64) 
         .with_stealth(true) // 启用隐身模式，降低被检测为爬虫的概率
         .with_chrome_intercept(RequestInterceptConfiguration::new(true)) // 拦截广告/追踪请求（依赖 spider 的 chrome_intercept feature）
         .with_wait_for_idle_network(Some(WaitForIdleNetwork::new(Some(Duration::from_secs(idle_wait_secs))))) // 等待网络空闲（JS 渲染完成）
-        .with_screenshot(Some(screenshot_config));
+        .with_screenshot(screenshot_config);
+
+    if let Some((w, h)) = viewport {
+        website.with_viewport(Some(spider::configuration::Viewport::new(w, h)));
+    }
 
     // 使用 deadline 的剩余时间作为 Chrome 执行超时，避免超出总预算
     let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
@@ -105,14 +130,7 @@ pub async fn scrape_headless(url: &str, timeout_secs: u64, idle_wait_secs: u64) 
         return Err(ScrapeError::HeadlessFailed("empty page html".to_string()));
     }
 
-    let screenshot_bytes = page.screenshot_bytes.clone();
-
-    // 复用普通抓取的元数据解析逻辑，然后覆盖 source 和截图字节
-    let mut result = parse_metadata(&html, &parsed);
-    result.source = "headless".to_string();
-    result.screenshot_bytes = screenshot_bytes;
-
-    Ok(result)
+    Ok(HeadlessCapture { html, screenshot_bytes: page.screenshot_bytes.clone() })
 }
 
 #[cfg(test)]
@@ -121,23 +139,22 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[ignore]
-    async fn headless_huaban_returns_metadata() {
-        let result = scrape_headless("https://huaban.com/", 60, 10).await;
-        assert!(result.is_ok(), "scrape_headless failed: {:?}", result.err());
+    async fn headless_huaban_returns_rendered_html() {
+        let result = capture_headless("https://huaban.com/", 60, 10, None, false).await;
+        assert!(result.is_ok(), "capture_headless failed: {:?}", result.err());
         let r = result.unwrap();
-        assert!(r.title.is_some(), "title should not be None");
-        assert!(!r.title.as_deref().unwrap_or("").is_empty(), "title should not be empty");
-        assert_eq!(r.source, "headless");
+        assert!(!r.html.is_empty(), "html should not be empty");
+        // 元数据由 extract 层解析，这里只验证拿到了渲染后的文档
+        assert!(r.html.contains("<title"), "rendered html should contain a title tag");
+        assert!(r.screenshot_bytes.is_none(), "未要求截图时不该产出截图");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[ignore]
     async fn headless_huaban_returns_screenshot_bytes() {
-        let result = scrape_headless("https://huaban.com/", 60, 10).await;
-        assert!(result.is_ok(), "scrape_headless failed: {:?}", result.err());
-        let r = result.unwrap();
-        assert!(r.screenshot_bytes.is_some(), "screenshot_bytes should not be None");
-        let bytes = r.screenshot_bytes.unwrap();
+        let result = capture_headless("https://huaban.com/", 60, 10, None, true).await;
+        assert!(result.is_ok(), "capture_headless failed: {:?}", result.err());
+        let bytes = result.unwrap().screenshot_bytes.expect("screenshot_bytes should not be None");
         assert!(bytes.len() > 10_240, "screenshot should be > 10KB, got {} bytes", bytes.len());
     }
 }
