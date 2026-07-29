@@ -1,5 +1,8 @@
 <template>
-  <div class="group w-full rounded-lg bg-slate-50 dark:bg-slate-800/40 p-4">
+  <div
+    ref="cardRef"
+    class="group w-full rounded-lg bg-slate-50 dark:bg-slate-800/40 p-4 transition-shadow"
+    :class="{ 'ring-2 ring-primary/60': dropTargetId === CARD_END_ID }">
     <div class="flex items-center gap-2 mb-2">
       <Icon
         :icon="isRoot ? 'mdi:home-variant' : 'mdi:folder'"
@@ -26,7 +29,12 @@
       </button>
     </div>
 
-    <div v-if="children.length === 0" class="text-xs text-slate-400 dark:text-slate-500 py-3 text-center">暂无书签</div>
+    <div
+      v-if="children.length === 0"
+      class="text-xs text-slate-400 dark:text-slate-500 py-3 text-center rounded border border-dashed"
+      :class="dropTargetId === CARD_END_ID ? 'border-primary text-primary' : 'border-transparent'">
+      暂无书签
+    </div>
     <div v-else ref="listRef">
       <div
         v-for="child in children"
@@ -42,6 +50,7 @@
           v-if="dropTargetId === child.id && dropMode === 'below'"
           class="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary z-10" />
       </div>
+      <span v-if="dropTargetId === CARD_END_ID" class="block h-0.5 rounded-full bg-primary mt-1" />
     </div>
   </div>
 </template>
@@ -50,7 +59,7 @@
 import { h, nextTick, onBeforeUnmount } from 'vue'
 import { Icon } from '@iconify/vue'
 import ContextMenu from '@imengyu/vue3-context-menu'
-import { bookmarksRenameDir, bookmarksDel, bookmarksSort } from '@api'
+import { bookmarksRenameDir, bookmarksDel, bookmarksSort, bookmarksMoveNode } from '@api'
 import { ROOT_KEY, type UserLayoutNodeVO } from '@typing'
 import BookmarkTreeRow from '@/components/BookmarkTreeRow.vue'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
@@ -63,16 +72,20 @@ const emit = defineEmits<{ edit: [node: UserLayoutNodeVO]; share: [folderId: str
 
 const bookmarkStore = useBookmarkStore()
 
-// ── 文件夹内书签拖动排序 ──
+// ── 书签拖动排序 / 跨文件夹移动 ──
 // 根目录卡片（isRoot）在 store 顺序表中对应 ROOT_KEY，而非 index.vue 里仅用于 UI 分组的 ROOT_CARD_ID
 const orderKey = computed(() => (props.isRoot ? ROOT_KEY : props.folderId))
+// 卡片容器本身也是放置区，代表"拖到本卡片末尾"：命中具体行之外的空白处（或空文件夹）时用它兜底
+const CARD_END_ID = '__card_end__'
 
+const cardRef = ref<HTMLElement | null>(null)
 const listRef = ref<HTMLElement | null>(null)
 const draggingId = ref<string | null>(null)
 const dropTargetId = ref<string | null>(null)
 const dropMode = ref<'above' | 'below' | null>(null)
 
 let rowsCleanup: (() => void) | null = null
+let cardCleanup: (() => void) | null = null
 let monitorCleanup: (() => void) | null = null
 
 function classify(el: HTMLElement, clientY: number): 'above' | 'below' {
@@ -101,9 +114,13 @@ function registerRows() {
       }),
       dropTargetForElements({
         element: el,
-        canDrop: ({ source }) => source.data.id !== id && props.children.some((c) => c.id === source.data.id),
+        // 不再要求 source 必须已属于本卡片：允许从其它文件夹/根目录拖入，实现跨文件夹移动
+        canDrop: ({ source }) => source.data.id !== id,
         getData: () => ({ id }),
         onDrag: ({ location }) => {
+          // dropTargets[0] 是嵌套放置区里被命中的最内层元素；只有真正悬停在本行上时才更新指示线，
+          // 避免与外层卡片容器的放置区（CARD_END_ID）互相覆盖闪烁
+          if (location.current.dropTargets[0]?.element !== el) return
           dropTargetId.value = id
           dropMode.value = classify(el, location.current.input.clientY)
         },
@@ -119,6 +136,27 @@ function registerRows() {
   rowsCleanup = combine(...disposers)
 }
 
+function registerCard() {
+  cardCleanup?.()
+  const el = cardRef.value
+  if (!el) return
+  cardCleanup = dropTargetForElements({
+    element: el,
+    getData: () => ({ id: CARD_END_ID }),
+    onDrag: ({ location }) => {
+      if (location.current.dropTargets[0]?.element !== el) return
+      dropTargetId.value = CARD_END_ID
+      dropMode.value = null
+    },
+    onDragLeave: () => {
+      if (dropTargetId.value === CARD_END_ID) {
+        dropTargetId.value = null
+        dropMode.value = null
+      }
+    },
+  })
+}
+
 function registerMonitor() {
   monitorCleanup?.()
   monitorCleanup = monitorForElements({
@@ -129,29 +167,47 @@ function registerMonitor() {
       const sourceId = String(source.data.id)
       const targetId = String(target.data.id)
       if (sourceId === targetId) return
-      if (!props.children.some((c) => c.id === sourceId) || !props.children.some((c) => c.id === targetId)) return
-      const mode = classify(target.element as HTMLElement, location.current.input.clientY)
+      // 全局 monitor：每个卡片实例都会收到同一次 drop，这里只处理真正落在"本卡片"范围内的那次
+      // （命中本卡片自己的某一行，或命中本卡片容器本身），避免被多个卡片实例重复处理
+      const belongsToThisCard =
+        targetId === CARD_END_ID ? target.element === cardRef.value : props.children.some((c) => c.id === targetId)
+      if (!belongsToThisCard) return
+      const mode = targetId === CARD_END_ID ? null : classify(target.element as HTMLElement, location.current.input.clientY)
       decide(sourceId, targetId, mode)
     },
   })
 }
 
-// 把某个子集合的新顺序，套用回 fullOld（可能包含子集之外的其它 id，如根目录卡片里的文件夹 id）：
-// 子集内 id 按 newSubsetOrder 重新排列，非子集 id 保留原位置不动
-function applySubsetOrder(fullOld: string[], newSubsetOrder: string[]): string[] {
-  const subset = new Set(newSubsetOrder)
-  const queue = [...newSubsetOrder]
-  return fullOld.map((id) => (subset.has(id) ? (queue.shift() as string) : id))
-}
+function decide(sourceId: string, targetId: string, mode: 'above' | 'below' | null) {
+  const destKey = orderKey.value
+  const fromKey = bookmarkStore.parentKeyOf(sourceId)
+  if (fromKey == null) return
+  const destOrder = bookmarkStore.order[destKey] ?? []
+  const targetIndex = targetId === CARD_END_ID ? destOrder.length : destOrder.indexOf(targetId)
+  if (targetIndex < 0) return
+  let insertIndex = targetId === CARD_END_ID ? destOrder.length : mode === 'below' ? targetIndex + 1 : targetIndex
 
-function decide(sourceId: string, targetId: string, mode: 'above' | 'below') {
-  const visibleIds = props.children.map((c) => c.id).filter((x) => x !== sourceId)
-  const ti = visibleIds.indexOf(targetId)
-  if (ti < 0) return
-  visibleIds.splice(mode === 'below' ? ti + 1 : ti, 0, sourceId)
-  const fullOld = bookmarkStore.order[orderKey.value] ?? visibleIds
-  bookmarkStore.reorderLocal(orderKey.value, applySubsetOrder(fullOld, visibleIds))
+  if (fromKey === destKey) {
+    // 同一文件夹内重排：直接在该文件夹的全量顺序表里挪位置（含根目录卡片里穿插的文件夹 id，位置不受影响）
+    const sourceIndex = destOrder.indexOf(sourceId)
+    if (sourceIndex < 0) return
+    const next = [...destOrder]
+    next.splice(sourceIndex, 1)
+    if (sourceIndex < insertIndex) insertIndex -= 1
+    next.splice(Math.max(0, Math.min(insertIndex, next.length)), 0, sourceId)
+    bookmarkStore.reorderLocal(destKey, next)
+  } else {
+    // 跨文件夹移动：moveLocal 会把节点从原文件夹顺序表中移出、插入目标文件夹指定位置，
+    // 并在原文件夹因此只剩 ≤1 项时自动就地解散
+    bookmarkStore.moveLocal(sourceId, destKey, insertIndex)
+  }
+
   bookmarksSort(bookmarkStore.fullOrderParams).catch((error) => console.error('[BookmarkFolderCard] 排序保存失败', error))
+  if (fromKey !== destKey) {
+    bookmarksMoveNode(sourceId, destKey === ROOT_KEY ? null : destKey).catch((error) =>
+      console.error('[BookmarkFolderCard] 移动书签失败', error),
+    )
+  }
 }
 
 watch(
@@ -161,11 +217,13 @@ watch(
 onMounted(() =>
   nextTick(() => {
     registerRows()
+    registerCard()
     registerMonitor()
   }),
 )
 onBeforeUnmount(() => {
   rowsCleanup?.()
+  cardCleanup?.()
   monitorCleanup?.()
 })
 

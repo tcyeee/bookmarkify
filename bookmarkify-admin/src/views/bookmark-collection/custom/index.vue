@@ -71,7 +71,7 @@ const gridOptions: VxeGridProps<UserShareAdminVO> = {
     { type: "seq", title: "#", width: 50 },
     { field: "nickName", title: "分享人", minWidth: 140 },
     { field: "note", title: "文案", minWidth: 220 },
-    { field: "bookmarkCount", title: "书签数", width: 90, align: "center" },
+    { field: "bookmarkCount", title: "书签数", width: 90 },
     { field: "status", title: "状态", width: 120, slots: { default: "status" } },
     {
       field: "expireTime",
@@ -85,7 +85,7 @@ const gridOptions: VxeGridProps<UserShareAdminVO> = {
       width: 180,
       formatter: ({ cellValue }) => formatDateTime(cellValue),
     },
-    { title: "操作", width: 120, align: "center", slots: { default: "actions" } },
+    { title: "操作", width: 120, slots: { default: "actions" } },
   ],
   toolbarConfig: { custom: true, refresh: true },
   pagerConfig: {},
