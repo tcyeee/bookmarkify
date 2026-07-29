@@ -43,6 +43,10 @@ enum class ErrorType(var msg: String) {
     E305("域名格式错误"),
     E306("埋点统计服务请求失败"),
 
+    // 我方抓取服务(bookmarkify-scrapper)自身不可用/配置错误，与"目标站点打不开"(E304)是两回事：
+    // 这类失败不代表书签失联，不能据此把书签置为 UNREACHABLE
+    E307("抓取服务不可用"),
+
     /* 不提示,也不在前端报错的部分 */
     E201("Websocket认证失败"),
     E203("REDIS断开连接"),

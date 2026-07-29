@@ -209,6 +209,8 @@ async function checkLiveness() {
         ? "检测完成，网站存活"
         : `检测完成，网站不可访问${result.errorMsg ? `：${result.errorMsg}` : ""}`,
     );
+  } catch {
+    // 同上：抓取服务自身不可用时接口直接报错，提示已由拦截器弹出
   } finally {
     checkingLiveness.value = false;
   }
@@ -237,6 +239,8 @@ async function handleRefresh(row: BookmarkEntity) {
         ? "已重新抓取并更新"
         : `重新抓取失败${updated.parseErrMsg ? `：${updated.parseErrMsg}` : ""}`,
     );
+  } catch {
+    // 抓取服务不可用(E307)等会走接口错误分支，消息已由请求拦截器弹出，这里只需别留下未捕获的 rejection
   } finally {
     refreshingMap[row.id] = false;
   }

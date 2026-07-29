@@ -461,6 +461,14 @@ class BookmarkServiceImpl(
         return BookmarkRefetchVO(title = vo.title, iconUrl = iconUrl, logoUrl = logoUrl)
     }
 
+    /**
+     * 抓取服务(scrapper)自身不可用 ≠ 目标站点失联。前者常见于本地开发没起 scrapper、
+     * 鉴权 token 配错，此时若照旧把书签写成 UNREACHABLE，一次本地调试就能把好端端的
+     * 书签洗成"失联"。这类失败一律不落库，直接向上抛出让调用方看到真实原因。
+     */
+    private fun Throwable.isScrapperUnavailable(): Boolean =
+        this is CommonException && errorType == ErrorType.E307
+
     override fun adminCheckLiveness(bookmarkId: String): BookmarkLivenessVO {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         log.debug("[adminCheckLiveness] 管理员触发书签活性检测: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
@@ -489,6 +497,10 @@ class BookmarkServiceImpl(
                 )
             },
             onFailure = { e ->
+                if (e.isScrapperUnavailable()) {
+                    log.warn("[adminCheckLiveness] 抓取服务不可用，不改动书签状态: bookmarkId=$bookmarkId, err=${e.message}")
+                    throw e
+                }
                 bookmark.apply {
                     isActivity = false
                     parseStatus = ParseStatusEnum.UNREACHABLE
@@ -543,6 +555,10 @@ class BookmarkServiceImpl(
                 log.debug("[adminRefresh] 更新成功: bookmarkId=$bookmarkId, title=${bookmark.title}")
             },
             onFailure = { e ->
+                if (e.isScrapperUnavailable()) {
+                    log.warn("[adminRefresh] 抓取服务不可用，不改动书签状态: bookmarkId=$bookmarkId, err=${e.message}")
+                    throw e
+                }
                 bookmark.apply {
                     isActivity = false
                     parseStatus = ParseStatusEnum.UNREACHABLE
@@ -882,6 +898,12 @@ class BookmarkServiceImpl(
                 bookmark
             },
             onFailure = { e ->
+                // 抓取服务没起/配错时保持 PENDING 原样，交给 checkAll() 之后重来，
+                // 别把我方故障记成书签失联（异步链路不抛，抛了也没人接）
+                if (e.isScrapperUnavailable()) {
+                    log.warn("[parseByApi] 抓取服务不可用，保留待抓取状态: bookmarkId=${bookmark.id}, err=${e.message}")
+                    return@fold bookmark
+                }
                 log.debug("[parseByApi] API 调用失败: bookmarkId=${bookmark.id}, err=${e.message}")
                 bookmark.apply {
                     isActivity = false
