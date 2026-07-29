@@ -26,13 +26,13 @@ import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 
 interface IBookmarkService : IService<BookmarkEntity> {
-    /** 每天检查数据库所有书签活性 */
+    /** 每 5 分钟对账一次 PENDING 书签：只负责「异步解析事件丢失/未完成」的兜底重投，不做活性判断 */
     fun checkAll()
 
-    /** 定时重试 UNREACHABLE 书签：ping 通后重新触发解析，结果写入 bookmark_ping_log */
+    /** 定时扫描 UNREACHABLE 书签（含已认证）：ping 通后重新触发解析，结果写入 bookmark_ping_log；异步执行，不占用调度线程 */
     fun retryUnreachableBookmarks()
 
-    /** 每小时扫描一次全部 7 天未更新的书签（含已认证）做活性检查，结果写入 bookmark_ping_log */
+    /** 定时扫描 SUCCESS 书签（含已认证）做活性复查，结果写入 bookmark_ping_log；异步执行，不占用调度线程 */
     fun livenessCheckStaleBookmarks()
 
     /** 添加书签并异步检查 */

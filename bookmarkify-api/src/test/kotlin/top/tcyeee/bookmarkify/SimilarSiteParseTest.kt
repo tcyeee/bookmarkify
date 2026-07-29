@@ -5,13 +5,16 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
 import top.tcyeee.bookmarkify.config.entity.DeepSeekConfig
 import top.tcyeee.bookmarkify.config.entity.ScrapperConfig
+import top.tcyeee.bookmarkify.mapper.ScrapperCallLogMapper
 import top.tcyeee.bookmarkify.server.impl.ApiServiceImpl
 
 class SimilarSiteParseTest {
     private val svc = ApiServiceImpl(
         ScrapperConfig(), DeepSeekConfig(), ObjectMapper().registerKotlinModule(),
+        mock(ScrapperCallLogMapper::class.java),
     )
 
     @Test

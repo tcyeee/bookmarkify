@@ -139,9 +139,12 @@ async function handleResult<T>(result: Result<T>, requestLabel: string): Promise
   if (result.ok) return result.data
 
   // token 失效(101):登出并跳转欢迎页,不再静默重新登录
+  // 必须 skipServerLogout=true:服务端已判定会话失效才会返回 101,此时再调用 /auth/logout
+  // 大概率再次收到 101,而 withDebounce 会把递归产生的这次调用去重成同一个 in-flight promise,
+  // 导致外层 logout() 永远等不到内层结果、卡在 finally 之前——cleanup 和 navigateTo 都不会执行。
   if (result.code === 101) {
     const authStore = useAuthStore()
-    await authStore.logout()
+    await authStore.logout(true)
     return Promise.reject(result)
   }
 

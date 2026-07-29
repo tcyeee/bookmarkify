@@ -225,47 +225,36 @@ class BookmarkServiceImpl(
 
     override fun checkAll() =
         // F-08: Limit each scheduler tick to CHECKALL_BATCH_SIZE records.
-        // The previous .lt(verifyFlag, false) was a no-op on PostgreSQL booleans, so in
-        // production there may be a large backlog of unverified bookmarks. Without a limit,
-        // the first post-fix run would flood the parse executor and delay newly-added bookmark parsing.
+        // 职责收窄为「异步解析事件丢失/未完成」的兜底对账：只处理 PENDING，不再涉足 UNREACHABLE/SUCCESS 的复查——
+        // 那是 retryUnreachableBookmarks / livenessCheckStaleBookmarks 的职责，避免同一条记录被多个任务抢跑。
+        // PENDING 正常应在几分钟内被异步解析消费掉，超过 CHECKALL_PENDING_STALE_MINUTES 未更新基本可判定是事件丢失。
         ktQuery()
-            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
+            .eq(BookmarkEntity::parseStatus, ParseStatusEnum.PENDING)
             .eq(BookmarkEntity::verifyFlag, false)
+            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -CHECKALL_PENDING_STALE_MINUTES, ChronoUnit.MINUTES))
             // 最旧的优先处理，配合 LIMIT 保证积压记录会被逐批消费，不会被新记录饿死。
             .orderByAsc(BookmarkEntity::updateTime)
             .last("LIMIT $CHECKALL_BATCH_SIZE")
             .list()
             .forEach { eventPublisher.publishEvent(BookmarkParseEvent(it.id)) }
 
+    @Async(AsyncConfig.BOOKMARK_PARSE_EXECUTOR)
     override fun retryUnreachableBookmarks() {
         val abnormalCheckIntervalHours = bookmarkLivenessConfigService.getConfig().abnormalCheckIntervalHours
-        val candidates = ktQuery()
-            .eq(BookmarkEntity::parseStatus, ParseStatusEnum.UNREACHABLE)
-            .eq(BookmarkEntity::verifyFlag, false)
-            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -abnormalCheckIntervalHours.toLong(), ChronoUnit.HOURS))
-            .orderByAsc(BookmarkEntity::updateTime)
-            .last("LIMIT $RETRY_UNREACHABLE_BATCH_SIZE")
-            .list()
-            // 非域名类型(本地/IP/其他)不抓取，也不应对其发起存活 ping
-            .filter { WebsiteParser.classifyLinkType(it.urlHost) == BookmarkLinkType.DOMAIN }
-
-        log.debug("[retryUnreachableBookmarks] 本次待重试书签数: ${candidates.size}")
-        candidates.forEach { bookmark ->
-            val alive = apiService.pingWebsite(bookmark.rawUrl)
-            val triggeredParse = alive && !bookmark.verifyFlag
-            pingLogMapper.insert(
-                BookmarkPingLogEntity(
-                    bookmarkId = bookmark.id,
-                    urlHost = bookmark.urlHost,
-                    alive = alive,
-                    triggeredParse = triggeredParse,
-                )
-            )
+        // 职责范围为全部 UNREACHABLE（含已认证），不再按 verifyFlag 过滤：认证书签的重新解析仍会被
+        // parseBookmark() 短路跳过，但 ping 结果本身依旧值得记录，且它是 UNREACHABLE 唯一的负责任务。
+        pingSweep(
+            taskLabel = "retryUnreachableBookmarks",
+            statusFilter = ParseStatusEnum.UNREACHABLE,
+            staleAfterHours = abnormalCheckIntervalHours,
+            batchSize = RETRY_UNREACHABLE_BATCH_SIZE,
+            triggeredParseOf = { bookmark, alive -> alive && !bookmark.verifyFlag },
+        ) { bookmark, alive, triggeredParse ->
             if (triggeredParse) {
                 log.debug("[retryUnreachableBookmarks] ping 成功，触发重新解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
-                eventPublisher.publishEvent(BookmarkParseEvent(bookmark.id))
             } else {
-                log.debug("[retryUnreachableBookmarks] ping 失败，更新 updateTime: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                val reason = if (alive) "ping 成功但已手动认证，跳过重新解析" else "ping 失败"
+                log.debug("[retryUnreachableBookmarks] $reason，更新 updateTime: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
                 // 更新 updateTime，使该记录在下次调度周期之前不会被重复选中
                 ktUpdate().eq(BookmarkEntity::id, bookmark.id)
                     .set(BookmarkEntity::updateTime, LocalDateTime.now())
@@ -274,37 +263,23 @@ class BookmarkServiceImpl(
         }
     }
 
+    @Async(AsyncConfig.BOOKMARK_PARSE_EXECUTOR)
     override fun livenessCheckStaleBookmarks() {
-        // 范围覆盖全部书签（含已手动认证的），因为 checkAll/retryUnreachableBookmarks 都只处理 verifyFlag=false，
-        // 已认证书签此前从未被自动复查过。排除 PENDING：尚未解析完成的记录由 checkAll 每5分钟负责兜底。
         val activeCheckIntervalHours = bookmarkLivenessConfigService.getConfig().activeCheckIntervalHours
-        val candidates = ktQuery()
-            .ne(BookmarkEntity::parseStatus, ParseStatusEnum.PENDING)
-            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -activeCheckIntervalHours.toLong(), ChronoUnit.HOURS))
-            .orderByAsc(BookmarkEntity::updateTime)
-            .last("LIMIT $LIVENESS_CHECK_BATCH_SIZE")
-            .list()
-            // 非域名类型(本地/IP/其他)不抓取，也不应对其发起存活 ping
-            .filter { WebsiteParser.classifyLinkType(it.urlHost) == BookmarkLinkType.DOMAIN }
-
-        log.debug("[livenessCheckStaleBookmarks] 本次待检查书签数: ${candidates.size}")
-        candidates.forEach { bookmark ->
-            val alive = apiService.pingWebsite(bookmark.rawUrl)
+        // 职责范围收窄为 SUCCESS（含已认证）：UNREACHABLE 已由 retryUnreachableBookmarks 独占负责，
+        // 避免同一条 UNREACHABLE 记录被两个任务重复 ping。PENDING 由 checkAll 负责，与此无关。
+        pingSweep(
+            taskLabel = "livenessCheckStaleBookmarks",
+            statusFilter = ParseStatusEnum.SUCCESS,
+            staleAfterHours = activeCheckIntervalHours,
+            batchSize = LIVENESS_CHECK_BATCH_SIZE,
             // parseBookmark() 对 verifyFlag=true 的书签直接短路返回，不会更新 updateTime，
             // 发布重新解析事件对已认证书签是无效操作，会导致该记录每小时被重复选中。
-            val triggeredParse = alive && !bookmark.isActivity && !bookmark.verifyFlag
-            pingLogMapper.insert(
-                BookmarkPingLogEntity(
-                    bookmarkId = bookmark.id,
-                    urlHost = bookmark.urlHost,
-                    alive = alive,
-                    triggeredParse = triggeredParse,
-                )
-            )
+            triggeredParseOf = { bookmark, alive -> alive && !bookmark.isActivity && !bookmark.verifyFlag },
+        ) { bookmark, alive, triggeredParse ->
             when {
                 triggeredParse -> {
                     log.debug("[livenessCheckStaleBookmarks] ping 成功且此前不活跃，触发重新解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
-                    eventPublisher.publishEvent(BookmarkParseEvent(bookmark.id))
                 }
                 alive -> {
                     log.debug("[livenessCheckStaleBookmarks] ping 成功，仅刷新 updateTime: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
@@ -321,6 +296,61 @@ class BookmarkServiceImpl(
                         .update()
                 }
             }
+        }
+    }
+
+    /**
+     * 定时活性检测任务的通用骨架：按 [statusFilter] + [staleAfterHours] 选出候选、逐条 ping、写 [BookmarkPingLogEntity]，
+     * 再交给 [onResult] 决定各自的落库/重新解析动作。[triggeredParseOf] 决定是否需要发布 [BookmarkParseEvent]。
+     *
+     * 候选总数（不含 LIMIT）超过 [batchSize] 时打印告警：说明当前数据量下，配置的检测间隔已经追不上，
+     * 只是「目标值」而非「保证值」——需要调大 batchSize 或拉长间隔配置。
+     */
+    private fun pingSweep(
+        taskLabel: String,
+        statusFilter: ParseStatusEnum,
+        staleAfterHours: Int,
+        batchSize: Int,
+        triggeredParseOf: (bookmark: BookmarkEntity, alive: Boolean) -> Boolean,
+        onResult: (bookmark: BookmarkEntity, alive: Boolean, triggeredParse: Boolean) -> Unit,
+    ) {
+        val staleBefore = LocalDateTimeUtil.offset(LocalDateTime.now(), -staleAfterHours.toLong(), ChronoUnit.HOURS)
+
+        val totalBacklog = ktQuery()
+            .eq(BookmarkEntity::parseStatus, statusFilter)
+            .lt(BookmarkEntity::updateTime, staleBefore)
+            .count()
+        if (totalBacklog > batchSize) {
+            log.warn(
+                "[$taskLabel] 候选积压 $totalBacklog 条，超过单次处理上限 $batchSize：" +
+                    "当前数据量下 ${staleAfterHours}h 的检测间隔配置可能无法按时完成一轮检测"
+            )
+        }
+
+        val candidates = ktQuery()
+            .eq(BookmarkEntity::parseStatus, statusFilter)
+            .lt(BookmarkEntity::updateTime, staleBefore)
+            // 最旧的优先处理，配合 LIMIT 保证积压记录会被逐批消费，不会被新记录饿死。
+            .orderByAsc(BookmarkEntity::updateTime)
+            .last("LIMIT $batchSize")
+            .list()
+            // 非域名类型(本地/IP/其他)不抓取，也不应对其发起存活 ping
+            .filter { WebsiteParser.classifyLinkType(it.urlHost) == BookmarkLinkType.DOMAIN }
+
+        log.debug("[$taskLabel] 本次待检查书签数: ${candidates.size}")
+        candidates.forEach { bookmark ->
+            val alive = apiService.pingWebsite(bookmark.rawUrl)
+            val triggeredParse = triggeredParseOf(bookmark, alive)
+            pingLogMapper.insert(
+                BookmarkPingLogEntity(
+                    bookmarkId = bookmark.id,
+                    urlHost = bookmark.urlHost,
+                    alive = alive,
+                    triggeredParse = triggeredParse,
+                )
+            )
+            onResult(bookmark, alive, triggeredParse)
+            if (triggeredParse) eventPublisher.publishEvent(BookmarkParseEvent(bookmark.id))
         }
     }
 
@@ -972,6 +1002,9 @@ class BookmarkServiceImpl(
         // F-08: cap each checkAll() run to prevent flooding the parse executor when a large backlog
         // of unverified bookmarks exists (e.g., on first deployment after fixing the .lt→.eq bug).
         private const val CHECKALL_BATCH_SIZE = 100
+        // PENDING 正常几分钟内就会被异步解析消费掉；超过这个时长还没变化，基本可判定是解析事件丢失/进程重启丢弃，
+        // 而不是网站本身的活性问题——所以用远短于活性检测的分钟级窗口，而不是活性检测的小时/天级窗口。
+        private const val CHECKALL_PENDING_STALE_MINUTES = 30L
         private const val RETRY_UNREACHABLE_BATCH_SIZE = 50
         private const val LIVENESS_CHECK_BATCH_SIZE = 200
         private const val MAX_IMPORT_BOOKMARK_COUNT = 2000
