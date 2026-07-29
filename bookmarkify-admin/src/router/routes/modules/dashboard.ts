@@ -59,15 +59,6 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
-        name: 'ScrapperCallLog',
-        path: '/bookmark/scrapper-log',
-        component: () => import('#/views/bookmark/scrapper-log/index.vue'),
-        meta: {
-          icon: 'carbon:cloud-logging',
-          title: 'Scrapper调用日志',
-        },
-      },
-      {
         name: 'BookmarkPingLog',
         path: '/bookmark/ping-log',
         component: () => import('#/views/bookmark/ping-log/index.vue'),
@@ -83,6 +74,34 @@ const routes: RouteRecordRaw[] = [
         meta: {
           icon: 'carbon:workspace',
           title: '网站管理',
+        },
+      },
+    ],
+  },
+  {
+    meta: {
+      icon: 'lucide:radar',
+      title: 'Scrapper管理',
+    },
+    name: 'Scrapper',
+    path: '/scrapper',
+    children: [
+      {
+        name: 'ScrapperCallLog',
+        path: '/scrapper/call-log',
+        component: () => import('#/views/scrapper/call-log/index.vue'),
+        meta: {
+          icon: 'carbon:cloud-logging',
+          title: 'Scrapper调用日志',
+        },
+      },
+      {
+        name: 'ScrapperCheck',
+        path: '/scrapper/check',
+        component: () => import('#/views/scrapper/check/index.vue'),
+        meta: {
+          icon: 'carbon:activity',
+          title: 'Scrapper检测',
         },
       },
     ],
