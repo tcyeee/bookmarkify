@@ -41,7 +41,7 @@ data class BookmarkEntity(
     @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
     @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
 
-    // 图标相关字段（小图标/高清LOGO/内边距/背景色/高清开关）已迁移到 bookmark_logo 表（BookmarkLogoEntity），与书签一对一。
+    // 图标相关信息已迁往 site_asset / site_display_pref：一行一图 + 按展示模式分行的显示偏好。
 
     /* 状态信息 */
     @JsonIgnore @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.PENDING,
@@ -49,6 +49,7 @@ data class BookmarkEntity(
     @JsonIgnore @field:Schema(description = "抓取成功但页面疑似反爬虫/WAF挑战页,内容可能不可靠") var antiCrawlerBlocked: Boolean = false,
     @JsonIgnore @field:Schema(description = "手动认证状态") var verifyFlag: Boolean = false, // 如果该书签信息都没问题, 添加手动认证状态以后, 即可被搜索到
     @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)，由 DeepSeek 判断") var nsfw: Boolean = false,
+    @JsonIgnore @field:Max(50) @field:Schema(description = "NSFW 判定理由，由 DeepSeek 给出，供人工审核/排查使用") var nsfwReason: String? = null,
     @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
@@ -89,7 +90,7 @@ data class BookmarkEntity(
         this.parseStatus = ParseStatusEnum.SUCCESS
         this.antiCrawlerBlocked = wrapper.antiCrawlerDetected
         this.updateTime = LocalDateTime.now()
-        // 小图标(iconBase64)已迁出到 bookmark_logo，由解析层在保存元信息后单独 upsert。
+        // 图标由 SiteAssetWriter 在保存元信息后单独落 site_asset。
     }
 
     // 是否需要检查标签,这里为true,说明这个书签需要被检查了
@@ -155,31 +156,3 @@ data class BookmarkUserLink(
                 .getOrDefault(BookmarkLinkType.OTHER)
     }
 }
-
-/**
- * 书签图标记录：小图标(base64) + 高清LOGO + 显示设置(内边距/背景色/高清开关) + 高清LOGO文件元数据。
- * 与 bookmark 一对一（bookmark_id 唯一）。这些图标相关字段原先在 bookmark 表，现统一收拢到此表。
- */
-@TableName("bookmark_logo")
-data class BookmarkLogoEntity(
-    @TableId @field:Schema(description = "图标记录ID") val id: String = IdUtil.fastUUID(),
-    @field:Schema(description = "所属书签ID") var bookmarkId: String = "",
-
-    /* 图标数据 */
-    @field:Schema(description = "小图标base64") var iconBase64: String? = null,
-    @field:Max(500) @field:Schema(description = "高清LOGO的OSS地址") var logoUrl: String? = null,
-
-    /* 显示设置（管理后台可编辑） */
-    @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
-    @field:Max(32) @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
-    @field:Schema(description = "是否在前台用高清LOGO渲染") var useHdLogo: Boolean = false,
-
-    /* 高清LOGO文件元数据 */
-    @field:Schema(description = "LOGO大小(单位:字节)") var size: Long = 0,
-    @field:Schema(description = "LOGO高度(单位:Pix)") var height: Int = 0,
-    @field:Schema(description = "LOGO宽度(单位:Pix)") var width: Int = 0,
-    @field:Schema(description = "LOGO文件后缀") var suffix: String = "",
-
-    @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
-    @field:Schema(description = "更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
-) : Serializable

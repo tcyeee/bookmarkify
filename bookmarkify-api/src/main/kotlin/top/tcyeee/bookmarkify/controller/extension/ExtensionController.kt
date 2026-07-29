@@ -1,5 +1,13 @@
 package top.tcyeee.bookmarkify.controller.extension
 
+import top.tcyeee.bookmarkify.entity.dto.scrape.cached
+import top.tcyeee.bookmarkify.entity.dto.scrape.description
+import top.tcyeee.bookmarkify.entity.dto.scrape.faviconUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.logoUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.primarySource
+import top.tcyeee.bookmarkify.entity.dto.scrape.screenshotUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.socialUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.title
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.GetMapping
@@ -27,6 +35,6 @@ class ExtensionController(private val apiService: IApiService) {
     @Operation(summary = "查询网站标题与图标，供插件在浏览页面时展示/预填")
     fun siteInfo(@RequestParam url: String): ExtensionSiteInfoVO {
         val scraped = apiService.queryWebsiteInfo(url)
-        return ExtensionSiteInfoVO(title = scraped.title, favicon = scraped.favicon)
+        return ExtensionSiteInfoVO(title = scraped.title, favicon = scraped.faviconUrl)
     }
 }

@@ -6,10 +6,14 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
 import top.tcyeee.bookmarkify.entity.entity.*
+import top.tcyeee.bookmarkify.entity.enums.AssetQuality
+import top.tcyeee.bookmarkify.entity.enums.DisplayMode
+import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
+import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
 import top.tcyeee.bookmarkify.utils.OssUtils
 import java.time.LocalDateTime
 
@@ -37,65 +41,68 @@ data class BookmarkShow(
     @field:Schema(description = "基础url") var urlBase: String? = null,
     @field:Schema(description = "是否置顶") var pinned: Boolean = false,
     @field:Schema(description = "书签链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
-    // 图标相关字段已迁移到 bookmark_logo，对外统一以 logo 嵌套对象输出（下面这些扁平字段仅供内部/SQL 映射用，不直接序列化）
-    @JsonIgnore @field:Schema(description = "小图标(序列化进 logo)") var iconBase64: String? = null,
-    @JsonIgnore @field:Schema(description = "图片内边距(序列化进 logo)") var iconPadding: Int = 25,
-    @JsonIgnore @field:Schema(description = "图标背景色(序列化进 logo)") var iconBgColor: String? = null,
-    @JsonIgnore @field:Schema(description = "是否使用高清图") var useHdLogo: Boolean = false,
+    // 图标不再由本类自己拼装：改由 SiteAssetResolver 按展示模式从 site_asset 解析后注入。
+    @field:Schema(description = "图标信息(按展示模式解析后的结果)") var logo: BookmarkLogoShowVO = BookmarkLogoShowVO(),
     @field:Schema(description = "网站活性") var isActivity: Boolean? = null,
     @JsonIgnore @field:Schema(description = "用户ID") var uid: String? = null,
-    @JsonIgnore @field:Schema(description = "大图尺寸") var hdSize: Int = 0,
     @JsonIgnore @field:Schema(description = "Host(用于拿不到name的情况下最后显示Title)") var urlHost: String? = null,
     @JsonIgnore @field:Schema(description = "在有manifest的情况下,替换title") var appName: String? = null,
     @JsonIgnore @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)，供分享审核使用") var nsfw: Boolean = false,
     @field:Schema(description = "用户桌面排布节点ID(书签管理页批量删除/移入文件夹等操作使用此ID，而非 bookmarkUserLinkId)") var layoutNodeId: String? = null,
-    @JsonIgnore @field:Schema(description = "大图标OSS地址,带权限(序列化进 logo)") var iconHdUrl: String? = null,
     @field:Schema(description = "所属文件夹节点ID，无所属文件夹时为 null") var folderId: String? = null,
     @field:Schema(description = "所属文件夹名称，无所属文件夹时为 null") var folderName: String? = null,
 ) {
-    // 高清渲染：管理员开关开启，或书签本身被用户置顶（置顶区域始终尝试用高清图），且存在达标高清图时才用高清
-    val isHd: Boolean get() = (useHdLogo || pinned) && hdSize > 0
-
-    /** 图标信息（嵌套对象）：小图标 / 高清地址 / 内边距 / 背景色，统一收拢供前端读取。 */
-    val logo: BookmarkLogoShowVO
-        get() = BookmarkLogoShowVO(iconBase64, iconHdUrl, iconPadding, iconBgColor)
-
-    constructor(userlink: BookmarkUserLink, bookmark: BookmarkEntity?, logo: BookmarkLogoEntity?) : this() {
+    constructor(
+        userlink: BookmarkUserLink,
+        bookmark: BookmarkEntity?,
+        resolved: SiteAssetResolver.ResolvedLogo?,
+    ) : this() {
         bookmark?.let { BeanUtil.copyProperties(it, this) }
         BeanUtil.copyProperties(userlink, this)
-        // 图标相关字段从 bookmark_logo 取
-        logo?.let {
-            iconBase64 = it.iconBase64
-            iconPadding = it.iconPadding
-            iconBgColor = it.iconBgColor
-            useHdLogo = it.useHdLogo
-        }
         bookmarkUserLinkId = userlink.id
         urlBase = bookmark?.let { "${it.urlScheme}://${it.urlHost}" }
-        hdSize = logo?.height ?: 0
-        iconHdUrl = null
+        logo = BookmarkLogoShowVO.from(resolved)
     }
 
-    /** 设置大图LOGO还有备用Title */
+    /** 设置备用 title：简称 → 标题 → host。图标签名已由 SiteAssetResolver 完成。 */
     fun initLogo(): BookmarkShow {
-        // 为图片添加签名
-        if (isHd) OssUtils.getLogoUrl(bookmarkId!!, hdSize, 256).also { iconHdUrl = it }
-
-        // 设置备用title
         title = appName?.takeIf { it.isNotBlank() } ?: title?.takeIf { it.isNotBlank() } ?: urlHost
         return this
     }
 }
 
-/** 前台书签图标的嵌套对象（由 BookmarkShow.logo 输出） */
+/**
+ * 前台书签图标：**按展示模式解析后的单一结果**，不再是"给你几个图位自己挑"。
+ *
+ * 挑哪张是服务端的策略（见 AssetRolePolicy），前端只负责渲染。这样 TILE 与 LIST
+ * 相反的优先级、以及"没有够格的图就走首字母色块"这类判断，都不必在前端复现一遍。
+ */
 data class BookmarkLogoShowVO(
-    @field:Schema(description = "小图标base64") val iconBase64: String? = null,
-    @field:Schema(description = "大图标OSS地址(带签名)") val iconHdUrl: String? = null,
+    @field:Schema(description = "图片地址(已签名并按模式缩放);走首字母色块时为 null") val url: String? = null,
+    @field:Schema(description = "这张图实际是什么:FAVICON/LOGO/SOCIAL/SCREENSHOT") val role: AssetRole? = null,
+    @field:Schema(description = "可信度:TRUSTED/DEGRADED") val quality: AssetQuality? = null,
+    @field:Schema(description = "是否矢量图") val isVector: Boolean = false,
+    @field:Schema(description = "为 true 时前端应放弃图片,改用首字母色块") val monogram: Boolean = true,
     @field:Schema(description = "图片内边距") val iconPadding: Int = 25,
     @field:Schema(description = "图标背景色") val iconBgColor: String? = null,
-)
+) {
+    companion object {
+        fun from(r: SiteAssetResolver.ResolvedLogo?): BookmarkLogoShowVO {
+            if (r == null) return BookmarkLogoShowVO()
+            return BookmarkLogoShowVO(
+                url = r.url,
+                role = r.role,
+                quality = r.quality,
+                isVector = r.isVector,
+                monogram = r.monogram,
+                iconPadding = r.iconPadding,
+                iconBgColor = r.iconBgColor,
+            )
+        }
+    }
+}
 
-/** 用户端「添加书签」搜索结果：基础信息 + 小图标(来自 bookmark_logo) */
+/** 用户端「添加书签」搜索结果：基础信息 + 按 LIST 模式解析出的图标 */
 data class BookmarkSearchVO(
     @field:Schema(description = "书签ID") var id: String,
     @field:Schema(description = "书签根域名") var urlHost: String,
@@ -104,13 +111,13 @@ data class BookmarkSearchVO(
     @field:Schema(description = "书签标题") var title: String? = null,
     @field:Schema(description = "图标信息") var logo: BookmarkLogoShowVO = BookmarkLogoShowVO(),
 ) {
-    constructor(entity: BookmarkEntity, logo: BookmarkLogoEntity?) : this(
+    constructor(entity: BookmarkEntity, resolved: SiteAssetResolver.ResolvedLogo?) : this(
         id = entity.id,
         urlHost = entity.urlHost,
         urlScheme = entity.urlScheme,
         appName = entity.appName,
         title = entity.title,
-        logo = BookmarkLogoShowVO(iconBase64 = logo?.iconBase64),
+        logo = BookmarkLogoShowVO.from(resolved),
     )
 }
 
@@ -208,8 +215,9 @@ data class BookmarkAdminVO(
     @field:Schema(description = "书签标题") var title: String? = null,
     @field:Schema(description = "书签备注") var description: String? = null,
 
-    /* 图标信息（来自 bookmark_logo，嵌套对象） */
-    @field:Schema(description = "图标信息") var logo: BookmarkLogoAdminVO = BookmarkLogoAdminVO(),
+    /* 图片资产（site_asset，一行一图）与各展示模式的设置 */
+    @field:Schema(description = "该书签的全部图片资产") var assets: List<SiteAssetAdminVO> = emptyList(),
+    @field:Schema(description = "各展示模式下的图标设置") var displayPrefs: List<SiteDisplayPrefVO> = emptyList(),
 
     /* 状态信息 */
     @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.PENDING,
@@ -222,41 +230,53 @@ data class BookmarkAdminVO(
     @field:Schema(description = "命中的分类") var categories: List<CategoryVO> = emptyList(),
     @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)") var nsfw: Boolean = false,
 ) {
-    constructor(entity: BookmarkEntity, logo: BookmarkLogoEntity?) : this(
+    constructor(entity: BookmarkEntity) : this(
         id = entity.id,
         urlHost = entity.urlHost,
         urlScheme = entity.urlScheme,
     ) {
         BeanUtil.copyProperties(entity, this)
-        // 图标信息来自 bookmark_logo；高清 LOGO 存放在私有读 OSS 桶，库里 logoUrl 是未签名地址(直接访问会 403)，
-        // 这里换成限时签名地址(原图不缩放,便于后台审阅)，签名失败则置空交由前端说明。
-        this.logo = BookmarkLogoAdminVO(
-            iconBase64 = logo?.iconBase64,
-            logoUrl = logo?.logoUrl?.takeIf { it.isNotBlank() }?.let {
-                runCatching { OssUtils.resizeAndSignImg(it, 0, 0) }.getOrNull()
-            },
-            maximalLogoSize = logo?.width ?: 0,
-            iconPadding = logo?.iconPadding ?: 25,
-            iconBgColor = logo?.iconBgColor,
-            useHdLogo = logo?.useHdLogo ?: false,
-        )
     }
 }
 
-/** 管理后台书签图标的嵌套对象（由 BookmarkAdminVO.logo 输出） */
-data class BookmarkLogoAdminVO(
-    @field:Schema(description = "小图标base64") var iconBase64: String? = null,
-    @field:Schema(description = "高清LOGO的签名OSS地址(私有桶,带访问签名)") var logoUrl: String? = null,
-    @field:Schema(description = "最大LOGO尺寸") var maximalLogoSize: Int = 0,
+/**
+ * 管理后台的单张资产视图。
+ *
+ * 后台刻意展示**全部**资产而非仅选中的那张：排查"这个站为什么用了张丑图"时，需要看到
+ * 它到底声明了哪些图、各自出处是什么、有没有撞 hash。
+ */
+data class SiteAssetAdminVO(
+    @field:Schema(description = "资产ID") var id: String = "",
+    @field:Schema(description = "用途(本服务推导)") var role: AssetRole = AssetRole.FAVICON,
+    @field:Schema(description = "出处(scrapper 报告的事实)") var extractor: String = "",
+    @field:Schema(description = "可信度") var quality: AssetQuality = AssetQuality.DEGRADED,
+    @field:Schema(description = "可直接预览的地址(私有桶已签名)") var url: String? = null,
+    @field:Schema(description = "源站原始地址") var resolvedUrl: String = "",
+    @field:Schema(description = "真实像素宽") var width: Int? = null,
+    @field:Schema(description = "真实像素高") var height: Int? = null,
+    @field:Schema(description = "字节数") var byteSize: Long? = null,
+    @field:Schema(description = "MIME") var mime: String? = null,
+    @field:Schema(description = "是否矢量图") var isVector: Boolean = false,
+    @field:Schema(description = "图片字节 sha256") var contentHash: String? = null,
+    @field:Schema(description = "同 role 内的自动首选项") var isPrimary: Boolean = false,
+    @field:Schema(description = "与本书签其它资产字节相同(说明该站没有独立 LOGO)") var duplicateOfOther: Boolean = false,
+    @field:Schema(description = "该张的失败原因") var errorMsg: String? = null,
+)
+
+/** 管理后台某展示模式下的图标设置 */
+data class SiteDisplayPrefVO(
+    @field:Schema(description = "展示模式") var displayMode: DisplayMode = DisplayMode.TILE,
     @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
     @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
-    @field:Schema(description = "是否使用高清图") var useHdLogo: Boolean = false,
+    @field:Schema(description = "人工钉死的资产ID") var pinnedAssetId: String? = null,
+    @field:Schema(description = "当前该模式下实际会渲染的地址") var previewUrl: String? = null,
+    @field:Schema(description = "为 true 表示该模式下会走首字母色块") var monogram: Boolean = true,
 )
 
 /** 管理后台「重新获取」的预览结果：重新解析得到的标题与小图标（不落库，仅供前端对比选择） */
 data class BookmarkRefetchVO(
     @field:Schema(description = "新解析的网站标题") var title: String? = null,
-    @field:Schema(description = "新解析的小图标base64") var iconBase64: String? = null,
+    @field:Schema(description = "新解析的网站图标地址") var iconUrl: String? = null,
     @field:Schema(description = "新解析的高清LOGO签名地址(私有桶,未抓到为 null)") var logoUrl: String? = null,
 )
 

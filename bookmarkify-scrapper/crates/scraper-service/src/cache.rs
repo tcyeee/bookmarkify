@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use moka::future::Cache;
-use crate::scraper::ScrapeResult;
+use crate::contract::ScrapeResponse;
 
 /// 基于 URL 的抓取结果内存缓存，支持自动过期和容量限制。
 ///
@@ -10,7 +10,7 @@ use crate::scraper::ScrapeResult;
 /// 保证同一资源的不同 URL 写法能命中同一条缓存。
 pub struct ScrapeCache {
     /// 底层 moka 异步缓存，键为规范化后的 URL 字符串，值为共享的抓取结果
-    inner: Cache<String, Arc<ScrapeResult>>,
+    inner: Cache<String, Arc<ScrapeResponse>>,
     /// 近期失败 URL 的负缓存（60s TTL），防止重复触发高开销的 headless 抓取
     errors: Cache<String, ()>,
 }
@@ -45,8 +45,8 @@ impl ScrapeCache {
     /// - `url`：目标 URL 字符串（原始形式，无需预先规范化）
     ///
     /// # 返回
-    /// 命中时返回 `Some(Arc<ScrapeResult>)`，未命中或 URL 非法时返回 `None`。
-    pub async fn get(&self, url: &str) -> Option<Arc<ScrapeResult>> {
+    /// 命中时返回 `Some(Arc<ScrapeResponse>)`，未命中或 URL 非法时返回 `None`。
+    pub async fn get(&self, url: &str) -> Option<Arc<ScrapeResponse>> {
         let key = Self::normalize(url)?;
         self.inner.get(&key).await
     }
@@ -71,7 +71,7 @@ impl ScrapeCache {
     /// # 参数
     /// - `url`：目标 URL 字符串
     /// - `result`：要缓存的抓取结果（通过 `Arc` 共享所有权）
-    pub async fn set(&self, url: &str, result: Arc<ScrapeResult>) {
+    pub async fn set(&self, url: &str, result: Arc<ScrapeResponse>) {
         if let Some(key) = Self::normalize(url) {
             self.inner.insert(key, result).await;
         }
@@ -121,17 +121,25 @@ impl ScrapeCache {
 mod tests {
     use super::*;
 
-    fn make_result(title: &str) -> Arc<ScrapeResult> {
-        Arc::new(ScrapeResult {
-            title: Some(title.to_string()),
-            description: None,
-            image: None,
-            favicon: None,
-            logo: None,
-            source: "og".to_string(),
-            screenshot_bytes: None,
-            screenshot_url: None,
-        })
+    fn make_result(title: &str) -> Arc<ScrapeResponse> {
+        use crate::contract::{FetchInfo, PageMeta, RenderLayer, ScrapeRequest, Timing};
+        let request: ScrapeRequest =
+            serde_json::from_str(r#"{"url":"https://example.com"}"#).unwrap();
+        let fetch = FetchInfo {
+            final_url: "https://example.com/".to_string(),
+            redirect_chain: Vec::new(),
+            http_status: 200,
+            layer_used: RenderLayer::Http,
+            from_cache: false,
+            content_type: None,
+            charset: None,
+            byte_size: None,
+            tls: None,
+            timing_ms: Timing { total: 1, ..Default::default() },
+        };
+        let mut resp = ScrapeResponse::new(request, fetch);
+        resp.meta = Some(PageMeta { title: Some(title.to_string()), ..Default::default() });
+        Arc::new(resp)
     }
 
     #[test]
@@ -166,7 +174,10 @@ mod tests {
         cache.set(url, Arc::clone(&r)).await;
         let got = cache.get(url).await;
         assert!(got.is_some());
-        assert_eq!(got.unwrap().title, r.title);
+        assert_eq!(
+            got.unwrap().meta.as_ref().and_then(|m| m.title.clone()),
+            r.meta.as_ref().and_then(|m| m.title.clone())
+        );
     }
 
     #[tokio::test]

@@ -1,0 +1,76 @@
+package top.tcyeee.bookmarkify.entity.dto.scrape
+
+import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
+import top.tcyeee.bookmarkify.entity.enums.AssetRole
+import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
+import top.tcyeee.bookmarkify.server.asset.AssetRolePolicy
+import java.time.LocalDateTime
+
+/**
+ * 从 scrapper 的**事实**派生出便于业务代码消费的扁平视图。
+ *
+ * 这些派生刻意放在 API 侧而非 scrapper 侧：「哪张图算 LOGO」是书签鸭的策略，不是网页的
+ * 事实。scrapper 只报 `extractor`，映射规则集中在 [AssetRolePolicy]。
+ *
+ * 供只需要"给我一张 logo 就行"的旧调用点使用；需要完整资产列表的场景请直接读
+ * `response.assets` 或走 `site_asset` 表。
+ */
+
+/** 页面标题 */
+val ScrapeResponse.title: String? get() = meta?.title
+
+/** 页面描述 */
+val ScrapeResponse.description: String? get() = meta?.description
+
+/** 站点短名（manifest.short_name），大图模式下方那行短文案 */
+val ScrapeResponse.shortName: String? get() = meta?.shortName
+
+/**
+ * 标题的出处，作为整次抓取的"代表来源"。
+ *
+ * 契约里出处是**逐字段**的（title 可能来自 OG 而 description 来自 meta[name]），
+ * 这里取标题的出处仅供日志与列表展示；完整信息在 `scrape_snapshot` 里。
+ */
+val ScrapeResponse.primarySource: String? get() = meta?.sources?.get("title")?.extractor?.name
+
+/** 是否命中 scrapper 侧缓存 */
+val ScrapeResponse.cached: Boolean get() = fetch.fromCache
+
+/** 按用途挑一张最合适的资产地址（优先 OSS 永久地址） */
+private fun ScrapeResponse.bestUrlOf(role: AssetRole): String? = assets
+    .filter { it.error == null && (it.storageUrl != null || it.resolvedUrl.isNotBlank()) }
+    .filter { AssetRolePolicy.classify(it.extractor).first == role }
+    .maxByOrNull { a ->
+        val trusted = if (AssetRolePolicy.classify(a.extractor).second.name == "TRUSTED") 1_000_000 else 0
+        trusted + minOf(a.width ?: 0, a.height ?: 0)
+    }
+    ?.let { it.storageUrl ?: it.resolvedUrl }
+
+/** 最合适的网站图标地址 */
+val ScrapeResponse.faviconUrl: String? get() = bestUrlOf(AssetRole.FAVICON)
+
+/** 最合适的品牌 LOGO 地址 */
+val ScrapeResponse.logoUrl: String? get() = bestUrlOf(AssetRole.LOGO)
+
+/** 社交分享图地址（即旧代码里的"OG 图"）*/
+val ScrapeResponse.socialUrl: String? get() = bestUrlOf(AssetRole.SOCIAL)
+
+/** 截图地址（仅 headless 模式且已落存储时存在）*/
+val ScrapeResponse.screenshotUrl: String? get() = screenshot?.storageUrl ?: screenshot?.dataUrl
+
+/**
+ * 把抓取结果填充进书签实体（取代旧 `ScrapeResponse.entity(bookmark)`）。
+ *
+ * 只写 `bookmark` 主表上仍然属于它的字段；标题/描述同时也会由
+ * [SiteAssetWriter][top.tcyeee.bookmarkify.server.asset.SiteAssetWriter] 落进
+ * `site_page_meta`，主表这份是给列表查询用的冗余。
+ */
+fun ScrapeResponse.applyTo(bookmark: BookmarkEntity): BookmarkEntity = bookmark.apply {
+    title = this@applyTo.title
+    description = this@applyTo.description
+    isActivity = true
+    parseStatus = ParseStatusEnum.SUCCESS
+    parseErrMsg = null
+    antiCrawlerBlocked = diagnostics.antiCrawler?.detected == true
+    updateTime = LocalDateTime.now()
+}

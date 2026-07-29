@@ -9,28 +9,19 @@
       :style="[logoSizeStyle, logoStyle]">
       <!-- 本地/IP 类型书签：后端不抓取信息，用与「不可访问」同色的灰底 + 白色圆点图标 -->
       <Icon v-if="isPlainCircle" icon="mdi:dots-circle" class="shrink-0 text-white" :style="glyphStyle" />
-      <!-- 优先使用高清图（仅在调用方显式要求时，如置顶区域） -->
+      <!-- 服务端已按展示模式选好唯一一张图，前端不再在多个图位之间取舍 -->
       <img
-        v-else-if="props.preferHd && props.value.logo?.iconHdUrl && !hdError"
-        :key="`hd-${props.value.logo?.iconHdUrl}`"
-        :src="props.value.logo?.iconHdUrl"
-        alt=""
-        draggable="false"
-        @error="onHdError"
-      />
-      <!-- base64 图：可按尺寸放大 -->
-      <img
-        v-else-if="!iconError"
-        :key="`base64-${props.value.logo?.iconBase64?.slice(0, 20) || ''}`"
-        :style="base64Style"
-        :src="base64Src"
+        v-else-if="imageUrl && !iconError"
+        :key="imageUrl"
+        :style="imageStyle"
+        :src="imageUrl"
         alt=""
         draggable="false"
         @error="onIconError"
       />
-      <!-- 最终兜底：灰色地球（内联 SVG，与管理台一致） -->
-      <img v-else :style="fallbackStyle" :src="FALLBACK_ICON" alt="" draggable="false" />
-    </div>
+      <!-- 首字母色块：该站没有够格的图（monogram），硬把 32px 的 favicon 拉到 72px 只会更难看 -->
+      <div v-else class="monogram" :style="monogramStyle">{{ monogramChar }}</div>
+
     <!-- 不可访问 / 不支持 SSL：整体覆盖同一层灰色蒙版，居中叠加白色标识（断网 / 感叹号）以区分两种状态 -->
     <div
       v-if="isInactive || isInsecure"
@@ -65,21 +56,14 @@ import { computed, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import { BookmarkLinkType, type BookmarkShow } from '@typing'
 
-const props = defineProps<{ value: BookmarkShow; size?: number; preferHd?: boolean }>()
-
-// 无图标 / 加载失败时的兜底图标（灰色地球，内联 SVG 避免依赖静态资源）
-const FALLBACK_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`,
-)}`
+// preferHd 已移除：用哪张图是服务端按展示模式决定的（AssetRolePolicy），
+// 前端再传一个偏好只会和服务端策略打架。原先这个 prop 也从未被任何调用方传过。
+const props = defineProps<{ value: BookmarkShow; size?: number }>()
 
 // 统一的灰：「不可访问」蒙版与「本地/IP」底色共用，保证两种状态视觉一致
 const INACTIVE_GRAY = 'rgba(100, 116, 139, 0.62)'
 
-// 状态：错误标记、动态背景色、是否放大
-const hdError = ref(false)
 const iconError = ref(false)
-const backgroundColor = ref('#ffffff')
-const shouldUpscale = ref(false)
 const logoSize = computed(() => props.size ?? 80)
 
 // 本地(localhost/127.0.0.1)或纯 IP 地址类型的书签：后端不抓取网站信息，前端仅展示统一的 mdi 圆圈图标
@@ -91,15 +75,11 @@ const isPlainCircle = computed(
 // 取图标尺寸的 50%，并设 10px 下限，避免 20px 的列表小格子下细到看不清
 const glyphStyle = computed(() => {
   const glyph = Math.max(10, Math.round(logoSize.value * 0.5))
-  return {
-    width: `${glyph}px`,
-    height: `${glyph}px`,
-  }
+  return { width: `${glyph}px`, height: `${glyph}px` }
 })
 
-// 自定义背景色（管理台设置）：存在则直接铺该色
+// 自定义背景色 / 内边距：管理台按展示模式设置，服务端已随 logo 一并下发
 const customBgColor = computed(() => props.value.logo?.iconBgColor || '')
-// 图片内边距（管理台设置）：收缩 base64 图标
 const effectivePadding = computed(() => props.value.logo?.iconPadding ?? 0)
 
 // 不支持 SSL(明文 http)：后端不下发该标记，前端按 urlFull 的协议判定。
@@ -111,189 +91,71 @@ const isInsecure = computed(() => {
 
 // 网站不可访问：图标变灰并叠加断网标识
 const isInactive = computed(() => props.value?.isActivity === false)
-// 判定是否需走 base64 分支
-const shouldUseBase64 = computed(
-  () => (!props.preferHd || !props.value.logo?.iconHdUrl || hdError.value) && !iconError.value && !!props.value.logo?.iconBase64,
-)
-// base64 时叠加主色与淡白蒙版
-const logoSizeStyle = computed(() => ({
-  width: `${logoSize.value}px`,
-  height: `${logoSize.value}px`,
-}))
+
+// monogram 为 true 表示"该站没有够格的图"，此时不渲染图片
+const imageUrl = computed(() => (props.value.logo?.monogram ? '' : props.value.logo?.url || ''))
+
+const logoSizeStyle = computed(() => ({ width: `${logoSize.value}px`, height: `${logoSize.value}px` }))
+
 const logoStyle = computed(() => {
   // 本地/IP：铺与「不可访问」蒙版同一个灰（叠在 bg-white 上合成同色），配白色图标
-  if (isPlainCircle.value) {
-    return { backgroundColor: INACTIVE_GRAY }
-  }
-  if (customBgColor.value) {
-    return { backgroundColor: customBgColor.value }
-  }
-  return shouldUseBase64.value
-    ? {
-        backgroundColor: backgroundColor.value,
-        backgroundImage: 'linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.58))',
-      }
-    : undefined
+  if (isPlainCircle.value) return { backgroundColor: INACTIVE_GRAY }
+  if (customBgColor.value) return { backgroundColor: customBgColor.value }
+  return undefined
 })
-// base64 尺寸：随外部 size 同步，保持原有比例（填充比例调高，减少空白留边）
-const base64PixelSize = computed(() => {
-  const base = logoSize.value * (shouldUpscale.value ? 0.82 : 0.68)
-  // 内边距按比例收缩(相对图标尺寸),避免小格子下被绝对像素减成负值而塌成 4px
-  const shrink = 1 - Math.min(Math.max(effectivePadding.value, 0), 35) / 100
-  return Math.max(4, Math.round(base * shrink))
-})
-const base64Style = computed(() => ({
-  width: `${base64PixelSize.value}px`,
-  height: `${base64PixelSize.value}px`,
-}))
-const fallbackStyle = computed(() => ({
-  width: `${Math.round(logoSize.value * 0.4)}px`,
-  height: `${Math.round(logoSize.value * 0.4)}px`,
-}))
-const base64Src = computed(() => buildBase64DataUrl(props.value.logo?.iconBase64 || ''))
 
-function onHdError() {
-  hdError.value = true
-}
+// 图片按内边距收缩；矢量图与大图都由服务端按模式缩放好，这里只做留白
+const imageStyle = computed(() => {
+  const shrink = 1 - Math.min(Math.max(effectivePadding.value, 0), 35) / 100
+  const px = Math.max(4, Math.round(logoSize.value * shrink))
+  return { width: `${px}px`, height: `${px}px`, objectFit: 'contain' as const }
+})
+
+// ── 首字母色块 ──
+// 取标题/域名首字符；中文直接用该字，英文用大写字母
+const monogramChar = computed(() => {
+  const src = props.value.title || props.value.urlBase || props.value.urlFull || '?'
+  const ch = src.replace(/^https?:\/\//i, '').trim().charAt(0)
+  return (ch || '?').toUpperCase()
+})
+
+// 由标题散列出稳定的色相：同一个书签每次渲染颜色一致，不同书签易于区分
+const monogramStyle = computed(() => {
+  const src = props.value.title || props.value.urlBase || '?'
+  let hash = 0
+  for (let i = 0; i < src.length; i++) hash = (hash * 31 + src.charCodeAt(i)) >>> 0
+  const hue = hash % 360
+  return {
+    width: '100%',
+    height: '100%',
+    backgroundColor: customBgColor.value || `hsl(${hue} 55% 55%)`,
+    fontSize: `${Math.max(10, Math.round(logoSize.value * 0.42))}px`,
+  }
+})
 
 function onIconError() {
   iconError.value = true
 }
 
-// 监听 iconBase64 变化
+// 换书签或换图时重置错误状态，让新图有机会加载
 watch(
-  () => props.value.logo?.iconBase64,
-  async (base64) => {
-    if (!import.meta.client || !base64) {
-      backgroundColor.value = '#ffffff'
-      shouldUpscale.value = false
-      return
-    }
-
-    try {
-      const { color, upscale } = await analyzeBase64(base64)
-      backgroundColor.value = color
-      shouldUpscale.value = upscale
-    } catch {
-      backgroundColor.value = '#ffffff'
-      shouldUpscale.value = false
-      iconError.value = true
-    }
-  },
-  { immediate: true },
-)
-
-// 监听 iconHdUrl 变化，重置错误状态以便重新加载
-watch(
-  () => props.value.logo?.iconHdUrl,
+  () => [props.value.bookmarkId, props.value.logo?.url],
   () => {
-    hdError.value = false
-  },
-)
-
-// 监听整个 value 对象变化，重置所有错误状态
-watch(
-  () => props.value,
-  () => {
-    hdError.value = false
     iconError.value = false
   },
-  { deep: true },
 )
-
-// 加载 base64，得到主色与放大标记
-async function analyzeBase64(base64: string): Promise<{ color: string; upscale: boolean }> {
-  const img = await loadBase64Image(base64)
-  const upscale = Math.max(img.width, img.height) >= 64
-  const color = computeAverageColor(img)
-  return { color, upscale }
-}
-
-// 计算平均色，步长取样兼顾性能
-function computeAverageColor(img: HTMLImageElement): string {
-  const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')
-
-  if (!ctx || !img.width || !img.height) {
-    return '#ffffff'
-  }
-
-  const targetWidth = Math.min(img.width, 64)
-  const targetHeight = Math.min(img.height, 64)
-  canvas.width = targetWidth
-  canvas.height = targetHeight
-
-  ctx.drawImage(img, 0, 0, targetWidth, targetHeight)
-  const { data } = ctx.getImageData(0, 0, targetWidth, targetHeight)
-
-  let r = 0
-  let g = 0
-  let b = 0
-  let count = 0
-
-  // 取平均色，步长减少开销
-  const step = 4 * 4
-  for (let i = 0; i + 3 < data.length; i += step) {
-    const alpha = data[i + 3] ?? 0
-    if (!alpha) continue
-    r += data[i] ?? 0
-    g += data[i + 1] ?? 0
-    b += data[i + 2] ?? 0
-    count++
-  }
-
-  if (!count) return '#ffffff'
-
-  return rgbToHex(Math.round(r / count), Math.round(g / count), Math.round(b / count))
-}
-
-// 载入 base64 图片
-function loadBase64Image(base64: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => resolve(img)
-    img.onerror = reject
-    img.src = buildBase64DataUrl(base64)
-  })
-}
-
-function buildBase64DataUrl(base64: string): string {
-  if (!base64) return ''
-  const trimmed = base64.trim()
-  if (trimmed.startsWith('data:')) return trimmed
-  const mime = detectMimeFromBase64(trimmed)
-  return `data:${mime};base64,${trimmed}`
-}
-
-function detectMimeFromBase64(base64: string): string {
-  if (!import.meta.client) return 'image/png'
-
-  try {
-    const raw = atob(base64.slice(0, 240))
-    const trimmed = raw.trimStart()
-    if (trimmed.startsWith('\x89PNG')) return 'image/png'
-    if (trimmed.startsWith('\xff\xd8\xff')) return 'image/jpeg'
-    if (trimmed.startsWith('GIF8')) return 'image/gif'
-    if (trimmed.startsWith('<svg') || trimmed.startsWith('<?xml') || trimmed.toLowerCase().includes('<svg')) return 'image/svg+xml'
-  } catch {
-    // ignore and fall back
-  }
-
-  return 'image/png'
-}
-
-function rgbToHex(r: number, g: number, b: number): string {
-  return `#${[r, g, b]
-    .map((val) => {
-      const hex = val.toString(16)
-      return hex.length === 1 ? `0${hex}` : hex
-    })
-    .join('')}`
-}
 </script>
 
 <style scoped>
+.monogram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #fff;
+  user-select: none;
+}
+
 .inactive-logo {
   /* 网站不可访问：图标去色，压暗交给上层灰色蒙版 */
   filter: grayscale(100%);

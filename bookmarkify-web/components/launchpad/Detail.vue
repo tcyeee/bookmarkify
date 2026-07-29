@@ -6,17 +6,10 @@
     <div class="flex items-center gap-4">
       <div class="h-20 w-20 rounded-2xl bg-white flex justify-center items-center shadow-lg overflow-hidden">
         <img
-          v-if="detail.logo?.iconHdUrl && !hdError"
-          :src="detail.logo?.iconHdUrl"
+          v-if="detail.logo?.url && !iconError"
+          :src="detail.logo.url"
           alt="bookmark icon"
           class="w-full h-full object-contain"
-          @error="onHdError"
-        />
-        <img
-          v-else-if="!iconError"
-          class="w-10 h-10"
-          :src="iconBase64"
-          alt="bookmark icon"
           @error="onIconError"
         />
         <img v-else class="w-10 h-10" src="/avatar/default.png" alt="bookmark icon" />
@@ -63,15 +56,12 @@ const saving = ref(false)
 const form = reactive({ title: '' })
 const isDirty = computed(() => form.title.trim() !== (detail.value?.title || ''))
 
-const hdError = ref(false)
 const iconError = ref(false)
-const iconBase64 = computed(() => `data:image/png;base64,${detail.value?.logo?.iconBase64 || ''}`)
 
 watch(
   () => detail.value,
   (val) => {
     form.title = val?.title || ''
-    hdError.value = false
     iconError.value = false
   },
   { immediate: true }
@@ -101,10 +91,6 @@ async function save() {
 function resetForm() {
   if (!detail.value) return
   form.title = detail.value.title || ''
-}
-
-function onHdError() {
-  hdError.value = true
 }
 
 function onIconError() {

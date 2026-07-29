@@ -31,9 +31,12 @@ bookmarkify-scrapper/
 └── crates/
     └── scraper-service/             # 生产服务
     │   └── src/
-    │       ├── main.rs              # HTTP 服务器、路由、AppState
-    │       ├── scraper.rs           # Layer 1：HTML 元数据解析
-    │       ├── headless.rs          # Layer 2：无头 Chrome 抓取
+    │       ├── main.rs              # HTTP 服务器、路由、AppState、/scrape 编排
+    │       ├── contract.rs          # 对外契约（请求/响应类型），唯一的跨服务耦合面
+    │       ├── scraper.rs           # Layer 1：取回 HTML + SSRF 防护基元
+    │       ├── headless.rs          # Layer 2：无头 Chrome 取回渲染后的 HTML
+    │       ├── extract.rs           # 纯函数提取层：HTML → 元数据/图片声明（可离线测试）
+    │       ├── pipeline.rs          # 网络富化层：manifest 抓取 + 图片 probe/下载/上传
     │       ├── cache.rs             # URL 规范化缓存
     │       └── oss.rs               # 阿里云 OSS 上传客户端
 ```

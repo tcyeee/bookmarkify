@@ -2,7 +2,9 @@ package top.tcyeee.bookmarkify.server
 
 import top.tcyeee.bookmarkify.entity.dto.AiReviewOutcome
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
-import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
+import top.tcyeee.bookmarkify.entity.dto.NsfwCheckResult
+import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
+import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 
 /**
@@ -10,8 +12,16 @@ import top.tcyeee.bookmarkify.entity.dto.SimilarSite
  * @date 3/14/26 14:07
  */
 interface IApiService {
-    /** 通过自部署的 bookmarkify-scrapper 解析网站基础信息 */
+    /** 用默认参数解析网站基础信息（等价于 scrape(domain, ScrapeRequest(url))） */
     fun queryWebsiteInfo(domain: String): ScrapeResponse
+
+    /**
+     * 完全控制 scrapper 行为的抓取入口。
+     *
+     * 管理后台"重试"应当传 `cache = CacheOptions(mode = BYPASS)`，否则可能直接命中
+     * scrapper 侧缓存，等于没重试。
+     */
+    fun scrape(domain: String, request: ScrapeRequest): ScrapeResponse
 
     /**
      * 通过 DeepSeek 从网站标题中提取品牌简称
@@ -38,10 +48,10 @@ interface IApiService {
     fun inferSimilarSites(title: String?, description: String?, host: String): List<SimilarSite>
 
     /**
-     * 通过 DeepSeek 判断网站是否涉及成人色情、赌博博彩等违规/不宜内容(NSFW)。
-     * 保守策略：调用失败或无法判断时返回 false，不误伤正常网站。
+     * 通过 DeepSeek 判断网站是否涉及成人色情、赌博博彩等违规/不宜内容(NSFW)，命中时附带简短理由。
+     * 保守策略：调用失败或无法判断时返回 [NsfwCheckResult.nsfw]=false，不误伤正常网站。
      */
-    fun inferNsfw(title: String?, description: String?, host: String): Boolean
+    fun inferNsfw(title: String?, description: String?, host: String): NsfwCheckResult
 
     /**
      * 通过 DeepSeek 判断分享内容是否涉及色情、涉政、歧视侮辱等不合规信息（用于分享发布审核）。

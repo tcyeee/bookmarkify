@@ -1,0 +1,168 @@
+{
+  "_comment": "bookmarkify-scrapper POST /scrape 的契约样例。Rust 侧 contract.rs 与 Kotlin 侧 ScrapeContract.kt 的测试都会反序列化本文件——两边任何一侧改了字段名或枚举取值，这里就会红。改契约请同时改这三个文件。以 '_' 开头的键是给人看的注释，两侧都会忽略。",
+
+  "request": {
+    "url": "https://github.com/vbenjs/vue-vben-admin",
+    "render": {
+      "mode": "AUTO",
+      "timeoutMs": 15000,
+      "waitUntil": "LOAD",
+      "viewport": { "width": 1280, "height": 720, "dpr": 2.0 },
+      "locale": "zh-CN",
+      "colorScheme": "LIGHT"
+    },
+    "extract": {
+      "meta": true,
+      "assets": true,
+      "manifest": true,
+      "jsonld": true,
+      "opengraph": true,
+      "twitter": true,
+      "feeds": false,
+      "alternates": false,
+      "text": false
+    },
+    "assets": { "download": "PROBE", "maxBytes": 2097152, "maxCount": 20 },
+    "screenshot": { "enabled": false, "fullPage": false, "format": "WEBP", "quality": 80 },
+    "cache": { "mode": "BYPASS" },
+    "robots": { "respect": true }
+  },
+
+  "fetch": {
+    "finalUrl": "https://github.com/vbenjs/vue-vben-admin",
+    "redirectChain": [{ "url": "http://github.com/vbenjs/vue-vben-admin", "status": 301 }],
+    "httpStatus": 200,
+    "layerUsed": "HTTP",
+    "fromCache": false,
+    "contentType": "text/html; charset=utf-8",
+    "charset": "utf-8",
+    "byteSize": 482130,
+    "tls": { "valid": true, "issuer": "DigiCert Inc", "notAfter": "2026-03-14T23:59:59Z" },
+    "timingMs": { "dns": 12, "connect": 30, "tls": 45, "ttfb": 180, "total": 421 }
+  },
+
+  "_comment_meta": "字段级出处是本契约的核心：title 来自 OG，description 却回落到了 meta[name]，shortName 来自 manifest。旧契约的单一 source 会把这三者压扁成一个 'og'。",
+  "meta": {
+    "title": "GitHub - vbenjs/vue-vben-admin",
+    "description": "A modern vue admin panel built with Vue3.",
+    "siteName": "GitHub",
+    "shortName": "GitHub",
+    "canonicalUrl": "https://github.com/vbenjs/vue-vben-admin",
+    "lang": "en",
+    "themeColor": "#1e2327",
+    "publishedAt": "2020-10-11T08:00:00Z",
+    "robots": "index, follow",
+    "keywords": ["vue", "admin", "vben"],
+    "sources": {
+      "title": { "extractor": "OG", "rawKey": "og:title" },
+      "description": { "extractor": "META_NAME", "rawKey": "description" },
+      "siteName": { "extractor": "OG", "rawKey": "og:site_name" },
+      "shortName": { "extractor": "MANIFEST", "rawKey": "short_name" },
+      "canonicalUrl": { "extractor": "LINK_TAG", "rawKey": "canonical" },
+      "lang": { "extractor": "HTML_ATTR", "rawKey": "lang" },
+      "publishedAt": { "extractor": "JSON_LD", "rawKey": "datePublished" }
+    }
+  },
+
+  "_comment_assets": "同一张图可能被多个 extractor 命中——注意 LINK_ICON 与 APPLE_TOUCH_ICON 的 contentHash 相同，这正是'该站没有独立 LOGO'的证据，调用方据此决定大图模式走首字母色块而不是拉伸 favicon。",
+  "assets": [
+    {
+      "extractor": "LINK_ICON",
+      "declared": { "rel": "icon", "sizes": "32x32", "type": "image/png" },
+      "originUrl": "/favicons/favicon.png",
+      "resolvedUrl": "https://github.com/favicons/favicon.png",
+      "width": 32,
+      "height": 32,
+      "byteSize": 1802,
+      "mime": "image/png",
+      "isVector": false,
+      "contentHash": "sha256:6f1b9c0d4e2a7b5c8d3f1a0e9b7c6d5a4f3e2d1c0b9a8877665544332211aabb"
+    },
+    {
+      "extractor": "APPLE_TOUCH_ICON",
+      "declared": { "rel": "apple-touch-icon", "sizes": "180x180" },
+      "originUrl": "/apple-touch-icon.png",
+      "resolvedUrl": "https://github.com/apple-touch-icon.png",
+      "width": 32,
+      "height": 32,
+      "byteSize": 1802,
+      "mime": "image/png",
+      "isVector": false,
+      "contentHash": "sha256:6f1b9c0d4e2a7b5c8d3f1a0e9b7c6d5a4f3e2d1c0b9a8877665544332211aabb"
+    },
+    {
+      "extractor": "LINK_MASK_ICON",
+      "declared": { "rel": "mask-icon", "type": "image/svg+xml" },
+      "originUrl": "/pinned-octocat.svg",
+      "resolvedUrl": "https://github.com/pinned-octocat.svg",
+      "byteSize": 934,
+      "mime": "image/svg+xml",
+      "isVector": true,
+      "contentHash": "sha256:aa11bb22cc33dd44ee55ff6600778899aabbccddeeff00112233445566778899"
+    },
+    {
+      "extractor": "MANIFEST_ICON",
+      "declared": { "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+      "originUrl": "https://github.githubassets.com/icon-512.png",
+      "resolvedUrl": "https://github.githubassets.com/icon-512.png",
+      "width": 512,
+      "height": 512,
+      "byteSize": 21044,
+      "mime": "image/png",
+      "isVector": false,
+      "contentHash": "sha256:1122334455667788990011223344556677889900112233445566778899001122",
+      "storageUrl": "https://cdn.bookmarkify.cc/asset/11/22/1122334455667788.png"
+    },
+    {
+      "extractor": "OG_IMAGE",
+      "declared": {},
+      "originUrl": "https://opengraph.githubassets.com/abc/vbenjs/vue-vben-admin",
+      "resolvedUrl": "https://opengraph.githubassets.com/abc/vbenjs/vue-vben-admin",
+      "width": 1200,
+      "height": 600,
+      "byteSize": 88213,
+      "mime": "image/png",
+      "isVector": false,
+      "contentHash": "sha256:99887766554433221100ffeeddccbbaa99887766554433221100ffeeddccbbaa"
+    },
+    {
+      "extractor": "FAVICON_ICO_FALLBACK",
+      "declared": {},
+      "originUrl": "/favicon.ico",
+      "resolvedUrl": "https://github.com/favicon.ico",
+      "error": "probe failed: 404"
+    }
+  ],
+
+  "manifest": {
+    "url": "https://github.com/manifest.json",
+    "raw": {
+      "name": "GitHub",
+      "short_name": "GitHub",
+      "theme_color": "#1e2327",
+      "icons": [{ "src": "https://github.githubassets.com/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }]
+    }
+  },
+
+  "jsonld": [
+    { "@context": "https://schema.org", "@type": "SoftwareSourceCode", "name": "vue-vben-admin", "datePublished": "2020-10-11T08:00:00Z" }
+  ],
+
+  "opengraph": {
+    "title": "GitHub - vbenjs/vue-vben-admin",
+    "site_name": "GitHub",
+    "image": "https://opengraph.githubassets.com/abc/vbenjs/vue-vben-admin",
+    "type": "object"
+  },
+
+  "twitter": {
+    "card": "summary_large_image",
+    "site": "@github"
+  },
+
+  "diagnostics": {
+    "warnings": ["asset probe failed for /favicon.ico: 404"],
+    "antiCrawler": { "detected": false },
+    "robots": { "allowed": true }
+  }
+}

@@ -22,7 +22,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchVO
 import top.tcyeee.bookmarkify.entity.CategoryVO
 import top.tcyeee.bookmarkify.entity.BookmarkImportPreviewVO
-import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
+import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 
 interface IBookmarkService : IService<BookmarkEntity> {
