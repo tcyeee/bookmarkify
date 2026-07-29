@@ -137,10 +137,37 @@
       "confirm": "创建"
     },
     "createSuccess": "集合创建成功",
+    "cleanup": {
+      "label": "一键整理",
+      "invalid": "清理失效书签",
+      "duplicate": "合并重复书签",
+      "invalidNone": "没有发现失效书签",
+      "invalidConfirmTitle": "清理失效书签",
+      "invalidConfirmMessage": "检测到 {count} 个失效书签（链接已无法访问），将全部删除，此操作不可撤销。",
+      "invalidSuccess": "已清理 {count} 个失效书签",
+      "duplicateNone": "没有发现重复书签",
+      "duplicateConfirmTitle": "合并重复书签",
+      "duplicateConfirmMessage": "检测到 {groups} 组重复书签，每组保留一个（优先保留置顶的，否则保留最早添加的），删除其余 {count} 个副本，此操作不可撤销。",
+      "duplicateSuccess": "已合并重复书签，删除 {count} 个副本"
+    },
     "pagination": {
       "total": "共 {total} 个书签",
       "pageOf": "第 {current} / {total} 页",
       "pageSize": "每页显示"
+    },
+    "folderPanel": {
+      "all": "全部书签",
+      "unnamed": "未命名文件夹",
+      "root": "根目录",
+      "rootEmpty": "根目录暂无书签",
+      "empty": "此文件夹暂无书签",
+      "itemCount": "{count} 个书签",
+      "rename": "重命名",
+      "delete": "删除文件夹",
+      "renameSuccess": "文件夹已重命名",
+      "deleteConfirmTitle": "删除文件夹",
+      "deleteConfirmMessage": "确定删除文件夹「{name}」吗？文件夹内的书签也会一并删除，此操作不可撤销。",
+      "deleteSuccess": "文件夹已删除"
     }
   },
   "shareManage": {

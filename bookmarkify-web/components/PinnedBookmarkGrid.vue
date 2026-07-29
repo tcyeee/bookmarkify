@@ -9,7 +9,13 @@
       class="w-16 flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
       @contextmenu.prevent="onContextMenu($event, node)">
       <BookmarkLogo :value="node.typeApp!" :size="56" :prefer-hd="true" />
-      <span class="w-full text-xs text-slate-600 dark:text-slate-300 truncate text-center">
+      <span
+        class="w-full text-xs truncate text-center"
+        :class="
+          node.typeApp!.isActivity === false
+            ? 'text-slate-400 dark:text-slate-500'
+            : 'text-slate-600 dark:text-slate-300'
+        ">
         {{ node.typeApp!.title || node.typeApp!.urlBase }}
       </span>
     </a>
