@@ -4,6 +4,7 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.server.asset.AssetRolePolicy
+import top.tcyeee.bookmarkify.utils.OssUtils
 import java.time.LocalDateTime
 
 /**
@@ -36,15 +37,20 @@ val ScrapeResponse.primarySource: String? get() = meta?.sources?.get("title")?.e
 /** 是否命中 scrapper 侧缓存 */
 val ScrapeResponse.cached: Boolean get() = fetch.fromCache
 
-/** 按用途挑一张最合适的资产地址（优先 OSS 永久地址） */
+/**
+ * 按用途挑一张最合适的资产地址（优先落了对象存储的那张）。
+ *
+ * 落存储的资产给出的是 **object key**，桶是私有读的，必须经 [OssUtils.signAsset] 换成限时
+ * 签名地址才能直接给浏览器；没落存储的只能回退到源站直连地址，那种地址本就公开，不签。
+ */
 private fun ScrapeResponse.bestUrlOf(role: AssetRole): String? = assets
-    .filter { it.error == null && (it.storageUrl != null || it.resolvedUrl.isNotBlank()) }
+    .filter { it.error == null && (it.storageKey != null || it.resolvedUrl.isNotBlank()) }
     .filter { AssetRolePolicy.classify(it.extractor).first == role }
     .maxByOrNull { a ->
         val trusted = if (AssetRolePolicy.classify(a.extractor).second.name == "TRUSTED") 1_000_000 else 0
         trusted + minOf(a.width ?: 0, a.height ?: 0)
     }
-    ?.let { it.storageUrl ?: it.resolvedUrl }
+    ?.let { asset -> asset.storageKey?.let { OssUtils.signAsset(it) } ?: asset.resolvedUrl }
 
 /** 最合适的网站图标地址 */
 val ScrapeResponse.faviconUrl: String? get() = bestUrlOf(AssetRole.FAVICON)
@@ -55,8 +61,9 @@ val ScrapeResponse.logoUrl: String? get() = bestUrlOf(AssetRole.LOGO)
 /** 社交分享图地址（即旧代码里的"OG 图"）*/
 val ScrapeResponse.socialUrl: String? get() = bestUrlOf(AssetRole.SOCIAL)
 
-/** 截图地址（仅 headless 模式且已落存储时存在）*/
-val ScrapeResponse.screenshotUrl: String? get() = screenshot?.storageUrl ?: screenshot?.dataUrl
+/** 截图地址（仅 headless 模式且已落存储时存在）；同样需要签名，未落存储时回退内联 data URL */
+val ScrapeResponse.screenshotUrl: String?
+    get() = screenshot?.storageKey?.let { OssUtils.signAsset(it) } ?: screenshot?.dataUrl
 
 /**
  * 把抓取结果填充进书签实体（取代旧 `ScrapeResponse.entity(bookmark)`）。

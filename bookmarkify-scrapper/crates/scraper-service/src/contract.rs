@@ -241,7 +241,7 @@ fn default_max_count() -> usize {
 /// | `NONE` | 否 | —— |
 /// | `PROBE` | 是 | 算完 hash/尺寸即丢弃 |
 /// | `INLINE` | 是 | 编码进 `dataUrl` |
-/// | `UPLOAD` | 是 | 传对象存储，返回 `storageUrl` |
+/// | `UPLOAD` | 是 | 传对象存储，返回 `storageKey` |
 ///
 /// 图标普遍只有几 KB，`PROBE` 的带宽代价很低，换来的是调用方判定"这张图够不够大、
 /// 能不能当 LOGO 用"以及跨 extractor 去重所需的全部依据。
@@ -255,7 +255,7 @@ pub enum AssetDownload {
     Probe,
     /// 取回正文并以 `data:` URL 内联在 `dataUrl` 字段里。适合小图标。
     Inline,
-    /// 取回正文并上传对象存储，返回 `storageUrl`。服务端未配置 OSS 时自动降级为 `PROBE`。
+    /// 取回正文并上传对象存储，返回 `storageKey`（object key，不含域名）。服务端未配置 OSS 时自动降级为 `PROBE`。
     Upload,
 }
 
@@ -624,9 +624,12 @@ pub struct Asset {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<String>,
 
-    /// 上传对象存储后的永久地址，`download = UPLOAD` 时才有。
+    /// 上传对象存储后的 **object key**（不含域名），`download = UPLOAD` 时才有。
+    ///
+    /// 刻意不返回完整 URL：域名、签名、按展示模式缩放都是消费端的策略，本服务只报
+    /// "字节落在了哪个 key 上"这个事实。
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub storage_url: Option<String>,
+    pub storage_key: Option<String>,
     /// `data:` 内联，`download = INLINE` 时才有。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data_url: Option<String>,
@@ -725,9 +728,9 @@ pub struct Alternate {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Screenshot {
-    /// 上传对象存储后的地址；未配置 OSS 时为空，转用 `dataUrl`。
+    /// 上传对象存储后的 **object key**（不含域名）；未配置 OSS 时为空，转用 `dataUrl`。
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub storage_url: Option<String>,
+    pub storage_key: Option<String>,
     /// `data:` 内联，仅在未配置 OSS 时出现。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data_url: Option<String>,

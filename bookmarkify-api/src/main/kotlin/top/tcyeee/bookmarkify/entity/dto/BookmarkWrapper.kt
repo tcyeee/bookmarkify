@@ -73,12 +73,3 @@ data class ManifestIcon(
 /* 预加载资源对象，包含 URL 及资源类型 */
 data class PreloadResource(val url: String, val asType: String? = null)
 
-// 图片文件
-data class ImgInfo(val url: String, val size: Long, val width: Int, val height: Int)
-
-/**
- * 网站 LOGO 存储结果。
- * @param logoUrl 高清 LOGO 上传 OSS 后的永久地址（无 LOGO 时为 null）
- * @param ogUrl OG 分享图上传 OSS 后的永久地址（无 OG 或上传失败时为 null）
- */
-data class LogoResult(val logoUrl: String?, val ogUrl: String? = null)

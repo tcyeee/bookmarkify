@@ -40,7 +40,23 @@ class BackgroundImageServiceImpl(
         ktQuery().eq(BackgroundImageEntity::uid, uid).eq(BackgroundImageEntity::isDefault, false).list()
             .mapNotNull { fileMapper.selectById(it.fileId).vo() }
 
-    override fun deleteUserImage(uid: String, id: String): Boolean =
-        ktUpdate().eq(BackgroundImageEntity::uid, uid).eq(BackgroundImageEntity::id, id)
+    /**
+     * 删除用户自传的背景图。
+     *
+     * 先删 DB 行，成功后再删 OSS 对象与 user_file 行：顺序反过来的话，一旦 DB 删除失败，
+     * 库里就会留下一条指向已消失对象的记录。OSS 删除失败只记警告（见 [OssUtils.delete]），
+     * 不回滚 —— 用户视角图已经删掉了，残留对象由桶的生命周期规则兜底。
+     */
+    override fun deleteUserImage(uid: String, id: String): Boolean {
+        val fileId = baseMapper.selectById(id)?.takeIf { it.uid == uid && !it.isDefault }?.fileId
+        val removed = ktUpdate().eq(BackgroundImageEntity::uid, uid).eq(BackgroundImageEntity::id, id)
             .eq(BackgroundImageEntity::isDefault, false).remove()
+        if (removed && fileId != null) {
+            fileMapper.selectById(fileId)?.let {
+                OssUtils.delete(it.fullPath)
+                fileMapper.deleteById(fileId)
+            }
+        }
+        return removed
+    }
 }

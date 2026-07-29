@@ -118,7 +118,7 @@ pub async fn fetch_manifest(
                 mime: None,
                 is_vector,
                 content_hash: None,
-                storage_url: None,
+                storage_key: None,
                 data_url: None,
                 error: None,
             });
@@ -270,8 +270,8 @@ async fn enrich_one(
         }
         AssetDownload::Upload => {
             let oss = oss.ok_or_else(|| "oss not configured".to_string())?;
-            let key = OssClient::asset_key(&asset.resolved_url, "asset", Some(&mime));
-            out.storage_url = Some(
+            let key = oss.asset_key(&asset.resolved_url, "asset", Some(&mime));
+            out.storage_key = Some(
                 oss.upload_bytes(&key, &bytes, &mime)
                     .await
                     .map_err(|e| format!("oss upload failed: {e:?}"))?,
@@ -532,7 +532,7 @@ mod tests {
             mime: None,
             is_vector: Some(false),
             content_hash: None,
-            storage_url: None,
+            storage_key: None,
             data_url: None,
             error: None,
         }];
@@ -562,7 +562,7 @@ mod tests {
             mime: None,
             is_vector: None,
             content_hash: None,
-            storage_url: None,
+            storage_key: None,
             data_url: None,
             error: None,
         };

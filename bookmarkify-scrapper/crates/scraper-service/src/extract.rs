@@ -18,7 +18,7 @@ use crate::contract::{
 use scraper::{Html, Selector};
 use std::collections::BTreeMap;
 
-/// 纯 HTML 提取的产物。网络相关字段（真实尺寸、hash、storageUrl）由上层流水线补齐。
+/// 纯 HTML 提取的产物。网络相关字段（真实尺寸、hash、storageKey）由上层流水线补齐。
 #[derive(Debug, Default)]
 pub struct Extracted {
     pub meta: PageMeta,
@@ -480,7 +480,7 @@ fn push_asset(
         mime: None,
         is_vector,
         content_hash: None,
-        storage_url: None,
+        storage_key: None,
         data_url: None,
         error: None,
     });

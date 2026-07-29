@@ -524,7 +524,7 @@ async fn scrape_handler(
             let (w, h) = pipeline::image_dimensions(&bytes).unwrap_or((0, 0));
             let byte_size = Some(bytes.len() as u64);
             let mut shot = Screenshot {
-                storage_url: None,
+                storage_key: None,
                 data_url: None,
                 width: w,
                 height: h,
@@ -534,9 +534,9 @@ async fn scrape_handler(
             };
             match state.oss.as_deref() {
                 Some(oss) => {
-                    let key = oss::OssClient::screenshot_key(&body.url);
+                    let key = oss.screenshot_key(&body.url);
                     match oss.upload_bytes(&key, &bytes, "image/png").await {
-                        Ok(url) => shot.storage_url = Some(url),
+                        Ok(k) => shot.storage_key = Some(k),
                         Err(e) => {
                             warnings.push(format!("screenshot upload failed: {e:?}"));
                             shot.data_url = Some(format!("data:image/png;base64,{}", base64_encode(&bytes)));
@@ -931,7 +931,7 @@ mod tests {
         assert!(hash.starts_with("sha256:"));
         // PROBE 不保留正文
         assert!(link_icon.get("dataUrl").is_none());
-        assert!(link_icon.get("storageUrl").is_none());
+        assert!(link_icon.get("storageKey").is_none());
 
         // 6. 同一张图被多个 extractor 命中时 hash 相同 —— 这正是"该站没有独立 LOGO"的判据
         let apple = assets.iter().find(|a| a["extractor"] == "APPLE_TOUCH_ICON").unwrap();

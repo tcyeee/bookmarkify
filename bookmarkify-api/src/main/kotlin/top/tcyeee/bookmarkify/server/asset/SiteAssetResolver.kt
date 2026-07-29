@@ -143,11 +143,7 @@ class SiteAssetResolver(
         // 没落到我们自己的 OSS（例如只做了 PROBE），只能给源站直连地址
             ?: return asset.resolvedUrl.takeIf { it.isNotBlank() }
 
-        val key = runCatching { OssUtils.ownOssObjectKey(java.net.URI(storage).toURL()) }.getOrNull()
-        // 不是本服务 OSS 的地址（比如 scrapper 用了别的公开 CDN），原样返回
-            ?: return storage
-
-        val size = if (asset.isVector) null else renderSize(mode)
-        return runCatching { OssUtils.signWithResize(key, size, size) }.getOrElse { storage }
+        // storage 可能是 object key（新契约）或存量的完整 URL，signAsset 统一处理这两种形态
+        return OssUtils.signAsset(storage, if (asset.isVector) null else renderSize(mode))
     }
 }

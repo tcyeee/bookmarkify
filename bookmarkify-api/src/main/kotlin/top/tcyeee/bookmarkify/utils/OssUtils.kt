@@ -13,15 +13,9 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
-import top.tcyeee.bookmarkify.entity.dto.ImgInfo
-import top.tcyeee.bookmarkify.entity.dto.LogoResult
-import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.enums.FileType
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.URI
-import javax.imageio.ImageIO
 
 /**
  * @author tcyeee
@@ -95,115 +89,36 @@ class OssUtils {
         }
 
         /**
-         * 将线上地址转存到OSS
-         * 1.只存储尺寸最大的那个
-         * @param list 包含LOGO和OG的List
-         * @param bookmarkId 书签ID(用于添加文件夹)
-         * @return 返回最大的LOGO信息
+         * 把一条**资产引用**转成前端可直接用的限时签名地址。
+         *
+         * 这是全项目唯一该被展示层调用的入口。它要处理两种形态：
+         * - **裸 object key**（scrapper 新契约的 `storageKey`，以及本服务自己写入的路径）
+         * - **完整 URL**（`site_asset.storage_url` 里的存量数据，scrapper 改造前写入的）
+         *
+         * 分流依据只有"是不是以 http(s):// 开头"这一条，因此新旧两种形态可以在库里长期共存，
+         * 不需要数据迁移、不需要停机，也不要求两个服务同时上线。
+         *
+         * 非本服务 OSS 的外链（例如资产只做了 PROBE、库里存的是源站地址）原样返回 —— 那种
+         * 地址本来就是公开可访问的，签名反而会破坏它。
+         *
+         * @param ref object key 或完整 URL
+         * @param size 目标边长；null 或 <=0 表示不缩放（矢量图必须走这条）
          */
-        fun restoreBookmarkLogoAndOg(list: List<ManifestIcon>?, bookmarkId: String): LogoResult {
-            log.debug("[restoreBookmarkLogoAndOg] bookmarkId={}, iconCount={}", bookmarkId, list?.size)
-            if (list.isNullOrEmpty()) throw CommonException(ErrorType.E999)
-
-            // 存储OG（og:image 宽屏分享图，与 LOGO 是两类图）：上传失败不影响 LOGO 主流程，地址回传由调用方落库
-            val ogs = list.filter { it.isOg() }.filterNot { it.src.isNullOrBlank() }
-            log.debug("[restoreBookmarkLogoAndOg] 找到OG图片数={}", ogs.size)
-            val ogUrl = if (ogs.isEmpty()) null else runCatching {
-                log.debug("[restoreBookmarkLogoAndOg] 开始存储OG: src={}", ogs.first().src)
-                restoreImg(FileType.WEBSITE_OG, ogs.first().src!!, bookmarkId).url
-            }.onFailure { log.warn("[restoreBookmarkLogoAndOg] OG存储失败: {}", it.message) }.getOrNull()
-
-            // 找到最大的那个LOGO
-            val maximalIcon: ManifestIcon = list
-                .filterNot { it.isOg() }
-                .filterNot { it.src.isNullOrBlank() }
-                .filterNot { it.src!!.endsWith(".ico") }
-                .maxByOrNull { it.size() } ?: run {
-                log.debug("[restoreBookmarkLogoAndOg] 未找到合适的LOGO图标, 返回空结果")
-                return LogoResult(logoUrl = null, ogUrl = ogUrl)
-            }
-            log.debug("[restoreBookmarkLogoAndOg] 选中最大LOGO: src={}, size={}", maximalIcon.src, maximalIcon.size())
-
-            // 存储高清 LOGO 并捕获其 OSS 永久地址
-            return runCatching { restoreImg(FileType.WEBSITE_LOGO, maximalIcon.src!!, bookmarkId) }
-                .getOrElse { throw CommonException(ErrorType.E218, it.message) }
-                .let { logoInfo ->
-                    log.debug("[restoreBookmarkLogoAndOg] LOGO存储成功: url={}, width={}, height={}", logoInfo.url, logoInfo.width, logoInfo.height)
-                    LogoResult(logoUrl = logoInfo.url, ogUrl = ogUrl)
-                }
-        }
-
-        /**
-         * 文件存储 当前只编写了图片文件
-         * @param fileType 文件类型
-         * @param url 文件线上地址
-         * @param bookmarkId 书签ID(用于添加文件夹)
-         */
-        fun restoreImg(fileType: FileType, url: String, bookmarkId: String): ImgInfo {
-            log.debug("[restoreImg] 开始拉取远程图片: fileType={}, url={}, bookmarkId={}", fileType, url, bookmarkId)
-            val parsedUrl = runCatching { URI.create(url).toURL() }
-                .getOrElse { throw CommonException(ErrorType.E223, it.message) }
-
-            // 来源本就是本服务自己的 OSS（scrapper 与 API 共用同一桶，logo 形如 cdn.bookmarkify.cc/...）：
-            // 直接用 OSS SDK 读取对象，绕开自定义域名公网 HTTPS 可能的 TLS 证书 SAN 不匹配
-            // （No subject alternative DNS name matching cdn.bookmarkify.cc found），同时免去一次外网往返。
-            ownOssObjectKey(parsedUrl)?.let { key ->
-                log.debug("[restoreImg] 源自本服务 OSS，改用 SDK 直读: key={}", key)
-                val obj = runCatching { ossClient.getObject(bucket, key) }
-                    .getOrElse { throw CommonException(ErrorType.E218, it.message) }
-                return obj.objectContent.use { uploadImg(it, fileType, url, bookmarkId) }
-            }
-
-            // SSRF 防护：仅允许 http/https，且解析后的 IP 不能是回环/链路本地/任意地址/RFC1918 内网
-            val scheme = parsedUrl.protocol?.lowercase()
-            if (scheme != "http" && scheme != "https") {
-                throw CommonException(ErrorType.E223, "scheme:$scheme")
-            }
-            val host = parsedUrl.host?.takeIf { it.isNotBlank() }
-                ?: throw CommonException(ErrorType.E223, "host:empty")
-            val addr = runCatching { java.net.InetAddress.getByName(host) }
-                .getOrElse { throw CommonException(ErrorType.E223, "dns:$host") }
-            if (addr.isAnyLocalAddress || addr.isLoopbackAddress
-                || addr.isLinkLocalAddress || addr.isSiteLocalAddress
-            ) {
-                throw CommonException(ErrorType.E223, "private:$host")
-            }
-
-            // F-05 (DNS rebinding): pin the connection to the already-validated IP so the JVM
-            // cannot re-resolve the hostname and get a different (private) address on the second lookup.
-            // HTTPS 例外: TLS 证书是按 URL 主机名校验的, 换成 IP 字面量会导致 SAN 不匹配而握手失败
-            // (No subject alternative names matching IP address)。HTTPS 因此改用原主机名直连——
-            // TLS 本身要求证书匹配该公网域名, rebinding 到内网主机会因拿不出合法证书而握手失败, 已足够防护。
-            val pinByIp = scheme == "http"
-            val safeUrl = if (pinByIp) {
-                URI(parsedUrl.protocol, null, addr.hostAddress, parsedUrl.port, parsedUrl.file, null, null).toURL()
+        fun signAsset(ref: String?, size: Int? = null): String? {
+            val raw = ref?.trim()?.takeIf { it.isNotBlank() } ?: return null
+            val key = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) {
+                // 存量完整 URL：只有指向我们自己的桶才有 key 可言，外链原样返回
+                runCatching { ownOssObjectKey(URI(raw).toURL()) }.getOrNull() ?: return raw
             } else {
-                parsedUrl
+                raw.removePrefix("/").substringBefore("?")
             }
-            val connection = runCatching { safeUrl.openConnection() }
-                .getOrElse { throw CommonException(ErrorType.E223, it.message) }
-                .apply {
-                    connectTimeout = 5000
-                    readTimeout = 5000
-                    // F-01 (SSRF redirect): disable automatic redirect following.
-                    // Without this a 301/302 from the validated public server could redirect
-                    // to a private/internal address, bypassing the SSRF guard entirely.
-                    (this as? java.net.HttpURLConnection)?.instanceFollowRedirects = false
-                    // 仅在以 IP 字面量连接 (HTTP) 时回填 Host 头, 让虚拟主机正确解析;
-                    // HTTPS 直接用主机名连接, 无需覆盖 Host。
-                    if (pinByIp) setRequestProperty("Host", host)
-                }
-
-            // 限制文件大小
-            val length = connection.contentLengthLong
-            log.debug("[restoreImg] 远程文件大小: length={} bytes, limit={} bytes", length, fileType.limit)
-            if (length != -1L && length > fileType.limit) throw CommonException(ErrorType.E219, "length:${length}")
-
-            return connection.getInputStream().use {
-                log.debug("[restoreImg] 开始上传图片到OSS")
-                this.uploadImg(it, fileType, url, bookmarkId)
-            }
+            if (key.isBlank()) return raw
+            val dim = size?.takeIf { it > 0 }
+            return runCatching { signWithResize(key, dim, dim) }
+                .onFailure { log.warn("[signAsset] 签名失败, 回退原值: ref={}, err={}", raw, it.message) }
+                .getOrDefault(raw)
         }
+
 
         /**
          * 若 [parsedUrl] 指向本服务自己的 OSS（自定义域名或默认 OSS 域名），返回其对象 key；否则返回 null。
@@ -215,66 +130,6 @@ class OssUtils {
                 .mapNotNull { runCatching { URI(it).host?.lowercase() }.getOrNull() }
             if (host !in ownHosts) return null
             return parsedUrl.path.removePrefix("/").substringBefore("?").takeIf { it.isNotBlank() }
-        }
-
-
-        /**
-         * @param inputStream 文件流
-         * @param fileType 文件类型(用于确定文件夹)
-         * @param url 文件线上地址
-         */
-        fun uploadImg(inputStream: InputStream, fileType: FileType, url: String, bookmarkId: String): ImgInfo {
-            log.debug("[uploadImg] fileType={}, url={}, bookmarkId={}", fileType, url, bookmarkId)
-            if (!fileType.isImg()) throw CommonException(ErrorType.E999)
-            // F-OOM: 远端可能不返回 Content-Length（绕过 restoreImg 的预检查），因此这里必须有界读取，
-            // 绝不能用 readBytes() 把整个流一次性吞进堆内存——否则恶意/异常服务器可触发 OOM。
-            val bytes = inputStream.readBounded(fileType.limit)
-                .also { log.debug("[uploadImg] 读取字节数={}, limit={}", it.size, fileType.limit) }
-
-            // 则检查图片的长和宽(后续用于重命名)
-            val img: Pair<Int, Int> = runCatching { ImageIO.read(ByteArrayInputStream(bytes)) }
-                .getOrElse { throw CommonException(ErrorType.E220, it.message) }
-                .let { Pair(it.width, it.height) }
-            log.debug("[uploadImg] 图片尺寸: width={}, height={}", img.first, img.second)
-
-            return buildString {
-                append(fileType.folder)
-                append("/")
-                append(bookmarkId)
-                append("/")
-                append(if (img.first == img.second) img.first else "OG")
-                append(".")
-                append(FileUtil.extName(url)?.substringBefore("?") ?: throw CommonException(ErrorType.E225))
-            }
-                // 重新构造输入流，避免前面的 readBytes 导致流已被读完
-                .also {
-                    log.debug("[uploadImg] OSS存储路径: {}", it)
-                    this.upload(ByteArrayInputStream(bytes), it)
-                }
-                .let { ImgInfo("$domain/$it", bytes.size.toLong(), img.first, img.second) }
-                .also { log.debug("[uploadImg] 上传完成: url={}, size={}", it.url, it.size) }
-        }
-
-        /**
-         * @param inputStream 文件流
-         * @param path 文件的最终存储地址(包含名称和后缀) eg /logo/dkgy-hfauw-ekadfa/og.png
-         * return 最终线上地址
-         */
-        /**
-         * 有界读取：最多读取 [limit] 字节，超出立即抛出，避免无 Content-Length 时的 OOM。
-         */
-        private fun InputStream.readBounded(limit: Int): ByteArray {
-            val buffer = ByteArrayOutputStream()
-            val chunk = ByteArray(8192)
-            var total = 0
-            while (true) {
-                val read = this.read(chunk)
-                if (read == -1) break
-                total += read
-                if (total > limit) throw CommonException(ErrorType.E219, "length>$limit")
-                buffer.write(chunk, 0, read)
-            }
-            return buffer.toByteArray()
         }
 
         private fun upload(inputStream: InputStream, path: String) =
@@ -294,10 +149,18 @@ class OssUtils {
         /**
          * 生成带缩放样式的限时访问链接
          *
+         * 过期时间**向下对齐到窗口边界**：直接用 `now + TTL` 会让同一个对象每次请求都得到不同的
+         * URL（query 里的 Expires/Signature 都变），浏览器与 CDN 因此永远 cache miss —— 同一个
+         * 图标每刷新一次就回源一次，而每次回源都会触发一次按次计费的 OSS 图片处理。对齐之后，
+         * 同一窗口内重复调用返回**逐字节相同**的 URL，缓存才谈得上命中。
+         *
+         * 代价是实际有效期在 `[TTL/2, TTL]` 之间浮动（取决于落在窗口的哪个位置），所以窗口
+         * 取一半 TTL、再补满一个 TTL，保证任何时刻签出的链接至少还有 [expirationMillis] 可用。
+         *
          * @param objectName OSS对象名（不含域名）
          * @param width 目标宽度（null/<=0 表示不限制）
          * @param height 目标高度（null/<=0 表示不限制）
-         * @param expirationMillis 过期时间（毫秒）
+         * @param expirationMillis 最短剩余有效期（毫秒）
          */
         fun signWithResize(
             objectName: String,
@@ -307,7 +170,9 @@ class OssUtils {
         ): String {
             log.debug("[signWithResize] objectName={}, width={}, height={}, expirationMillis={}", objectName, width, height, expirationMillis)
             return try {
-                val expiration = java.util.Date(System.currentTimeMillis() + expirationMillis)
+                val window = (expirationMillis / 2).coerceAtLeast(1)
+                val alignedNow = System.currentTimeMillis() / window * window
+                val expiration = java.util.Date(alignedNow + window + expirationMillis)
                 val request = GeneratePresignedUrlRequest(bucket, objectName).apply {
                     this.expiration = expiration
                     // 阿里云 OSS 图片处理(IMG)不支持 SVG 缩放: 带 image/resize 会返回
@@ -358,32 +223,6 @@ class OssUtils {
                 .takeIf { it.isNotBlank() } ?: throw CommonException(ErrorType.E223, "path:$path")
             log.debug("[resizeAndSignImg] 解析objectName={}", objectName)
             return signWithResize(objectName, width.takeIf { it > 0 }, height.takeIf { it > 0 })
-        }
-
-        /**
-         * 获取带缩放参数的私有图片签名URL
-         *
-         * @param bookmarkId 书签地址
-         * @param maxmalSize 最大尺寸(文件名称)
-         * @param size 格式化后的宽&高
-         * @param expirationMillis 过期时间（毫秒），默认1小时
-         * @return 签名URL
-         */
-        fun getLogoUrl(
-            bookmarkId: String, maxmalSize: Int, size: Int, expirationMillis: Long = 3600 * 1000
-        ): String {
-            log.debug("[getLogoUrl] bookmarkId={}, maxmalSize={}, size={}, expirationMillis={}", bookmarkId, maxmalSize, size, expirationMillis)
-            val objectName = buildString {
-                append(FileType.WEBSITE_LOGO.folder)
-                append("/")
-                append(bookmarkId)
-                append("/")
-                append(maxmalSize)
-                append(".png")
-            }
-            val target = maxmalSize.coerceAtMost(size)
-            log.debug("[getLogoUrl] objectName={}, target={}x{}", objectName, target, target)
-            return signWithResize(objectName, target, target, expirationMillis)
         }
 
         /**

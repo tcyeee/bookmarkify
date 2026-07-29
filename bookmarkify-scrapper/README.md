@@ -66,7 +66,7 @@ PROXY_URL=http://127.0.0.1:7890 ./target/release/scraper-service
 # 启用 OSS 上传
 OSS_ACCESS_KEY_ID=xxx OSS_ACCESS_KEY_SECRET=xxx \
 OSS_BUCKET=my-bucket OSS_ENDPOINT=oss-cn-hangzhou.aliyuncs.com \
-OSS_BASE_URL=https://my-bucket.oss-cn-hangzhou.aliyuncs.com \
+OSS_KEY_PREFIX=scrapper \
 ./target/release/scraper-service
 ```
 
@@ -85,11 +85,11 @@ OSS_BASE_URL=https://my-bucket.oss-cn-hangzhou.aliyuncs.com \
 | `SSRF_ALLOW_PRIVATE` | | — | 设为 `1` 关闭 SSRF 防护，允许访问私有 / 回环地址；不设则默认拦截 |
 | `SCRAPER_AUTH_TOKEN` | | — | 设置后 `/scrape`、`/ping` 要求 `Authorization: Bearer <token>`；不设则不鉴权 |
 | `MAX_CONCURRENT_REQUESTS` | | `32` | `/scrape` + `/ping` 最大并发数，超出返回 `503` |
-| `OSS_ACCESS_KEY_ID` | | — | 阿里云 Access Key ID，五个 OSS_* 变量须同时配置才生效 |
+| `OSS_ACCESS_KEY_ID` | | — | 阿里云 Access Key ID，前四个 OSS_* 变量须同时配置才生效 |
 | `OSS_ACCESS_KEY_SECRET` | | — | 阿里云 Access Key Secret |
 | `OSS_BUCKET` | | — | OSS Bucket 名称 |
 | `OSS_ENDPOINT` | | — | OSS 地域 Endpoint，例如 `oss-cn-hangzhou.aliyuncs.com` |
-| `OSS_BASE_URL` | | — | 返回链接的公网前缀，例如 `https://<bucket>.oss-cn-hangzhou.aliyuncs.com` |
+| `OSS_KEY_PREFIX` | | `scrapper` | 对象 key 的统一前缀。桶上的 `PutObject` 授权与生命周期规则都按它书写，改这里必须同步改桶策略 |
 | `RUST_LOG` | | `info` | 日志过滤器，支持 `debug`、`info`、`warn` 等 |
 
 ## API 文档

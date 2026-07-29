@@ -97,7 +97,7 @@ Content-Type: application/json
 | `NONE` | 否 | —— | 仅 `declared.*` |
 | `PROBE`（默认） | 是 | 算完即丢 | `width` / `height` / `mime` / `byteSize` / `contentHash` |
 | `INLINE` | 是 | 编码进 `dataUrl` | 同上 + `dataUrl` |
-| `UPLOAD` | 是 | 传对象存储 | 同上 + `storageUrl`；服务端未配置 OSS 时自动降级为 `PROBE` |
+| `UPLOAD` | 是 | 传对象存储 | 同上 + `storageKey`（object key，不含域名）；服务端未配置 OSS 时自动降级为 `PROBE` |
 
 图标普遍只有几 KB，`PROBE` 的带宽代价很低，换来的是调用方判定"这张图够不够大、能不能当
 LOGO 用"以及跨 `extractor` 去重所需的全部依据。
@@ -155,7 +155,7 @@ LOGO 用"以及跨 `extractor` 去重所需的全部依据。
     "width": 180, "height": 180, "byteSize": 8123, "mime": "image/png",
     "isVector": false,
     "contentHash": "sha256:…",                  // 跨 extractor 去重 / 判定"没有独立 LOGO"
-    "storageUrl": null, "dataUrl": null,
+    "storageKey": null, "dataUrl": null,
     "error": null                               // 单张失败隔离在此，不影响其余图片与整次抓取
   }],
 
@@ -166,7 +166,7 @@ LOGO 用"以及跨 `extractor` 去重所需的全部依据。
   "feeds":      [ /* extract.feeds = true 时才有 */ ],
   "alternates": [ /* extract.alternates = true 时才有 */ ],
   "text":       "…",                                  // extract.text = true 时才有
-  "screenshot": { "storageUrl": "…", "width": 1280, "height": 720, "format": "PNG" },
+  "screenshot": { "storageKey": "…", "width": 1280, "height": 720, "format": "PNG" },
 
   "diagnostics": {
     "warnings": ["manifest: fetch failed: 404"],      // 非致命问题
