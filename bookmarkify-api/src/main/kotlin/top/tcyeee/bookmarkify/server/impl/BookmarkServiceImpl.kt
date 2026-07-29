@@ -379,11 +379,11 @@ class BookmarkServiceImpl(
         val userLink = BookmarkUserLink(url, uid, nodeEntity.id, bookmark).also { bookmarkUserLinkMapper.insert(it) }
         log.debug("[addOne] Step4 已创建用户关联记录: userLinkId=${userLink.id}, bookmarkId=${bookmark.id}")
 
-        // 5. 检查书签是否需要重新解析（首次添加 / 上次解析距今超过 1 天）：
+        // 5. 检查书签是否需要重新解析（首次添加 / 上次解析距今超过 1 天 / 已有记录处于失效状态）：
         //    ↳ 需要解析 → 立即返回 loading 占位 VO，同时发布异步解析事件。
         //                  解析完成后由 parseAndNotice 通过 WebSocket 将最终结果推送到客户端。
-        if (bookmark.checkFlag()) {
-            log.debug("[addOne] Step5 书签需要解析，返回 LOADING 占位，已发布异步解析事件: bookmarkId=${bookmark.id}, userLinkId=${userLink.id}, nodeId=${nodeEntity.id}")
+        if (bookmark.checkFlag() || bookmark.needRecheckOnAdd()) {
+            log.debug("[addOne] Step5 书签需要解析，返回 LOADING 占位，已发布异步解析事件: bookmarkId=${bookmark.id}, parseStatus=${bookmark.parseStatus}, isActivity=${bookmark.isActivity}, userLinkId=${userLink.id}, nodeId=${nodeEntity.id}")
             return nodeEntity.loadingVO(bookmark.urlHost)
                 .also { eventPublisher.publishEvent(BookmarkParseAndNoticeEvent(uid, bookmark.id, userLink.id, nodeEntity.id)) }
         }
@@ -986,6 +986,26 @@ class BookmarkServiceImpl(
         }
     }
 
+    /**
+     * 用户新增书签时，已存在的 canonical 记录是否需要强制重新解析一次。
+     *
+     * checkFlag() 只看「上次解析距今是否超过 1 天」，对刚刚被判定失效(UNREACHABLE / isActivity=false)的书签会返回
+     * false，于是新增的用户直接拿到一条失效数据，只能等定时任务(retryUnreachableBookmarks)下一轮才可能恢复。
+     * 而用户主动添加这个网址本身就是「站点现在应该是好的」的强信号，所以这里立即重新解析一次；
+     * 抓取成功后由解析链路(parseBookmark → parseByApi/parseLocally)写回数据库，并通过 WebSocket 推送最新结果。
+     *
+     * 三个例外：
+     * - PENDING：还没解析过或正在排队解析，归 checkFlag() 负责，不在这里重复触发。
+     * - verifyFlag=true(已人工认证)：parseBookmark() 会直接短路返回，重新解析是无效开销。
+     * - 距上次检查不足 [DEAD_RECHECK_COOLDOWN_MINUTES]：避免确实已经挂掉的站点被反复添加时反复 ping/抓取。
+     */
+    private fun BookmarkEntity.needRecheckOnAdd(): Boolean {
+        if (parseStatus == ParseStatusEnum.PENDING || verifyFlag) return false
+        if (parseStatus == ParseStatusEnum.SUCCESS && isActivity) return false
+        val lastCheck = updateTime ?: return true
+        return LocalDateTimeUtil.between(lastCheck, LocalDateTime.now(), ChronoUnit.MINUTES) >= DEAD_RECHECK_COOLDOWN_MINUTES
+    }
+
     private fun findById(bookmarkId: String): BookmarkEntity =
         requireNotNull(ktQuery().eq(BookmarkEntity::id, bookmarkId).one())
 
@@ -1008,5 +1028,8 @@ class BookmarkServiceImpl(
         private const val RETRY_UNREACHABLE_BATCH_SIZE = 50
         private const val LIVENESS_CHECK_BATCH_SIZE = 200
         private const val MAX_IMPORT_BOOKMARK_COUNT = 2000
+        // 失效书签在「用户新增」时的重检冷却：既保证用户手动添加能立刻触发一次重试，
+        // 又避免同一个已经挂掉的站点被连续添加时把 ping/抓取打满。
+        private const val DEAD_RECHECK_COOLDOWN_MINUTES = 10L
     }
 }
