@@ -18,6 +18,7 @@
       :href="node.typeApp.urlFull"
       target="_blank"
       rel="noopener noreferrer"
+      draggable="false"
       class="flex items-center gap-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
       :style="bookmarkIndentStyle"
       @contextmenu.prevent="onContextMenu($event, node)">
