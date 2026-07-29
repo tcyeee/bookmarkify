@@ -139,7 +139,8 @@
     "createSuccess": "集合创建成功",
     "pagination": {
       "total": "共 {total} 个书签",
-      "pageOf": "第 {current} / {total} 页"
+      "pageOf": "第 {current} / {total} 页",
+      "pageSize": "每页显示"
     }
   },
   "shareManage": {

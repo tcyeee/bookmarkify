@@ -139,7 +139,8 @@
     "createSuccess": "Collection créée avec succès",
     "pagination": {
       "total": "{total} favoris au total",
-      "pageOf": "Page {current} sur {total}"
+      "pageOf": "Page {current} sur {total}",
+      "pageSize": "Par page"
     }
   },
   "shareManage": {

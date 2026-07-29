@@ -139,7 +139,8 @@
     "createSuccess": "コレクションを作成しました",
     "pagination": {
       "total": "合計 {total} 件のブックマーク",
-      "pageOf": "{current} / {total} ページ"
+      "pageOf": "{current} / {total} ページ",
+      "pageSize": "表示件数"
     }
   },
   "shareManage": {
