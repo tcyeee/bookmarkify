@@ -1,14 +1,13 @@
 {
   "compilerOptions": {
     "types": ["node", "./types/vue-shim"],
-    "baseUrl": ".",
     "paths": {
-      "@api": ["server/apis"],
-      "@stores/*": ["stores/*"],
-      "@config": ["server/config"],
-      "@config/*": ["server/config/*"],
-      "@typing": ["typing"],
-      "@utils": ["server/utils"]
+      "@api": ["./server/apis"],
+      "@stores/*": ["./stores/*"],
+      "@config": ["./server/config"],
+      "@config/*": ["./server/config/*"],
+      "@typing": ["./typing"],
+      "@utils": ["./server/utils"]
     }
   },
   "vueCompilerOptions": {
