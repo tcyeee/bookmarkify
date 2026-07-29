@@ -6,8 +6,10 @@ import type { IBreadcrumb } from '@vben-core/shadcn-ui';
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
+import { Check, Copy } from '@vben/icons';
 
 import { VbenBreadcrumbView } from '@vben-core/shadcn-ui';
+import { useClipboard } from '@vueuse/core';
 
 interface Props {
   hideWhenOnlyOne?: boolean;
@@ -61,13 +63,30 @@ const breadcrumbs = computed((): IBreadcrumb[] => {
 function handleSelect(path: string) {
   router.push(path);
 }
+
+/** 当前页面组件的源码路径，由 vite 插件构建期注入到 meta.source */
+const source = computed(() => route.meta?.source as string | undefined);
+
+const { copied, copy } = useClipboard({ legacy: true });
 </script>
 <template>
-  <VbenBreadcrumbView
-    :breadcrumbs="breadcrumbs"
-    :show-icon="showIcon"
-    :style-type="type"
-    class="ml-2"
-    @select="handleSelect"
-  />
+  <div class="flex items-center">
+    <VbenBreadcrumbView
+      :breadcrumbs="breadcrumbs"
+      :show-icon="showIcon"
+      :style-type="type"
+      class="ml-2"
+      @select="handleSelect"
+    />
+    <button
+      v-if="source && breadcrumbs.length > 0"
+      :title="copied ? '已复制' : `复制页面源码路径：${source}`"
+      class="text-muted-foreground hover:text-foreground hover:bg-accent ml-1 flex size-6 items-center justify-center rounded transition-colors"
+      type="button"
+      @click="copy(source)"
+    >
+      <Check v-if="copied" class="size-3.5 text-green-500" />
+      <Copy v-else class="size-3.5" />
+    </button>
+  </div>
 </template>

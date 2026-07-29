@@ -64,7 +64,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/bookmark/ping-log/index.vue'),
         meta: {
           icon: 'carbon:cloud-logging',
-          title: '书签活性检查日志',
+          title: '书签检查配置',
         },
       },
       {

@@ -4,6 +4,7 @@ import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.IdUtil
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
+import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
@@ -16,6 +17,16 @@ data class AdminGridConfigVO(
     @field:Schema(description = "表格标识") val gridId: String,
     @field:Schema(description = "列配置(宽度/隐藏/排序)") val storeData: Any? = null,
 )
+
+data class BookmarkLivenessConfigVO(
+    @field:Schema(description = "已激活书签检测频率(小时)") val activeCheckIntervalHours: Int,
+    @field:Schema(description = "异常书签检测频率(小时)") val abnormalCheckIntervalHours: Int,
+) {
+    constructor(value: BookmarkLivenessConfigValue) : this(
+        activeCheckIntervalHours = value.activeCheckIntervalHours,
+        abnormalCheckIntervalHours = value.abnormalCheckIntervalHours,
+    )
+}
 
 data class BookmarkShow(
     @field:Schema(description = "关联书签ID") var bookmarkId: String? = null,

@@ -6,7 +6,10 @@ import { defineAsyncComponent, onMounted, reactive, ref } from "vue";
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
 
+import { ElMessage } from "element-plus";
+
 import { getAdminBookmarkPingLogListApi } from "#/api/bookmark-ping-log";
+import { getBookmarkLivenessConfigApi, saveBookmarkLivenessConfigApi } from "#/api/bookmark-liveness-config";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
@@ -85,6 +88,46 @@ const ElTag = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElTag)
 );
 
+const ElInputNumber = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/input-number/index"),
+    import("element-plus/es/components/input-number/style/css"),
+  ]).then(([res]) => res.ElInputNumber)
+);
+
+const configLoading = ref(false);
+const configSaving = ref(false);
+const livenessConfig = reactive({
+  activeCheckIntervalHours: 168,
+  abnormalCheckIntervalHours: 24,
+});
+
+async function fetchLivenessConfig() {
+  configLoading.value = true;
+  try {
+    const res = await getBookmarkLivenessConfigApi();
+    livenessConfig.activeCheckIntervalHours = res.activeCheckIntervalHours;
+    livenessConfig.abnormalCheckIntervalHours = res.abnormalCheckIntervalHours;
+  } finally {
+    configLoading.value = false;
+  }
+}
+
+async function saveLivenessConfig() {
+  configSaving.value = true;
+  try {
+    const res = await saveBookmarkLivenessConfigApi({
+      activeCheckIntervalHours: livenessConfig.activeCheckIntervalHours,
+      abnormalCheckIntervalHours: livenessConfig.abnormalCheckIntervalHours,
+    });
+    livenessConfig.activeCheckIntervalHours = res.activeCheckIntervalHours;
+    livenessConfig.abnormalCheckIntervalHours = res.abnormalCheckIntervalHours;
+    ElMessage.success("已保存");
+  } finally {
+    configSaving.value = false;
+  }
+}
+
 const loading = ref(false);
 const tableData = ref<BookmarkPingLogVO[]>([]);
 
@@ -141,6 +184,7 @@ function handleSizeChange(size: number) {
 }
 
 onMounted(() => {
+  fetchLivenessConfig();
   fetchData();
 });
 </script>
@@ -150,9 +194,24 @@ onMounted(() => {
     <ElCard shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
-          <span>书签活性检查日志</span>
+          <span>书签检查配置</span>
         </div>
       </template>
+      <div class="mb-4 rounded border border-solid border-gray-200 p-4 dark:border-gray-700">
+        <ElForm :inline="true" :model="livenessConfig" v-loading="configLoading">
+          <ElFormItem label="已激活的书签检测频率">
+            <ElInputNumber v-model="livenessConfig.activeCheckIntervalHours" :min="1" :step="1" />
+            <span class="ml-2 text-gray-500">小时</span>
+          </ElFormItem>
+          <ElFormItem label="异常书签检测频率">
+            <ElInputNumber v-model="livenessConfig.abnormalCheckIntervalHours" :min="1" :step="1" />
+            <span class="ml-2 text-gray-500">小时</span>
+          </ElFormItem>
+          <ElFormItem>
+            <ElButton type="primary" :loading="configSaving" @click="saveLivenessConfig">保存</ElButton>
+          </ElFormItem>
+        </ElForm>
+      </div>
       <div class="mb-4">
         <ElForm :inline="true" :model="searchForm">
           <ElFormItem label="域名">
