@@ -361,11 +361,12 @@ function handleReset() {
 const gridOptions: VxeGridProps<BookmarkEntity> = {
   id: "admin-bookmark-cleaning",
   columns: [
-    // 头像拆成三类图分别展示：favicon(小图标 base64) / logo(高清 LOGO) / og(宽屏分享图)，缺哪张一眼可见。
-    // field 指到各自的数据来源，既是真实取值路径，也让列自定义(customConfig.storage)有稳定唯一的 key
-    { field: "assets", title: "favicon", width: 80, slots: { default: "favicon" } },
-    { field: "assets", title: "logo", width: 80, slots: { default: "logo" } },
-    { field: "assets", title: "社交图", width: 90, slots: { default: "og" } },
+    // 头像拆成三类图分别展示：favicon(小图标) / logo(高清 LOGO) / 社交图(宽屏分享图)，缺哪张一眼可见。
+    // 三列的数据都取自 row.assets，但 field 必须各不相同：它同时是列自定义(customConfig.storage)
+    // 的持久化 key，三列共用一个 key 时 vxe-table 会报 colRepet，且隐藏其中一列会连带隐藏另外两列
+    { field: "assetFavicon", title: "favicon", width: 80, slots: { default: "favicon" } },
+    { field: "assetLogo", title: "logo", width: 80, slots: { default: "logo" } },
+    { field: "assetSocial", title: "社交图", width: 90, slots: { default: "og" } },
     { field: "appName", title: "App Name", minWidth: 120 },
     { field: "title", title: "标题", minWidth: 220 },
     { field: "urlHost", title: "域名", minWidth: 180 },
