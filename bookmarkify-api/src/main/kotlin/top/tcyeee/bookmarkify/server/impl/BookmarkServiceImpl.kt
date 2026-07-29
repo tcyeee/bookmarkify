@@ -417,8 +417,32 @@ class BookmarkServiceImpl(
 
     override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> {
         val entityPage = baseMapper.selectPage(params.toPage(), params.toWrapper())
-        // 列表页不逐条展开资产（那会 N+1），资产明细在详情接口里给
         val page = entityPage.convert { BookmarkAdminVO(it) }
+        // 后台列表按 role 分列展示 favicon/logo/社交图，缺哪张要一眼可见，所以资产必须随列表下发；
+        // 用一条 in 查询批量取回避免 N+1，签名按列表格子的尺寸缩放
+        runCatching {
+            val ids = page.records.map { it.id }
+            val assetMap = siteAssetResolver.assetsOfBatch(ids)
+            page.records.forEach { vo -> vo.assets = toAssetVOs(assetMap[vo.id].orEmpty(), ADMIN_LIST_ASSET_SIZE) }
+            // 图标管理页直接在列表上编辑内边距/背景色，列表不下发 displayPrefs 就只能显示默认值，
+            // 看起来像"保存没生效"。这里的查询条数只与展示模式个数有关，与行数无关
+            val prefMap = siteAssetResolver.prefsOfBatch(ids)
+            val resolvedByMode = DisplayMode.entries.associateWith { siteAssetResolver.resolveBatch(ids, it) }
+            page.records.forEach { vo ->
+                vo.displayPrefs = DisplayMode.entries.map { mode ->
+                    val pref = prefMap[vo.id]?.firstOrNull { it.displayMode == mode }
+                    val resolved = resolvedByMode[mode]?.get(vo.id)
+                    SiteDisplayPrefVO(
+                        displayMode = mode,
+                        iconPadding = pref?.iconPadding ?: 25,
+                        iconBgColor = pref?.iconBgColor,
+                        pinnedAssetId = pref?.pinnedAssetId,
+                        previewUrl = resolved?.url,
+                        monogram = resolved?.monogram ?: true,
+                    )
+                }
+            }
+        }.onFailure { log.warn("[adminListAll] 资产回填失败(忽略): ${it.message}") }
         // 分类回填失败(如分类表缺失/查询异常)不应拖垮整个书签列表，降级为空分类
         runCatching {
             val catMap = bookmarkCategoryService.categoriesOf(page.records.map { it.id })
@@ -918,29 +942,25 @@ class BookmarkServiceImpl(
     // ────── 管理后台：书签详情组装 ──────
 
     /**
-     * 组装管理后台的书签详情：主表字段 + **全部**图片资产 + 各展示模式的设置。
+     * 把某个书签的资产行转成后台视图。
      *
-     * 刻意返回全部资产而非仅选中的那张 —— 排查"这站为什么用了张丑图"时需要看到它到底
-     * 声明了哪些图、各自出处是什么、有没有互相撞 hash。
+     * [size] 是希望 OSS 返回的边长：列表页的格子只有 32px，回原图纯属浪费带宽；详情页要
+     * 看清原图则传 null 不缩放。矢量图任何情况下都不缩放（缩放会被栅格化）。
      */
-    private fun adminDetail(bookmarkId: String): BookmarkAdminVO {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
-        val vo = BookmarkAdminVO(bookmark)
-
-        val assets = siteAssetResolver.assetsOf(bookmarkId)
+    private fun toAssetVOs(assets: List<SiteAssetEntity>, size: Int? = null): List<SiteAssetAdminVO> {
         // 出现次数 >1 的 hash 说明同一张图被多个 extractor 共用，据此在后台标出
         // "该站没有独立 LOGO"，省得人工逐张比对
         val dupHashes = assets.mapNotNull { it.contentHash }
             .groupingBy { it }.eachCount().filterValues { it > 1 }.keys
 
-        vo.assets = assets.map { a ->
+        return assets.map { a ->
             SiteAssetAdminVO(
                 id = a.id,
                 role = a.role,
                 extractor = a.extractor,
                 quality = a.quality,
-                // 私有读桶里的对象直连会 403，后台预览换成不缩放的签名地址
-                url = OssUtils.signAsset(a.storageUrl) ?: a.resolvedUrl,
+                // 私有读桶里的对象直连会 403，后台预览换成签名地址
+                url = OssUtils.signAsset(a.storageUrl, if (a.isVector) null else size) ?: a.resolvedUrl,
                 resolvedUrl = a.resolvedUrl,
                 width = a.width,
                 height = a.height,
@@ -953,6 +973,19 @@ class BookmarkServiceImpl(
                 errorMsg = a.errorMsg,
             )
         }
+    }
+
+    /**
+     * 组装管理后台的书签详情：主表字段 + **全部**图片资产 + 各展示模式的设置。
+     *
+     * 刻意返回全部资产而非仅选中的那张 —— 排查"这站为什么用了张丑图"时需要看到它到底
+     * 声明了哪些图、各自出处是什么、有没有互相撞 hash。
+     */
+    private fun adminDetail(bookmarkId: String): BookmarkAdminVO {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        val vo = BookmarkAdminVO(bookmark)
+
+        vo.assets = toAssetVOs(siteAssetResolver.assetsOf(bookmarkId))
 
         vo.displayPrefs = DisplayMode.entries.map { mode ->
             val pref = siteDisplayPrefService.find(bookmarkId, mode)
@@ -1066,5 +1099,7 @@ class BookmarkServiceImpl(
         // 失效书签在「用户新增」时的重检冷却：既保证用户手动添加能立刻触发一次重试，
         // 又避免同一个已经挂掉的站点被连续添加时把 ping/抓取打满。
         private const val DEAD_RECHECK_COOLDOWN_MINUTES = 10L
+        // 后台列表里图片格子是 32px，2x 屏取 128 已经绰绰有余，回原图只是白烧带宽
+        private const val ADMIN_LIST_ASSET_SIZE = 128
     }
 }

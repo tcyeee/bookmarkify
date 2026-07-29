@@ -87,6 +87,32 @@ class SiteAssetResolver(
             .orderByDesc(SiteAssetEntity::isPrimary)
     )
 
+    /**
+     * 后台列表用：一次查出多个书签的全部资产。
+     *
+     * 后台列表要按 role 分列展示 favicon/logo/社交图，逐行调 [assetsOf] 就是 N+1；
+     * 这里一条 in 查询取回后在内存分组。
+     */
+    fun assetsOfBatch(bookmarkIds: List<String>): Map<String, List<SiteAssetEntity>> {
+        val ids = bookmarkIds.filter { it.isNotBlank() }.distinct()
+        if (ids.isEmpty()) return emptyMap()
+        return siteAssetMapper.selectList(
+            KtQueryWrapper(SiteAssetEntity::class.java)
+                .`in`(SiteAssetEntity::bookmarkId, ids)
+                .orderByAsc(SiteAssetEntity::role)
+                .orderByDesc(SiteAssetEntity::isPrimary)
+        ).groupBy { it.bookmarkId }
+    }
+
+    /** 后台列表用：一次查出多个书签在全部模式下的人工偏好。 */
+    fun prefsOfBatch(bookmarkIds: List<String>): Map<String, List<SiteDisplayPrefEntity>> {
+        val ids = bookmarkIds.filter { it.isNotBlank() }.distinct()
+        if (ids.isEmpty()) return emptyMap()
+        return siteDisplayPrefMapper.selectList(
+            KtQueryWrapper(SiteDisplayPrefEntity::class.java).`in`(SiteDisplayPrefEntity::bookmarkId, ids)
+        ).groupBy { it.bookmarkId }
+    }
+
     /** 后台用：读取某书签在某模式下的人工偏好，没有则返回默认值。 */
     fun prefOf(bookmarkId: String, mode: DisplayMode): SiteDisplayPrefEntity =
         siteDisplayPrefMapper.selectList(
