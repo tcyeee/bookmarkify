@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.server.asset
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers
+import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
+import com.baomidou.mybatisplus.extension.kotlin.KtUpdateWrapper
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
@@ -35,7 +36,7 @@ class SiteDisplayPrefService(private val mapper: SiteDisplayPrefMapper) {
         if (existing == null) mapper.insert(entity) else {
             mapper.update(
                 entity,
-                Wrappers.lambdaUpdate<SiteDisplayPrefEntity>()
+                KtUpdateWrapper(SiteDisplayPrefEntity::class.java)
                     .eq(SiteDisplayPrefEntity::bookmarkId, bookmarkId)
                     .eq(SiteDisplayPrefEntity::displayMode, mode)
             )
@@ -44,13 +45,13 @@ class SiteDisplayPrefService(private val mapper: SiteDisplayPrefMapper) {
 
     /** 取某模式下的设置；没有则返回 null（调用方自行决定默认值）。 */
     fun find(bookmarkId: String, mode: DisplayMode): SiteDisplayPrefEntity? = mapper.selectList(
-        Wrappers.lambdaQuery<SiteDisplayPrefEntity>()
+        KtQueryWrapper(SiteDisplayPrefEntity::class.java)
             .eq(SiteDisplayPrefEntity::bookmarkId, bookmarkId)
             .eq(SiteDisplayPrefEntity::displayMode, mode)
     ).firstOrNull()
 
     /** 取该书签所有模式的设置。 */
     fun findAll(bookmarkId: String): List<SiteDisplayPrefEntity> = mapper.selectList(
-        Wrappers.lambdaQuery<SiteDisplayPrefEntity>().eq(SiteDisplayPrefEntity::bookmarkId, bookmarkId)
+        KtQueryWrapper(SiteDisplayPrefEntity::class.java).eq(SiteDisplayPrefEntity::bookmarkId, bookmarkId)
     )
 }
