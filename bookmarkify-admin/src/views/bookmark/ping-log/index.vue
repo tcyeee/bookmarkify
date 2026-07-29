@@ -211,6 +211,7 @@ onMounted(() => {
             <ElButton type="primary" :loading="configSaving" @click="saveLivenessConfig">保存</ElButton>
           </ElFormItem>
         </ElForm>
+        <div class="text-xs text-gray-400">异常书签检测频率不能低于已激活书签检测频率（即间隔小时数不能更大）</div>
       </div>
       <div class="mb-4">
         <ElForm :inline="true" :model="searchForm">
