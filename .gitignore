@@ -37,6 +37,8 @@ bookmarkify-api/tmp
 
 # ─── Local env files ───
 .env
+.env.local
+.env.*.local
 !.env.example
 
 # Auto Claude data directory

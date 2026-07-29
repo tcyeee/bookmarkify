@@ -7,7 +7,7 @@
   "scripts": {
     "build": "pnpm run build:packages && pnpm vite build --mode production",
     "build:packages": "node scripts/build-core-packages.mjs",
-    "build:analyze": "pnpm vite build --mode analyze",
+    "build:analyze": "VITE_VISUALIZER=true pnpm vite build --mode production",
     "dev": "pnpm vite --mode development",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit --skipLibCheck",

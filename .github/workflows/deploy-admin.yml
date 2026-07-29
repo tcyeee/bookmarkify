@@ -36,12 +36,17 @@ jobs:
       # Vben reads env ONLY from .env files (dotenv.parse), never the shell, and
       # VITE_GLOB_* values are baked into _app.config.js at build time.
       # .env.production.local has the highest precedence and is ephemeral here.
+      # The repo only ships a gitignored .env (local dev) + .env.example — no
+      # committed .env.production — so CI must supply every production value
+      # itself; nothing here falls back to defaults.
       #   - VITE_GLOB_API_URL=/api -> admin calls /api/admin/**, nginx strips /api
       #     and proxies to bookmarkify-api:7001.
       #   - VITE_APP_TITLE / NAMESPACE / STORE_SECURE_KEY normally live in the
       #     gitignored .env at the bookmarkify-admin root, which is ABSENT in
       #     CI. Without VITE_APP_TITLE the index.html EJS build fails ("not
       #     defined"), so we supply them here.
+      #   - VITE_ROUTER_HISTORY=hash is required: nginx has no SPA-fallback
+      #     rewrite, so switching to history mode 404s on any non-root route.
       - name: Write production env overrides
         working-directory: bookmarkify-admin
         run: |
@@ -51,6 +56,10 @@ jobs:
             echo "VITE_APP_STORE_SECURE_KEY=bookmarkify-admin-store-key"
             echo "VITE_GLOB_API_URL=/api"
             echo "VITE_BASE=/"
+            echo "VITE_COMPRESS=none"
+            echo "VITE_PWA=false"
+            echo "VITE_ROUTER_HISTORY=hash"
+            echo "VITE_INJECT_APP_LOADING=true"
             echo "VITE_ARCHIVER=false"
           } > .env.production.local
 
