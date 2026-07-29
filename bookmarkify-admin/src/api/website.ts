@@ -27,6 +27,8 @@ export interface WebsiteLivenessCheckResult {
   cached?: boolean;
   screenshot?: string;
   errorMsg?: string;
+  /** 抓取成功且该 URL 命中已有书签时为 true，表示已同步覆盖持久化该书签 */
+  synced?: boolean;
 }
 
 /** 任意 URL 活性检测：不要求该 URL 已收录为书签，直接调用 scrapper 抓取一次并返回其全部字段 */

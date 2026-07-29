@@ -79,7 +79,7 @@ async function checkLiveness() {
     checkResult.value = result;
     ElMessage[result.success ? "success" : "warning"](
       result.success
-        ? "检测完成，抓取成功"
+        ? `检测完成，抓取成功${result.synced ? "，已同步至数据库" : ""}`
         : `检测完成，抓取失败${result.errorMsg ? `：${result.errorMsg}` : ""}`,
     );
   } finally {
@@ -129,6 +129,7 @@ async function checkLiveness() {
       <div class="flex flex-col items-start gap-3">
         <p class="text-sm text-gray-500">
           输入任意网站 URL 并直接调用 scrapper 抓取一次，展示其返回的全部原始字段；无需该网站已收录为书签。
+          若抓取成功且该 URL 命中已有书签，会同步覆盖持久化该书签的标题/简介/图标/活性状态。
         </p>
         <div class="flex w-full max-w-xl items-center gap-2">
           <ElInput
@@ -152,6 +153,9 @@ async function checkLiveness() {
             </span>
             <ElTag v-if="checkResult.cached" type="info" size="small">
               命中缓存
+            </ElTag>
+            <ElTag v-if="checkResult.synced" type="success" size="small">
+              已同步至数据库
             </ElTag>
           </div>
           <div v-if="checkResult.title" class="flex">

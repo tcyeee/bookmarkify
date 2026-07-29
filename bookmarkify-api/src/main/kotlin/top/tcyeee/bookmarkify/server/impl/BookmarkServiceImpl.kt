@@ -519,6 +519,30 @@ class BookmarkServiceImpl(
         return BookmarkAdminVO(bookmark, logo)
     }
 
+    override fun adminSyncFromExternalScrape(url: String, vo: ScrapeResponse): Boolean {
+        val urlWrapper = WebsiteParser.urlWrapper(url)
+        val bookmark = getByUrl(urlWrapper.urlHost, urlWrapper.urlPath ?: "/") ?: return false
+        log.debug("[adminSyncFromExternalScrape] 网站管理活性检测命中已有书签，同步落库: bookmarkId=${bookmark.id}, url=$url")
+        bookmark.apply {
+            title = vo.title
+            description = vo.description
+            isActivity = true
+            parseStatus = ParseStatusEnum.SUCCESS
+            parseErrMsg = null
+            updateTime = LocalDateTime.now()
+        }
+        val logo = logoOf(bookmark.id)
+        val icons = vo.toManifestIcons(bookmark.rawUrl)
+        logo.iconBase64 = vo.favicon?.takeIf { it.isNotBlank() }
+            ?: ChromeBookmarkParser.icoBase64(icons, bookmark.rawUrl)
+        applyHdLogo(logo, icons, bookmark.id)
+        logo.updateTime = LocalDateTime.now()
+        bookmarkLogoService.saveOrUpdate(logo)
+        baseMapper.updateById(bookmark)
+        log.debug("[adminSyncFromExternalScrape] 同步完成: bookmarkId=${bookmark.id}, title=${bookmark.title}")
+        return true
+    }
+
     override fun adminUpdateBasicInfo(bookmarkId: String, params: BookmarkBasicInfoUpdateParams): BookmarkAdminVO {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         params.title?.let { bookmark.title = it }
