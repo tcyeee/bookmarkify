@@ -37,7 +37,7 @@
     <div
       v-else-if="node.type === HomeItemType.BOOKMARK_LOADING"
       class="flex items-center gap-2 py-1.5"
-      :style="indentStyle">
+      :style="bookmarkIndentStyle">
       <div class="size-5 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse shrink-0" />
       <span class="text-sm text-slate-400 dark:text-slate-500 truncate">{{ node.name || '加载中…' }}</span>
     </div>
