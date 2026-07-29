@@ -36,11 +36,14 @@ class AdminWebsiteController(
         )
     }
 
-    // 任意 URL 活性检测：直接调用 scrapper /scrape 并原样返回其全部字段；不要求该 URL 已收录为书签，也不落库
+    // 任意 URL 活性检测：直接调用 scrapper /scrape 并原样返回其全部字段；不要求该 URL 已收录为书签。
+    // 抓取成功且该 URL 命中已有 canonical 书签时，同步覆盖持久化该书签(标题/简介/图标/活性状态)；
+    // 未命中已有书签或抓取失败时不落库。
     @PostMapping("/liveness-check")
     fun checkLiveness(@RequestBody params: WebsiteLivenessCheckParams): WebsiteLivenessCheckVO =
         runCatching { apiService.queryWebsiteInfo(params.url) }.fold(
             onSuccess = { vo ->
+                val synced = bookmarkService.adminSyncFromExternalScrape(params.url, vo)
                 WebsiteLivenessCheckVO(
                     success = true,
                     title = vo.title,
@@ -51,6 +54,7 @@ class AdminWebsiteController(
                     source = vo.source,
                     cached = vo.cached,
                     screenshot = vo.screenshot,
+                    synced = synced,
                 )
             },
             onFailure = { e -> WebsiteLivenessCheckVO(success = false, errorMsg = e.message) },

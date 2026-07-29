@@ -22,6 +22,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchVO
 import top.tcyeee.bookmarkify.entity.CategoryVO
 import top.tcyeee.bookmarkify.entity.BookmarkImportPreviewVO
+import top.tcyeee.bookmarkify.entity.dto.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 
 interface IBookmarkService : IService<BookmarkEntity> {
@@ -75,6 +76,13 @@ interface IBookmarkService : IService<BookmarkEntity> {
 
     /** 管理员「一键更新」：重新抓取网站信息并直接覆盖持久化标题/简介/图标/高清 LOGO，同步落库 isActivity/parseStatus */
     fun adminRefresh(bookmarkId: String): BookmarkAdminVO
+
+    /**
+     * 「网站管理」页任意 URL 活性检测在抓取成功后的落库同步：仅当该 URL 已对应某条 canonical 书签(按
+     * urlHost+urlPath 匹配)时才生效，覆盖持久化标题/简介/图标/高清 LOGO，同步落库 isActivity/parseStatus；
+     * 未命中已有书签时不新建记录，也不落库。返回是否实际同步了某条书签。
+     */
+    fun adminSyncFromExternalScrape(url: String, vo: ScrapeResponse): Boolean
 
     /** 管理员手动编辑书签基础信息（标题/简介），非空字段才会覆盖 */
     fun adminUpdateBasicInfo(bookmarkId: String, params: BookmarkBasicInfoUpdateParams): BookmarkAdminVO

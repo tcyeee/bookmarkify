@@ -19,4 +19,5 @@ data class WebsiteLivenessCheckVO(
     @field:Schema(description = "是否命中scrapper缓存") val cached: Boolean? = null,
     @field:Schema(description = "截图(仅headless模式，OSS URL或base64)") val screenshot: String? = null,
     @field:Schema(description = "检测失败时的错误信息") val errorMsg: String? = null,
+    @field:Schema(description = "抓取成功且该URL命中已有书签时为true，表示已同步覆盖持久化该书签") val synced: Boolean = false,
 )
