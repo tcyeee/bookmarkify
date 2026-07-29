@@ -1,11 +1,10 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { nanoid } from 'nanoid'
-import { md5 } from 'js-md5'
 import { createAvatar } from '@dicebear/core'
 import { adventurerNeutral } from '@dicebear/collection'
 
-export { md5 }
+export { md5 } from 'js-md5'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(...inputs))

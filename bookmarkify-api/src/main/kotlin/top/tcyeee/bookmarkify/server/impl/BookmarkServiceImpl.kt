@@ -830,7 +830,11 @@ class BookmarkServiceImpl(
     }
 
     /**
-     * 本地解析（Jsoup）：抓取网页元信息 + favicon base64 + LOGO/OG 存 OSS
+     * 本地解析（Jsoup）：只抓文字元信息。
+     *
+     * **不产出图片资产** —— 图片统一由 scrapper 路径按契约落 `site_asset`。两套解析各写
+     * 一份图标正是本次重构要消除的问题（模型不同、字段不同、互相覆盖）。走这条路径的书签
+     * 只有标题/描述，图标需要后续由 scrapper 补齐。
      */
     private fun parseLocally(bookmark: BookmarkEntity): BookmarkEntity {
         log.debug("[parseLocally] 开始本地解析(Jsoup): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")

@@ -81,7 +81,106 @@ bookmarkify-web ──── REST+WS ────► bookmarkify-api ◄── R
 Key flows:
 - **Adding a bookmark:** Web → API stores a `BOOKMARK_LOADING` placeholder → publishes a Spring `ApplicationEvent` → an `@Async` listener triggers `/scrape` on the scrapper → result saved and pushed to the browser via WebSocket (`HOME_ITEM_UPDATE`).
 - **Auth:** Every visitor gets an anonymous session via `/auth/track`. The `satoken` cookie/header is used on all requests — not `Authorization`. Registered users "upgrade" the anonymous session.
-- **Storage:** Files (avatars, logos, OG images) go to Alibaba Cloud OSS; the scrapper uploads concurrently, the API also uploads via its own OSS util.
+- **Storage:** Files (avatars, icons, social images, screenshots) go to Alibaba Cloud OSS. The bucket is **private-read** — stored URLs are unsigned and 403 on direct access, so anything served to a browser must go through `OssUtils.signWithResize` / `resizeAndSignImg`, which also does the per-display-mode resizing.
+
+## Site Assets & the Scrapper Contract
+
+This is the part of the system most likely to be misunderstood, so read it before touching anything under `site_asset`, `AssetRolePolicy`, or the scrapper's `contract.rs`.
+
+### The one rule
+
+> **The scrapper reports facts (what the page declared). The API applies policy (what those facts mean for Bookmarkify).**
+
+Concretely, the scrapper's response contains `extractor` — *which tag/field this image came from* — and **never** `role`. "Does an `apple-touch-icon` count as a LOGO?" is a Bookmarkify judgement, not a property of the web page. That mapping lives in one file (`server/asset/AssetRolePolicy.kt`), so changing the rules needs no scrapper change and no re-crawl.
+
+| Concept | Owner | Example values |
+|---|---|---|
+| `extractor` (fact — where it came from) | scrapper | `LINK_ICON`, `APPLE_TOUCH_ICON`, `MANIFEST_ICON`, `JSON_LD_ORG_LOGO`, `OG_IMAGE` |
+| `role` (policy — what we use it for) | API | `FAVICON`, `LOGO`, `SOCIAL`, `SCREENSHOT` |
+| `quality` (policy — how much we trust it) | API | `TRUSTED`, `DEGRADED` |
+
+### Data model
+
+Four tables (`deploy/migrations/2026-07-29_site_assets_and_scrape_snapshot.sql`), replacing the old `bookmark_logo`:
+
+| Table | Holds | Written by |
+|---|---|---|
+| `scrape_snapshot` | The full scrapper response as `jsonb` | crawl |
+| `site_page_meta` | title / description / `site_name` / `site_short_name` / per-field `meta_sources` | crawl |
+| `site_asset` | **One row per image** — role, extractor, quality, dimensions, `content_hash` | crawl |
+| `site_display_pref` | Human-tuned padding / bg colour / pinned asset, keyed by **(bookmark, display_mode)** | humans only |
+
+The crawl path (`SiteAssetWriter`) writes the first three and **never touches `site_display_pref`** — that separation is the whole point. The old `bookmark_logo` mixed crawl facts, file metadata, and human preferences in one row, so every re-crawl had to do a careful partial update to avoid clobbering an admin's settings.
+
+`scrape_snapshot` exists so a field we didn't project into a column today can be **backfilled later without re-crawling**.
+
+### Two display modes, inverted priorities
+
+A bookmark renders two ways, and they want *opposite* things:
+
+| | `TILE` (big icon + short name) | `LIST` (small icon + full name) |
+|---|---|---|
+| Asset priority | `LOGO` → `FAVICON` | `FAVICON` → `LOGO` |
+| Text | `site_short_name` (manifest `short_name`) | `title` |
+| Padding / bg colour | applies | effectively invisible |
+| OSS resize | 256px | 64px |
+
+This is why there is no single global "primary image" flag — `is_primary` is scoped *within* a role. It's also why `site_display_pref` is keyed by display mode.
+
+The W3C already models this split: Web App Manifest has both `name` and `short_name`, the latter existing precisely for space-constrained icon captions.
+
+### The monogram fallback
+
+`content_hash` (SHA-256 of the image bytes) is what makes this possible: if a site's "LOGO" has the same hash as its favicon, it has no real logo — it just reused the icon under a different `rel`. `AssetRolePolicy` downgrades it to `DEGRADED`, and `shouldFallbackToMonogram()` tells the frontend to render a letter tile instead of upscaling a 32px favicon to 72px (which looks terrible).
+
+### Field-level provenance
+
+`site_page_meta.meta_sources` records the origin of **each field separately**:
+
+```json
+{ "title":       { "extractor": "OG",        "rawKey": "og:title" },
+  "description": { "extractor": "META_NAME", "rawKey": "description" } }
+```
+
+The old single `source` column was actively wrong: the OG branch fell back to `meta[name=description]` for the description while still reporting `"og"` for the whole record.
+
+### The contract is pinned by a shared fixture
+
+`contract/scrape-response.sample.json` is deserialized by **three** test suites — Rust `contract.rs`, Kotlin `ScrapeContractTest`, and Kotlin `SiteAssetIngestorTest`. Change the contract on either side without updating the other and all three go red. Keep these in sync:
+
+```
+bookmarkify-scrapper/crates/scraper-service/src/contract.rs   ← Rust side
+bookmarkify-api/.../entity/dto/scrape/ScrapeContract.kt       ← Kotlin side
+contract/scrape-response.sample.json                          ← shared fixture
+```
+
+Wire format is camelCase with `SCREAMING_SNAKE_CASE` enums. The **request** body uses `deny_unknown_fields` — a misspelled field is rejected with 422 rather than silently defaulting.
+
+### Where things live
+
+```
+bookmarkify-scrapper/crates/scraper-service/src/
+├── contract.rs    # request/response types — the only cross-service coupling surface
+├── scraper.rs     # Layer 1 HTTP fetch + SSRF primitives (manual redirect following)
+├── headless.rs    # Layer 2 headless Chrome — returns rendered HTML, does not parse
+├── extract.rs     # pure HTML → metadata/asset declarations (offline-testable)
+└── pipeline.rs    # network enrichment: manifest fetch + image probe/download/upload
+
+bookmarkify-api/.../server/asset/
+├── AssetRolePolicy.kt       # extractor→role mapping + per-mode selection (pure, heavily tested)
+├── SiteAssetResolver.kt     # DB-backed resolution + OSS signing/resizing (batch, avoids N+1)
+├── SiteAssetIngestor.kt     # ScrapeResponse → rows (pure)
+├── SiteAssetWriter.kt       # persistence (crawl facts only)
+└── SiteDisplayPrefService.kt # human preferences only
+```
+
+### Gotchas
+
+- **`assets.download` defaults to `PROBE`,** which *does* fetch the image body — `contentHash` and real pixel dimensions can't be computed otherwise. It just discards the bytes afterwards instead of storing them.
+- **Admin "retry" must send `cache.mode = BYPASS`.** Otherwise it may hit the scrapper's cache and not actually retry.
+- **The local Jsoup path (`parseLocally`) no longer produces images.** Only the scrapper path writes `site_asset`. Two parsers each writing their own icon model is exactly what this refactor removed.
+- **`fetch.tls` and `diagnostics.robots` are deliberately omitted,** not populated with guesses — the underlying capability isn't implemented yet.
+- **Migrations are hand-applied** (`deploy/migrations/`, no Flyway) and the deploy workflow does *not* run them. Order matters: create tables → deploy → full re-crawl → only then `2026-07-29_drop_bookmark_logo.sql`.
 
 ## Local Dev Port Conflict
 

@@ -100,8 +100,8 @@ const routes: RouteRecordRaw[] = [
         path: '/scrapper/check',
         component: () => import('#/views/scrapper/check/index.vue'),
         meta: {
-          icon: 'carbon:activity',
-          title: 'Scrapper检测',
+          icon: 'carbon:debug',
+          title: 'Scrapper 测试台',
         },
       },
     ],
