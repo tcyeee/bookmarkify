@@ -26,11 +26,29 @@
               <label
                 v-for="node in filteredBookmarks"
                 :key="node.id"
-                class="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
-                <input type="checkbox" class="cy-checkbox cy-checkbox-sm" :checked="checkedIds.has(node.id)" @change="toggleNode(node.id)" />
+                :class="
+                  cn(
+                    'flex items-center gap-3 px-4 py-2.5 transition-colors',
+                    shareable(node)
+                      ? 'hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer'
+                      : 'cursor-not-allowed opacity-60',
+                  )
+                ">
+                <input
+                  type="checkbox"
+                  class="cy-checkbox cy-checkbox-sm"
+                  :checked="checkedIds.has(node.id)"
+                  :disabled="!shareable(node)"
+                  @change="toggleNode(node.id)" />
                 <BookmarkLogo :value="node.typeApp!" :size="20" />
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                  <p
+                    :class="
+                      cn(
+                        'text-sm font-medium truncate',
+                        shareable(node) ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500',
+                      )
+                    ">
                     {{ node.typeApp!.title || node.typeApp!.urlBase }}
                   </p>
                   <p class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ node.typeApp!.urlBase }}</p>
@@ -101,11 +119,20 @@
 </template>
 
 <script lang="ts" setup>
-import { HomeItemType, ShareStatus, type UserLayoutNodeVO } from '@typing'
+import { BookmarkLinkType, HomeItemType, ShareStatus, type UserLayoutNodeVO } from '@typing'
 import { shareCreate } from '@api'
+import { cn } from '@utils'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
 definePageMeta({ middleware: 'auth' })
+
+// 失效(不可访问)以及本地/IP 类型的书签对分享的接收方没有意义：不可选中，标题置灰
+function shareable(node: UserLayoutNodeVO) {
+  const app = node.typeApp
+  if (!app) return false
+  if (app.isActivity === false) return false
+  return app.linkType !== BookmarkLinkType.LOCAL && app.linkType !== BookmarkLinkType.IP
+}
 
 const route = useRoute()
 const bookmarkStore = useBookmarkStore()
@@ -121,12 +148,14 @@ const initialNodeIds = (() => {
     folderNode?.type === HomeItemType.BOOKMARK_DIR
       ? bookmarkStore.childrenOf(folderId)
       : bookmarkStore.rootNodes.filter((n) => n.type !== HomeItemType.BOOKMARK_DIR)
-  return source.filter((n) => n.type === HomeItemType.BOOKMARK).map((n) => n.id)
+  return source.filter((n) => n.type === HomeItemType.BOOKMARK && shareable(n)).map((n) => n.id)
 })()
 
 const checkedIds = ref(new Set<string>(initialNodeIds))
 
 function toggleNode(id: string) {
+  const node = bookmarkStore.nodes[id]
+  if (!node || !shareable(node)) return
   if (checkedIds.value.has(id)) {
     checkedIds.value.delete(id)
   } else {

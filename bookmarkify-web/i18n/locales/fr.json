@@ -137,10 +137,37 @@
       "confirm": "Créer"
     },
     "createSuccess": "Collection créée avec succès",
+    "cleanup": {
+      "label": "Nettoyage",
+      "invalid": "Supprimer les liens morts",
+      "duplicate": "Fusionner les doublons",
+      "invalidNone": "Aucun lien mort trouvé",
+      "invalidConfirmTitle": "Supprimer les liens morts",
+      "invalidConfirmMessage": "{count} favoris morts détectés (leurs liens sont inaccessibles). Ils seront tous supprimés, action irréversible.",
+      "invalidSuccess": "{count} favoris morts supprimés",
+      "duplicateNone": "Aucun favori en double trouvé",
+      "duplicateConfirmTitle": "Fusionner les doublons",
+      "duplicateConfirmMessage": "{groups} groupes de doublons détectés. Un exemplaire est conservé par groupe (celui épinglé s'il y en a un, sinon le plus ancien) et les {count} autres sont supprimés. Action irréversible.",
+      "duplicateSuccess": "Doublons fusionnés, {count} exemplaires supprimés"
+    },
     "pagination": {
       "total": "{total} favoris au total",
       "pageOf": "Page {current} sur {total}",
       "pageSize": "Par page"
+    },
+    "folderPanel": {
+      "all": "Tous les favoris",
+      "unnamed": "Dossier sans nom",
+      "root": "Racine",
+      "rootEmpty": "Aucun favori à la racine pour le moment",
+      "empty": "Aucun favori dans ce dossier pour le moment",
+      "itemCount": "{count} favoris",
+      "rename": "Renommer",
+      "delete": "Supprimer le dossier",
+      "renameSuccess": "Dossier renommé",
+      "deleteConfirmTitle": "Supprimer le dossier",
+      "deleteConfirmMessage": "Supprimer le dossier « {name} » ? Les favoris qu'il contient seront aussi supprimés, action irréversible.",
+      "deleteSuccess": "Dossier supprimé"
     }
   },
   "shareManage": {

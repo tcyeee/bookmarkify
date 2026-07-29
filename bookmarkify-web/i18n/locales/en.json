@@ -137,10 +137,37 @@
       "confirm": "Create"
     },
     "createSuccess": "Collection created successfully",
+    "cleanup": {
+      "label": "Clean up",
+      "invalid": "Remove Dead Links",
+      "duplicate": "Merge Duplicates",
+      "invalidNone": "No dead links found",
+      "invalidConfirmTitle": "Remove Dead Links",
+      "invalidConfirmMessage": "Found {count} dead bookmarks (their links are unreachable). All of them will be deleted, and this cannot be undone.",
+      "invalidSuccess": "Removed {count} dead bookmarks",
+      "duplicateNone": "No duplicate bookmarks found",
+      "duplicateConfirmTitle": "Merge Duplicates",
+      "duplicateConfirmMessage": "Found {groups} groups of duplicates. One copy is kept in each group (a pinned one if there is any, otherwise the oldest) and the other {count} copies are deleted. This cannot be undone.",
+      "duplicateSuccess": "Duplicates merged, {count} copies deleted"
+    },
     "pagination": {
       "total": "{total} bookmarks total",
       "pageOf": "Page {current} of {total}",
       "pageSize": "Per page"
+    },
+    "folderPanel": {
+      "all": "All Bookmarks",
+      "unnamed": "Untitled Folder",
+      "root": "Root",
+      "rootEmpty": "No bookmarks at the root level yet",
+      "empty": "No bookmarks in this folder yet",
+      "itemCount": "{count} bookmarks",
+      "rename": "Rename",
+      "delete": "Delete Folder",
+      "renameSuccess": "Folder renamed",
+      "deleteConfirmTitle": "Delete Folder",
+      "deleteConfirmMessage": "Delete folder \"{name}\"? Bookmarks inside it will be deleted too, and this cannot be undone.",
+      "deleteSuccess": "Folder deleted"
     }
   },
   "shareManage": {

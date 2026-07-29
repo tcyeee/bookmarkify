@@ -137,10 +137,37 @@
       "confirm": "作成"
     },
     "createSuccess": "コレクションを作成しました",
+    "cleanup": {
+      "label": "一括整理",
+      "invalid": "失効リンクを削除",
+      "duplicate": "重複をまとめる",
+      "invalidNone": "失効リンクは見つかりませんでした",
+      "invalidConfirmTitle": "失効リンクを削除",
+      "invalidConfirmMessage": "失効ブックマーク（リンクにアクセスできないもの）が {count} 件見つかりました。すべて削除され、元に戻せません。",
+      "invalidSuccess": "失効ブックマークを {count} 件削除しました",
+      "duplicateNone": "重複ブックマークは見つかりませんでした",
+      "duplicateConfirmTitle": "重複をまとめる",
+      "duplicateConfirmMessage": "重複ブックマークが {groups} 組見つかりました。各組で 1 件だけ残し（ピン留めがあればそれを、なければ最も古いものを）、残り {count} 件を削除します。元に戻せません。",
+      "duplicateSuccess": "重複をまとめ、{count} 件を削除しました"
+    },
     "pagination": {
       "total": "合計 {total} 件のブックマーク",
       "pageOf": "{current} / {total} ページ",
       "pageSize": "表示件数"
+    },
+    "folderPanel": {
+      "all": "すべてのブックマーク",
+      "unnamed": "名称未設定フォルダ",
+      "root": "ルート",
+      "rootEmpty": "ルートにはまだブックマークがありません",
+      "empty": "このフォルダにはまだブックマークがありません",
+      "itemCount": "{count} 件のブックマーク",
+      "rename": "名前を変更",
+      "delete": "フォルダを削除",
+      "renameSuccess": "フォルダ名を変更しました",
+      "deleteConfirmTitle": "フォルダを削除",
+      "deleteConfirmMessage": "フォルダ「{name}」を削除しますか？中のブックマークも削除され、元に戻せません。",
+      "deleteSuccess": "フォルダを削除しました"
     }
   },
   "shareManage": {

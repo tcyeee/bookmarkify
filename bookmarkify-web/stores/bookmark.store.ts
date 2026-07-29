@@ -60,6 +60,17 @@ export const useBookmarkStore = defineStore('homeItems', {
         .filter((n) => n.type === HomeItemType.BOOKMARK && n.typeApp?.pinned)
         .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
     },
+    // 后端 /bookmark/sort 是整表覆盖式写入（非按 key 合并），只提交单个文件夹的顺序会把
+    // 其余节点的 sort 一并抹掉。这里始终基于全量 order 生成完整 sort 表，同一列表内的
+    // 相对顺序保持不变，供任意拖拽排序场景直接提交。
+    fullOrderParams(state): Record<string, number> {
+      const params: Record<string, number> = {}
+      let i = 0
+      for (const ids of Object.values(state.order)) {
+        for (const id of ids) params[id] = i++
+      }
+      return params
+    },
   },
 
   actions: {

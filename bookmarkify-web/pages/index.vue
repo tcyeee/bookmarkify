@@ -50,8 +50,8 @@
               <div class="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-2">置顶</div>
               <PinnedBookmarkGrid :nodes="bookmarkStore.pinnedNodes" @edit="openEditModal" />
             </div>
-            <div class="flex justify-center gap-4">
-              <div v-for="(column, i) in folderColumns" :key="i" class="flex flex-col gap-4 w-full max-w-[420px]">
+            <div class="grid justify-center gap-4" :style="folderGridStyle">
+              <div v-for="(column, i) in folderColumns" :key="i" class="flex flex-col gap-4 min-w-0">
                 <BookmarkFolderCard
                   v-for="folder in column"
                   :key="folder.id"
@@ -84,7 +84,13 @@
               @contextmenu.prevent="onMyResultContextMenu($event, item)">
               <BookmarkLogo :value="item.typeApp!" :size="20" />
               <div class="flex flex-col overflow-hidden flex-1">
-                <span class="text-sm text-slate-700 dark:text-slate-200 truncate">
+                <span
+                  class="text-sm truncate"
+                  :class="
+                    item.typeApp!.isActivity === false
+                      ? 'text-slate-400 dark:text-slate-500'
+                      : 'text-slate-700 dark:text-slate-200'
+                  ">
                   {{ item.typeApp!.title || item.typeApp!.urlBase }}
                 </span>
                 <span class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ item.typeApp!.urlBase }}</span>
@@ -267,7 +273,15 @@ const folderCards = computed(() => {
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isXl = breakpoints.greaterOrEqual('xl')
 const isMd = breakpoints.between('md', 'xl')
-const columnCount = computed(() => (isXl.value ? 3 : isMd.value ? 2 : 1))
+const maxColumnCount = computed(() => (isXl.value ? 3 : isMd.value ? 2 : 1))
+// 卡片数少于最大列数时按实际数量取列，避免渲染出占位的空列把整行挤偏
+const columnCount = computed(() => Math.max(1, Math.min(maxColumnCount.value, folderCards.value.length)))
+
+// 用 grid 而非 flex：轨道宽度由 minmax(0, 420px) 决定，与内容无关，
+// 各列必定等宽（flex 项目的 min-width:auto 会被超长行撑开，导致列宽不一致）
+const folderGridStyle = computed(() => ({
+  gridTemplateColumns: `repeat(${columnCount.value}, minmax(0, 420px))`,
+}))
 
 // 按「已放入子项数量」贪心分配到最短的一列，模拟瀑布流的高度均衡效果
 const folderColumns = computed(() => {

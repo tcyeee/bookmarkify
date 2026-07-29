@@ -22,7 +22,15 @@
       :style="bookmarkIndentStyle"
       @contextmenu.prevent="onContextMenu($event, node)">
       <BookmarkLogo :value="node.typeApp" :size="20" />
-      <span class="text-sm text-slate-700 dark:text-slate-200 truncate">{{ node.typeApp.title || node.typeApp.urlBase }}</span>
+      <span
+        class="text-sm truncate"
+        :class="
+          node.typeApp.isActivity === false
+            ? 'text-slate-400 dark:text-slate-500'
+            : 'text-slate-700 dark:text-slate-200'
+        ">
+        {{ node.typeApp.title || node.typeApp.urlBase }}
+      </span>
     </a>
 
     <div

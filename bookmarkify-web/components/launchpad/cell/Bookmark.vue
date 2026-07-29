@@ -19,7 +19,7 @@
     <div
       v-if="showTitle"
       class="w-18 text-sm mt-[0.3rem] truncate text-center"
-      :class="props.value ? 'text-white opacity-90' : 'text-gray-300'">
+      :class="titleClass">
       {{ props.value ? props.value.title || props.value.urlBase : (props.tempTitle ?? 'loading...') }}
     </div>
   </div>
@@ -38,6 +38,11 @@ const { toggleDrag } = toRefs(props)
 const preferenceStore = usePreferenceStore()
 const showTitle = computed<boolean>(() => preferenceStore.preference?.showTitle ?? true)
 const iconSize = computed(() => preferenceStore.bookmarkCellSizePx)
+// 标题配色：加载中为浅灰；网站不可访问时转灰，与图标上的灰色蒙版呼应；正常为白色（叠在壁纸上）
+const titleClass = computed(() => {
+  if (!props.value) return 'text-gray-300'
+  return props.value.isActivity === false ? 'text-gray-400 opacity-80' : 'text-white opacity-90'
+})
 const bookmarkOpenMode = computed<BookmarkOpenMode>(
   () => preferenceStore.preference?.bookmarkOpenMode ?? BookmarkOpenMode.CURRENT_TAB,
 )

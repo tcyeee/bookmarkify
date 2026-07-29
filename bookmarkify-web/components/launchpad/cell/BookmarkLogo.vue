@@ -1,18 +1,14 @@
 <template>
-  <!-- 外层容器：卡片圆角与开发态提示 -->
-  <div
-    :class="[
-      'relative w-app h-app rounded-[22%] bg-gray-100 center overflow-hidden',
-      isDev ? 'dev-outline dev-shrink' : '',
-    ]"
-    :style="isDev ? { '--dev-outline-color': devOutlineColor } : undefined">
+  <!-- 外层容器：卡片圆角。shrink-0 必需——多处调用把本组件放进 flex 行里与超长标题同排，
+       没有它时卡片会被 flex 横向压扁成长方形（overflow-hidden 再把图标裁掉） -->
+  <div class="relative shrink-0 rounded-[22%] bg-gray-100 center overflow-hidden">
     <!-- 内层 Logo：默认白底，必要时覆盖主色与淡白蒙版；不可访问时整体变灰 -->
     <div
       class="bg-white flex justify-center items-center"
-      :class="{ 'inactive-logo': isInactive }"
+      :class="{ 'inactive-logo': isInactive || isInsecure }"
       :style="[logoSizeStyle, logoStyle]">
-      <!-- 本地/IP 类型书签：后端不抓取信息，仅展示统一的 mdi 圆圈图标 -->
-      <Icon v-if="isPlainCircle" icon="mdi:circle" class="text-slate-300" :style="circleIconStyle" />
+      <!-- 本地/IP 类型书签：后端不抓取信息，用与「不可访问」同色的灰底 + 白色圆点图标 -->
+      <Icon v-if="isPlainCircle" icon="mdi:dots-circle" class="shrink-0 text-white" :style="glyphStyle" />
       <!-- 优先使用高清图（仅在调用方显式要求时，如置顶区域） -->
       <img
         v-else-if="props.preferHd && props.value.logo?.iconHdUrl && !hdError"
@@ -33,9 +29,22 @@
       <!-- 最终兜底：灰色地球（内联 SVG，与管理台一致） -->
       <img v-else :style="fallbackStyle" :src="FALLBACK_ICON" alt="" />
     </div>
-    <!-- 不可访问：叠加断网标识（内联 SVG，居中偏下） -->
-    <div v-if="isInactive" class="offline-badge" :style="offlineBadgeStyle" aria-label="无法访问">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="100%" height="100%">
+    <!-- 不可访问 / 不支持 SSL：整体覆盖同一层灰色蒙版，居中叠加白色标识（断网 / 感叹号）以区分两种状态 -->
+    <div
+      v-if="isInactive || isInsecure"
+      class="inactive-mask"
+      :style="{ backgroundColor: INACTIVE_GRAY }"
+      :aria-label="isInactive ? '无法访问' : '不支持 SSL'">
+      <svg
+        v-if="isInactive"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="shrink-0"
+        :style="glyphStyle">
         <path d="M1 1l22 22" />
         <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
         <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
@@ -44,6 +53,7 @@
         <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
         <line x1="12" y1="20" x2="12.01" y2="20" />
       </svg>
+      <Icon v-else icon="mdi:exclamation-thick" class="shrink-0" :style="glyphStyle" />
     </div>
   </div>
 </template>
@@ -60,6 +70,9 @@ const FALLBACK_ICON = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`,
 )}`
 
+// 统一的灰：「不可访问」蒙版与「本地/IP」底色共用，保证两种状态视觉一致
+const INACTIVE_GRAY = 'rgba(100, 116, 139, 0.62)'
+
 // 状态：错误标记、动态背景色、是否放大
 const hdError = ref(false)
 const iconError = ref(false)
@@ -71,39 +84,45 @@ const logoSize = computed(() => props.size ?? 80)
 const isPlainCircle = computed(
   () => props.value.linkType === BookmarkLinkType.LOCAL || props.value.linkType === BookmarkLinkType.IP,
 )
-const circleIconStyle = computed(() => ({
-  width: `${Math.round(logoSize.value * 0.55)}px`,
-  height: `${Math.round(logoSize.value * 0.55)}px`,
-}))
+
+// 灰底上的白色图标（本地/IP 的圆点、不可访问的断网标识）共用一套尺寸，保证两种状态外观一致：
+// 取图标尺寸的 50%，并设 10px 下限，避免 20px 的列表小格子下细到看不清
+const glyphStyle = computed(() => {
+  const glyph = Math.max(10, Math.round(logoSize.value * 0.5))
+  return {
+    width: `${glyph}px`,
+    height: `${glyph}px`,
+  }
+})
 
 // 自定义背景色（管理台设置）：存在则直接铺该色
 const customBgColor = computed(() => props.value.logo?.iconBgColor || '')
 // 图片内边距（管理台设置）：收缩 base64 图标
 const effectivePadding = computed(() => props.value.logo?.iconPadding ?? 0)
 
-// 开发环境标记
-const isDev = computed(() => isLocalhostOrIP(props.value.urlFull))
+// 不支持 SSL(明文 http)：后端不下发该标记，前端按 urlFull 的协议判定。
+// 本地/IP 天然多为 http，已有各自的展示形态；「不可访问」优先级更高，两者都不再叠加此状态
+const isInsecure = computed(() => {
+  if (isPlainCircle.value || props.value?.isActivity === false) return false
+  return /^http:\/\//i.test(props.value?.urlFull || '')
+})
+
 // 网站不可访问：图标变灰并叠加断网标识
 const isInactive = computed(() => props.value?.isActivity === false)
-// 断网标识尺寸随图标尺寸缩放（约 38%）
-const offlineBadgeStyle = computed(() => {
-  const badge = Math.round(logoSize.value * 0.38)
-  return {
-    width: `${badge}px`,
-    height: `${badge}px`,
-  }
-})
 // 判定是否需走 base64 分支
 const shouldUseBase64 = computed(
   () => (!props.preferHd || !props.value.logo?.iconHdUrl || hdError.value) && !iconError.value && !!props.value.logo?.iconBase64,
 )
-const devOutlineColor = computed(() => backgroundColor.value || '#ffffff')
 // base64 时叠加主色与淡白蒙版
 const logoSizeStyle = computed(() => ({
   width: `${logoSize.value}px`,
   height: `${logoSize.value}px`,
 }))
 const logoStyle = computed(() => {
+  // 本地/IP：铺与「不可访问」蒙版同一个灰（叠在 bg-white 上合成同色），配白色图标
+  if (isPlainCircle.value) {
+    return { backgroundColor: INACTIVE_GRAY }
+  }
   if (customBgColor.value) {
     return { backgroundColor: customBgColor.value }
   }
@@ -270,48 +289,23 @@ function rgbToHex(r: number, g: number, b: number): string {
     })
     .join('')}`
 }
-
-function isLocalhostOrIP(url: string): boolean {
-  const localhostRegex = /^(localhost|127\.0\.0\.1|::1)$/i
-  const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/
-
-  try {
-    const hostname = new URL(url).hostname
-    return localhostRegex.test(hostname) || ipRegex.test(hostname)
-  } catch {
-    return false
-  }
-}
 </script>
 
 <style scoped>
-.dev-outline {
-  /* 外描边不占空间，避免缩小内部图标 */
-  outline: 4px dashed var(--dev-outline-color, #ffffff);
-  outline-offset: 0;
-}
-
-.dev-shrink {
-  /* 稍微缩放，让描边后的整体与正常图标一致 */
-  transform: scale(0.9);
-  transform-origin: center;
-}
-
 .inactive-logo {
-  /* 网站不可访问：图标去色并降低不透明度 */
+  /* 网站不可访问：图标去色，压暗交给上层灰色蒙版 */
   filter: grayscale(100%);
-  opacity: 0.5;
 }
 
-.offline-badge {
-  /* 断网标识：绝对定位，居中偏下 */
+.inactive-mask {
+  /* 灰色蒙版：铺满整个图标卡片（外层 overflow-hidden 已裁出圆角），居中放置白色断网标识 */
   position: absolute;
-  left: 50%;
-  top: 58%;
-  transform: translate(-50%, -50%);
-  color: rgba(255, 255, 255, 0.95);
-  /* 深色描边保证在浅色图标上也可见 */
-  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.55)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 底色由 INACTIVE_GRAY 内联注入，与「本地/IP」灰底共用同一个值 */
+  color: #ffffff;
   pointer-events: none;
 }
 </style>
