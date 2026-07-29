@@ -3,6 +3,8 @@ import type {
   AssetDownload,
   CacheMode,
   RenderMode,
+  ScrapeAsset,
+  ScrapePreviews,
   ScrapeRequest,
   ScrapeResponse,
   WaitUntil,
@@ -136,6 +138,21 @@ const form = reactive({
 });
 
 /**
+ * 补全协议头：只输 `github.com` 时按 https 处理，省得每次手敲前缀。
+ * 已带任意 scheme（http/https，乃至 file:）的原样保留，交给服务端去校验。
+ */
+function normalizeUrl(raw: string): string {
+  const v = raw.trim();
+  if (!v) return "";
+  return /^[a-z][\d+\-.a-z]*:\/\//i.test(v) ? v : `https://${v}`;
+}
+
+/** 失焦时把补全结果写回输入框，让用户看到真正要发的地址 */
+function onUrlBlur() {
+  form.url = normalizeUrl(form.url);
+}
+
+/**
  * 组装请求体。
  *
  * 只发有值的字段：scrapper 侧对请求启用了 `deny_unknown_fields`，虽然多发 null 不会被
@@ -143,7 +160,7 @@ const form = reactive({
  */
 const builtRequest = computed<ScrapeRequest>(() => {
   const req: ScrapeRequest = {
-    url: form.url.trim(),
+    url: normalizeUrl(form.url),
     render: {
       mode: form.renderMode,
       waitUntil: form.waitUntil,
@@ -183,6 +200,10 @@ const requestPreview = computed(() => JSON.stringify(builtRequest.value, null, 2
 
 const loading = ref(false);
 const result = ref<null | ScrapeResponse>(null);
+/** 与 result.assets 下标对齐的签名地址，由 API 侧对 storageKey 签出来 */
+const previews = ref<ScrapePreviews>({ assets: [], screenshot: null });
+/** 加载失败的预览下标 —— 空白格子看不出是没图还是加载不出来，得标一下 */
+const brokenPreviews = ref(new Set<number>());
 const errorMsg = ref("");
 
 async function run() {
@@ -190,13 +211,19 @@ async function run() {
     ElMessage.warning("请先输入目标 URL");
     return;
   }
+  // 回车直接抓取时输入框还没失焦，这里补一次，保证展示的和发出去的一致
+  form.url = normalizeUrl(form.url);
   loading.value = true;
   result.value = null;
+  previews.value = { assets: [], screenshot: null };
+  brokenPreviews.value = new Set();
   errorMsg.value = "";
   try {
-    result.value = await scrapeDebugApi(builtRequest.value);
+    const { previews: p, response } = await scrapeDebugApi(builtRequest.value);
+    result.value = response;
+    previews.value = p;
     ElMessage.success(
-      `抓取完成，用时 ${result.value.fetch.timingMs.total}ms，走的是 ${result.value.fetch.layerUsed}`,
+      `抓取完成，用时 ${response.fetch.timingMs.total}ms，走的是 ${response.fetch.layerUsed}`,
     );
   } catch (error: any) {
     errorMsg.value = error?.message ?? String(error);
@@ -291,6 +318,29 @@ const duplicateHashes = computed(() => {
   return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([h]) => h));
 });
 
+/**
+ * 一张图预览用哪个地址，以及它是哪来的。
+ *
+ * 优先级即可靠性排序：
+ * 1. **对象存储签名地址** —— UPLOAD 时才有。scrapper 只返回裸 object key，桶是私有读的，
+ *    必须由 API 签名后才能渲染，所以这个值来自 previews 而不是响应本身。
+ * 2. **内联 dataUrl** —— INLINE 时才有，同源，一定能显示。
+ * 3. **源站直连** —— PROBE/NONE 只能回退到这个。它是最容易挂的一档：源站防盗链、要求
+ *    Cookie、或干脆禁止跨站引用时都会加载失败，而同一个地址在新标签页里打开却是好的。
+ */
+function previewOf(a: ScrapeAsset, i: number) {
+  const signed = previews.value.assets?.[i];
+  if (signed) return { src: signed, from: "对象存储" };
+  if (a.dataUrl) return { src: a.dataUrl, from: "内联" };
+  if (a.resolvedUrl) return { src: a.resolvedUrl, from: "源站直连" };
+  return { src: "", from: "" };
+}
+
+/** 与 result.assets 下标对齐，模板里直接按下标取，避免同一行调用两次 */
+const assetPreviews = computed(() =>
+  (result.value?.assets ?? []).map((a, i) => previewOf(a, i)),
+);
+
 function sizeText(a: { height?: number; isVector?: boolean; width?: number }) {
   if (a.isVector) return "矢量";
   if (!a.width || !a.height) return "—";
@@ -319,7 +369,7 @@ const DOWNLOAD_DOC: Array<[string, string]> = [
   ["NONE", "只报告页面声明，不发任何额外请求。尺寸只有 declared.sizes 里写的那个（可能是假的）"],
   ["PROBE", "默认值。取回图片正文算出真实尺寸 / MIME / contentHash 后丢弃，不落任何存储"],
   ["INLINE", "取回正文并编码进 dataUrl。适合小图标"],
-  ["UPLOAD", "取回正文并传对象存储，返回 storageUrl。服务端未配置 OSS 时自动降级为 PROBE"],
+  ["UPLOAD", "取回正文并传对象存储，返回 storageKey（裸 object key，不含域名）。桶是私有读的，本页预览用的是 API 现签的临时地址。scrapper 未配置 OSS 时自动降级为 PROBE"],
 ];
 
 const CACHE_DOC: Array<[string, string]> = [
@@ -503,6 +553,8 @@ const EXTRACT_TIP: Record<string, string> = {
                 <li>无头模式拿不到重定向链：Chrome 内部跳转不经过我们，<code>redirectChain</code> 会是空数组</li>
                 <li><code>PROBE</code> 会真的下载图片正文 —— contentHash 与真实像素必须读到字节才能算，它只是算完就丢</li>
                 <li>请求体启用了 <code>deny_unknown_fields</code>：字段名拼错会整体 422，而不是被静默忽略</li>
+                <li><code>UPLOAD</code> 返回的 <code>storageKey</code> <strong>不是能直接用的地址</strong>：桶私有读，域名/签名/缩放都是 API 侧策略。本页预览列下方标了每张图的实际来源（对象存储 / 内联 / 源站直连）</li>
+                <li>标着<strong>源站直连</strong>的预览挂掉多半是源站防盗链 —— 同一个地址点开新标签页却是好的。这不是抓取失败，字节该拿到的已经拿到了</li>
               </ul>
             </ElCollapseItem>
           </ElCollapse>
@@ -525,8 +577,9 @@ const EXTRACT_TIP: Record<string, string> = {
               <ElTooltip :content="PARAM_TIP.url" raw-content placement="top" popper-class="scrape-tip">
                 <ElInput
                   v-model="form.url"
-                  placeholder="目标 URL，如 https://github.com"
+                  placeholder="目标 URL，如 github.com（不写协议默认 https）"
                   clearable
+                  @blur="onUrlBlur"
                   @keyup.enter="run"
                 />
               </ElTooltip>
@@ -762,7 +815,7 @@ const EXTRACT_TIP: Record<string, string> = {
                   <table class="w-full text-sm">
                     <thead>
                       <tr class="border-b text-left text-xs text-gray-500">
-                        <th class="w-16 py-1">预览</th>
+                        <th class="w-20 py-1">预览</th>
                         <th class="w-48 py-1">出处</th>
                         <th class="w-24 py-1">尺寸</th>
                         <th class="w-20 py-1">大小</th>
@@ -772,13 +825,25 @@ const EXTRACT_TIP: Record<string, string> = {
                     <tbody>
                       <tr v-for="(a, i) in result.assets" :key="i" class="border-b border-gray-50 align-top">
                         <td class="py-1.5">
-                          <img
-                            v-if="!a.error"
-                            :src="a.dataUrl || a.storageUrl || a.resolvedUrl"
-                            alt=""
-                            class="h-8 w-8 rounded border object-contain"
-                          />
-                          <span v-else class="text-xs text-red-400">✕</span>
+                          <span v-if="a.error" class="text-xs text-red-400">✕</span>
+                          <template v-else>
+                            <!-- 源站直连那一档常因防盗链失败，不带 Referer 能救回一部分 -->
+                            <img
+                              v-if="assetPreviews[i]?.src"
+                              v-show="!brokenPreviews.has(i)"
+                              :src="assetPreviews[i]!.src"
+                              alt=""
+                              referrerpolicy="no-referrer"
+                              class="h-8 w-8 rounded border object-contain"
+                              @error="brokenPreviews.add(i)"
+                            />
+                            <span v-if="brokenPreviews.has(i)" class="text-xs text-red-400" title="图片地址加载失败">
+                              加载失败
+                            </span>
+                            <div class="mt-0.5 text-[10px] leading-tight text-gray-400">
+                              {{ assetPreviews[i]?.from }}
+                            </div>
+                          </template>
                         </td>
                         <td class="py-1.5">
                           <div class="font-mono text-xs">{{ a.extractor }}</div>
@@ -797,7 +862,12 @@ const EXTRACT_TIP: Record<string, string> = {
                         <td class="py-1.5">{{ sizeText(a) }}</td>
                         <td class="py-1.5">{{ bytesText(a.byteSize) }}</td>
                         <td class="py-1.5">
-                          <div class="break-all text-xs">{{ a.resolvedUrl }}</div>
+                          <a :href="a.resolvedUrl" target="_blank" rel="noreferrer" class="block break-all text-xs text-blue-600 hover:underline">
+                            {{ a.resolvedUrl }}
+                          </a>
+                          <div v-if="a.storageKey" class="break-all font-mono text-xs text-gray-400">
+                            key {{ a.storageKey }}
+                          </div>
                           <div v-if="a.error" class="text-xs text-red-500">{{ a.error }}</div>
                           <div v-if="a.contentHash" class="font-mono text-xs text-gray-400">
                             {{ a.contentHash.slice(0, 23) }}…
@@ -817,8 +887,9 @@ const EXTRACT_TIP: Record<string, string> = {
                     {{ result.screenshot.format }} · {{ bytesText(result.screenshot.byteSize) }}
                   </div>
                   <img
-                    :src="result.screenshot.storageUrl || result.screenshot.dataUrl"
+                    :src="previews.screenshot || result.screenshot.dataUrl"
                     alt="screenshot"
+                    referrerpolicy="no-referrer"
                     class="max-w-full rounded border"
                   />
                 </div>

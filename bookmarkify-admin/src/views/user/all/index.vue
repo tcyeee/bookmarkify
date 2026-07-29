@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { UserAdminVO, UserSearchParams } from "#/api/user-manage";
+import type { UserAdminVO, UserSearchParams, UserStatus } from "#/api/user-manage";
 
 import { defineAsyncComponent, reactive } from "vue";
 
@@ -51,9 +51,30 @@ const ElTag = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElTag)
 );
 
-const searchForm = reactive<Pick<UserSearchParams, "name">>({
+const ElSelect = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/select/index"),
+    import("element-plus/es/components/select/style/css"),
+  ]).then(([res]) => res.ElSelect)
+);
+
+const ElOption = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/select/index"),
+    import("element-plus/es/components/select/style/css"),
+  ]).then(([res]) => res.ElOption)
+);
+
+const searchForm = reactive<Pick<UserSearchParams, "name" | "status">>({
   name: "",
+  status: undefined,
 });
+
+/** deleted / disabled 是两个独立标记，这里收敛成一个互斥状态用于展示 */
+function resolveStatus(row: UserAdminVO): UserStatus {
+  if (row.deleted) return "DELETED";
+  return row.disabled ? "DISABLED" : "NORMAL";
+}
 
 const gridOptions: VxeGridProps<UserAdminVO> = {
   id: "admin-user-all",
@@ -65,7 +86,7 @@ const gridOptions: VxeGridProps<UserAdminVO> = {
     { field: "phone", title: "手机号", minWidth: 160 },
     { field: "role", title: "角色", width: 140, slots: { default: "role" } },
     { field: "verified", title: "已验证", width: 100, slots: { default: "verified" } },
-    { field: "disabled", title: "禁用", width: 100, slots: { default: "disabled" } },
+    { field: "status", title: "状态", width: 100, slots: { default: "status" } },
     {
       field: "createTime",
       title: "创建时间",
@@ -86,6 +107,7 @@ const gridOptions: VxeGridProps<UserAdminVO> = {
       query: async ({ page }) => {
         const res = await getAdminUserListApi({
           name: searchForm.name || undefined,
+          status: searchForm.status || undefined,
           currentPage: page.currentPage,
           pageSize: page.pageSize,
         });
@@ -103,6 +125,7 @@ function handleSearch() {
 
 function handleReset() {
   searchForm.name = "";
+  searchForm.status = undefined;
   gridApi.reload();
 }
 </script>
@@ -119,6 +142,13 @@ function handleReset() {
         <ElForm :inline="true" :model="searchForm">
           <ElFormItem label="搜索">
             <ElInput v-model="searchForm.name" placeholder="昵称 / 邮箱 / 手机号" clearable />
+          </ElFormItem>
+          <ElFormItem label="状态">
+            <ElSelect v-model="searchForm.status" placeholder="全部" clearable style="width: 120px">
+              <ElOption label="正常" value="NORMAL" />
+              <ElOption label="禁用" value="DISABLED" />
+              <ElOption label="已删除" value="DELETED" />
+            </ElSelect>
           </ElFormItem>
           <ElFormItem>
             <ElButton type="primary" @click="handleSearch">搜索</ElButton>
@@ -145,8 +175,13 @@ function handleReset() {
           <ElTag v-if="row.verified" type="success" size="small"> 已验证 </ElTag>
           <ElTag v-else type="info" size="small"> 未验证 </ElTag>
         </template>
-        <template #disabled="{ row }">
-          <ElTag v-if="row.disabled" type="danger" size="small"> 禁用 </ElTag>
+        <template #status="{ row }">
+          <ElTag v-if="resolveStatus(row) === 'DELETED'" type="info" size="small">
+            已删除
+          </ElTag>
+          <ElTag v-else-if="resolveStatus(row) === 'DISABLED'" type="danger" size="small">
+            禁用
+          </ElTag>
           <ElTag v-else type="success" size="small"> 正常 </ElTag>
         </template>
       </Grid>

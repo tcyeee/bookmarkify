@@ -14,8 +14,12 @@ export interface UserAdminVO {
   updateTime: string;
 }
 
+/** 用户状态：由后端的 deleted / disabled 组合而成的互斥状态 */
+export type UserStatus = 'DELETED' | 'DISABLED' | 'NORMAL';
+
 export interface UserSearchParams {
   name?: string;
+  status?: undefined | UserStatus;
   currentPage?: number;
   pageSize?: number;
 }

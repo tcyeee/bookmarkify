@@ -6,9 +6,12 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.entity.dto.ScrapeDebugVO
+import top.tcyeee.bookmarkify.entity.dto.ScrapePreviews
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.server.IApiService
+import top.tcyeee.bookmarkify.utils.OssUtils
 
 /**
  * Scrapper 直通调试接口。
@@ -28,13 +31,25 @@ class AdminScrapperController(
 ) {
 
     /**
-     * 用完整参数调一次 scrapper，原样返回其响应。
+     * 用完整参数调一次 scrapper，原样返回其响应，另附一份预览地址。
      *
      * 不做任何持久化，也不碰 `site_asset` / `bookmark` —— 纯粹的调试通道。
      * 失败时由 [IApiService.scrape] 抛出 `CommonException(E304)`，错误信息透传给前端。
+     *
+     * `assets.download = UPLOAD` 时 scrapper 只给 **object key**，而桶是私有读的，
+     * 后台拿裸 key 渲染不出任何东西。签名是本服务的职责，所以在这里补上 —— 但补在
+     * [ScrapeDebugVO.previews] 里，[ScrapeDebugVO.response] 仍是 scrapper 的原样输出。
      */
     @PostMapping("/scrape")
-    @Operation(summary = "以完整参数调用 scrapper 并原样返回响应（无副作用）")
-    fun scrape(@RequestBody request: ScrapeRequest): ScrapeResponse =
-        apiService.scrape(request.url, request)
+    @Operation(summary = "以完整参数调用 scrapper 并原样返回响应，附后台预览用的签名地址（无副作用）")
+    fun scrape(@RequestBody request: ScrapeRequest): ScrapeDebugVO {
+        val response = apiService.scrape(request.url, request)
+        return ScrapeDebugVO(response = response, previews = response.previews())
+    }
+
+    /** 把响应里所有 `storageKey` 签成限时地址。不缩放：调试页要看的是原图。 */
+    private fun ScrapeResponse.previews() = ScrapePreviews(
+        assets = assets.map { OssUtils.signAsset(it.storageKey) },
+        screenshot = OssUtils.signAsset(screenshot?.storageKey),
+    )
 }
