@@ -30,6 +30,7 @@ import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.entity.BookmarkPingLogEntity
 import top.tcyeee.bookmarkify.mapper.*
 import top.tcyeee.bookmarkify.server.IApiService
+import top.tcyeee.bookmarkify.server.IBookmarkLivenessConfigService
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.config.event.BookmarkParseAndNoticeEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseAndResetUserItemEvent
@@ -57,6 +58,7 @@ class BookmarkServiceImpl(
     private val layoutNodeFunctionMapper: LayoutNodeFunctionMapper,
     private val bookmarkCategoryService: IBookmarkCategoryService,
     private val pingLogMapper: BookmarkPingLogMapper,
+    private val bookmarkLivenessConfigService: IBookmarkLivenessConfigService,
     transactionManager: PlatformTransactionManager,
 ) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
 
@@ -236,10 +238,11 @@ class BookmarkServiceImpl(
             .forEach { eventPublisher.publishEvent(BookmarkParseEvent(it.id)) }
 
     override fun retryUnreachableBookmarks() {
+        val abnormalCheckIntervalHours = bookmarkLivenessConfigService.getConfig().abnormalCheckIntervalHours
         val candidates = ktQuery()
             .eq(BookmarkEntity::parseStatus, ParseStatusEnum.UNREACHABLE)
             .eq(BookmarkEntity::verifyFlag, false)
-            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -1, ChronoUnit.DAYS))
+            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -abnormalCheckIntervalHours.toLong(), ChronoUnit.HOURS))
             .orderByAsc(BookmarkEntity::updateTime)
             .last("LIMIT $RETRY_UNREACHABLE_BATCH_SIZE")
             .list()
@@ -274,9 +277,10 @@ class BookmarkServiceImpl(
     override fun livenessCheckStaleBookmarks() {
         // 范围覆盖全部书签（含已手动认证的），因为 checkAll/retryUnreachableBookmarks 都只处理 verifyFlag=false，
         // 已认证书签此前从未被自动复查过。排除 PENDING：尚未解析完成的记录由 checkAll 每5分钟负责兜底。
+        val activeCheckIntervalHours = bookmarkLivenessConfigService.getConfig().activeCheckIntervalHours
         val candidates = ktQuery()
             .ne(BookmarkEntity::parseStatus, ParseStatusEnum.PENDING)
-            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -7, ChronoUnit.DAYS))
+            .lt(BookmarkEntity::updateTime, LocalDateTimeUtil.offset(LocalDateTime.now(), -activeCheckIntervalHours.toLong(), ChronoUnit.HOURS))
             .orderByAsc(BookmarkEntity::updateTime)
             .last("LIMIT $LIVENESS_CHECK_BATCH_SIZE")
             .list()

@@ -25,6 +25,7 @@ import { viteMetadataPlugin } from './inject-metadata';
 import { viteLicensePlugin } from './license';
 import { viteNitroMockPlugin } from './nitro-mock';
 import { vitePrintPlugin } from './print';
+import { viteRouteSourcePlugin } from './route-source';
 import { viteVxeTableImportsPlugin } from './vxe-table';
 
 /**
@@ -242,6 +243,7 @@ export {
   viteCompressPlugin,
   viteDtsPlugin,
   viteHtmlPlugin,
+  viteRouteSourcePlugin,
   viteVisualizerPlugin,
   viteVxeTableImportsPlugin,
 };

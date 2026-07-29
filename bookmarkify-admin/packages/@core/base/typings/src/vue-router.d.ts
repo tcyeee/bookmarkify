@@ -118,6 +118,11 @@ interface RouteMeta {
    */
   query?: Recordable;
   /**
+   * 页面组件的源码路径，由 vite 插件 `bookmarkify:route-source` 构建期注入，
+   * 面包屑的「复制页面路径」按钮使用，无需手写
+   */
+  source?: string;
+  /**
    * 标题名称
    */
   title: string;

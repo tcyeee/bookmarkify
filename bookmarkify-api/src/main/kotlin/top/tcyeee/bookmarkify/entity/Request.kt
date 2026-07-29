@@ -25,6 +25,11 @@ data class AdminGridConfigSaveParams(
     @field:Schema(description = "列配置(vxe-table CustomStoreData)") val storeData: Any? = null,
 )
 
+data class BookmarkLivenessConfigUpdateParams(
+    @field:Schema(description = "已激活书签检测频率(小时)") val activeCheckIntervalHours: Int,
+    @field:Schema(description = "异常书签检测频率(小时)") val abnormalCheckIntervalHours: Int,
+)
+
 data class BackSettingParams(
     @field:Schema(description = "背景类型：GRADIENT / IMAGE") val type: BackgroundType,
     @field:Schema(description = "背景ID") val backgroundId: String,
