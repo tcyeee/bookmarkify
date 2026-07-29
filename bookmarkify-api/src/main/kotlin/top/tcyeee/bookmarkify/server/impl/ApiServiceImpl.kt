@@ -39,39 +39,75 @@ class ApiServiceImpl(
         if (scrapperConfig.authToken.isBlank()) this
         else header("Authorization", "Bearer ${scrapperConfig.authToken}")
 
+    /** 本地开发默认连 127.0.0.1 的 scrapper，多半是根本没起——直接把启动命令带进报错里，省得去翻文档 */
+    private val scrapperStartupHint: String
+        get() = if (scrapperConfig.baseUrl.contains("localhost") || scrapperConfig.baseUrl.contains("127.0.0.1"))
+            "；本地开发需先启动: cd bookmarkify-scrapper && PORT=3001 cargo run -p scraper-service"
+        else ""
+
+    /**
+     * scrapper 的错误码 → 我方错误类型。区分"目标站点的问题"与"我方抓取服务的问题"：
+     * 前者说明书签确实抓不到（可据此判失联），后者只说明服务没起/配错/契约不同步。
+     * 取值见 bookmarkify-scrapper `main.rs` 的 error_response 分支。
+     */
+    private fun classifyScrapperError(code: String?): ErrorType = when (code) {
+        "INVALID_URL" -> ErrorType.E305                                          // URL 格式非法
+        "FORBIDDEN_TARGET", "FETCH_FAILED", "HEADLESS_FAILED", "TIMEOUT" -> ErrorType.E304 // 目标站点打不开
+        // UNAUTHORIZED(鉴权 token 配错)、OSS_FAILED、限流 503、422(请求体字段对不上)、
+        // 以及任何未识别取值，都归为我方服务问题
+        else -> ErrorType.E307
+    }
+
     override fun queryWebsiteInfo(domain: String): ScrapeResponse = scrape(domain, ScrapeRequest(url = buildUrl(domain)))
 
     override fun scrape(domain: String, request: ScrapeRequest): ScrapeResponse {
         val url = request.url.takeIf { it.isNotBlank() } ?: buildUrl(domain)
+        val endpoint = "${scrapperConfig.baseUrl.trimEnd('/')}/scrape"
         val startedAt = System.currentTimeMillis()
 
         // scrapper 可能回退到无头浏览器（HEADLESS_TIMEOUT + IDLE_WAIT），超时给足 60s
         val httpResponse = runCatching {
-            HttpUtil.createPost("${scrapperConfig.baseUrl.trimEnd('/')}/scrape")
+            HttpUtil.createPost(endpoint)
                 .header("Content-Type", "application/json")
                 .withScrapperAuth()
                 .body(objectMapper.writeValueAsString(request))
                 .timeout(60000)
                 .execute()
         }.getOrElse {
-            logScrapperCall(url, startedAt, success = false, httpStatus = null, errorMsg = it.message ?: it.toString())
-            throw CommonException(ErrorType.E304, it.message ?: it.toString())
+            // 这一层的传输异常必然发生在 API ↔ scrapper 之间——目标站点能否打开是由
+            // scrapper 判定后以 HTTP 错误码回报的。以前这里一律记成 E304「域名无法访问」，
+            // 本地没起 scrapper 时就会把"服务没开"误报成"这个网站挂了"
+            val msg = "无法连接抓取服务 $endpoint :: ${it.message ?: it.toString()}$scrapperStartupHint"
+            logScrapperCall(url, startedAt, success = false, httpStatus = null, errorMsg = msg)
+            throw CommonException(ErrorType.E307, msg)
         }
 
         val body = httpResponse.body()
         if (!httpResponse.isOk) {
             // 错误响应体形如 {"error":"FETCH_FAILED","detail":"..."}；deny_unknown_fields
             // 命中时 axum 返回的是纯文本，解析不出 error 字段也不能炸
-            val msg = runCatching { objectMapper.readTree(body).path("error").asText(null) }.getOrNull()
-                ?: "scrapper 返回 ${httpResponse.status}"
+            val json = runCatching { objectMapper.readTree(body) }.getOrNull()
+            val code = json?.path("error")?.asText(null)
+            // 认不出 error 字段（axum 的 422 是纯文本）时，原样带上响应体，别只剩一个状态码
+            val detail = json?.path("detail")?.asText(null)?.takeIf { it.isNotBlank() }
+                ?: body?.takeIf { code == null && it.isNotBlank() }?.take(200)
+            val errorType = classifyScrapperError(code)
+            val msg = buildString {
+                append(code ?: "scrapper 返回 HTTP ${httpResponse.status}")
+                if (detail != null) append(" :: ").append(detail)
+                // 服务是活着的（有 HTTP 响应），所以这里只给地址不给"先启动服务"的提示
+                if (errorType == ErrorType.E307) append(" (scrapper: $endpoint)")
+            }
             logScrapperCall(url, startedAt, success = false, httpStatus = httpResponse.status, errorMsg = msg)
-            throw CommonException(ErrorType.E304, msg)
+            throw CommonException(errorType, msg)
         }
 
         val scrapeResponse = runCatching { objectMapper.readValue<ScrapeResponse>(body) }
             .getOrElse {
-                logScrapperCall(url, startedAt, success = false, httpStatus = httpResponse.status, errorMsg = "scrapper 响应解析失败")
-                throw CommonException(ErrorType.E304, "scrapper 响应解析失败")
+                // 契约对不上是我方两侧代码不同步，不是目标站点的问题
+                val msg = "scrapper 响应解析失败(契约不匹配) :: ${it.message?.take(200)}"
+                logScrapperCall(url, startedAt, success = false, httpStatus = httpResponse.status, errorMsg = msg)
+                throw CommonException(ErrorType.E307, msg)
             }
 
         logScrapperCall(
