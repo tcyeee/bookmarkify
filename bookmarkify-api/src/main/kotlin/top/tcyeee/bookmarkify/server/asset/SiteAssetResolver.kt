@@ -1,6 +1,6 @@
 package top.tcyeee.bookmarkify.server.asset
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers
+import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
@@ -63,12 +63,12 @@ class SiteAssetResolver(
         if (ids.isEmpty()) return emptyMap()
 
         val assetsByBookmark = siteAssetMapper
-            .selectList(Wrappers.lambdaQuery<SiteAssetEntity>().`in`(SiteAssetEntity::bookmarkId, ids))
+            .selectList(KtQueryWrapper(SiteAssetEntity::class.java).`in`(SiteAssetEntity::bookmarkId, ids))
             .groupBy { it.bookmarkId }
 
         val prefByBookmark = siteDisplayPrefMapper
             .selectList(
-                Wrappers.lambdaQuery<SiteDisplayPrefEntity>()
+                KtQueryWrapper(SiteDisplayPrefEntity::class.java)
                     .`in`(SiteDisplayPrefEntity::bookmarkId, ids)
                     .eq(SiteDisplayPrefEntity::displayMode, mode)
             )
@@ -81,16 +81,16 @@ class SiteAssetResolver(
 
     /** 后台用：某书签的全部资产原样返回，供人工挑选与排查。 */
     fun assetsOf(bookmarkId: String): List<SiteAssetEntity> = siteAssetMapper.selectList(
-        Wrappers.lambdaQuery<SiteAssetEntity>()
+        KtQueryWrapper(SiteAssetEntity::class.java)
             .eq(SiteAssetEntity::bookmarkId, bookmarkId)
             .orderByAsc(SiteAssetEntity::role)
             .orderByDesc(SiteAssetEntity::isPrimary)
     )
 
     /** 后台用：读取某书签在某模式下的人工偏好，没有则返回默认值。 */
-    fun prefOf(bookmarkId: String, mode: DisplayMode): SiteDisplayPrefEntity =
+    fun prefOf(bookmarkId: String, mode: DisplayMode): SiteDisplayPrefEntity =  
         siteDisplayPrefMapper.selectList(
-            Wrappers.lambdaQuery<SiteDisplayPrefEntity>()
+            KtQueryWrapper(SiteDisplayPrefEntity::class.java)
                 .eq(SiteDisplayPrefEntity::bookmarkId, bookmarkId)
                 .eq(SiteDisplayPrefEntity::displayMode, mode)
         ).firstOrNull() ?: SiteDisplayPrefEntity(bookmarkId = bookmarkId, displayMode = mode)

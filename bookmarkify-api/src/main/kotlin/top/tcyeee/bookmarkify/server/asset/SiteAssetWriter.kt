@@ -1,6 +1,6 @@
 package top.tcyeee.bookmarkify.server.asset
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers
+import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -45,7 +45,7 @@ class SiteAssetWriter(
         }
 
         siteAssetMapper.delete(
-            Wrappers.lambdaQuery<SiteAssetEntity>().eq(SiteAssetEntity::bookmarkId, bookmarkId)
+            KtQueryWrapper(SiteAssetEntity::class.java).eq(SiteAssetEntity::bookmarkId, bookmarkId)
         )
         p.assets.forEach { siteAssetMapper.insert(it) }
 
