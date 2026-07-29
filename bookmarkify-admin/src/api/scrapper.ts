@@ -201,7 +201,13 @@ export interface ScrapeAsset {
   isVector?: boolean;
   /** 图片字节 sha256，跨 extractor 去重用 */
   contentHash?: string;
-  storageUrl?: string;
+  /**
+   * 上传对象存储后的 **object key**（不含域名），download = UPLOAD 时才有。
+   *
+   * 桶是私有读的，这个值**不能直接当图片地址用** —— 签名与缩放是 API 侧的策略，
+   * 后台要渲染请用 `ScrapeDebugResult.previews.assets[i]`。
+   */
+  storageKey?: string;
   dataUrl?: string;
   error?: string;
 }
@@ -224,7 +230,8 @@ export interface Alternate {
 }
 
 export interface Screenshot {
-  storageUrl?: string;
+  /** object key，同样需要签名后才能渲染，见 `ScrapeDebugResult.previews.screenshot` */
+  storageKey?: string;
   dataUrl?: string;
   width: number;
   height: number;
@@ -267,11 +274,34 @@ export interface ScrapeResponse {
 }
 
 /**
- * 以完整参数调用 scrapper，原样返回其响应。
+ * 后台预览用的可直接访问地址，由 API 侧对 `storageKey` 签名得到。
+ *
+ * 单独一层而不是改写 `response`：scrapper 只报告字节落在哪个 object key，域名 / 签名 / 缩放
+ * 都是 API 的部署策略。混进 response 就意味着调试页展示的「原始 JSON」不再是 scrapper 真正
+ * 返回的东西，而那正是这个页面存在的理由。
+ */
+export interface ScrapePreviews {
+  /** 与 `response.assets` **下标一一对应**；该项未落对象存储时为 null */
+  assets: Array<null | string>;
+  /** 截图的签名地址；未落对象存储时为 null（此时用 `screenshot.dataUrl`） */
+  screenshot: null | string;
+}
+
+export interface ScrapeDebugResult {
+  /** scrapper 原样返回的响应 */
+  response: ScrapeResponse;
+  previews: ScrapePreviews;
+}
+
+/**
+ * 以完整参数调用 scrapper，原样返回其响应，另附后台预览用的签名地址。
  *
  * **无副作用**：不写 site_asset、不改书签、不落快照，纯调试通道。
  * 若要带落库效果，请用 `/admin/website/liveness-check`。
  */
 export async function scrapeDebugApi(request: ScrapeRequest) {
-  return requestClient.post<ScrapeResponse>('/admin/scrapper/scrape', request);
+  return requestClient.post<ScrapeDebugResult>(
+    '/admin/scrapper/scrape',
+    request,
+  );
 }

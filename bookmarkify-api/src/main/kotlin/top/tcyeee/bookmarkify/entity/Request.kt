@@ -131,8 +131,12 @@ data class AllOfMyBookmarkParams(
 }
 
 
+/** 用户状态筛选项：由 deleted / disabled 两个标记组合而成，对外只暴露一个互斥的状态 */
+enum class UserStatusFilter { NORMAL, DISABLED, DELETED }
+
 data class UserSearchParams(
     var name: String? = null,
+    var status: UserStatusFilter? = null,
 ) : PageBean() {
     fun toWrapper(): Wrapper<UserInfoEntity> {
         val query = KtQueryWrapper(UserInfoEntity::class.java)
@@ -141,6 +145,12 @@ data class UserSearchParams(
                 it.like(UserInfoEntity::nickName, name)
                     .or().like(UserInfoEntity::email, name)
             }
+        }
+        when (status) {
+            UserStatusFilter.NORMAL -> query.eq(UserInfoEntity::deleted, false).eq(UserInfoEntity::disabled, false)
+            UserStatusFilter.DISABLED -> query.eq(UserInfoEntity::deleted, false).eq(UserInfoEntity::disabled, true)
+            UserStatusFilter.DELETED -> query.eq(UserInfoEntity::deleted, true)
+            null -> Unit
         }
         return query
     }
