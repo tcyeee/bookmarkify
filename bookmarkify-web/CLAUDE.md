@@ -28,7 +28,7 @@ pnpm generate             # static site generation → .output/public
 
 ## Deployment
 
-Deployed as a **static site** (`nuxt generate` → `.output/public`) served directly by nginx — there is no Node/Docker runtime in production. CI (`.github/workflows/deploy-web.yml`, monorepo root) builds on push to the `prod` branch, rsyncs `.output/public` to `/home/ubuntu/www/bookmarkify-web/` on the server (nginx `location /` serves it with a `/200.html` SPA fallback), then notifies WeChat via Server酱. The prod public URLs (`NUXT_API_BASE=https://bookmarkify.cc/api`, `NUXT_WS_BASE=wss://bookmarkify.cc`) are baked in at build time by the workflow.
+Deployed as a **static site** (`nuxt generate` → `.output/public`) served directly by nginx — there is no Node/Docker runtime in production. CI (`.github/workflows/deploy-web.yml`, monorepo root) builds on push to the `prod` branch, rsyncs `.output/public` to `/home/ubuntu/www/bookmarkify-web/` on the server (nginx `location /` serves it with a `/200.html` SPA fallback), then notifies WeChat via Server酱. The workflow sets `NUXT_BACKEND=https://bookmarkify.cc` and `nuxt.config.ts` derives the public `apiBase` (`https://bookmarkify.cc/api`) and `wsBase` (`wss://bookmarkify.cc`) from it; both are baked into the static output at build time.
 
 There is no test runner or lint script configured in `package.json`. No tests exist in the repo. A `pnpm typecheck` script (`nuxt typecheck`) does exist, but it currently fails with several pre-existing type errors (implicit `any`, possibly-`undefined` access in `bookmark.store.ts`) that predate this note — it is not wired into CI.
 
@@ -38,8 +38,7 @@ Copy `.env.example` to `.env`:
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `NUXT_API_BASE` | Backend REST URL | `http://127.0.0.1:8001` |
-| `NUXT_WS_BASE` | Backend WebSocket URL | `ws://localhost:8001` |
+| `NUXT_BACKEND` | Backend origin — the **only** switch for which backend to hit. REST and WebSocket are both derived from it in `nuxt.config.ts`: remote values get `/api` appended for REST (nginx strips it again), local ones don't; `wsBase` is the same origin with `http`→`ws`. Pass an origin only — no `/api`, no `/ws`. | `http://127.0.0.1:8001` |
 | `NUXT_PUBLIC_SITE_URL` | Public site URL (SEO/canonical) | `https://bookmarkify.cc` |
 | `NUXT_PUBLIC_GOOGLE_CLIENT_ID` | Google OAuth client ID | — |
 | `NUXT_PUBLIC_GITHUB_CLIENT_ID` | GitHub OAuth client ID | — |

@@ -55,6 +55,13 @@ async function loadEnv<T = Record<string, string>>(
     }
   }
   const reg = new RegExp(`^(${match})`);
+  // 允许 shell 内联的环境变量覆盖 .env 文件里的同名配置（与 vite 原生 loadEnv 行为一致），
+  // 例如 `VITE_VISUALIZER=true pnpm build` 无需专门的 .env.analyze 文件。
+  Object.keys(process.env).forEach((key) => {
+    if (reg.test(key) && process.env[key] !== undefined) {
+      (envConfig as Record<string, string>)[key] = process.env[key] as string;
+    }
+  });
   Object.keys(envConfig).forEach((key) => {
     if (!reg.test(key)) {
       Reflect.deleteProperty(envConfig, key);

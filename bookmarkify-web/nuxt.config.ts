@@ -2,6 +2,18 @@ import tailwindcss from '@tailwindcss/vite'
 import Icons from 'unplugin-icons/vite'
 import { resolve } from 'path'
 
+// 连哪个后端：唯一开关，二选一（REST 和 WebSocket 一起切）。填后端 origin，不带 /api。
+// 前缀差异在这里补平，和 bookmarkify-admin/vite.config.mts 的 isRemote 判断同一套逻辑：
+//   本地 —— 直连 API 进程，REST 无前缀（http://127.0.0.1:8001/auth/track）
+//   线上 —— 经 nginx，REST 要走 /api（deploy/nginx/bookmakify.cc.conf 的
+//           `rewrite ^/api(/.*)$ $1 break` 再把前缀剥掉给后端）
+// WebSocket 两种情况都不加前缀：nginx 的 location /ws 是原样透传。
+const backend = (process.env.NUXT_BACKEND || 'http://127.0.0.1:8001').replace(/\/+$/, '')
+const isRemoteBackend = !/127\.0\.0\.1|localhost/.test(backend)
+const apiBase = isRemoteBackend ? `${backend}/api` : backend
+// 不要在这里拼 /ws —— stores/websocket.store.ts 会自己拼成 `${wsBase}/ws?token=...`
+const wsBase = backend.replace(/^http/, 'ws')
+
 const siteUrl = process.env.NUXT_PUBLIC_SITE_URL || 'https://bookmarkify.cc'
 const seoDescription =
   '集中收藏应用、工具与灵感；一键保存、智能分类与搜索、云端同步、书签活性检测，以及社区分享与发现，随时随地一触即达。'
@@ -107,8 +119,8 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      apiBase: process.env.NUXT_API_BASE,
-      wsBase: process.env.NUXT_WS_BASE,
+      apiBase,
+      wsBase,
       siteUrl,
       googleClientId: process.env.NUXT_PUBLIC_GOOGLE_CLIENT_ID,
       githubClientId: process.env.NUXT_PUBLIC_GITHUB_CLIENT_ID,

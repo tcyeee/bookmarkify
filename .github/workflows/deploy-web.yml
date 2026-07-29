@@ -38,8 +38,8 @@ jobs:
       - name: Generate static site
         working-directory: bookmarkify-web
         env:
-          NUXT_API_BASE: https://bookmarkify.cc/api
-          NUXT_WS_BASE: wss://bookmarkify.cc
+          # 后端 origin，不带 /api —— nuxt.config.ts 会据此派生 apiBase(+/api) 和 wsBase(wss://)
+          NUXT_BACKEND: https://bookmarkify.cc
           NUXT_PUBLIC_SITE_URL: https://bookmarkify.cc
           # Google 登录 ClientId（公开值，前端 JS 里本就可见，直接内联；如需更换可改此处或覆盖为 secret）
           NUXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NUXT_PUBLIC_GOOGLE_CLIENT_ID || '534119394768-5ed59pcgub9a1s45a9uvu69alvk1ddko.apps.googleusercontent.com' }}
