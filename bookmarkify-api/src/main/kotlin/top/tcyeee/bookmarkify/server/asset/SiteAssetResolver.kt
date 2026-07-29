@@ -88,7 +88,7 @@ class SiteAssetResolver(
     )
 
     /** 后台用：读取某书签在某模式下的人工偏好，没有则返回默认值。 */
-    fun prefOf(bookmarkId: String, mode: DisplayMode): SiteDisplayPrefEntity =  
+    fun prefOf(bookmarkId: String, mode: DisplayMode): SiteDisplayPrefEntity =
         siteDisplayPrefMapper.selectList(
             KtQueryWrapper(SiteDisplayPrefEntity::class.java)
                 .eq(SiteDisplayPrefEntity::bookmarkId, bookmarkId)
