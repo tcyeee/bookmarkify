@@ -38,3 +38,6 @@ sealed class AiReviewOutcome {
     data class Rejected(val reason: String) : AiReviewOutcome()
     data object Unavailable : AiReviewOutcome()
 }
+
+/** [top.tcyeee.bookmarkify.server.IApiService.inferNsfw] 的判定结果；命中时附带简短理由，便于人工审核/排查。 */
+data class NsfwCheckResult(val nsfw: Boolean, val reason: String? = null)
