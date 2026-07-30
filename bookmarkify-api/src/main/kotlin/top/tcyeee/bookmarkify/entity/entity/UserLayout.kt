@@ -49,8 +49,9 @@ data class UserLayoutNodeEntity(
 
         BeanUtil.copyProperties(this, it)
         if (type == NodeTypeEnum.BOOKMARK) {
+            // 图标与备用标题由调用方在构造 [bookmark] 时通过 BookmarkShow.initDisplay 一次性批量注入，
+            // 这里不再补——布局节点拿不到 SiteAssetResolver，在这一层补只能逐个查资产表变成 N+1。
             it.typeApp = bookmark
-            it.typeApp?.initLogo()
         }
         if (type == NodeTypeEnum.FUNCTION) {
             it.typeFuc = func?.vo()

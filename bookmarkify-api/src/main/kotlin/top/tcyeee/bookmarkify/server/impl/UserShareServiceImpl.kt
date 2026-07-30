@@ -22,12 +22,14 @@ import top.tcyeee.bookmarkify.entity.dto.AiReviewOutcome
 import top.tcyeee.bookmarkify.entity.entity.UserShareBookmarkEntity
 import top.tcyeee.bookmarkify.entity.entity.UserShareEntity
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
+import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.mapper.UserShareBookmarkMapper
 import top.tcyeee.bookmarkify.mapper.UserShareMapper
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.server.IUserShareService
+import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
 import top.tcyeee.bookmarkify.utils.SocketUtils
 import java.time.LocalDateTime
 
@@ -40,6 +42,7 @@ class UserShareServiceImpl(
     private val userService: IUserService,
     private val apiService: IApiService,
     private val eventPublisher: ApplicationEventPublisher,
+    private val siteAssetResolver: SiteAssetResolver,
 ) : IUserShareService, ServiceImpl<UserShareMapper, UserShareEntity>() {
 
     @Transactional(rollbackFor = [Exception::class])
@@ -88,7 +91,10 @@ class UserShareServiceImpl(
         val share = getById(id) ?: throw CommonException(ErrorType.E122)
         if (share.effectiveStatus != ShareStatus.NORMAL) throw CommonException(ErrorType.E122)
         val user = userService.getById(share.uid) ?: throw CommonException(ErrorType.E122)
-        val bookmarks = userShareBookmarkMapper.bookmarksByShareId(id).onEach { it.initLogo() }
+        // 分享页与桌面一样是大图形态，按 TILE 解析图标；一次批量解析避免逐条查资产表
+        val bookmarks = userShareBookmarkMapper.bookmarksByShareId(id)
+        val logoMap = siteAssetResolver.resolveBatch(bookmarks.mapNotNull { it.bookmarkId }, DisplayMode.TILE)
+        bookmarks.forEach { it.initDisplay(logoMap[it.bookmarkId]) }
         return SharePublicVO(
             id = share.id,
             note = share.note,

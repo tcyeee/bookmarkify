@@ -34,4 +34,11 @@ class BookmarkParseEventListener(private val bookmarkService: IBookmarkService) 
     fun onParseAndResetUserItem(event: BookmarkParseAndResetUserItemEvent) = runCatching {
         bookmarkService.parseAndResetUserItem(event.uid, event.rawUrl, event.userLinkId, event.layoutNodeId)
     }.onFailure { log.error("[Async] BookmarkParseAndResetUserItemEvent 处理失败: rawUrl={}", event.rawUrl, it) }.let { }
+
+    /** 跑在 [AsyncConfig.BOOKMARK_ENRICH_EXECUTOR] 而非解析池上：见 [BookmarkEnrichEvent]。 */
+    @Async(AsyncConfig.BOOKMARK_ENRICH_EXECUTOR)
+    @EventListener
+    fun onEnrich(event: BookmarkEnrichEvent) = runCatching {
+        bookmarkService.enrich(event.bookmarkId)
+    }.onFailure { log.error("[Async] BookmarkEnrichEvent 处理失败: bookmarkId={}", event.bookmarkId, it) }.let { }
 }

@@ -144,7 +144,10 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 1. **Dual auth realms:** `StpKit.USER` for regular users, `StpKit.ADMIN` for admin panel. Completely separate session stores.
 2. **Anonymous-first identity:** Every visitor gets a `deviceUid` cookie and auto-created `user_info` row. Users "upgrade" by verifying phone/email.
 3. **Bookmark deduplication:** The `bookmark` table stores one canonical record per domain. User-specific data lives in `bookmark_user_link`.
-4. **Async parsing pipeline:** Adding a bookmark returns a loading placeholder immediately. A Spring `ApplicationEvent` is published; an `@Async` listener (`BookmarkParseEventListener`, running on the `bookmarkParseExecutor` thread pool) parses the website, uploads logos to OSS, and pushes the result via WebSocket (`HOME_ITEM_UPDATE`). Failed parses are not retried inline — `checkAll()` cron reconciles unverified bookmarks.
+4. **Async parsing pipeline:** Adding a bookmark returns a loading placeholder immediately. A Spring `ApplicationEvent` is published; an `@Async` listener (`BookmarkParseEventListener`, running on the `bookmarkParseExecutor` thread pool) parses the website, uploads logos to OSS, and pushes the result via WebSocket (`HOME_ITEM_UPDATE`). Failed parses are not retried inline — see *Reconciliation* below.
+   - **Bulk import publishes no events at all.** `importBookmarkFile` only writes rows (`bookmark_user_link.bookmark_id = 'LOADING'` marks the unfinished ones). Fanning out thousands of events would saturate the parse pool *and* its bounded queue, after which `CallerRunsPolicy` runs the remaining scrapes on the caller — which is the Tomcat request thread. `drainStuckLoading()` (every 30s) feeds the pool from the DB instead, sized to the queue's free capacity.
+   - **DeepSeek enrichment is off the parse path.** Category tagging and the NSFW check run on a separate `bookmarkEnrichExecutor` via `BookmarkEnrichEvent`. They are invisible to the user but cost ~20s of round-trips, and the parse pool's throughput is literally "how long a bookmark spins".
+   - **No pre-scrape ping.** Both parse paths already resolve unreachable sites to `UNREACHABLE` on their own (`classifyScrapperError` → E304, or a Jsoup fetch exception). `pingWebsite` is only for the scheduled liveness sweeps.
 5. **Desktop layout tree:** `user_layout_node` stores a tree with `parentId` (ROOT → folders → bookmarks). Sort order is a JSON map in `user_preference` to avoid bulk DB writes.
 6. **AOP caching/throttling:** `@RedisCache` for method-level caching; `@Throttle` for per-user rate limiting via Redis SETNX.
 7. **Unified response wrapper:** `GlobalExceptionHandler` (ResponseBodyAdvice) wraps all responses in `ResultWrapper{ok, code, data, msg}`.
@@ -167,10 +170,28 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 
 ### Async Parse Events
 
-In-process Spring events (`config/event/`), dispatched by `BookmarkParseEventListener` on the `bookmarkParseExecutor` pool (`config/async/AsyncConfig.kt`):
-- `BookmarkParseEvent` — Parse + save a bookmark (cron / startup)
-- `BookmarkParseAndNoticeEvent` — Parse + WebSocket push (single add)
-- `BookmarkParseAndResetUserItemEvent` — Parse + bind user link (import)
+In-process Spring events (`config/event/`), dispatched by `BookmarkParseEventListener` (`config/async/AsyncConfig.kt`):
+
+| Event | Pool | Purpose |
+|---|---|---|
+| `BookmarkParseEvent` | `bookmarkParseExecutor` | Parse + save a bookmark (cron / startup) |
+| `BookmarkParseAndNoticeEvent` | `bookmarkParseExecutor` | Parse + WebSocket push (single add) |
+| `BookmarkParseAndResetUserItemEvent` | `bookmarkParseExecutor` | Parse + bind user link (import) |
+| `BookmarkEnrichEvent` | `bookmarkEnrichExecutor` | Category + NSFW (DeepSeek); deliberately off the parse pool |
+
+`ParseLock` (Redis SETNX) guards two things: one scrape at a time per canonical bookmark (concurrent adds of the same URL would otherwise interleave `SiteAssetWriter`'s delete-then-insert and corrupt the asset rows), and one in-flight re-dispatch per user link.
+
+### Reconciliation (three tasks, disjoint by design)
+
+| Task | Cadence | Selects on | Fixes |
+|---|---|---|---|
+| `checkAll()` | 5 min | `bookmark.parse_status = PENDING` stale by `COALESCE(update_time, create_time)` | Lost parse events for the canonical record |
+| `drainStuckLoading()` | 30s | `user_layout_node.type = BOOKMARK_LOADING` | **User-visible** stuck spinners: the import backlog, plus any add whose event was lost |
+| `retryUnreachableBookmarks()` / `livenessCheckStaleBookmarks()` | hourly | `UNREACHABLE` / `SUCCESS` | Site liveness (these two own `pingWebsite`) |
+
+`drainStuckLoading` keys off the layout node rather than `parse_status` on purpose: when a bookmark scrapes fine but the user-link rebind or node flip fails, `parse_status` is `SUCCESS` and every status-based task skips it — while the user's tile spins forever.
+
+**`COALESCE(update_time, create_time)` in `checkAll` is load-bearing.** A fresh `BookmarkEntity` has `updateTime = null`, and SQL `NULL < ?` is never true, so a plain `update_time <` predicate silently excludes exactly the never-parsed rows that need reconciling most.
 
 ### Redis Cache Keys
 
@@ -208,3 +229,5 @@ In-process Spring events (`config/event/`), dispatched by `BookmarkParseEventLis
 - `HomeItem` / `HomeItemMapper` (and `HomeItemServiceImpl.kt`) are legacy — superseded by the `UserLayoutNode` system; avoid extending them in new work
 - The `server/` package (not `service/`) holds service interfaces — keep this naming when adding services
 - Admin login credentials default to `tcyeee@outlook.com` / `admin` in config
+- **The API runs as a single instance and cannot currently be scaled horizontally.** Two things assume it: `@Scheduled` tasks have no distributed lock (every instance would run every sweep — duplicate pings, duplicate parse dispatch), and `SessionManager` keeps WebSocket sessions in a process-local `ConcurrentHashMap` (a push only reaches users connected to *that* instance, so roughly half of all `HOME_ITEM_UPDATE` pushes would silently vanish behind a load balancer). Adding a second instance requires ShedLock (or equivalent) plus Redis pub/sub fan-out for WebSocket pushes — `ParseLock` already being in Redis is not sufficient on its own.
+- Icons live in `site_asset` and are **not** joined by any `BookmarkShow` SQL. Anything building a `BookmarkShow` must call `initDisplay(resolved)` with a `SiteAssetResolver` result — the required parameter exists precisely because the earlier `logo` default let several call sites forget, silently degrading the whole desktop to monogram tiles. Use `resolveBatch` for lists.
