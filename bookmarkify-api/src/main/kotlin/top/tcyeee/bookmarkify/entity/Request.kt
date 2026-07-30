@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
+import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.utils.BaseUtils
 import java.time.LocalDateTime
@@ -29,6 +30,7 @@ data class AdminGridConfigSaveParams(
 data class BookmarkLivenessConfigUpdateParams(
     @field:Schema(description = "已激活书签检测频率(小时)") val activeCheckIntervalHours: Int,
     @field:Schema(description = "异常书签检测频率(小时)") val abnormalCheckIntervalHours: Int,
+    @field:Schema(description = "内容重新抓取间隔(天)") val contentRefreshIntervalDays: Int,
 )
 
 data class BackSettingParams(
@@ -50,6 +52,7 @@ data class UserDelParams(val email: String? = null)
 data class UserInfoUpdateParams(var nickName: String)
 data class BookmarkUpdatePrams(var linkId: String, var title: String, var description: String)
 data class BookmarkPinParams(var linkId: String, var pinned: Boolean)
+data class BookmarkOpenParams(var linkId: String)
 data class BookmarkIconUpdateParams(
     // 显示设置按展示模式分行：72px 大图上的内边距/背景色与 16px 列表行是两回事
     @field:Schema(description = "展示模式 TILE/LIST") var displayMode: DisplayMode = DisplayMode.TILE,
@@ -189,14 +192,15 @@ data class ScrapperCallLogSearchParams(
 /** 管理后台书签活性检查日志查询入参 */
 data class BookmarkPingLogSearchParams(
     var urlHost: String? = null,
-    var alive: Boolean? = null,
+    /** 按探测结论筛选。替代了原来的 alive 布尔筛选——那个表达不了「无结论」这一态。 */
+    var outcome: PingOutcome? = null,
 ) : PageBean() {
     fun toWrapper(): Wrapper<BookmarkPingLogEntity> {
         val query = KtQueryWrapper(BookmarkPingLogEntity::class.java)
         if (!urlHost.isNullOrBlank()) {
             query.like(BookmarkPingLogEntity::urlHost, urlHost)
         }
-        alive?.let { query.eq(BookmarkPingLogEntity::alive, it) }
+        outcome?.let { query.eq(BookmarkPingLogEntity::outcome, it) }
         return query.orderByDesc(BookmarkPingLogEntity::createTime)
     }
 }

@@ -81,6 +81,7 @@
               target="_blank"
               rel="noopener noreferrer"
               class="flex items-center gap-3 py-2 px-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
+              @click="recordOpen(item)"
               @contextmenu.prevent="onMyResultContextMenu($event, item)">
               <BookmarkLogo :value="item.typeApp!" :size="20" />
               <div class="flex flex-col overflow-hidden flex-1">
@@ -216,7 +217,15 @@
 <script lang="ts" setup>
 import { h } from 'vue'
 import { HomeItemType, type UserLayoutNodeVO } from '@typing'
-import { bookmarksSearch, bookmarksLinkOne, bookmarksDel, bookmarksUpdate, bookmarksPin, bookmarksCreateDir } from '@api'
+import {
+  bookmarksSearch,
+  bookmarksLinkOne,
+  bookmarksDel,
+  bookmarksUpdate,
+  bookmarksPin,
+  bookmarksCreateDir,
+  bookmarksRecordOpen,
+} from '@api'
 import { useDebounceFn, useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { Icon } from '@iconify/vue'
@@ -415,6 +424,11 @@ async function linkSuggested(item: BookmarkSearchVO) {
   bookmarkStore.addNode(res)
   suggestResults.value = suggestResults.value.filter((i) => i.id !== item.id)
   useToastStore().success('添加成功')
+}
+
+function recordOpen(item: UserLayoutNodeVO) {
+  if (!item.typeApp) return
+  bookmarksRecordOpen(item.typeApp.bookmarkUserLinkId).catch(() => {})
 }
 
 // ── 「我的书签」搜索结果右键菜单：修改 / 删除 ──

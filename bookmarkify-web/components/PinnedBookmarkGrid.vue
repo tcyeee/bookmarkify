@@ -7,6 +7,7 @@
       target="_blank"
       rel="noopener noreferrer"
       class="w-16 flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
+      @click="recordOpen(node)"
       @contextmenu.prevent="onContextMenu($event, node)">
       <BookmarkLogo :value="node.typeApp!" :size="56" :prefer-hd="true" />
       <span
@@ -26,7 +27,7 @@
 import { h } from 'vue'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { Icon } from '@iconify/vue'
-import { bookmarksDel, bookmarksPin } from '@api'
+import { bookmarksDel, bookmarksPin, bookmarksRecordOpen } from '@api'
 import type { UserLayoutNodeVO } from '@typing'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
@@ -36,6 +37,11 @@ defineProps<{ nodes: UserLayoutNodeVO[] }>()
 const emit = defineEmits<{ edit: [node: UserLayoutNodeVO] }>()
 
 const bookmarkStore = useBookmarkStore()
+
+function recordOpen(node: UserLayoutNodeVO) {
+  if (!node.typeApp) return
+  bookmarksRecordOpen(node.typeApp.bookmarkUserLinkId).catch(() => {})
+}
 
 async function unpinOne(node: UserLayoutNodeVO) {
   if (!node.typeApp) return

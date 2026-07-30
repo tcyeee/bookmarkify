@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { BookmarkPingLogSearchParams, BookmarkPingLogVO } from "#/api/bookmark-ping-log";
+import type { BookmarkPingLogSearchParams, BookmarkPingLogVO, PingOutcome } from "#/api/bookmark-ping-log";
 
 import { defineAsyncComponent, onMounted, reactive, ref } from "vue";
 
@@ -100,6 +100,7 @@ const configSaving = ref(false);
 const livenessConfig = reactive({
   activeCheckIntervalHours: 168,
   abnormalCheckIntervalHours: 24,
+  contentRefreshIntervalDays: 30,
 });
 
 async function fetchLivenessConfig() {
@@ -108,6 +109,7 @@ async function fetchLivenessConfig() {
     const res = await getBookmarkLivenessConfigApi();
     livenessConfig.activeCheckIntervalHours = res.activeCheckIntervalHours;
     livenessConfig.abnormalCheckIntervalHours = res.abnormalCheckIntervalHours;
+    livenessConfig.contentRefreshIntervalDays = res.contentRefreshIntervalDays;
   } finally {
     configLoading.value = false;
   }
@@ -119,9 +121,11 @@ async function saveLivenessConfig() {
     const res = await saveBookmarkLivenessConfigApi({
       activeCheckIntervalHours: livenessConfig.activeCheckIntervalHours,
       abnormalCheckIntervalHours: livenessConfig.abnormalCheckIntervalHours,
+      contentRefreshIntervalDays: livenessConfig.contentRefreshIntervalDays,
     });
     livenessConfig.activeCheckIntervalHours = res.activeCheckIntervalHours;
     livenessConfig.abnormalCheckIntervalHours = res.abnormalCheckIntervalHours;
+    livenessConfig.contentRefreshIntervalDays = res.contentRefreshIntervalDays;
     ElMessage.success("已保存");
   } finally {
     configSaving.value = false;
@@ -137,17 +141,28 @@ const pagination = reactive({
   total: 0,
 });
 
-const searchForm = reactive<Pick<BookmarkPingLogSearchParams, "urlHost" | "alive">>({
+const searchForm = reactive<Pick<BookmarkPingLogSearchParams, "urlHost" | "outcome">>({
   urlHost: "",
-  alive: undefined,
+  outcome: undefined,
 });
+
+/** 三态结论的展示配置：标签类型 + 文案 + 悬浮说明 */
+const OUTCOME_META: Record<PingOutcome, { label: string; tip: string; type: "danger" | "success" | "warning" }> = {
+  ALIVE: { label: "存活", tip: "目标站点有响应", type: "success" },
+  DEAD: { label: "失活", tip: "抓取服务明确判定目标站点打不开", type: "danger" },
+  UNKNOWN: {
+    label: "无结论",
+    tip: "我方探测链路有问题（抓取服务不可达/鉴权失败/被限流），本轮未改动书签状态",
+    type: "warning",
+  },
+};
 
 async function fetchData() {
   loading.value = true;
   try {
     const res = await getAdminBookmarkPingLogListApi({
       urlHost: searchForm.urlHost || undefined,
-      alive: searchForm.alive,
+      outcome: searchForm.outcome,
       currentPage: pagination.currentPage,
       pageSize: pagination.pageSize,
     });
@@ -167,7 +182,7 @@ function handleSearch() {
 
 function handleReset() {
   searchForm.urlHost = "";
-  searchForm.alive = undefined;
+  searchForm.outcome = undefined;
   pagination.currentPage = 1;
   fetchData();
 }
@@ -207,11 +222,19 @@ onMounted(() => {
             <ElInputNumber v-model="livenessConfig.abnormalCheckIntervalHours" :min="1" :step="1" />
             <span class="ml-2 text-gray-500">小时</span>
           </ElFormItem>
+          <ElFormItem label="内容重新抓取间隔">
+            <ElInputNumber v-model="livenessConfig.contentRefreshIntervalDays" :min="1" :step="1" />
+            <span class="ml-2 text-gray-500">天</span>
+          </ElFormItem>
           <ElFormItem>
             <ElButton type="primary" :loading="configSaving" @click="saveLivenessConfig">保存</ElButton>
           </ElFormItem>
         </ElForm>
-        <div class="text-xs text-gray-400">异常书签检测频率不能低于已激活书签检测频率（即间隔小时数不能更大）</div>
+        <div class="text-xs text-gray-400">
+          异常书签检测频率不能低于已激活书签检测频率（即间隔小时数不能更大）；
+          「检测」只发一个 HEAD 请求判断站点是否存活，「重新抓取」会走完整抓取链路更新标题与图标，代价高得多，所以间隔单独配置且不能短于检测频率。
+          连续失败 10 次的书签会转入归档、停止巡检。
+        </div>
       </div>
       <div class="mb-4">
         <ElForm :inline="true" :model="searchForm">
@@ -219,9 +242,10 @@ onMounted(() => {
             <ElInput v-model="searchForm.urlHost" placeholder="urlHost 模糊搜索" clearable />
           </ElFormItem>
           <ElFormItem label="状态">
-            <ElSelect v-model="searchForm.alive" placeholder="全部" clearable style="width: 120px">
-              <ElOption label="存活" :value="true" />
-              <ElOption label="失活" :value="false" />
+            <ElSelect v-model="searchForm.outcome" placeholder="全部" clearable style="width: 130px">
+              <ElOption label="存活" value="ALIVE" />
+              <ElOption label="失活" value="DEAD" />
+              <ElOption label="无结论" value="UNKNOWN" />
             </ElSelect>
           </ElFormItem>
           <ElFormItem>
@@ -234,10 +258,11 @@ onMounted(() => {
         <ElTableColumn type="index" label="#" width="50" />
         <ElTableColumn prop="urlHost" label="域名" min-width="200" />
         <ElTableColumn prop="bookmarkId" label="书签ID" min-width="260" show-overflow-tooltip />
-        <ElTableColumn prop="alive" label="存活状态" width="100">
+        <ElTableColumn prop="outcome" label="探测结论" width="110">
           <template #default="{ row }">
-            <ElTag v-if="row.alive" type="success" size="small"> 存活 </ElTag>
-            <ElTag v-else type="danger" size="small"> 失活 </ElTag>
+            <ElTag :type="OUTCOME_META[row.outcome]?.type ?? 'info'" size="small" :title="OUTCOME_META[row.outcome]?.tip">
+              {{ OUTCOME_META[row.outcome]?.label ?? row.outcome }}
+            </ElTag>
           </template>
         </ElTableColumn>
         <ElTableColumn prop="triggeredParse" label="是否触发重新解析" width="150">

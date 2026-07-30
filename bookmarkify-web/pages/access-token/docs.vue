@@ -42,7 +42,33 @@
         <section class="mt-8">
           <h2 class="text-base font-semibold">接口</h2>
 
-          <h3 class="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200">查询网站标题与图标</h3>
+          <h3 class="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200">校验令牌有效性(接入前自检)</h3>
+          <pre
+            class="mt-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-4 py-3 text-xs font-mono overflow-x-auto"
+          ><code>GET {{ apiBase }}/extension/ping
+
+Header:
+  X-Extension-Token: &lt;token&gt;</code></pre>
+
+          <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">curl 示例：</p>
+          <pre
+            class="mt-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-4 py-3 text-xs font-mono overflow-x-auto"
+          ><code>curl -H "X-Extension-Token: YOUR_TOKEN" "{{ apiBase }}/extension/ping"</code></pre>
+
+          <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">成功响应（返回该令牌自身信息，不含明文）：</p>
+          <pre
+            class="mt-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-4 py-3 text-xs font-mono overflow-x-auto"
+          ><code>{
+  "code": 0,
+  "msg": "success",
+  "data": { "id": "...", "name": "我的脚本", "tokenPrefix": "bmk_ext_a1b2****", "lastUsedAt": "...", "createTime": "..." },
+  "ok": true
+}</code></pre>
+          <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">
+            失败响应与下方 site-info 一致(code 125)。建议第三方在首次接入时先调用本接口自检，确认无误后再调用真正的业务接口。
+          </p>
+
+          <h3 class="mt-6 text-sm font-semibold text-slate-700 dark:text-slate-200">查询网站标题与图标</h3>
           <pre
             class="mt-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-4 py-3 text-xs font-mono overflow-x-auto"
           ><code>GET {{ apiBase }}/extension/site-info?url=&lt;目标网页URL&gt;
@@ -94,7 +120,7 @@ POST /user/access-token/revoke?id=&lt;id&gt;                     → 撤销令�
         <section class="mt-8 mb-4">
           <h2 class="text-base font-semibold">安全边界</h2>
           <ul class="mt-2 list-disc pl-5 space-y-1 text-sm text-slate-600 dark:text-slate-300">
-            <li>该 token 仅能访问 /extension/site-info 一个接口，无法读写书签、分享或账号信息。</li>
+            <li>该 token 仅能访问 /extension/ping、/extension/site-info 两个只读接口，无法读写书签、分享或账号信息。</li>
             <li>请勿将 token 硬编码进公开代码仓库或分享给他人。</li>
           </ul>
         </section>
@@ -132,6 +158,25 @@ AccessToken 是一种与你的账号登录会话（satoken）完全隔离的只�
 
 ## 接口
 
+### 校验令牌有效性(接入前自检)
+GET ${apiBase}/extension/ping
+
+Header:
+  X-Extension-Token: <token>
+
+curl 示例：
+  curl -H "X-Extension-Token: YOUR_TOKEN" "${apiBase}/extension/ping"
+
+成功响应（返回该令牌自身信息，不含明文）：
+  {
+    "code": 0,
+    "msg": "success",
+    "data": { "id": "...", "name": "我的脚本", "tokenPrefix": "bmk_ext_a1b2****", "lastUsedAt": "...", "createTime": "..." },
+    "ok": true
+  }
+
+失败响应与 site-info 一致(code 125)。建议第三方在首次接入时先调用本接口自检，确认无误后再调用真正的业务接口。
+
 ### 查询网站标题与图标
 GET ${apiBase}/extension/site-info?url=<目标网页URL>
 
@@ -166,7 +211,7 @@ GET  /user/access-token/list                              → 查看自己名下
 POST /user/access-token/revoke?id=<id>                     → 撤销令牌
 
 ## 安全边界
-- 该 token 仅能访问 /extension/site-info 一个接口，无法读写书签、分享或账号信息。
+- 该 token 仅能访问 /extension/ping、/extension/site-info 两个只读接口，无法读写书签、分享或账号信息。
 - 请勿将 token 硬编码进公开代码仓库或分享给他人。`
 })
 

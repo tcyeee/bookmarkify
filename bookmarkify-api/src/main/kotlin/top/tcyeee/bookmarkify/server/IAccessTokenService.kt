@@ -20,4 +20,6 @@ interface IAccessTokenService : IService<AccessTokenEntity> {
     fun revoke(id: String, uid: String): Boolean
     /** 校验插件请求带来的明文 token，返回其所属 uid；无效/已撤销返回 null。校验通过会异步更新 lastUsedAt */
     fun verify(rawToken: String): String?
+    /** 供 /extension/ping 使用：校验通过后返回令牌自身信息(不含明文)，供第三方在正式接入前自检配置是否正确；无效/已撤销返回 null */
+    fun pingInfo(rawToken: String): AccessTokenVO?
 }

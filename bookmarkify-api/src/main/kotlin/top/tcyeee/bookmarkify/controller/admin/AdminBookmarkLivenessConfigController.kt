@@ -22,6 +22,7 @@ class AdminBookmarkLivenessConfigController(
             bookmarkLivenessConfigService.updateConfig(
                 params.activeCheckIntervalHours,
                 params.abnormalCheckIntervalHours,
+                params.contentRefreshIntervalDays,
             )
         )
 }

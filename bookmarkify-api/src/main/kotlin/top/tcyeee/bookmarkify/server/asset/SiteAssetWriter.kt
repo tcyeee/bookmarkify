@@ -49,8 +49,20 @@ class SiteAssetWriter(
             if (exists) sitePageMetaMapper.updateById(meta) else sitePageMetaMapper.insert(meta)
         }
 
+        val existing = assetsOf(bookmarkId)
+        // 内容定期重抓开启后，绝大多数重抓的结果与库里**完全一样**（站点没改版）。
+        // 照旧走一遍"删全部 + 插全部"只是白写一堆行、白调一次孤儿回收，还把 id 和
+        // fetched_at 全换一遍，让"这张图什么时候第一次见到"这个信息凭空丢失。
+        if (isIdenticalToExisting(existing, p.assets)) {
+            log.debug(
+                "[SiteAssetWriter] 资产与库中完全一致，跳过整体替换: bookmarkId={}, assets={}",
+                bookmarkId, p.assets.size
+            )
+            return
+        }
+
         // 整体替换会让上一轮的 OSS 对象失去最后一个引用者，得记下来事后回收
-        val previousKeys = storageKeysOf(bookmarkId)
+        val previousKeys = existing.mapNotNull { it.storageUrl?.trim()?.takeIf(String::isNotEmpty) }.toSet()
 
         siteAssetMapper.delete(
             KtQueryWrapper(SiteAssetEntity::class.java).eq(SiteAssetEntity::bookmarkId, bookmarkId)
@@ -66,12 +78,29 @@ class SiteAssetWriter(
         )
     }
 
-    /** 某书签当前引用的全部对象存储 key。 */
-    private fun storageKeysOf(bookmarkId: String): Set<String> = siteAssetMapper.selectList(
-        KtQueryWrapper(SiteAssetEntity::class.java)
-            .select(SiteAssetEntity::storageUrl)
-            .eq(SiteAssetEntity::bookmarkId, bookmarkId)
-    ).mapNotNull { it.storageUrl?.trim()?.takeIf(String::isNotEmpty) }.toSet()
+    /**
+     * 本次投影出的资产是否与库中现存的完全等价。
+     *
+     * 比较的是**全部由抓取与策略推导出来的列**，不只是 `content_hash`。只比哈希会破坏
+     * 「改 [AssetRolePolicy] 的规则后重新抓一遍即可生效、无需改 scrapper」这条性质：
+     * 规则改了而图片没变时，哈希一样但 role/quality/isPrimary 已经不同，必须照常重写。
+     *
+     * 不参与比较的只有 `id`（每次投影都新生成）和 `fetchedAt`（本次抓取时间，本就该保留旧值）。
+     */
+    private fun isIdenticalToExisting(existing: List<SiteAssetEntity>, projected: List<SiteAssetEntity>): Boolean {
+        if (existing.size != projected.size || existing.isEmpty()) return false
+        fun SiteAssetEntity.identity() = listOf(
+            role, extractor, quality, originUrl, resolvedUrl, storageUrl,
+            width, height, byteSize, mime, isVector, contentHash, isPrimary, errorMsg,
+        )
+        return existing.map { it.identity() }.sortedBy { it.toString() } ==
+            projected.map { it.identity() }.sortedBy { it.toString() }
+    }
+
+    /** 某书签当前的全部资产行。 */
+    private fun assetsOf(bookmarkId: String): List<SiteAssetEntity> = siteAssetMapper.selectList(
+        KtQueryWrapper(SiteAssetEntity::class.java).eq(SiteAssetEntity::bookmarkId, bookmarkId)
+    )
 
     /**
      * 回收本次重抓后彻底没人引用的 OSS 对象。

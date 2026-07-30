@@ -20,6 +20,8 @@ export const bookmarksSort = (params: Record<string, number>) => http.post<boole
 export const bookmarksDel = (params: Array<string>) => http.post<boolean>('/bookmark/delete', params)
 export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post<t.BookmarkShow>('/bookmark/update', params)
 export const bookmarksPin = (linkId: string, pinned: boolean) => http.post<boolean>('/bookmark/pin', { linkId, pinned })
+// 仅做打开次数记录，fire-and-forget 调用，不阻塞书签的实际打开
+export const bookmarksRecordOpen = (linkId: string) => http.post<boolean>('/bookmark/open', { linkId })
 export const bookmarksUploadPreview = (file: File) =>
   http.upload<t.BookmarkImportPreviewVO>('/bookmark/upload/preview', file)
 

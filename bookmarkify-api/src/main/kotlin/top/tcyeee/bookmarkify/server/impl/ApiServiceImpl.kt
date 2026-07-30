@@ -27,6 +27,7 @@ import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScreenshotOptions
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.ScrapperCallLogEntity
+import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.mapper.ScrapperCallLogMapper
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.utils.WebsiteParser
@@ -310,19 +311,60 @@ class ApiServiceImpl(
         return runCatching { objectMapper.readValue<List<SimilarSite>>(json) }.getOrElse { emptyList() }
     }
 
-    override fun pingWebsite(url: String): Boolean {
+    /**
+     * 活性探测。三态判定的归属与 [scrape] 完全一致，共用 [classifyScrapperError]：
+     * 「目标站点打不开」(E304) 才是站点的事实，其余一律是我方链路的问题。
+     *
+     * 此前这里把所有失败路径都塌缩成 `false`，于是 scrapper 没起、token 配错、
+     * 或并发超限被 load_shed 打回 503，都会被巡检任务当作「站点失联」写进 `bookmark`。
+     * `scrape` 早就用 [isScrapperUnavailable][top.tcyeee.bookmarkify.server.impl.BookmarkServiceImpl]
+     * 挡掉了同类问题，ping 这条路径一直是漏的——而它还是所有判定的第一道门。
+     */
+    override fun pingWebsite(url: String): PingOutcome {
         val targetUrl = buildUrl(url)
-        return runCatching {
-            val request = PingRequest(url = targetUrl)
-            val httpResponse = HttpUtil.createPost("${scrapperConfig.baseUrl.trimEnd('/')}/ping")
+        val endpoint = "${scrapperConfig.baseUrl.trimEnd('/')}/ping"
+
+        val httpResponse = runCatching {
+            HttpUtil.createPost(endpoint)
                 .header("Content-Type", "application/json")
                 .withScrapperAuth()
-                .body(objectMapper.writeValueAsString(request))
-                .timeouts(15000)
+                .body(objectMapper.writeValueAsString(PingRequest(url = targetUrl)))
+                .timeouts(PING_READ_TIMEOUT_MS)
                 .execute()
-            if (!httpResponse.isOk) return false
-            objectMapper.readValue<PingResponse>(httpResponse.body()).alive
-        }.getOrElse { false }
+        }.getOrElse {
+            // 传输层异常必然发生在 API ↔ scrapper 之间：目标站点能否打开是由 scrapper
+            // 判定后写在响应体里的，我方连响应都没拿到，对站点死活没有任何结论
+            log.warn("[pingWebsite] 抓取服务不可达，本次探测无结论: url=$targetUrl, endpoint=$endpoint, err=${it.message}$scrapperStartupHint")
+            return PingOutcome.UNKNOWN
+        }
+
+        if (!httpResponse.isOk) {
+            val code = runCatching { objectMapper.readTree(httpResponse.body())?.path("error")?.asText(null) }.getOrNull()
+            return when (classifyScrapperError(code)) {
+                // scrapper 明确判定目标站点打不开
+                ErrorType.E304 -> PingOutcome.DEAD
+                // URL 本身不合法：这条记录永远 ping 不通，结论确实是 DEAD，
+                // 但成因是我方数据脏而非站点挂了，值得单独留一条日志
+                ErrorType.E305 -> {
+                    log.warn("[pingWebsite] URL 非法，判定为不可达: url=$targetUrl")
+                    PingOutcome.DEAD
+                }
+                // 鉴权失败 / 并发超限的 503 / 请求体契约不符 —— 全是我方的问题
+                else -> {
+                    log.warn("[pingWebsite] 抓取服务返回异常，本次探测无结论: url=$targetUrl, status=${httpResponse.status}, code=$code")
+                    PingOutcome.UNKNOWN
+                }
+            }
+        }
+
+        return runCatching { objectMapper.readValue<PingResponse>(httpResponse.body()).alive }.fold(
+            onSuccess = { alive -> if (alive) PingOutcome.ALIVE else PingOutcome.DEAD },
+            onFailure = {
+                // 契约对不上是我方两侧代码不同步，同样不是站点的问题
+                log.warn("[pingWebsite] 响应解析失败(契约不匹配)，本次探测无结论: url=$targetUrl, err=${it.message}")
+                PingOutcome.UNKNOWN
+            },
+        )
     }
 
     override fun inferNsfw(title: String?, description: String?, host: String): NsfwCheckResult {
@@ -410,5 +452,8 @@ class ApiServiceImpl(
          * 跟对方要花多久处理请求无关，没有哪个调用点需要更长的连接等待。
          */
         private const val CONNECT_TIMEOUT_MS = 5_000
+
+        /** ping 的读取超时。对面只发一个 HEAD 请求，给 15s 已经很宽裕。 */
+        private const val PING_READ_TIMEOUT_MS = 15_000
     }
 }

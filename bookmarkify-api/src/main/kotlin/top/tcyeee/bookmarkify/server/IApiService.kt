@@ -7,6 +7,7 @@ import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
+import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 
 /**
  * @author tcyeee
@@ -74,7 +75,10 @@ interface IApiService {
 
     /**
      * 通过 scrapper /ping 探测目标网站是否存活（走代理）。
-     * 网络异常或 scrapper 不可达时返回 false（保守策略，不阻塞后续抓取兜底逻辑）。
+     *
+     * 返回三态而不是 Boolean：scrapper 不可达、鉴权失败、并发超限被限流，这些都属于
+     * 「我方没探到」而非「站点死了」，一律返回 [PingOutcome.UNKNOWN]，调用方不得据此改动书签状态。
+     * 详见 [PingOutcome]。
      */
-    fun pingWebsite(url: String): Boolean
+    fun pingWebsite(url: String): PingOutcome
 }

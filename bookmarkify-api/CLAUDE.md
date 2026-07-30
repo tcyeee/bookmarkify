@@ -165,7 +165,9 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 | `user_preference` | Per-user preferences (background, layout, sort order) |
 | `background_config` / `background_image` / `background_gradient` | Background settings |
 | `user_file` | Uploaded file records (avatar, background) |
-| `bookmark_logo` | Logo/OG metadata for bookmarks |
+| `site_asset` / `site_page_meta` / `scrape_snapshot` / `site_display_pref` | Crawl results + display prefs (replaced `bookmark_logo`; see root `CLAUDE.md`) |
+| `bookmark_ping_log` | One row per liveness probe (`outcome` = ALIVE/DEAD/UNKNOWN), purged after 90 days |
+| `system_config` | Generic key-value config (JSON), e.g. the liveness sweep intervals |
 | `category` / `bookmark_category` | Category dictionary + bookmark↔category links |
 
 ### Async Parse Events
@@ -181,17 +183,36 @@ In-process Spring events (`config/event/`), dispatched by `BookmarkParseEventLis
 
 `ParseLock` (Redis SETNX) guards two things: one scrape at a time per canonical bookmark (concurrent adds of the same URL would otherwise interleave `SiteAssetWriter`'s delete-then-insert and corrupt the asset rows), and one in-flight re-dispatch per user link.
 
-### Reconciliation (three tasks, disjoint by design)
+### Reconciliation (four tasks, disjoint by design)
 
 | Task | Cadence | Selects on | Fixes |
 |---|---|---|---|
 | `checkAll()` | 5 min | `bookmark.parse_status = PENDING` stale by `COALESCE(update_time, create_time)` | Lost parse events for the canonical record |
 | `drainStuckLoading()` | 30s | `user_layout_node.type = BOOKMARK_LOADING` | **User-visible** stuck spinners: the import backlog, plus any add whose event was lost |
-| `retryUnreachableBookmarks()` / `livenessCheckStaleBookmarks()` | hourly | `UNREACHABLE` / `SUCCESS` | Site liveness (these two own `pingWebsite`) |
+| `livenessCheckStaleBookmarks()` | hourly, :00 | `SUCCESS` + `next_check_at <= now()` | Site liveness **and** periodic content refresh |
+| `retryUnreachableBookmarks()` | hourly, :30 | `UNREACHABLE` + `next_check_at <= now()` | Recovery of failed sites (these two own `pingWebsite`) |
 
 `drainStuckLoading` keys off the layout node rather than `parse_status` on purpose: when a bookmark scrapes fine but the user-link rebind or node flip fails, `parse_status` is `SUCCESS` and every status-based task skips it — while the user's tile spins forever.
 
 **`COALESCE(update_time, create_time)` in `checkAll` is load-bearing.** A fresh `BookmarkEntity` has `updateTime = null`, and SQL `NULL < ?` is never true, so a plain `update_time <` predicate silently excludes exactly the never-parsed rows that need reconciling most.
+
+### Liveness sweeps
+
+Read this before touching `pingSweep`, `LivenessPolicy`, or the `next_check_at` columns.
+
+**`pingWebsite` returns three states, not a boolean.** `PingOutcome.UNKNOWN` means *our* chain failed (scrapper unreachable, auth wrong, `load_shed` 503, contract mismatch) — it never reaches `bookmark`. Only `ALIVE`/`DEAD` are facts about the site. The classification reuses `classifyScrapperError`, the same helper `scrape` uses: `E304` → `DEAD`, everything else → `UNKNOWN`. Collapsing these into `false` is what used to let one scrapper outage rewrite hundreds of healthy bookmarks per hour as `UNREACHABLE`.
+
+**A sweep probes the whole batch first, then writes.** In between sits `LivenessPolicy.breakerReason`, which aborts the round if >50% came back `UNKNOWN` (≥10 samples) or >90% came back `DEAD` (≥20 samples). The second rule catches the case the first cannot: the scrapper is up but its egress is broken, so it *honestly* reports `alive=false` for everything. Ping logs are still written on an aborted round — that batch is the evidence of what broke. Order matters; probing and writing in one pass makes the breaker useless.
+
+**Scheduling state lives in its own columns.** `next_check_at` is the only cursor the sweeps read; `last_check_at` / `last_parse_at` / `consecutive_fail` carry the rest. `update_time` went back to meaning "record last modified" — when it doubled as the cursor, an admin editing a title postponed that bookmark's next sweep by a full cycle, and a successful ping polluted the field's public meaning. `next_check_at IS NULL` counts as due, so a row that somehow missed its scheduling write gets picked up instead of vanishing. **Every site that writes `parse_status` must call `scheduleAfterParseSuccess()` / `scheduleAfterParseFailure()`** — miss one and that row either repeats every round or is never selected again.
+
+**Backoff and archival** (`LivenessPolicy`): `ALIVE` → +`activeCheckIntervalHours`; `DEAD` → `abnormalCheckIntervalHours × 2^(fail-1)`, capped at 16×; `UNKNOWN` → +1h and **no** increment of `consecutive_fail` (our own outage must not push the whole table to the end of the backoff curve). At 10 consecutive failures the row becomes `ParseStatusEnum.ARCHIVED`, which drops out of both sweeps — nothing pings a domain that has been gone for two months, and the `LIMIT` slots stay free for rows that matter. `isActivity` stays false, so users still see it as a dead bookmark.
+
+**Content refresh is what makes this an "update" mechanism.** `shouldRefreshContent` re-scrapes when `last_parse_at` is older than `contentRefreshIntervalDays` (default 30). The old condition (`alive && !isActivity`) was dead code — `isActivity=false` never coexists with `parse_status=SUCCESS` — so healthy sites were never re-crawled at all.
+
+**Manual edits are protected per field.** `bookmark.locked_fields` (`BookmarkLockedField`) lists what a crawl may not overwrite. Editing a field in the admin locks it; explicitly accepting a crawled value (`adminRefresh`, `adminApplyRefetch` with `useNewTitle`) unlocks it. Crawl paths may read locks, never write them. Without this, turning on periodic refresh would silently revert every hand-fixed title within a month. `verifyFlag` remains the coarse "stop crawling this record entirely" switch.
+
+**Pools and mutual exclusion.** Sweeps run on `bookmarkSweepExecutor` (1 thread, no queue) rather than the parse pool, so a long round cannot push user-facing adds into `CallerRunsPolicy`. Inside a round, pings go out `AsyncConfig.PING_CONCURRENCY`-wide on `bookmarkPingExecutor` — **this value is coupled to the scrapper's `MAX_CONCURRENT_REQUESTS` (default 32)**: exceed it and `load_shed` returns 503s, which register as `UNKNOWN` and trip the breaker, i.e. too much concurrency makes the sweep abort itself. `ParseLock.sweep(taskLabel)` guarantees one round at a time; `@Async` removed the scheduler's built-in non-overlap guarantee, and being in Redis the lock also covers multi-instance deploys.
 
 ### Redis Cache Keys
 
@@ -199,6 +220,7 @@ In-process Spring events (`config/event/`), dispatched by `BookmarkParseEventLis
 - `DEFAULT_BACKGROUND_*` — Cached default backgrounds (12h TTL)
 - `WECHAT_WORK_ACCESS_TOKEN` — OAuth token (1h TTL)
 - `throttle:<uid>:<method>` — Rate limit locks
+- `parse:lock:bookmark:<id>` / `parse:lock:dispatch:<userLinkId>` / `parse:lock:sweep:<taskLabel>` — `ParseLock` mutexes (5 min / 5 min / 30 min TTL)
 
 ## Coding Conventions
 

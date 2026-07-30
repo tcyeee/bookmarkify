@@ -170,7 +170,7 @@
                   target="_blank"
                   rel="noopener noreferrer"
                   class="block text-xs text-slate-400 dark:text-slate-500 truncate hover:text-sky-500 hover:underline"
-                  @click.stop
+                  @click.stop="recordOpen(item)"
                   >{{ item.urlFull }}</a
                 >
               </div>
@@ -266,7 +266,7 @@
 </template>
 
 <script lang="ts" setup>
-import { bookmarksList, bookmarksDel, bookmarksCreateDir, bookmarksRenameDir } from '@api'
+import { bookmarksList, bookmarksDel, bookmarksCreateDir, bookmarksRenameDir, bookmarksRecordOpen } from '@api'
 import { HomeItemType, ROOT_KEY } from '@typing'
 import type * as t from '@typing'
 import { useDebounceFn } from '@vueuse/core'
@@ -489,6 +489,10 @@ function toggleSelectAll() {
     return
   }
   selectedIds.value = new Set(displayItems.value.map((r) => nodeKey(r)).filter((id): id is string => !!id))
+}
+
+function recordOpen(item: t.BookmarkShow) {
+  bookmarksRecordOpen(item.bookmarkUserLinkId).catch(() => {})
 }
 
 async function deleteOne(item: t.BookmarkShow) {
