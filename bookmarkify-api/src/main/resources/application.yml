@@ -57,6 +57,17 @@ bookmarkify:
   scrapper:
     base-url: ${BOOKMARKIFY_SCRAPPER_BASE_URL:http://bookmarkify-scraper:3000}  # 自部署 scrapper 服务地址（接替 iframely）
     auth-token: ${BOOKMARKIFY_SCRAPPER_AUTH_TOKEN:}  # 对应 scrapper 的 SCRAPER_AUTH_TOKEN；留空则不发送鉴权 header
+    # 抓到的图片一律落我方 OSS（assets.download=UPLOAD）。关掉只会退化成 PROBE：图照样下载
+    # 但算完 hash 就丢，库里只剩源站直连地址，首页图标的可用性等于外包给了第三方站点。
+    # 仅排障时临时关闭，不要在任何环境常态关闭。
+    upload-assets: ${BOOKMARKIFY_SCRAPPER_UPLOAD_ASSETS:true}
+    # 重抓后回收"最后一个引用者也没了"的 OSS 对象。删对象不可逆，留此开关以便随时止血
+    reclaim-orphan-assets: ${BOOKMARKIFY_SCRAPPER_RECLAIM_ORPHAN_ASSETS:true}
+    asset-max-bytes: 8388608  # 单张图片上限 8MB（契约默认 2MB 是给"只探测"场景定的，会挡掉大尺寸 og:image）
+    asset-max-count: 40       # 单页最多处理 40 张图（图标齐全的站点很容易超过契约默认的 20）
+    # 页面截图。开启会强制每条书签都走无头浏览器，抓取耗时从百毫秒涨到秒级，
+    # 而目前没有任何展示位在用截图，故默认关闭
+    screenshot: ${BOOKMARKIFY_SCRAPPER_SCREENSHOT:false}
   goatcounter:
     # 自托管 GoatCounter 站点地址（dev/prod 同走公网域名，prod 经 nginx 回环命中 site3）
     base-url: ${BOOKMARKIFY_GOATCOUNTER_BASE_URL:https://bookmarkify.stats.viii.me}

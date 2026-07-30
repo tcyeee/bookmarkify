@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.entity.dto.scrape
 
+import org.slf4j.LoggerFactory
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
@@ -16,6 +17,9 @@ import java.time.LocalDateTime
  * 供只需要"给我一张 logo 就行"的旧调用点使用；需要完整资产列表的场景请直接读
  * `response.assets` 或走 `site_asset` 表。
  */
+
+/** 文件级 logger：这里全是扩展属性，没有类可以挂 `T.log` 扩展 */
+private val log = LoggerFactory.getLogger("top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponseExt")
 
 /** 页面标题 */
 val ScrapeResponse.title: String? get() = meta?.title
@@ -50,7 +54,16 @@ private fun ScrapeResponse.bestUrlOf(role: AssetRole): String? = assets
         val trusted = if (AssetRolePolicy.classify(a.extractor).second.name == "TRUSTED") 1_000_000 else 0
         trusted + minOf(a.width ?: 0, a.height ?: 0)
     }
-    ?.let { asset -> asset.storageKey?.let { OssUtils.signAsset(it) } ?: asset.resolvedUrl }
+    ?.let { asset ->
+        asset.storageKey?.let { OssUtils.signAsset(it) } ?: asset.resolvedUrl.also {
+            // 走到这里说明本次抓取没请求 UPLOAD（或那张图上传失败）。以前这是完全静默的，
+            // 于是"图片一律进 OSS"整条链路空转了很久都没人发现
+            log.warn(
+                "[bestUrlOf] {} 未落 OSS，回退源站直连: extractor={}, url={}, finalUrl={}",
+                role, asset.extractor, it, fetch.finalUrl
+            )
+        }
+    }
 
 /** 最合适的网站图标地址 */
 val ScrapeResponse.faviconUrl: String? get() = bestUrlOf(AssetRole.FAVICON)

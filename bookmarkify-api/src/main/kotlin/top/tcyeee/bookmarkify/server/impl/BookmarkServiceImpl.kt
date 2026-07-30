@@ -14,8 +14,6 @@ import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.async.AsyncConfig
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
-import top.tcyeee.bookmarkify.entity.dto.scrape.CacheOptions
-import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.scrape.applyTo
 import top.tcyeee.bookmarkify.entity.dto.scrape.cached
@@ -472,8 +470,9 @@ class BookmarkServiceImpl(
     override fun adminRefetch(bookmarkId: String): BookmarkRefetchVO {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         log.debug("[adminRefetch] 管理员重新获取书签元信息: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
-        // 仅预览，不落库：重新抓取一次，拿到新的标题与小图标
-        val vo = apiService.scrape(bookmark.rawUrl, ScrapeRequest(url = bookmark.rawUrl, cache = CacheOptions(mode = CacheMode.BYPASS)))
+        // 仅预览，不落库：重新抓取一次，拿到新的标题与小图标。
+        // BYPASS 是必须的——命中 scrapper 缓存的"重新获取"等于没获取
+        val vo = apiService.scrape(bookmark.rawUrl, apiService.scrapeRequest(bookmark.rawUrl, CacheMode.BYPASS))
         val iconUrl = vo.faviconUrl
         // 预览与应用之间用 Redis 暂存完整抓取结果，确保「所见即所存」且避免应用时再抓一次造成漂移
         RedisUtils.set(RedisType.BOOKMARK_REFETCH, bookmarkId, vo)
@@ -495,6 +494,7 @@ class BookmarkServiceImpl(
     override fun adminCheckLiveness(bookmarkId: String): BookmarkLivenessVO {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         log.debug("[adminCheckLiveness] 管理员触发书签活性检测: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
+        val startedAt = System.currentTimeMillis()
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
                 bookmark.apply {
@@ -524,6 +524,7 @@ class BookmarkServiceImpl(
                     log.warn("[adminCheckLiveness] 抓取服务不可用，不改动书签状态: bookmarkId=$bookmarkId, err=${e.message}")
                     throw e
                 }
+                recordScrapeFailure(bookmark, e, startedAt)
                 bookmark.apply {
                     isActivity = false
                     parseStatus = ParseStatusEnum.UNREACHABLE
@@ -552,6 +553,8 @@ class BookmarkServiceImpl(
         // 资产是整体替换的：图标与 LOGO 同源于一次抓取，没法只采用其中一半而保持一致，
         // 因此只要任一开关打开就整批落库（细粒度取舍改由 site_display_pref.pinnedAssetId 表达）
         if (params.useNewIcon || params.useNewLogo) {
+            // 回放的是 adminRefetch 暂存在 Redis 里的那次抓取结果，本次没发生网络请求，
+            // 耗时记 0 是准确的（真实耗时属于当初那次抓取）
             siteAssetWriter.persist(bookmarkId, bookmark.rawUrl, vo, 0)
         }
         bookmark.updateTime = LocalDateTime.now()
@@ -564,7 +567,8 @@ class BookmarkServiceImpl(
     override fun adminRefresh(bookmarkId: String): BookmarkAdminVO {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         log.debug("[adminRefresh] 管理员一键更新书签信息: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
-        runCatching { apiService.scrape(bookmark.rawUrl, ScrapeRequest(url = bookmark.rawUrl, cache = CacheOptions(mode = CacheMode.BYPASS))) }.fold(
+        val startedAt = System.currentTimeMillis()
+        runCatching { apiService.scrape(bookmark.rawUrl, apiService.scrapeRequest(bookmark.rawUrl, CacheMode.BYPASS)) }.fold(
             onSuccess = { vo ->
                 bookmark.apply {
                     title = vo.title
@@ -574,7 +578,7 @@ class BookmarkServiceImpl(
                     parseErrMsg = null
                     updateTime = LocalDateTime.now()
                 }
-                siteAssetWriter.persist(bookmarkId, bookmark.rawUrl, vo, 0)
+                siteAssetWriter.persist(bookmarkId, bookmark.rawUrl, vo, elapsedMs(startedAt))
                 log.debug("[adminRefresh] 更新成功: bookmarkId=$bookmarkId, title=${bookmark.title}")
             },
             onFailure = { e ->
@@ -582,6 +586,7 @@ class BookmarkServiceImpl(
                     log.warn("[adminRefresh] 抓取服务不可用，不改动书签状态: bookmarkId=$bookmarkId, err=${e.message}")
                     throw e
                 }
+                recordScrapeFailure(bookmark, e, startedAt)
                 bookmark.apply {
                     isActivity = false
                     parseStatus = ParseStatusEnum.UNREACHABLE
@@ -899,11 +904,29 @@ class BookmarkServiceImpl(
         return bookmark
     }
 
+    /** 抓取耗时，落进 `scrape_snapshot.duration_ms`。此前这里一律硬编码 0，那一列等于没数据。 */
+    private fun elapsedMs(startedAt: Long): Int = (System.currentTimeMillis() - startedAt).toInt()
+
+    /**
+     * 落一条失败快照。
+     *
+     * 只记"这个站点抓不到"这一事实；我方服务不可用（[isScrapperUnavailable]）的情况不该走到这里。
+     * 快照纯属诊断数据，写不进去也不能反过来影响解析主流程，故失败只记日志。
+     */
+    private fun recordScrapeFailure(bookmark: BookmarkEntity, e: Throwable, startedAt: Long) {
+        runCatching {
+            siteAssetWriter.persistFailure(bookmark.id, bookmark.rawUrl, e.message, elapsedMs(startedAt))
+        }.onFailure {
+            log.warn("[recordScrapeFailure] 失败快照落库失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}")
+        }
+    }
+
     /**
      * 远程解析（scrapper）：通过自部署的 bookmarkify-scrapper 获取元信息 + favicon base64 + LOGO/OG 存 OSS
      */
     private fun parseByApi(bookmark: BookmarkEntity): BookmarkEntity {
         log.debug("[parseByApi] 开始远程解析(scrapper): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")
+        val startedAt = System.currentTimeMillis()
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
                 log.debug("[parseByApi] scrapper 返回成功: bookmarkId=${bookmark.id}, title=${vo.title}, source=${vo.primarySource}, assets=${vo.assets.size}")
@@ -916,18 +939,22 @@ class BookmarkServiceImpl(
                     baseMapper.insertOrUpdate(it)
                 }
                 // 快照 + 元数据 + 资产一次落库
-                siteAssetWriter.persist(bookmark.id, bookmark.rawUrl, vo, 0)
+                siteAssetWriter.persist(bookmark.id, bookmark.rawUrl, vo, elapsedMs(startedAt))
                 log.debug("[parseByApi] 第三方API解析全部完成: bookmarkId=${bookmark.id}, assets=${vo.assets.size}")
                 bookmark
             },
             onFailure = { e ->
                 // 抓取服务没起/配错时保持 PENDING 原样，交给 checkAll() 之后重来，
-                // 别把我方故障记成书签失联（异步链路不抛，抛了也没人接）
+                // 别把我方故障记成书签失联（异步链路不抛，抛了也没人接）。
+                // 也不落失败快照：那记录的是我方故障，不是这个站点的抓取事实
                 if (e.isScrapperUnavailable()) {
                     log.warn("[parseByApi] 抓取服务不可用，保留待抓取状态: bookmarkId=${bookmark.id}, err=${e.message}")
                     return@fold bookmark
                 }
                 log.debug("[parseByApi] API 调用失败: bookmarkId=${bookmark.id}, err=${e.message}")
+                // 失败也留快照：只把书签标成 UNREACHABLE 的话，事后只知道"抓不到"，
+                // 不知道抓的是哪个 URL、报了什么错、耗了多久。persistFailure 一直没人调用
+                recordScrapeFailure(bookmark, e, startedAt)
                 bookmark.apply {
                     isActivity = false
                     parseStatus = ParseStatusEnum.UNREACHABLE

@@ -18,8 +18,13 @@ import top.tcyeee.bookmarkify.entity.dto.DeepSeekResponse
 import top.tcyeee.bookmarkify.entity.dto.NsfwCheckResult
 import top.tcyeee.bookmarkify.entity.dto.PingRequest
 import top.tcyeee.bookmarkify.entity.dto.PingResponse
+import top.tcyeee.bookmarkify.entity.dto.scrape.AssetDownload
+import top.tcyeee.bookmarkify.entity.dto.scrape.AssetOptions
+import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
+import top.tcyeee.bookmarkify.entity.dto.scrape.CacheOptions
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
+import top.tcyeee.bookmarkify.entity.dto.scrape.ScreenshotOptions
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.ScrapperCallLogEntity
 import top.tcyeee.bookmarkify.mapper.ScrapperCallLogMapper
@@ -58,7 +63,27 @@ class ApiServiceImpl(
         else -> ErrorType.E307
     }
 
-    override fun queryWebsiteInfo(domain: String): ScrapeResponse = scrape(domain, ScrapeRequest(url = buildUrl(domain)))
+    /**
+     * 业务链路统一的抓取参数，见 [IApiService.scrapeRequest]。
+     *
+     * 关键的一条是 `download = UPLOAD`：契约默认的 PROBE 会把图片正文下载完直接丢弃，
+     * 于是 `storageKey` 恒为空、`site_asset.storage_url` 恒为 NULL，前台只能回退到源站
+     * 直连地址。图片落我方 OSS 是产品要求，不是可选优化。
+     */
+    override fun scrapeRequest(url: String, cacheMode: CacheMode): ScrapeRequest = ScrapeRequest(
+        url = url,
+        assets = AssetOptions(
+            download = if (scrapperConfig.uploadAssets) AssetDownload.UPLOAD else AssetDownload.PROBE,
+            maxBytes = scrapperConfig.assetMaxBytes,
+            maxCount = scrapperConfig.assetMaxCount,
+        ),
+        // 开启会强制走无头浏览器，默认关；见 ScrapperConfig.screenshot
+        screenshot = ScreenshotOptions(enabled = scrapperConfig.screenshot),
+        cache = CacheOptions(mode = cacheMode),
+    )
+
+    override fun queryWebsiteInfo(domain: String): ScrapeResponse =
+        scrape(domain, scrapeRequest(buildUrl(domain)))
 
     override fun scrape(domain: String, request: ScrapeRequest): ScrapeResponse {
         val url = request.url.takeIf { it.isNotBlank() } ?: buildUrl(domain)
