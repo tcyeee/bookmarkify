@@ -3,7 +3,9 @@ package top.tcyeee.bookmarkify.server.asset
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import top.tcyeee.bookmarkify.entity.dto.scrape.ImageFormat
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
+import top.tcyeee.bookmarkify.entity.dto.scrape.Screenshot
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
@@ -132,6 +134,49 @@ class SiteAssetIngestorTest {
         assertEquals(AssetRole.FAVICON, list.role, "列表取 FAVICON")
         // 该站的 manifest icon 是 512px 可信 LOGO，不该退化成首字母色块
         assertTrue(!AssetRolePolicy.shouldFallbackToMonogram(tile))
+    }
+
+    /**
+     * 截图那条 SCREENSHOT 行的地址语义：`storageUrl` 是 object key，而 origin/resolved 记的是
+     * **被截图的页面**。这两列以前填的也是 object key，既不是 URL，也把"这张图哪来的"弄丢了。
+     *
+     * 契约样例里没有 screenshot（默认不开启截图），所以这里单独造一个响应。
+     */
+    @Test
+    fun `screenshot row points at the captured page, not at its own object key`() {
+        val withShot = response.copy(
+            screenshot = Screenshot(
+                storageKey = "scrapper/screenshots/abc123.webp",
+                width = 1280,
+                height = 720,
+                format = ImageFormat.WEBP,
+                byteSize = 40_960,
+            )
+        )
+        val shot = SiteAssetIngestor
+            .project("bm-3", "https://github.com/vbenjs/vue-vben-admin", withShot, 900, mapper)
+            .assets.single { it.role == AssetRole.SCREENSHOT }
+
+        assertEquals("scrapper/screenshots/abc123.webp", shot.storageUrl)
+        // finalUrl 是跟完重定向后的页面，截图针对的就是它
+        assertEquals("https://github.com/vbenjs/vue-vben-admin", shot.resolvedUrl)
+        assertEquals("https://github.com/vbenjs/vue-vben-admin", shot.originUrl)
+        assertEquals(AssetQuality.TRUSTED, shot.quality)
+        assertEquals("image/webp", shot.mime)
+        assertEquals(1280, shot.width)
+    }
+
+    /** 只内联、没落存储的截图不该入库：base64 撑爆 site_asset，且没法参与签名/缩放 */
+    @Test
+    fun `inline-only screenshot is not persisted`() {
+        val withInlineShot = response.copy(
+            screenshot = Screenshot(dataUrl = "data:image/webp;base64,AAAA", width = 800, height = 600)
+        )
+        val assets = SiteAssetIngestor
+            .project("bm-4", "https://github.com/vbenjs/vue-vben-admin", withInlineShot, 900, mapper)
+            .assets
+
+        assertTrue(assets.none { it.role == AssetRole.SCREENSHOT })
     }
 
     @Test

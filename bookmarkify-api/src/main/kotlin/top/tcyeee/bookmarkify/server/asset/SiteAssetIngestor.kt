@@ -74,7 +74,7 @@ object SiteAssetIngestor {
 
         val assets = AssetRolePolicy.assignRoles(
             response.assets.mapNotNull { toEntity(bookmarkId, it) }
-        ) + screenshotAsset(bookmarkId, response)
+        ) + screenshotAsset(bookmarkId, url, response)
 
         return Projection(snapshot, pageMeta, assets)
     }
@@ -127,19 +127,31 @@ object SiteAssetIngestor {
      *
      * 它不在 `assets[]` 里（截图不是页面"声明"的资源，是我们渲染出来的），所以不参与
      * [AssetRolePolicy.assignRoles] 的角色判定，直接定死角色。
+     *
+     * [originUrl]/[resolvedUrl] 记的是**被截图的那个页面**，不是截图文件本身 —— 截图没有
+     * "源地址"可言。此前这两列填的是 object key，既不是 URL（后台详情页的"源地址"列会显示
+     * 一个裸 key），也让"这张图哪来的"这个信息彻底丢失。
      */
-    private fun screenshotAsset(bookmarkId: String, response: ScrapeResponse): List<SiteAssetEntity> {
+    private fun screenshotAsset(
+        bookmarkId: String,
+        pageUrl: String,
+        response: ScrapeResponse,
+    ): List<SiteAssetEntity> {
         val shot = response.screenshot ?: return emptyList()
-        val url = shot.storageKey ?: return emptyList() // 只内联未落存储的截图不入库
+        // 只内联(dataUrl)未落存储的截图不入库：库里存 base64 会把 site_asset 撑爆，
+        // 且它无法参与签名/缩放那套展示策略
+        val storageKey = shot.storageKey ?: return emptyList()
+        // 截图针对的是跟完重定向后的最终页面
+        val source = response.fetch.finalUrl.takeIf { it.isNotBlank() } ?: pageUrl
         return listOf(
             SiteAssetEntity(
                 bookmarkId = bookmarkId,
                 role = AssetRole.SCREENSHOT,
                 extractor = "HEADLESS_CAPTURE",
                 quality = AssetQuality.TRUSTED,
-                originUrl = url.take(1000),
-                resolvedUrl = url.take(1000),
-                storageUrl = url.take(1000),
+                originUrl = source.take(1000),
+                resolvedUrl = source.take(1000),
+                storageUrl = storageKey.take(1000),
                 width = shot.width.takeIf { it > 0 },
                 height = shot.height.takeIf { it > 0 },
                 byteSize = shot.byteSize,

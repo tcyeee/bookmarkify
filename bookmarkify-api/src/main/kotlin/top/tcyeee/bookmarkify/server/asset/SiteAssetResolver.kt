@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server.asset
 
 import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import org.springframework.stereotype.Service
+import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
@@ -74,9 +75,19 @@ class SiteAssetResolver(
             )
             .associateBy { it.bookmarkId }
 
-        return ids.associateWith { id ->
-            build(assetsByBookmark[id].orEmpty(), prefByBookmark[id], mode)
+        // 回退到源站直连是**降级**，不是正常形态：说明这些图没进我方 OSS，可用性依赖第三方站点。
+        // 逐张打日志会把列表渲染刷爆，因此按批聚合成一行——这条降级以前是完全静默的，
+        // 结果整站图片长期热链而监控上毫无痕迹
+        var hotlinked = 0
+        val resolved = ids.associateWith { id ->
+            build(assetsByBookmark[id].orEmpty(), prefByBookmark[id], mode) { hotlinked++ }
         }
+        if (hotlinked > 0) log.warn(
+            "[SiteAssetResolver] {}/{} 个书签回退到源站直连图片(未落 OSS)，" +
+                "请检查 bookmarkify.scrapper.upload-assets 是否开启、以及这些书签是否需要重抓: mode={}",
+            hotlinked, ids.size, mode
+        )
+        return resolved
     }
 
     /** 后台用：某书签的全部资产原样返回，供人工挑选与排查。 */
@@ -121,10 +132,12 @@ class SiteAssetResolver(
                 .eq(SiteDisplayPrefEntity::displayMode, mode)
         ).firstOrNull() ?: SiteDisplayPrefEntity(bookmarkId = bookmarkId, displayMode = mode)
 
+    /** @param onHotlink 选中的图没落 OSS、只能给源站直连地址时回调，供调用方聚合告警 */
     private fun build(
         assets: List<SiteAssetEntity>,
         pref: SiteDisplayPrefEntity?,
         mode: DisplayMode,
+        onHotlink: () -> Unit,
     ): ResolvedLogo {
         val chosen = AssetRolePolicy.resolve(assets, mode, pref?.pinnedAssetId)
             ?: return ResolvedLogo.EMPTY.copy(
@@ -145,7 +158,7 @@ class SiteAssetResolver(
         }
 
         return ResolvedLogo(
-            url = presentUrl(chosen, mode),
+            url = presentUrl(chosen, mode, onHotlink),
             role = chosen.role,
             quality = chosen.quality,
             isVector = chosen.isVector,
@@ -164,10 +177,17 @@ class SiteAssetResolver(
      *
      * 矢量图不缩放（本就与分辨率无关，缩放反而会被栅格化）。
      */
-    private fun presentUrl(asset: SiteAssetEntity, mode: DisplayMode): String? {
+    private fun presentUrl(asset: SiteAssetEntity, mode: DisplayMode, onHotlink: () -> Unit): String? {
         val storage = asset.storageUrl?.takeIf { it.isNotBlank() }
-        // 没落到我们自己的 OSS（例如只做了 PROBE），只能给源站直连地址
-            ?: return asset.resolvedUrl.takeIf { it.isNotBlank() }
+        // 没落到我们自己的 OSS（抓取时只做了 PROBE，或那张图当时下载失败），只能给源站直连
+        // 地址。这是降级路径：源站防盗链、改版 404、境外站点不可达都会直接砸到用户脸上
+            ?: return asset.resolvedUrl.takeIf { it.isNotBlank() }?.also {
+                log.debug(
+                    "[presentUrl] 资产未落 OSS，回退源站直连: bookmarkId={}, role={}, url={}",
+                    asset.bookmarkId, asset.role, it
+                )
+                onHotlink()
+            }
 
         // storage 可能是 object key（新契约）或存量的完整 URL，signAsset 统一处理这两种形态
         return OssUtils.signAsset(storage, if (asset.isVector) null else renderSize(mode))

@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server
 import top.tcyeee.bookmarkify.entity.dto.AiReviewOutcome
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.dto.NsfwCheckResult
+import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
@@ -12,15 +13,26 @@ import top.tcyeee.bookmarkify.entity.dto.SimilarSite
  * @date 3/14/26 14:07
  */
 interface IApiService {
-    /** 用默认参数解析网站基础信息（等价于 scrape(domain, ScrapeRequest(url))） */
+    /** 用业务默认参数解析网站基础信息（等价于 `scrape(domain, scrapeRequest(url))`） */
     fun queryWebsiteInfo(domain: String): ScrapeResponse
 
     /**
-     * 完全控制 scrapper 行为的抓取入口。
+     * 业务链路统一的抓取参数。
      *
-     * 管理后台"重试"应当传 `cache = CacheOptions(mode = BYPASS)`，否则可能直接命中
-     * scrapper 侧缓存，等于没重试。
+     * **所有会落库的抓取都必须经由这里拼请求**，不要直接 `ScrapeRequest(url = ...)` ——
+     * 契约默认值是给通用调用方定的（`assets.download = PROBE`，即下载完就丢），
+     * 书签鸭的策略是"抓到的图一律进我方 OSS"，两者并不一致。曾经每个调用点各自 new
+     * 一个 ScrapeRequest，于是全线静默退化成 PROBE，库里一个 storageKey 都没有。
+     *
+     * 唯一的例外是后台抓取调试页：它的全部参数都由使用者在界面上指定，本就不该被业务
+     * 默认值覆盖，也不该往 OSS 里写测试数据。
+     *
+     * @param cacheMode 后台"重试/重新获取"必须传 [CacheMode.BYPASS]，否则可能直接命中
+     *   scrapper 侧缓存，等于没重试
      */
+    fun scrapeRequest(url: String, cacheMode: CacheMode = CacheMode.DEFAULT): ScrapeRequest
+
+    /** 完全控制 scrapper 行为的抓取入口；参数请优先用 [scrapeRequest] 生成。 */
     fun scrape(domain: String, request: ScrapeRequest): ScrapeResponse
 
     /**
