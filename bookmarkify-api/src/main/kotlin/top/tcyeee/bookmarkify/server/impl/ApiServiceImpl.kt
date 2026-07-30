@@ -44,6 +44,17 @@ class ApiServiceImpl(
         if (scrapperConfig.authToken.isBlank()) this
         else header("Authorization", "Bearer ${scrapperConfig.authToken}")
 
+    /**
+     * 分别设置连接超时与读取超时。
+     *
+     * hutool 的 `timeout(n)` 把两者设成同一个值，于是 scrape 那条为了等无头浏览器而给到 60s 的
+     * **读取**超时，同时也成了 60s 的**连接**超时：抓取服务没起、端口不通时，一个解析线程要白白
+     * 等满一分钟才能发现连不上——而「TCP 连不上」这件事本来几百毫秒就有结论。
+     * 连接阶段该快速失败，慢的只应该是等对方干活的那一段。
+     */
+    private fun HttpRequest.timeouts(readMs: Int): HttpRequest =
+        setConnectionTimeout(CONNECT_TIMEOUT_MS).setReadTimeout(readMs)
+
     /** 本地开发默认连 127.0.0.1 的 scrapper，多半是根本没起——直接把启动命令带进报错里，省得去翻文档 */
     private val scrapperStartupHint: String
         get() = if (scrapperConfig.baseUrl.contains("localhost") || scrapperConfig.baseUrl.contains("127.0.0.1"))
@@ -96,7 +107,7 @@ class ApiServiceImpl(
                 .header("Content-Type", "application/json")
                 .withScrapperAuth()
                 .body(objectMapper.writeValueAsString(request))
-                .timeout(60000)
+                .timeouts(60000)
                 .execute()
         }.getOrElse {
             // 这一层的传输异常必然发生在 API ↔ scrapper 之间——目标站点能否打开是由
@@ -196,7 +207,7 @@ class ApiServiceImpl(
                 .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
                 .header("Content-Type", "application/json")
                 .body(objectMapper.writeValueAsString(request))
-                .timeout(10000)
+                .timeouts(10000)
                 .execute()
                 .body()
         }.getOrNull() ?: return null
@@ -245,7 +256,7 @@ class ApiServiceImpl(
                 .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
                 .header("Content-Type", "application/json")
                 .body(objectMapper.writeValueAsString(request))
-                .timeout(10000)
+                .timeouts(10000)
                 .execute()
                 .body()
         }.getOrNull() ?: return emptyList()
@@ -280,7 +291,7 @@ class ApiServiceImpl(
                 .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
                 .header("Content-Type", "application/json")
                 .body(objectMapper.writeValueAsString(request))
-                .timeout(20000)
+                .timeouts(20000)
                 .execute()
                 .body()
         }.getOrNull() ?: return emptyList()
@@ -307,7 +318,7 @@ class ApiServiceImpl(
                 .header("Content-Type", "application/json")
                 .withScrapperAuth()
                 .body(objectMapper.writeValueAsString(request))
-                .timeout(15000)
+                .timeouts(15000)
                 .execute()
             if (!httpResponse.isOk) return false
             objectMapper.readValue<PingResponse>(httpResponse.body()).alive
@@ -336,7 +347,7 @@ class ApiServiceImpl(
                 .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
                 .header("Content-Type", "application/json")
                 .body(objectMapper.writeValueAsString(request))
-                .timeout(10000)
+                .timeouts(10000)
                 .execute()
                 .body()
         }.getOrNull() ?: return NsfwCheckResult(false)
@@ -375,7 +386,7 @@ class ApiServiceImpl(
                 .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
                 .header("Content-Type", "application/json")
                 .body(objectMapper.writeValueAsString(request))
-                .timeout(10000)
+                .timeouts(10000)
                 .execute()
                 .body()
         }.getOrNull() ?: return AiReviewOutcome.Unavailable
@@ -391,5 +402,13 @@ class ApiServiceImpl(
     private fun buildUrl(domain: String): String {
         if (domain.matches(Regex("^https?://.*"))) return domain
         return "https://$domain"
+    }
+
+    companion object {
+        /**
+         * 建立 TCP 连接的超时。对所有外部调用统一取值：连不上是网络/服务层面的硬失败，
+         * 跟对方要花多久处理请求无关，没有哪个调用点需要更长的连接等待。
+         */
+        private const val CONNECT_TIMEOUT_MS = 5_000
     }
 }

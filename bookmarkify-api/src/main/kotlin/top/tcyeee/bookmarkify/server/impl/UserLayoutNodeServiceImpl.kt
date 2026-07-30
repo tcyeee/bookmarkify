@@ -5,18 +5,21 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.CreateDirParams
 import top.tcyeee.bookmarkify.entity.MoveNodeParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
+import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
 import top.tcyeee.bookmarkify.server.ILayoutNodeFunctionService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
+import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
 import top.tcyeee.bookmarkify.utils.SocketUtils
 
 /**
@@ -31,6 +34,7 @@ class UserLayoutNodeServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val layoutNodeFunctionService: ILayoutNodeFunctionService,
+    private val siteAssetResolver: SiteAssetResolver,
 ) : IUserLayoutNodeService, ServiceImpl<UserLayoutNodeMapper, UserLayoutNodeEntity>() {
 
     companion object {
@@ -38,10 +42,21 @@ class UserLayoutNodeServiceImpl(
         private const val ROOT_NAME = "ROOT"
     }
 
+    /**
+     * 用户全部书签的展示视图，按 layoutNodeId 索引。
+     *
+     * 桌面是「大图 + 短名」形态，故按 [DisplayMode.TILE] 解析图标；一次批量解析避免逐个书签查资产表。
+     */
+    private fun bookmarkShowMap(uid: String): Map<String, BookmarkShow> {
+        val shows = bookmarkUserLinkMapper.allBookmarkByUid(uid)
+        val logoMap = siteAssetResolver.resolveBatch(shows.mapNotNull { it.bookmarkId }, DisplayMode.TILE)
+        return shows.onEach { it.initDisplay(logoMap[it.bookmarkId]) }.associateBy { it.layoutNodeId!! }
+    }
+
     @Transactional
     override fun layout(uid: String): UserLayoutNodeVO {
         // 查询用户的自定义标签
-        val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
+        val bookmarkMap = bookmarkShowMap(uid)
         // 查询用户的绑定功能
         val bookmarkFunctionMap = layoutNodeFunctionService.findByUid(uid).associateBy { it.layoutNodeId }
         // 查询到用户的排序信息
@@ -72,7 +87,7 @@ class UserLayoutNodeServiceImpl(
 
         // 构建含子节点的目录 VO 并推送 WebSocket 通知
         val sortMap = preferenceService.queryByUid(uid).sortMap
-        val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
+        val bookmarkMap = bookmarkShowMap(uid)
         val childVOs = listByIds(params.nodeIds).map { it.vo(sortMap[it.id], bookmarkMap[it.id], null) }
         val dirVO = dirNode.vo(sortMap[dirNode.id], null, null)
         dirVO.children.addAll(childVOs)
@@ -148,7 +163,7 @@ class UserLayoutNodeServiceImpl(
         }
 
         val sortMap = preferenceService.queryByUid(uid).sortMap
-        val bookmarkMap = bookmarkUserLinkMapper.allBookmarkByUid(uid).associateBy { it.layoutNodeId!! }
+        val bookmarkMap = bookmarkShowMap(uid)
 
         fun buildDirVO(dirId: String): UserLayoutNodeVO {
             val dir = getById(dirId)

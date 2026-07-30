@@ -93,10 +93,21 @@ data class BookmarkEntity(
         // 图标由 SiteAssetWriter 在保存元信息后单独落 site_asset。
     }
 
-    // 是否需要检查标签,这里为true,说明这个书签需要被检查了
+    /**
+     * 用户新增这个书签时，已有的解析结果是否已经过期、需要重抓一次。
+     *
+     * 按小时而不是按天比较：`ChronoUnit.DAYS.between` 会向下取整，配上 `> 1` 之后
+     * 「距上次解析 1.9 天」算出来是 1、判定为不需要重抓，实际阈值悄悄变成了满 2 天，
+     * 与这里一直写着的「超过 1 天」不符。
+     */
     fun checkFlag(): Boolean {
         if (updateTime == null) return true
-        return LocalDateTimeUtil.between(updateTime, LocalDateTime.now(), ChronoUnit.DAYS) > 1
+        return LocalDateTimeUtil.between(updateTime, LocalDateTime.now(), ChronoUnit.HOURS) >= STALE_AFTER_HOURS
+    }
+
+    companion object {
+        /** 解析结果的有效期：超过这么久，用户再添加同一网址时重抓一次。 */
+        private const val STALE_AFTER_HOURS = 24L
     }
 }
 

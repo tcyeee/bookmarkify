@@ -29,8 +29,24 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 每 5 分钟对账一次 PENDING 书签：只负责「异步解析事件丢失/未完成」的兜底重投，不做活性判断 */
     fun checkAll()
 
+    /**
+     * 把用户桌面上还停在 BOOKMARK_LOADING 的书签补投递给解析线程池。
+     *
+     * 既是批量导入的正式消费通道（导入只落库、不投递事件，否则会把解析线程池连同 HTTP 线程一起打满），
+     * 也兜底 addOne 丢失的解析事件。按线程池空闲队列容量决定投递量，跑在调度线程上。
+     */
+    fun drainStuckLoading()
+
     /** 定时扫描 UNREACHABLE 书签（含已认证）：ping 通后重新触发解析，结果写入 bookmark_ping_log；异步执行，不占用调度线程 */
     fun retryUnreachableBookmarks()
+
+    /**
+     * 抓取成功后的元数据富化（分类打标 + NSFW 判定，均为 DeepSeek 调用）。
+     *
+     * 由 BookmarkEnrichEvent 在**独立线程池**上触发，不占用解析池——这两件事用户看不到，
+     * 不该让它们的耗时体现在「加书签要转多久圈」上。
+     */
+    fun enrich(bookmarkId: String)
 
     /** 定时扫描 SUCCESS 书签（含已认证）做活性复查，结果写入 bookmark_ping_log；异步执行，不占用调度线程 */
     fun livenessCheckStaleBookmarks()

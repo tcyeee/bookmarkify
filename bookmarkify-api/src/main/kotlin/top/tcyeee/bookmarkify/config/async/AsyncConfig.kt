@@ -47,7 +47,37 @@ class AsyncConfig {
         initialize()
     }
 
+    /**
+     * 书签元数据富化线程池（分类打标 / NSFW 判定，均为 DeepSeek 调用）。
+     *
+     * 与解析池分开的理由是这两类任务的**紧迫性完全不同**：解析池上跑的是「用户正盯着转圈等」的活，
+     * 富化跑的是用户根本看不到的后台标注。混在一起时，一次批量导入的富化任务会把解析队列占满，
+     * 直接体现为别的用户加书签变慢。
+     */
+    @Bean(BOOKMARK_ENRICH_EXECUTOR)
+    fun bookmarkEnrichExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
+        // 纯外部 API 等待，且没人等结果，给少量线程慢慢消化即可
+        corePoolSize = 2
+        maxPoolSize = 8
+        // 队列开得比解析池大得多：一次导入 2000 条书签会一次性排进来，而这里每条只是两次 HTTP 调用，
+        // 排着慢慢做完全可以接受——真正要避免的是队列满了以后回退到调用线程，
+        // 那个调用线程正是解析线程，等于把刚拆出去的耗时又还了回去
+        queueCapacity = 10_000
+        setThreadNamePrefix("bm-enrich-")
+        setRejectedExecutionHandler { runnable, executor ->
+            log.warn(
+                "[bookmarkEnrichExecutor] 富化队列已满，任务回退到调用线程(解析线程)执行，加书签会变慢: " +
+                    "active=${executor.activeCount}, queueSize=${executor.queue.size}"
+            )
+            ThreadPoolExecutor.CallerRunsPolicy().rejectedExecution(runnable, executor)
+        }
+        // 富化结果丢了不影响书签可用，停机时不必等它跑完
+        setWaitForTasksToCompleteOnShutdown(false)
+        initialize()
+    }
+
     companion object {
         const val BOOKMARK_PARSE_EXECUTOR = "bookmarkParseExecutor"
+        const val BOOKMARK_ENRICH_EXECUTOR = "bookmarkEnrichExecutor"
     }
 }

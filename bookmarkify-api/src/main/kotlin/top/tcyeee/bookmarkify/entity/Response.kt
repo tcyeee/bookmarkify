@@ -52,20 +52,23 @@ data class BookmarkShow(
     @field:Schema(description = "所属文件夹节点ID，无所属文件夹时为 null") var folderId: String? = null,
     @field:Schema(description = "所属文件夹名称，无所属文件夹时为 null") var folderName: String? = null,
 ) {
-    constructor(
-        userlink: BookmarkUserLink,
-        bookmark: BookmarkEntity?,
-        resolved: SiteAssetResolver.ResolvedLogo?,
-    ) : this() {
+    constructor(userlink: BookmarkUserLink, bookmark: BookmarkEntity?) : this() {
         bookmark?.let { BeanUtil.copyProperties(it, this) }
         BeanUtil.copyProperties(userlink, this)
         bookmarkUserLinkId = userlink.id
         urlBase = bookmark?.let { "${it.urlScheme}://${it.urlHost}" }
-        logo = BookmarkLogoShowVO.from(resolved)
     }
 
-    /** 设置备用 title：简称 → 标题 → host。图标签名已由 SiteAssetResolver 完成。 */
-    fun initLogo(): BookmarkShow {
+    /**
+     * 注入按展示模式解析出的图标，并设置备用 title：简称 → 标题 → host。
+     *
+     * [resolved] 刻意不给默认值。图片从 bookmark_logo 的扁平列改成 site_asset 一行一图后，
+     * 图标改由调用方经 [SiteAssetResolver] 解析注入，而 [logo] 字段自身有默认值——于是漏注入的
+     * 调用点照样编译通过，前端只会静默退化成首字母色块，没有任何报错。桌面主视图与添加/导入
+     * 完成后的两处 WebSocket 推送都是这么丢的。参数必填，让编译器替我们守住这条边界。
+     */
+    fun initDisplay(resolved: SiteAssetResolver.ResolvedLogo?): BookmarkShow {
+        logo = BookmarkLogoShowVO.from(resolved)
         title = appName?.takeIf { it.isNotBlank() } ?: title?.takeIf { it.isNotBlank() } ?: urlHost
         return this
     }
