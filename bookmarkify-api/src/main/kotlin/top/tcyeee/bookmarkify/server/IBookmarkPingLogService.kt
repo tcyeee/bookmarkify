@@ -11,4 +11,12 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkPingLogEntity
  */
 interface IBookmarkPingLogService : IService<BookmarkPingLogEntity> {
     fun adminListAll(params: BookmarkPingLogSearchParams): IPage<BookmarkPingLogVO>
+
+    /**
+     * 删除超过保留期的探测日志，返回删除条数。
+     *
+     * 这张表只增不减：每小时最多写 250 行、约 6k/天、220 万/年，而它的用途是排查最近的异常，
+     * 半年前某个域名 ping 过一次没有任何价值。
+     */
+    fun purgeExpired(): Int
 }

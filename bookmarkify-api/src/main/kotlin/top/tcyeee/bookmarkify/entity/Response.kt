@@ -10,7 +10,9 @@ import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
+import top.tcyeee.bookmarkify.entity.enums.BookmarkLockedField
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
+import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
@@ -25,10 +27,12 @@ data class AdminGridConfigVO(
 data class BookmarkLivenessConfigVO(
     @field:Schema(description = "已激活书签检测频率(小时)") val activeCheckIntervalHours: Int,
     @field:Schema(description = "异常书签检测频率(小时)") val abnormalCheckIntervalHours: Int,
+    @field:Schema(description = "内容重新抓取间隔(天)") val contentRefreshIntervalDays: Int,
 ) {
     constructor(value: BookmarkLivenessConfigValue) : this(
         activeCheckIntervalHours = value.activeCheckIntervalHours,
         abnormalCheckIntervalHours = value.abnormalCheckIntervalHours,
+        contentRefreshIntervalDays = value.contentRefreshIntervalDays,
     )
 }
 
@@ -232,13 +236,24 @@ data class BookmarkAdminVO(
     @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
     @field:Schema(description = "命中的分类") var categories: List<CategoryVO> = emptyList(),
     @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)") var nsfw: Boolean = false,
+
+    /* 巡检调度状态：后台需要能回答「这条为什么还没被复查」「为什么一直没变」这类问题 */
+    @field:Schema(description = "上次成功抓到内容的时间") var lastParseAt: LocalDateTime? = null,
+    @field:Schema(description = "上次活性探测时间(不论结论)") var lastCheckAt: LocalDateTime? = null,
+    @field:Schema(description = "下次巡检时间") var nextCheckAt: LocalDateTime? = null,
+    @field:Schema(description = "连续探测失败次数") var consecutiveFail: Int = 0,
+    @field:Schema(description = "被人工锁定、不会被自动抓取覆盖的字段") var lockedFields: List<BookmarkLockedField> = emptyList(),
 ) {
     constructor(entity: BookmarkEntity) : this(
         id = entity.id,
         urlHost = entity.urlHost,
         urlScheme = entity.urlScheme,
     ) {
-        BeanUtil.copyProperties(entity, this)
+        // lockedFields 在实体里是逗号拼接的字符串，对外给数组：让前端判断某个字段是否锁定时
+        // 不必自己切字符串。必须把它从自动拷贝里排除——同名但类型不同(String? → List)，
+        // 交给 BeanUtil 硬转会抛异常，把整个后台详情接口带下去。
+        BeanUtil.copyProperties(entity, this, "lockedFields")
+        lockedFields = entity.lockedFieldSet.toList()
     }
 }
 
@@ -381,7 +396,8 @@ data class BookmarkPingLogVO(
     @field:Schema(description = "日志ID") var id: String,
     @field:Schema(description = "书签ID") var bookmarkId: String,
     @field:Schema(description = "URL host") var urlHost: String,
-    @field:Schema(description = "是否存活") var alive: Boolean,
+    @field:Schema(description = "探测结论(ALIVE/DEAD/UNKNOWN)") var outcome: PingOutcome,
+    @field:Schema(description = "是否存活；结论为 UNKNOWN 时为 null") var alive: Boolean? = null,
     @field:Schema(description = "ping通后是否触发了重新解析") var triggeredParse: Boolean = false,
     @field:Schema(description = "检查时间") var createTime: LocalDateTime = LocalDateTime.now(),
 ) {
@@ -389,6 +405,7 @@ data class BookmarkPingLogVO(
         id = entity.id,
         bookmarkId = entity.bookmarkId,
         urlHost = entity.urlHost,
+        outcome = entity.outcome,
         alive = entity.alive,
     ) {
         BeanUtil.copyProperties(entity, this)

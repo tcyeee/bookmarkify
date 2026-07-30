@@ -50,14 +50,20 @@ class AccessTokenServiceImpl : IAccessTokenService, ServiceImpl<AccessTokenMappe
     }
 
     override fun verify(rawToken: String): String? {
-        if (!rawToken.startsWith(TOKEN_PREFIX)) return null
-        val hash = SecureUtil.sha256(rawToken)
-        val entity = getOne(KtQueryWrapper(AccessTokenEntity::class.java).eq(AccessTokenEntity::tokenHash, hash)) ?: return null
+        val entity = findEntityByRawToken(rawToken) ?: return null
         // lastUsedAt 仅用于展示，更新失败不应影响本次鉴权结果
         runCatching {
             ktUpdate().eq(AccessTokenEntity::id, entity.id).set(AccessTokenEntity::lastUsedAt, LocalDateTime.now()).update()
         }.onFailure { log.warn("[AccessToken] 更新 lastUsedAt 失败: ${it.message}") }
         return entity.uid
+    }
+
+    override fun pingInfo(rawToken: String): AccessTokenVO? = findEntityByRawToken(rawToken)?.let { AccessTokenVO(it) }
+
+    private fun findEntityByRawToken(rawToken: String): AccessTokenEntity? {
+        if (!rawToken.startsWith(TOKEN_PREFIX)) return null
+        val hash = SecureUtil.sha256(rawToken)
+        return getOne(KtQueryWrapper(AccessTokenEntity::class.java).eq(AccessTokenEntity::tokenHash, hash))
     }
 
     /** 展示用前缀：暴露 token 前段一部分供用户在列表中辨认，其余部分(占大部分熵)不落库、不展示 */

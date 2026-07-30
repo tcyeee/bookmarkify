@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Max
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
+import top.tcyeee.bookmarkify.entity.enums.BookmarkLockedField
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.utils.ChromeBookmarkRawData
 import top.tcyeee.bookmarkify.utils.WebsiteParser
@@ -53,6 +54,19 @@ data class BookmarkEntity(
     @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
+
+    /* 巡检调度状态。刻意与 updateTime 分开：那一列是「记录最近修改时间」，
+     * 一旦兼作调度游标，管理员改个标题就会把这条记录的下次巡检推迟一整个检测周期，
+     * 而 ping 成功又会反过来污染它的对外语义。定时巡检只看 nextCheckAt 一列。 */
+    @JsonIgnore @field:Schema(description = "上次成功抓到内容的时间(内容陈旧度以此为准)") var lastParseAt: LocalDateTime? = null,
+    @JsonIgnore @field:Schema(description = "上次活性探测的时间(不论结论)") var lastCheckAt: LocalDateTime? = null,
+    @JsonIgnore @field:Schema(description = "下次巡检时间(调度游标)") var nextCheckAt: LocalDateTime? = null,
+    @JsonIgnore @field:Schema(description = "连续探测失败次数，驱动指数退避与归档") var consecutiveFail: Int = 0,
+
+    @JsonIgnore
+    @field:Max(200)
+    @field:Schema(description = "管理员手工锁定、不允许自动抓取覆盖的字段(逗号分隔)")
+    var lockedFields: String? = null,
 ) {
     // 拼接后的完整网站（含路径，抓取/ping 都以这个具体页面为目标，而不是域名根路径）
     val rawUrl get() = "${this.urlScheme}://${this.urlHost}${this.urlPath}"
@@ -93,6 +107,26 @@ data class BookmarkEntity(
         // 图标由 SiteAssetWriter 在保存元信息后单独落 site_asset。
     }
 
+    /** 已锁定的字段集合。无法识别的取值直接忽略，别让一行脏数据把整条书签的解析拖崩。 */
+    val lockedFieldSet: Set<BookmarkLockedField>
+        get() = lockedFields?.split(',')
+            ?.mapNotNull { raw -> BookmarkLockedField.entries.firstOrNull { it.name == raw.trim() } }
+            ?.toSet()
+            ?: emptySet()
+
+    fun isLocked(field: BookmarkLockedField): Boolean = field in lockedFieldSet
+
+    /** 加锁（管理员手工编辑了该字段）。 */
+    fun lock(vararg fields: BookmarkLockedField) = setLockedFields(lockedFieldSet + fields)
+
+    /** 解锁（管理员显式接受了抓取来的值，该字段此后不再是人工值）。 */
+    fun unlock(vararg fields: BookmarkLockedField) = setLockedFields(lockedFieldSet - fields.toSet())
+
+    private fun setLockedFields(fields: Set<BookmarkLockedField>) {
+        // 空集合存 NULL 而不是空字符串：省得查询和判空要同时处理两种"没有锁"的表示
+        lockedFields = fields.takeIf { it.isNotEmpty() }?.joinToString(",") { it.name }
+    }
+
     /**
      * 用户新增这个书签时，已有的解析结果是否已经过期、需要重抓一次。
      *
@@ -124,6 +158,7 @@ data class BookmarkUserLink(
     @field:Schema(description = "书签链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
 
     @field:Schema(description = "是否置顶") var pinned: Boolean = false,
+    @JsonIgnore @field:Schema(description = "用户打开该书签的累计次数(仅做记录)") var openCount: Int = 0,
 
     @JsonIgnore @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "是否删除") val deleted: Boolean = false,

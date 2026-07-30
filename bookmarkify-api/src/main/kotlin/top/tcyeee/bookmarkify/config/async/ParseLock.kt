@@ -61,5 +61,14 @@ class ParseLock(private val redis: StringRedisTemplate) {
 
         /** 补投递一条用户书签的解析任务的锁 key。 */
         fun dispatch(userLinkId: String) = "dispatch:$userLinkId"
+
+        /**
+         * 一轮活性巡检的锁 key（[taskLabel] 区分不同的巡检任务）。
+         *
+         * 巡检任务标了 `@Async`，于是 Spring 调度器自带的「同一个任务不重叠」保证就没了：
+         * 一轮跑超过调度周期时，下一轮会在同一批候选上再跑一遍（它们的 next_check_at 还没写回），
+         * 重复 ping、重复写日志。锁走 Redis 而不是进程内标志，顺带把多实例部署也挡住了。
+         */
+        fun sweep(taskLabel: String) = "sweep:$taskLabel"
     }
 }

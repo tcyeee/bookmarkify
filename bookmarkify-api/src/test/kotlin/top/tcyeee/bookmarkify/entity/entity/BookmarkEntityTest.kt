@@ -1,9 +1,12 @@
 package top.tcyeee.bookmarkify.entity.entity
 
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
+import top.tcyeee.bookmarkify.entity.enums.BookmarkLockedField
 import java.time.LocalDateTime
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -51,5 +54,52 @@ class BookmarkEntityTest {
     @Test
     fun `a day and a half is stale, not rounded down to one day`() {
         assertTrue(bookmarkParsedAt(LocalDateTime.now().minusHours(36)).checkFlag())
+    }
+
+    // ────── 字段级人工锁定 ──────
+
+    @Test
+    fun `no locks by default`() {
+        val bookmark = bookmarkParsedAt(null)
+        assertTrue(bookmark.lockedFieldSet.isEmpty())
+        assertFalse(bookmark.isLocked(BookmarkLockedField.TITLE))
+    }
+
+    @Test
+    fun `lock is idempotent and serialises to a comma separated column`() {
+        val bookmark = bookmarkParsedAt(null).apply {
+            lock(BookmarkLockedField.TITLE)
+            lock(BookmarkLockedField.TITLE)
+            lock(BookmarkLockedField.APP_NAME)
+        }
+        assertEquals(setOf(BookmarkLockedField.TITLE, BookmarkLockedField.APP_NAME), bookmark.lockedFieldSet)
+        // 逗号拼接，且不能因为重复加锁就写出 'TITLE,TITLE'
+        assertEquals(2, bookmark.lockedFields!!.split(',').size)
+    }
+
+    @Test
+    fun `unlocking the last field stores NULL rather than an empty string`() {
+        // 两种「没有锁」的表示会让后续的查询与判空都要各写一遍
+        val bookmark = bookmarkParsedAt(null).apply {
+            lock(BookmarkLockedField.TITLE)
+            unlock(BookmarkLockedField.TITLE)
+        }
+        assertNull(bookmark.lockedFields)
+    }
+
+    @Test
+    fun `unlocking one field keeps the others`() {
+        val bookmark = bookmarkParsedAt(null).apply {
+            lock(BookmarkLockedField.TITLE, BookmarkLockedField.DESCRIPTION)
+            unlock(BookmarkLockedField.TITLE)
+        }
+        assertEquals(setOf(BookmarkLockedField.DESCRIPTION), bookmark.lockedFieldSet)
+    }
+
+    /** 脏数据不能把整条书签的解析拖崩：无法识别的取值静默忽略。 */
+    @Test
+    fun `unknown values in the column are ignored`() {
+        val bookmark = bookmarkParsedAt(null).apply { lockedFields = "TITLE, WHAT_IS_THIS ,,APP_NAME" }
+        assertEquals(setOf(BookmarkLockedField.TITLE, BookmarkLockedField.APP_NAME), bookmark.lockedFieldSet)
     }
 }

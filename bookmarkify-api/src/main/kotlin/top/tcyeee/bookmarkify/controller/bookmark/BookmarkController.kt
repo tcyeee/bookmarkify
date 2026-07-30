@@ -8,6 +8,7 @@ import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkImportPreviewVO
+import top.tcyeee.bookmarkify.entity.BookmarkOpenParams
 import top.tcyeee.bookmarkify.entity.BookmarkPinParams
 import top.tcyeee.bookmarkify.entity.BookmarkSearchVO
 import top.tcyeee.bookmarkify.entity.BookmarkShow
@@ -119,4 +120,12 @@ class BookmarksController(
     @GetMapping("/linkOne")
     @Operation(summary = "关联书签")
     fun linkOne(@RequestParam bookmarkId: String) = bookmarkService.linkOne(bookmarkId, BaseUtils.uid())
+
+    // 不加 @Throttle：该注解按 uid+方法名 限流，不区分参数，会导致连续打开两个不同书签时
+    // 第二次被拦截、计数丢失，与"尽量准确计数"的目的相悖。这里只是一次单行原子自增，
+    // 前端也是 fire-and-forget 调用，滥用成本收益比很低。
+    @PostMapping("/open")
+    @Operation(summary = "记录一次书签打开(仅做计数)")
+    fun open(@RequestBody params: BookmarkOpenParams): Boolean =
+        bookmarkUserLinkService.recordOpen(params.linkId, BaseUtils.uid())
 }

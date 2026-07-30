@@ -187,6 +187,8 @@ bookmarkify-api/.../server/asset/
 - **The local Jsoup path (`parseLocally`) no longer produces images.** Only the scrapper path writes `site_asset`. Two parsers each writing their own icon model is exactly what this refactor removed.
 - **`fetch.tls` and `diagnostics.robots` are deliberately omitted,** not populated with guesses — the underlying capability isn't implemented yet.
 - **Migrations are hand-applied** (`deploy/migrations/`, no Flyway) and the deploy workflow does *not* run them. Order matters: create tables → deploy → full re-crawl → only then `2026-07-29_drop_bookmark_logo.sql`.
+- **The 2026-07-30 batch must be applied *before* deploying the API** — the new code reads columns that don't exist yet (`bookmark.next_check_at`, `bookmark.locked_fields`, `bookmark_ping_log.outcome`). Run `2026-07-30_missing_table_ddl.sql` first (it only fills in `CREATE TABLE IF NOT EXISTS` for tables whose DDL was never committed), then `_ping_outcome`, `_bookmark_check_schedule`, `_bookmark_locked_fields`. All are idempotent.
+- **Sibling `CLAUDE.md` files carry the details:** the liveness sweep contract (tri-state ping, breaker, `next_check_at`, backoff, field locks) is in `bookmarkify-api/CLAUDE.md` under "Liveness sweeps".
 
 ## Local Dev Port Conflict
 

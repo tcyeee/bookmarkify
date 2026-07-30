@@ -29,6 +29,13 @@ class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<Bookma
             .set(BookmarkUserLink::pinned, pinned)
             .update()
 
+    // 用 setSql 做原子自增，避免"读旧值→+1→回写"在并发打开时互相覆盖丢计数
+    override fun recordOpen(linkId: String, uid: String): Boolean =
+        ktUpdate().eq(BookmarkUserLink::id, linkId)
+            .eq(BookmarkUserLink::uid, uid)
+            .setSql("open_count = open_count + 1")
+            .update()
+
     @Transactional(rollbackFor = [Exception::class])
     override fun copy(sourceUid: String, targetUid: String) {
         // F-06 (dead-code warning): This method has no current callers and MUST NOT be activated

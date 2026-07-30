@@ -334,6 +334,7 @@ const statusOptions: {
   { label: "等待中", value: "PENDING", type: "info" },
   { label: "成功", value: "SUCCESS", type: "success" },
   { label: "抓取失败", value: "UNREACHABLE", type: "danger" },
+  { label: "已归档", value: "ARCHIVED", type: "warning" },
 ];
 
 function handleRowClick({ row, column }: { row: BookmarkEntity; column: any }) {
@@ -457,6 +458,14 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
           <ElTag v-else-if="row.parseStatus === 'UNREACHABLE'" type="danger" size="small">
             抓取失败
           </ElTag>
+          <ElTag
+            v-else-if="row.parseStatus === 'ARCHIVED'"
+            type="warning"
+            size="small"
+            title="连续失败达到阈值，已停止巡检；手动刷新/检测可恢复"
+          >
+            已归档
+          </ElTag>
           <ElTag v-else size="small"> 未知 </ElTag>
         </template>
         <template #antiCrawlerBlocked="{ row }">
@@ -511,6 +520,14 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
                   </ElTag>
                   <ElTag v-else-if="currentRow.parseStatus === 'UNREACHABLE'" type="danger" size="small">
                     抓取失败
+                  </ElTag>
+                  <ElTag
+                    v-else-if="currentRow.parseStatus === 'ARCHIVED'"
+                    type="warning"
+                    size="small"
+                    title="连续失败达到阈值，已停止巡检；手动刷新/检测可恢复"
+                  >
+                    已归档
                   </ElTag>
                   <ElTag v-else size="small">
                     {{ currentRow.parseStatus || "未知" }}

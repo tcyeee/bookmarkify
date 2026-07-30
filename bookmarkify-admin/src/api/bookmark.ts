@@ -7,8 +7,14 @@ export interface CategoryVO {
   color?: string;
 }
 
-/** 书签抓取结果：PENDING(等待抓取) / SUCCESS(抓取成功) / UNREACHABLE(抓取失败,可能是暂时性故障) */
-export type BookmarkParseStatus = 'PENDING' | 'SUCCESS' | 'UNREACHABLE';
+/**
+ * 书签抓取结果：
+ * - PENDING     等待抓取
+ * - SUCCESS     抓取成功
+ * - UNREACHABLE 抓取失败，可能是暂时性故障，仍在按退避曲线重试
+ * - ARCHIVED    连续失败达到阈值，已停止巡检（管理员手动刷新/检测可让它回到上面两态）
+ */
+export type BookmarkParseStatus = 'ARCHIVED' | 'PENDING' | 'SUCCESS' | 'UNREACHABLE';
 
 export interface SimilarSite {
   name: string;

@@ -76,8 +76,68 @@ class AsyncConfig {
         initialize()
     }
 
+    /**
+     * 活性巡检线程池（`livenessCheckStaleBookmarks` / `retryUnreachableBookmarks` 的驱动线程）。
+     *
+     * 巡检此前跑在解析池上，与用户的 addOne 抢同一批线程和同一个队列：一轮 200 条串行 ping
+     * 最坏要占着一个线程近一小时，期间用户加书签的任务只能排队，队列满了还会被
+     * CallerRunsPolicy 甩回 HTTP 请求线程。`drainStuckLoading` 早就为这件事留了队列余量，
+     * 巡检没理由不守同样的规矩。
+     *
+     * 只给 1 个核心线程 + 空队列 + AbortPolicy：两个巡检任务本来就该串行，
+     * 拒绝也正是想要的行为——上一轮还没跑完就说明落后了，再排一个只会雪上加霜（[ParseLock]
+     * 的巡检锁也会挡住它）。真正的并发发生在池内部的并行 ping（见 [BOOKMARK_PING_EXECUTOR]）。
+     */
+    @Bean(BOOKMARK_SWEEP_EXECUTOR)
+    fun bookmarkSweepExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
+        corePoolSize = 1
+        maxPoolSize = 2
+        queueCapacity = 0
+        setThreadNamePrefix("bm-sweep-")
+        setRejectedExecutionHandler { _, executor ->
+            log.warn(
+                "[bookmarkSweepExecutor] 上一轮巡检仍在执行，本轮直接丢弃: " +
+                    "active=${executor.activeCount}, poolSize=${executor.poolSize}"
+            )
+        }
+        // 巡检中断了没有损失：下一轮按 next_check_at 会重新选中这些记录
+        setWaitForTasksToCompleteOnShutdown(false)
+        initialize()
+    }
+
+    /**
+     * 巡检内部并行 ping 用的池。
+     *
+     * 串行 ping 的最坏耗时是「批量上限 × 单条超时」= 200 × 15s ≈ 50 分钟，已经贴着 1 小时的
+     * 调度周期；并行到 8 路可压到 2 分钟量级。
+     *
+     * ⚠️ **[PING_CONCURRENCY] 是一个跨服务约束**：scrapper 用 tower 的 `concurrency_limit`
+     * 为 `/scrape` + `/ping` 设了统一的并发上限（`MAX_CONCURRENT_REQUESTS`，默认 32），超出即
+     * `load_shed` 返回 503。而 503 在我方会被判成 [PingOutcome.UNKNOWN]
+     * [top.tcyeee.bookmarkify.entity.enums.PingOutcome]，占比过半就触发熔断——也就是说并发调太高
+     * 会让整轮巡检自己把自己熔断掉。这里取 8，给用户触发的 `/scrape` 留足余量；
+     * 改动 scrapper 那个上限时必须回头看这个值。
+     */
+    @Bean(BOOKMARK_PING_EXECUTOR)
+    fun bookmarkPingExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
+        corePoolSize = PING_CONCURRENCY
+        maxPoolSize = PING_CONCURRENCY
+        // 一轮最多投递 batchSize 条，队列开到足够容纳最大批次，避免退化成调用线程串行执行
+        queueCapacity = 1_000
+        setThreadNamePrefix("bm-ping-")
+        // 队列都满了说明批次大小配得离谱，交给调用线程（巡检线程）兜着跑，慢但不丢
+        setRejectedExecutionHandler(ThreadPoolExecutor.CallerRunsPolicy())
+        setWaitForTasksToCompleteOnShutdown(false)
+        initialize()
+    }
+
     companion object {
         const val BOOKMARK_PARSE_EXECUTOR = "bookmarkParseExecutor"
         const val BOOKMARK_ENRICH_EXECUTOR = "bookmarkEnrichExecutor"
+        const val BOOKMARK_SWEEP_EXECUTOR = "bookmarkSweepExecutor"
+        const val BOOKMARK_PING_EXECUTOR = "bookmarkPingExecutor"
+
+        /** 并行 ping 的并发度。调整前先读 [bookmarkPingExecutor] 上关于 scrapper 并发上限的说明。 */
+        const val PING_CONCURRENCY = 8
     }
 }

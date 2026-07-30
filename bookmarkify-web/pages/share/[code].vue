@@ -36,7 +36,8 @@
           :href="item.urlFull"
           target="_blank"
           rel="noopener noreferrer"
-          class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+          class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+          @click="bookmarksRecordOpen(item.bookmarkUserLinkId).catch(() => {})">
           <BookmarkLogo :value="item" :size="20" />
           <div class="flex flex-col overflow-hidden flex-1">
             <span class="text-sm text-slate-700 dark:text-slate-200 truncate">{{ item.title || item.urlBase }}</span>
@@ -49,7 +50,7 @@
 </template>
 
 <script lang="ts" setup>
-import { shareView } from '@api'
+import { shareView, bookmarksRecordOpen } from '@api'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
 definePageMeta({ layout: 'explore' })

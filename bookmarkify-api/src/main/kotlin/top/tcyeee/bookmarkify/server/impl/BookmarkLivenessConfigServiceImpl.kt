@@ -28,7 +28,11 @@ class BookmarkLivenessConfigServiceImpl(
             }
     }
 
-    override fun updateConfig(activeCheckIntervalHours: Int, abnormalCheckIntervalHours: Int): BookmarkLivenessConfigValue {
+    override fun updateConfig(
+        activeCheckIntervalHours: Int,
+        abnormalCheckIntervalHours: Int,
+        contentRefreshIntervalDays: Int,
+    ): BookmarkLivenessConfigValue {
         if (activeCheckIntervalHours < 1 || abnormalCheckIntervalHours < 1) {
             throw CommonException(ErrorType.E102, "检测频率必须大于等于 1 小时")
         }
@@ -37,7 +41,19 @@ class BookmarkLivenessConfigServiceImpl(
         if (abnormalCheckIntervalHours > activeCheckIntervalHours) {
             throw CommonException(ErrorType.E102, "异常书签检测频率不能低于已激活书签检测频率")
         }
-        val value = BookmarkLivenessConfigValue(activeCheckIntervalHours, abnormalCheckIntervalHours)
+        // 重新抓取一次的代价远高于一次 HEAD 探测（可能拉起无头浏览器、下载图片、传 OSS），
+        // 配得比活性探测还勤就失去了分档的意义，且会成倍放大抓取压力。
+        if (contentRefreshIntervalDays < 1) {
+            throw CommonException(ErrorType.E102, "内容重新抓取间隔必须大于等于 1 天")
+        }
+        if (contentRefreshIntervalDays * 24 < activeCheckIntervalHours) {
+            throw CommonException(ErrorType.E102, "内容重新抓取间隔不能短于已激活书签检测频率")
+        }
+        val value = BookmarkLivenessConfigValue(
+            activeCheckIntervalHours = activeCheckIntervalHours,
+            abnormalCheckIntervalHours = abnormalCheckIntervalHours,
+            contentRefreshIntervalDays = contentRefreshIntervalDays,
+        )
         systemConfigService.setValue(CONFIG_KEY, objectMapper.writeValueAsString(value))
         return value
     }

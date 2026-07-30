@@ -21,6 +21,7 @@
       draggable="false"
       class="flex items-center gap-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
       :style="bookmarkIndentStyle"
+      @click="recordOpen(node)"
       @contextmenu.prevent="onContextMenu($event, node)">
       <BookmarkLogo :value="node.typeApp" :size="20" />
       <span
@@ -48,7 +49,7 @@
 import { computed, h } from 'vue'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { Icon } from '@iconify/vue'
-import { bookmarksDel, bookmarksPin } from '@api'
+import { bookmarksDel, bookmarksPin, bookmarksRecordOpen } from '@api'
 import { HomeItemType, type UserLayoutNodeVO } from '@typing'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
@@ -64,6 +65,11 @@ const children = computed(() =>
 const indentStyle = computed(() => ({ paddingLeft: `${props.depth * 1.25}rem` }))
 // 单条书签在文件夹卡片中额外增加左内边距，与文件夹行区分开
 const bookmarkIndentStyle = computed(() => ({ paddingLeft: `${props.depth * 1.25 + 0.5}rem` }))
+
+function recordOpen(node: UserLayoutNodeVO) {
+  if (!node.typeApp) return
+  bookmarksRecordOpen(node.typeApp.bookmarkUserLinkId).catch(() => {})
+}
 
 async function delOne(node: UserLayoutNodeVO) {
   try {
