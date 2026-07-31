@@ -167,8 +167,17 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 | `user_file` | Uploaded file records (avatar, background) |
 | `site_asset` / `site_page_meta` / `scrape_snapshot` / `site_display_pref` | Crawl results + display prefs (replaced `bookmark_logo`; see root `CLAUDE.md`) |
 | `bookmark_ping_log` | One row per liveness probe (`outcome` = ALIVE/DEAD/UNKNOWN), purged after 90 days |
+| `ai_call_log` | One row per DeepSeek call, **including request/response bodies** — see below |
 | `system_config` | Generic key-value config (JSON), e.g. the liveness sweep intervals |
 | `category` / `bookmark_category` | Category dictionary + bookmark↔category links |
+
+### DeepSeek calls go through one door
+
+`ApiServiceImpl.chatCompletion` is the **only** place that talks to `api.deepseek.com`. All six scenes (`AiCallScene`: app name, category infer/propose, similar sites, NSFW, share review) hand it a `DeepSeekRequest` and get back the message content or `null` — each scene then applies its own fail-open/fail-closed policy to the `null`.
+
+Do not add a seventh scene by copy-pasting an `HttpUtil.createPost` block. Everything that goes through `chatCompletion` lands in `ai_call_log` (prompt + raw response + tokens + duration, bodies truncated to 8000 chars); anything that doesn't is invisible forever, because AI output is consumed and discarded — once "疑似赌博博彩内容" is written onto a bookmark, what the model actually returned is unrecoverable. `success = false` also covers HTTP 200 with empty content, so the admin log's success rate matches the rate at which callers actually got an answer.
+
+The admin panel reads it at `POST /admin/ai-call-log/all` (第三方管理 › AI检测管理).
 
 ### Async Parse Events
 

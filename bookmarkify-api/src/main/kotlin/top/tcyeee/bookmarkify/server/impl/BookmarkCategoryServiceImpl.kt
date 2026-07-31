@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
+import top.tcyeee.bookmarkify.entity.CategorySaveParams
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.entity.BookmarkCategory
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
@@ -48,6 +49,35 @@ class BookmarkCategoryServiceImpl(
         }.onFailure {
             logger.warn("[categorize] 分类失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}")
         }
+    }
+
+    override fun categorizeAllowingNew(bookmark: BookmarkEntity): List<Category> {
+        val existing = categoryService.listAll()
+        val proposals = apiService.proposeCategories(
+            bookmark.title,
+            bookmark.description,
+            bookmark.urlHost,
+            existing.map { CategoryCandidate(it.slug, it.name, it.description) },
+        )
+        if (proposals.isEmpty()) {
+            logger.debug("[categorizeAllowingNew] DeepSeek 未返回分类: bookmarkId=${bookmark.id}")
+            return emptyList()
+        }
+
+        // slug 大小写不敏感地对齐既有词表：模型复用旧词时偶尔会改大小写，不归一就会建出重复分类
+        val bySlug = existing.associateBy { it.slug.lowercase() }
+        var nextSort = (existing.maxOfOrNull { it.sort } ?: 0) + 1
+        val resolved = proposals.map { p ->
+            bySlug[p.slug] ?: categoryService.saveCategory(
+                CategorySaveParams(slug = p.slug, name = p.name, sort = nextSort++),
+            ).also { logger.info("[categorizeAllowingNew] 新建分类: slug=${it.slug}, name=${it.name}") }
+        }
+
+        replaceLinks(bookmark.id, resolved.map { it.id }, CategorySource.DEEPSEEK)
+        logger.debug(
+            "[categorizeAllowingNew] 分类完成: bookmarkId=${bookmark.id}, slugs=${resolved.map { it.slug }}",
+        )
+        return resolved
     }
 
     override fun categoriesOf(bookmarkIds: Collection<String>): Map<String, List<Category>> {

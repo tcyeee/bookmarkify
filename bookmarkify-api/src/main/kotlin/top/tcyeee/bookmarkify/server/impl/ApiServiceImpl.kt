@@ -15,9 +15,11 @@ import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekMessage
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekRequest
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekResponse
+import top.tcyeee.bookmarkify.entity.dto.DeepSeekUsage
 import top.tcyeee.bookmarkify.entity.dto.NsfwCheckResult
 import top.tcyeee.bookmarkify.entity.dto.PingRequest
 import top.tcyeee.bookmarkify.entity.dto.PingResponse
+import top.tcyeee.bookmarkify.entity.dto.ProposedCategory
 import top.tcyeee.bookmarkify.entity.dto.scrape.AssetDownload
 import top.tcyeee.bookmarkify.entity.dto.scrape.AssetOptions
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
@@ -26,8 +28,11 @@ import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScreenshotOptions
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
+import top.tcyeee.bookmarkify.entity.entity.AiCallLogEntity
 import top.tcyeee.bookmarkify.entity.entity.ScrapperCallLogEntity
+import top.tcyeee.bookmarkify.entity.enums.AiCallScene
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
+import top.tcyeee.bookmarkify.mapper.AiCallLogMapper
 import top.tcyeee.bookmarkify.mapper.ScrapperCallLogMapper
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.utils.WebsiteParser
@@ -38,6 +43,7 @@ class ApiServiceImpl(
     private val deepSeekConfig: DeepSeekConfig,
     private val objectMapper: ObjectMapper,
     private val scrapperCallLogMapper: ScrapperCallLogMapper,
+    private val aiCallLogMapper: AiCallLogMapper,
 ) : IApiService {
 
     /** scrapper 侧 `SCRAPER_AUTH_TOKEN` 未配置时 `scrapperConfig.authToken` 留空，不发送该 header。 */
@@ -183,6 +189,110 @@ class ApiServiceImpl(
         }.onFailure { log.warn("[logScrapperCall] 写入 scrapper 调用日志失败: ${it.message}") }
     }
 
+    /**
+     * 所有 DeepSeek 调用的唯一出口：统一鉴权、超时、解析，并把每一次通讯落到 `ai_call_log`。
+     *
+     * 六个业务场景此前各自复制了一份「HttpUtil 发请求 + readValue + runCatching 吞掉异常」的样板，
+     * 于是一次判定为什么得出这个结果在事后完全不可追溯：模型原样回了什么、花了多少 token、
+     * 是超时还是被限流、还是干脆返回了空 choices，全都只存在于那一次调用的栈里。
+     * 抓取结果最终会落到 site_asset 还能复查，AI 的输出却是即用即弃的。
+     *
+     * @param subject 本次判定的对象（域名或标题），只用于日志检索
+     * @return 模型返回的正文（已 trim，空白视为无内容）；任何一步失败都返回 null，
+     *   由各场景按自己的 fail-open / fail-closed 策略兜底
+     */
+    private fun chatCompletion(
+        scene: AiCallScene,
+        subject: String?,
+        request: DeepSeekRequest,
+        readTimeoutMs: Int = AI_READ_TIMEOUT_MS,
+    ): String? {
+        val startedAt = System.currentTimeMillis()
+        val requestJson = runCatching { objectMapper.writeValueAsString(request) }.getOrElse {
+            logAiCall(scene, subject, request.model, null, startedAt, success = false, errorMsg = "请求序列化失败: ${it.message}")
+            return null
+        }
+
+        val httpResponse = runCatching {
+            HttpUtil.createPost(DEEPSEEK_ENDPOINT)
+                .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
+                .header("Content-Type", "application/json")
+                .body(requestJson)
+                .timeouts(readTimeoutMs)
+                .execute()
+        }.getOrElse {
+            logAiCall(
+                scene, subject, request.model, requestJson, startedAt, success = false,
+                errorMsg = "无法连接 DeepSeek $DEEPSEEK_ENDPOINT :: ${it.message ?: it.toString()}",
+            )
+            return null
+        }
+
+        val body = httpResponse.body()
+        if (!httpResponse.isOk) {
+            // 401(key 失效)、402(余额不足)、429(限流) 都长这样，光看状态码就能定位，响应体一并存着
+            logAiCall(
+                scene, subject, request.model, requestJson, startedAt, success = false,
+                httpStatus = httpResponse.status, responseBody = body,
+                errorMsg = "DeepSeek 返回 HTTP ${httpResponse.status}",
+            )
+            return null
+        }
+
+        val parsed = runCatching { objectMapper.readValue<DeepSeekResponse>(body) }.getOrElse {
+            logAiCall(
+                scene, subject, request.model, requestJson, startedAt, success = false,
+                httpStatus = httpResponse.status, responseBody = body,
+                errorMsg = "响应解析失败 :: ${it.message?.take(200)}",
+            )
+            return null
+        }
+
+        val content = parsed.choices?.firstOrNull()?.message?.content?.trim()?.takeIf { it.isNotBlank() }
+        logAiCall(
+            scene, subject, parsed.model ?: request.model, requestJson, startedAt,
+            // HTTP 200 但没有正文（空 choices / 被 max_tokens 截成空串）对调用方而言同样是失败，
+            // 日志里也该显示成失败，否则「成功率 100% 但结果全是兜底值」根本对不上
+            success = content != null,
+            httpStatus = httpResponse.status, responseBody = body, usage = parsed.usage,
+            errorMsg = if (content == null) "响应未包含有效内容" else null,
+        )
+        return content
+    }
+
+    /** 记录一次对 DeepSeek 的调用；日志写入失败不影响主流程。 */
+    private fun logAiCall(
+        scene: AiCallScene,
+        subject: String?,
+        model: String?,
+        requestBody: String?,
+        startedAt: Long,
+        success: Boolean,
+        httpStatus: Int? = null,
+        responseBody: String? = null,
+        usage: DeepSeekUsage? = null,
+        errorMsg: String? = null,
+    ) {
+        runCatching {
+            aiCallLogMapper.insert(
+                AiCallLogEntity(
+                    scene = scene,
+                    model = model,
+                    subject = subject?.take(200),
+                    success = success,
+                    httpStatus = httpStatus,
+                    requestBody = requestBody?.take(AiCallLogEntity.MAX_BODY_LEN),
+                    responseBody = responseBody?.take(AiCallLogEntity.MAX_BODY_LEN),
+                    promptTokens = usage?.promptTokens,
+                    completionTokens = usage?.completionTokens,
+                    totalTokens = usage?.totalTokens,
+                    durationMs = System.currentTimeMillis() - startedAt,
+                    errorMsg = errorMsg?.take(500),
+                )
+            )
+        }.onFailure { log.warn("[logAiCall] 写入 AI 调用日志失败: ${it.message}") }
+    }
+
     override fun inferAppName(title: String): String? {
         if (title.isBlank()) return null
 
@@ -203,24 +313,11 @@ class ApiServiceImpl(
             )
         )
 
-        val responseBody = runCatching {
-            HttpUtil.createPost("https://api.deepseek.com/chat/completions")
-                .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
-                .header("Content-Type", "application/json")
-                .body(objectMapper.writeValueAsString(request))
-                .timeouts(10000)
-                .execute()
-                .body()
-        }.getOrNull() ?: return null
-
-        return runCatching {
-            objectMapper.readValue<DeepSeekResponse>(responseBody)
-                .choices?.firstOrNull()?.message?.content
-                // 模型偶尔会把"无法判断时返回空字符串"的指令误当作要输出的内容，直接吐出"空字符串"这几个字
-                // 而非真正的空响应，导致该字面量被当作合法简称存入 appName 并覆盖真实标题。这里除了空白，
-                // 额外过滤掉约定的哨兵词 NONE 以及历史上曾被污染的字面量"空字符串"，双重兜底。
-                ?.trim()?.takeIf { it.isNotBlank() && it != "NONE" && it != "空字符串" }
-        }.getOrNull()
+        // 模型偶尔会把"无法判断时返回空字符串"的指令误当作要输出的内容，直接吐出"空字符串"这几个字
+        // 而非真正的空响应，导致该字面量被当作合法简称存入 appName 并覆盖真实标题。空白已由
+        // chatCompletion 统一过滤，这里再挡掉约定的哨兵词 NONE 与历史上曾被污染的字面量"空字符串"。
+        return chatCompletion(AiCallScene.APP_NAME, title, request)
+            ?.takeIf { it != "NONE" && it != "空字符串" }
     }
 
     override fun inferCategories(
@@ -252,26 +349,72 @@ class ApiServiceImpl(
             maxTokens = 40,
         )
 
-        val responseBody = runCatching {
-            HttpUtil.createPost("https://api.deepseek.com/chat/completions")
-                .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
-                .header("Content-Type", "application/json")
-                .body(objectMapper.writeValueAsString(request))
-                .timeouts(10000)
-                .execute()
-                .body()
-        }.getOrNull() ?: return emptyList()
-
-        val raw = runCatching {
-            objectMapper.readValue<DeepSeekResponse>(responseBody)
-                .choices?.firstOrNull()?.message?.content
-        }.getOrNull() ?: return emptyList()
+        val raw = chatCompletion(AiCallScene.CATEGORY_INFER, host, request) ?: return emptyList()
 
         return raw.split(',', '，', '\n', ' ')
             .map { it.trim().lowercase() }
             .filter { it.isNotBlank() && it in allowed }
             .distinct()
     }
+
+    override fun proposeCategories(
+        title: String?,
+        description: String?,
+        host: String,
+        existing: List<CategoryCandidate>,
+    ): List<ProposedCategory> {
+        val catalogue = existing
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n") { c -> "- ${c.slug}（${c.name}）${c.description?.let { "：$it" } ?: ""}" }
+            ?: "（当前分类列表为空）"
+        val systemPrompt = """
+            你是一个网站分类助手。下面是系统里**已有**的分类（slug 及含义）：
+            $catalogue
+            根据用户给出的网站信息，给出 1~3 个最贴切的分类。
+            规则：
+            1. 已有分类能覆盖时必须复用已有的 slug，不要造近义的新词；
+            2. 已有分类都不贴切时，可以新建分类：slug 用小写英文与连字符（如 ai-tools），名称用简短中文；
+            3. 每行一个，格式严格为 `slug|中文名`，不要编号、解释、markdown 或任何额外文字。
+        """.trimIndent()
+        val userContent = "host: $host\ntitle: ${title ?: ""}\ndescription: ${description ?: ""}"
+
+        val request = DeepSeekRequest(
+            messages = listOf(
+                DeepSeekMessage(role = "system", content = systemPrompt),
+                DeepSeekMessage(role = "user", content = userContent),
+            ),
+            maxTokens = 120,
+        )
+
+        val raw = chatCompletion(AiCallScene.CATEGORY_PROPOSE, host, request, readTimeoutMs = 15_000)
+            ?: return emptyList()
+
+        return raw.lineSequence()
+            .mapNotNull { line ->
+                // 模型偶尔会写成 `slug｜中文名` 或加上 "- " 前缀，这里一并容错
+                val parts = line.trim().removePrefix("-").trim().split('|', '｜', limit = 2)
+                if (parts.size != 2) return@mapNotNull null
+                val slug = normalizeSlug(parts[0])
+                val name = parts[1].trim().take(MAX_CATEGORY_NAME_LEN)
+                if (slug.isBlank() || name.isBlank()) null else ProposedCategory(slug, name)
+            }
+            .distinctBy { it.slug }
+            .take(MAX_PROPOSED_CATEGORIES)
+            .toList()
+    }
+
+    /**
+     * 把模型给的 slug 削成库里能用的形态：小写、只留 `a-z0-9-`、收敛连续连字符。
+     *
+     * 不做这一步的话 `AI 工具` / `Ai_Tools` / `ai tools` 会各自建一条分类，字典很快就脏了。
+     */
+    private fun normalizeSlug(raw: String): String =
+        raw.trim().lowercase()
+            .replace(Regex("[^a-z0-9-]+"), "-")
+            .trim('-')
+            .replace(Regex("-{2,}"), "-")
+            .take(MAX_CATEGORY_SLUG_LEN)
+            .trim('-')
 
     override fun inferSimilarSites(title: String?, description: String?, host: String): List<SimilarSite> {
         val systemPrompt = """
@@ -287,19 +430,8 @@ class ApiServiceImpl(
             ),
             maxTokens = 800,
         )
-        val responseBody = runCatching {
-            HttpUtil.createPost("https://api.deepseek.com/chat/completions")
-                .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
-                .header("Content-Type", "application/json")
-                .body(objectMapper.writeValueAsString(request))
-                .timeouts(20000)
-                .execute()
-                .body()
-        }.getOrNull() ?: return emptyList()
-        val content = runCatching {
-            objectMapper.readValue<DeepSeekResponse>(responseBody)
-                .choices?.firstOrNull()?.message?.content
-        }.getOrNull() ?: return emptyList()
+        val content = chatCompletion(AiCallScene.SIMILAR_SITE, host, request, readTimeoutMs = 20_000)
+            ?: return emptyList()
         // 最多返回 10 个，防止模型偶发超量
         return parseSimilarSites(content).take(10)
     }
@@ -384,26 +516,10 @@ class ApiServiceImpl(
             maxTokens = 30,
         )
 
-        val responseBody = runCatching {
-            HttpUtil.createPost("https://api.deepseek.com/chat/completions")
-                .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
-                .header("Content-Type", "application/json")
-                .body(objectMapper.writeValueAsString(request))
-                .timeouts(10000)
-                .execute()
-                .body()
-        }.getOrNull() ?: return NsfwCheckResult(false)
+        // fail-open：调用失败与「模型说没问题」在这里同样放行，不误伤正常网站
+        val raw = chatCompletion(AiCallScene.NSFW_CHECK, host, request) ?: return NsfwCheckResult(false)
 
-        val raw = runCatching {
-            objectMapper.readValue<DeepSeekResponse>(responseBody)
-                .choices?.firstOrNull()?.message?.content
-        }.getOrNull()?.trim() ?: return NsfwCheckResult(false)
-
-        return if (raw.isBlank() || raw.lowercase().startsWith("no")) {
-            NsfwCheckResult(false)
-        } else {
-            NsfwCheckResult(true, raw)
-        }
+        return if (raw.lowercase().startsWith("no")) NsfwCheckResult(false) else NsfwCheckResult(true, raw)
     }
 
     override fun inferContentViolation(title: String?, description: String?, host: String): AiReviewOutcome {
@@ -423,20 +539,8 @@ class ApiServiceImpl(
             maxTokens = 20,
         )
 
-        val responseBody = runCatching {
-            HttpUtil.createPost("https://api.deepseek.com/chat/completions")
-                .header("Authorization", "Bearer ${deepSeekConfig.apiKey}")
-                .header("Content-Type", "application/json")
-                .body(objectMapper.writeValueAsString(request))
-                .timeouts(10000)
-                .execute()
-                .body()
-        }.getOrNull() ?: return AiReviewOutcome.Unavailable
-
-        val raw = runCatching {
-            objectMapper.readValue<DeepSeekResponse>(responseBody)
-                .choices?.firstOrNull()?.message?.content
-        }.getOrNull()?.trim()?.takeIf { it.isNotBlank() } ?: return AiReviewOutcome.Unavailable
+        // fail-closed：拿不到结论时返回 Unavailable，绝不能与「内容正常」混为一谈
+        val raw = chatCompletion(AiCallScene.CONTENT_REVIEW, host, request) ?: return AiReviewOutcome.Unavailable
 
         return if (raw.equals("OK", ignoreCase = true)) AiReviewOutcome.Pass else AiReviewOutcome.Rejected(raw)
     }
@@ -455,5 +559,17 @@ class ApiServiceImpl(
 
         /** ping 的读取超时。对面只发一个 HEAD 请求，给 15s 已经很宽裕。 */
         private const val PING_READ_TIMEOUT_MS = 15_000
+
+        private const val DEEPSEEK_ENDPOINT = "https://api.deepseek.com/chat/completions"
+
+        /** AI 调用的默认读取超时。输出长的场景（相似网站、分类提议）在调用处单独放宽。 */
+        private const val AI_READ_TIMEOUT_MS = 10_000
+
+        /** 一个网站最多提议几个分类。与闭词表那条的 1~3 保持一致，别让一个站挂满标签。 */
+        private const val MAX_PROPOSED_CATEGORIES = 3
+
+        /** slug / name 的截断长度，与 `category` 表列宽对齐 */
+        private const val MAX_CATEGORY_SLUG_LEN = 50
+        private const val MAX_CATEGORY_NAME_LEN = 20
     }
 }

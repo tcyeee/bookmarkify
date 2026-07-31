@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
 import top.tcyeee.bookmarkify.entity.entity.*
+import top.tcyeee.bookmarkify.entity.enums.AiCallScene
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
@@ -360,6 +361,20 @@ data class BookmarkLivenessVO(
     @field:Schema(description = "抓取成功但页面疑似反爬虫/WAF挑战页,内容可能不可靠") var antiCrawlerBlocked: Boolean = false,
 )
 
+/**
+ * 管理后台「图片资产 · 重新抓取」的结果。
+ *
+ * 单独给出 [scrapedAssetCount] 而不是让前端比对前后数量：本次一张图都没抓到时资产会**原样保留**
+ * （见 SiteAssetWriter 的"没抓到就不清空"），此时前后数量相同，光看结果分不清是"没变化"还是
+ * "抓崩了但保住了旧图"，而这两件事该给管理员的提示完全不同。
+ */
+data class BookmarkAssetRefetchVO(
+    @field:Schema(description = "本次抓取是否成功") var success: Boolean,
+    @field:Schema(description = "本次抓取到的图片张数(0 表示保留了原有图片)") var scrapedAssetCount: Int,
+    @field:Schema(description = "抓取失败时的错误信息") var errorMsg: String? = null,
+    @field:Schema(description = "落库后的最新书签详情") var bookmark: BookmarkAdminVO,
+)
+
 /** 管理后台 DeepSeek 生成 appName 建议（不落库，供前端填入编辑框） */
 data class AppNameSuggestVO(
     @field:Schema(description = "DeepSeek 推断的书签简称(可能为空)") var appName: String? = null,
@@ -430,6 +445,34 @@ data class ScrapperCallLogVO(
         id = entity.id,
         url = entity.url,
         urlHost = entity.urlHost,
+        success = entity.success,
+    ) {
+        BeanUtil.copyProperties(entity, this)
+    }
+}
+
+/** 管理后台展示的第三方 AI 调用日志条目 */
+data class AiCallLogVO(
+    @field:Schema(description = "日志ID") var id: String,
+    @field:Schema(description = "服务商") var provider: String,
+    @field:Schema(description = "业务场景") var scene: AiCallScene,
+    @field:Schema(description = "模型") var model: String? = null,
+    @field:Schema(description = "判定对象(域名/标题)") var subject: String? = null,
+    @field:Schema(description = "是否成功") var success: Boolean,
+    @field:Schema(description = "HTTP状态码") var httpStatus: Int? = null,
+    @field:Schema(description = "请求体原文(含完整prompt)") var requestBody: String? = null,
+    @field:Schema(description = "响应体原文") var responseBody: String? = null,
+    @field:Schema(description = "输入token数") var promptTokens: Int? = null,
+    @field:Schema(description = "输出token数") var completionTokens: Int? = null,
+    @field:Schema(description = "总token数") var totalTokens: Int? = null,
+    @field:Schema(description = "耗时(ms)") var durationMs: Long = 0,
+    @field:Schema(description = "错误信息") var errorMsg: String? = null,
+    @field:Schema(description = "调用时间") var createTime: LocalDateTime = LocalDateTime.now(),
+) {
+    constructor(entity: AiCallLogEntity) : this(
+        id = entity.id,
+        provider = entity.provider,
+        scene = entity.scene,
         success = entity.success,
     ) {
         BeanUtil.copyProperties(entity, this)

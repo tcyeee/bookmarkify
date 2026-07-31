@@ -16,6 +16,7 @@ import {
   updateBookmarkIconApi,
 } from "#/api/bookmark";
 
+import BookmarkDetailDialog from "../BookmarkDetailDialog.vue";
 import BookmarkIcon from "./BookmarkIcon.vue";
 
 const ElCard = defineAsyncComponent(() =>
@@ -109,9 +110,18 @@ function displayName(row: BookmarkEntity): string {
   return row.appName || row.title || row.urlHost;
 }
 
-// ── 详情弹窗 ──────────────────────────────────────────────────────────────────
+// ── 书签详情弹窗：点击磁贴的默认动作，展示该书签的全部信息 ─────────────────────
 const detailVisible = ref(false);
-const detailItem = ref<BookmarkEntity | null>(null);
+const detailRow = ref<BookmarkEntity | null>(null);
+
+function openDetail(row: BookmarkEntity) {
+  detailRow.value = row;
+  detailVisible.value = true;
+}
+
+// ── 图标设置弹窗：调图标源/内边距/背景色，从详情弹窗底部进入 ────────────────────
+const iconVisible = ref(false);
+const iconItem = ref<BookmarkEntity | null>(null);
 
 // 图标设置编辑：图片内边距、背景色
 const PADDING_MIN = 0;
@@ -135,7 +145,7 @@ const PREVIEW_SIZES = [
 const normColor = (c?: null | string) => c || "";
 
 const iconDirty = computed(() => {
-  const item = detailItem.value;
+  const item = iconItem.value;
   if (!item) return false;
   return (
     editPadding.value !== prefOf(item.displayPrefs, 'TILE').iconPadding ||
@@ -160,8 +170,8 @@ const newLogoError = ref(false);
 // 有「重新获取」结果待应用，或图标设置有改动，均可保存
 const canSave = computed(() => iconDirty.value || refetchResult.value !== null);
 
-function openDetail(row: BookmarkEntity) {
-  detailItem.value = row;
+function openIconEditor(row: BookmarkEntity) {
+  iconItem.value = row;
   // 图标内边距范围 0~15，缺省值 10
   editPadding.value = Math.min(
     PADDING_MAX,
@@ -177,12 +187,12 @@ function openDetail(row: BookmarkEntity) {
   chooseTitle.value = "new";
   chooseIcon.value = "new";
   chooseLogo.value = "new";
-  detailVisible.value = true;
+  iconVisible.value = true;
 }
 
 /** 重新获取：调用后端重新解析，拿到新标题/新图标用于对比 */
 async function refetch() {
-  const item = detailItem.value;
+  const item = iconItem.value;
   if (!item) return;
   refetching.value = true;
   try {
@@ -214,7 +224,7 @@ async function pickScreenColor() {
 
 /** DeepSeek 生成书签简称，填入编辑框（仍可手改） */
 async function generateAppName() {
-  const item = detailItem.value;
+  const item = iconItem.value;
   if (!item) return;
   generatingAppName.value = true;
   try {
@@ -234,7 +244,7 @@ async function generateAppName() {
  * 保存：先应用「重新获取」的选择（新标题/新图标），再保存图标设置（内边距/背景色）
  */
 async function saveIcon() {
-  const item = detailItem.value;
+  const item = iconItem.value;
   if (!item) return;
   savingIcon.value = true;
   try {
@@ -352,23 +362,39 @@ onMounted(() => {
       </div>
     </ElCard>
 
+    <!-- 点击磁贴先看详情；调图标观感是另一件事，从这里的底部按钮进入图标设置 -->
+    <BookmarkDetailDialog v-model="detailVisible" :bookmark="detailRow">
+      <template #extra-actions="{ bookmark }">
+        <ElButton
+          v-if="bookmark"
+          type="primary"
+          @click="
+            detailVisible = false;
+            openIconEditor(bookmark);
+          "
+        >
+          图标设置
+        </ElButton>
+      </template>
+    </BookmarkDetailDialog>
+
     <ElDialog
-      v-model="detailVisible"
-      :title="detailItem ? detailItem.title || displayName(detailItem) : ''"
+      v-model="iconVisible"
+      :title="iconItem ? iconItem.title || displayName(iconItem) : ''"
       width="980px"
       append-to-body
       class="icon-dialog"
     >
-      <div v-if="detailItem" class="detail-body">
+      <div v-if="iconItem" class="detail-body">
         <!-- 标题下方：网站域名小字 -->
         <div class="domain-text">
           <ElLink
             type="info"
-            :href="fullUrl(detailItem)"
+            :href="fullUrl(iconItem)"
             target="_blank"
             :underline="false"
           >
-            {{ detailItem.urlHost }}
+            {{ iconItem.urlHost }}
           </ElLink>
         </div>
 
@@ -385,11 +411,11 @@ onMounted(() => {
                   class="preview-size-item"
                 >
                   <BookmarkIcon
-                    :src="logoOf(detailItem) ?? faviconOf(detailItem)"
+                    :src="logoOf(iconItem) ?? faviconOf(iconItem)"
                     :size="s.value"
                     :padding="editPadding"
                     :bg-color="editBgColor ?? undefined"
-                    :hd-url="editUseHdLogo ? logoOf(detailItem) : undefined"
+                    :hd-url="editUseHdLogo ? logoOf(iconItem) : undefined"
                   />
                   <span class="preview-size-tag">{{ s.label }}</span>
                 </div>
@@ -430,21 +456,21 @@ onMounted(() => {
                     @click="editUseHdLogo = false"
                   >
                     <div class="source-thumb">
-                      <BookmarkIcon :src="logoOf(detailItem) ?? faviconOf(detailItem)" :size="48" />
+                      <BookmarkIcon :src="logoOf(iconItem) ?? faviconOf(iconItem)" :size="48" />
                     </div>
                     <span class="source-tag">小图</span>
                   </div>
                   <div
                     :class="[
                       'source-option',
-                      { active: editUseHdLogo, disabled: !logoOf(detailItem) },
+                      { active: editUseHdLogo, disabled: !logoOf(iconItem) },
                     ]"
-                    @click="logoOf(detailItem) && (editUseHdLogo = true)"
+                    @click="logoOf(iconItem) && (editUseHdLogo = true)"
                   >
                     <div class="source-thumb">
                       <img
-                        v-if="logoOf(detailItem)"
-                        :src="logoOf(detailItem)"
+                        v-if="logoOf(iconItem)"
+                        :src="logoOf(iconItem)"
                         class="source-thumb-img"
                         alt="高清图标"
                         draggable="false"
@@ -454,7 +480,7 @@ onMounted(() => {
                     <span class="source-tag">高清</span>
                   </div>
                 </div>
-                <span v-if="!logoOf(detailItem)" class="edit-hint">
+                <span v-if="!logoOf(iconItem)" class="edit-hint">
                   未获取到高清 LOGO
                 </span>
               </div>
@@ -506,7 +532,7 @@ onMounted(() => {
                 @click="chooseTitle = 'old'"
               >
                 <span class="compare-tag">旧</span>
-                <span class="compare-text">{{ detailItem.title || "（空）" }}</span>
+                <span class="compare-text">{{ iconItem.title || "（空）" }}</span>
               </div>
               <div
                 :class="['compare-option', { active: chooseTitle === 'new' }]"
@@ -531,7 +557,7 @@ onMounted(() => {
                 ]"
                 @click="chooseIcon = 'old'"
               >
-                <BookmarkIcon :src="logoOf(detailItem) ?? faviconOf(detailItem)" :size="52" />
+                <BookmarkIcon :src="logoOf(iconItem) ?? faviconOf(iconItem)" :size="52" />
                 <span class="compare-tag">旧</span>
               </div>
               <div
@@ -563,8 +589,8 @@ onMounted(() => {
               >
                 <div class="logo-thumb">
                   <img
-                    v-if="logoOf(detailItem) && !oldLogoError"
-                    :src="logoOf(detailItem)"
+                    v-if="logoOf(iconItem) && !oldLogoError"
+                    :src="logoOf(iconItem)"
                     class="logo-thumb-img"
                     alt="旧高清 LOGO"
                     draggable="false"
