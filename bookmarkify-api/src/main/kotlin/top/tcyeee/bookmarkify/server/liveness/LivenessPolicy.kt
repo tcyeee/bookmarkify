@@ -90,4 +90,51 @@ object LivenessPolicy {
 
     /** 连续失败次数是否已经到了该归档的程度。 */
     fun shouldArchive(consecutiveFail: Int): Boolean = consecutiveFail >= ARCHIVE_AFTER_FAILURES
+
+    // ────── 站点（域名）级活性 ──────
+
+    /** 一轮巡检对某个域名的结论。 */
+    enum class SiteVerdict {
+        /** 域名确认活着 */
+        ALIVE,
+
+        /** 域名确认死亡：**只有根地址探测也失败时才会给出** */
+        DEAD,
+
+        /** 证据不足，保持原状 */
+        UNCHANGED,
+    }
+
+    /**
+     * 由「该域名下页面的探测结果」+「根地址的探测结果」判定域名活性。
+     *
+     * ## 这个函数存在的全部理由
+     *
+     * > **「某域名本轮所有候选页面都探测失败」不足以判定域名死亡。**
+     *
+     * 用户收藏的往往就是深链，而深链失效（视频被删、仓库归档、文章下架）是最常见的情形，
+     * 与域名死活无关。一旦一个被删的视频就能把 `youtube.com` 判死，下一轮该域名下**所有**页面
+     * 都会被站点层短路成失联、不再实际探测 —— 一次误判级联成整站误判，且再没有探测能纠正它。
+     * 与 [breakerReason] 防的是同一类事故：不要让局部证据推出全局结论。
+     *
+     * 所以判死这一侧必须由根地址确认；而判活不需要 —— 任意一个页面通了，域名必然活着。
+     *
+     * @param pageOutcomes 该域名下本轮**实际探测过**的页面结论（短路出来的不算，那是旧结论的复用）
+     * @param rootOutcome 根地址的探测结论；`null` 表示没探（那就只可能是 [UNCHANGED]）
+     */
+    fun siteVerdict(pageOutcomes: List<PingOutcome>, rootOutcome: PingOutcome?): SiteVerdict = when {
+        // 任意页面存活 → 域名必然存活，不必看根地址
+        pageOutcomes.any { it == PingOutcome.ALIVE } -> SiteVerdict.ALIVE
+        // 没探到任何页面，无从判断
+        pageOutcomes.isEmpty() -> SiteVerdict.UNCHANGED
+        // 混着 UNKNOWN（我方链路的问题）就不算"全部失联"，证据不足
+        !pageOutcomes.all { it == PingOutcome.DEAD } -> SiteVerdict.UNCHANGED
+        // 全部页面失联，结论完全取决于根地址
+        else -> when (rootOutcome) {
+            PingOutcome.DEAD -> SiteVerdict.DEAD
+            // 根地址通着 → 页面是真的没了，域名健在
+            PingOutcome.ALIVE -> SiteVerdict.UNCHANGED
+            else -> SiteVerdict.UNCHANGED
+        }
+    }
 }

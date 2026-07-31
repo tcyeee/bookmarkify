@@ -94,7 +94,7 @@ class UserShareServiceImpl(
         // 分享页与桌面一样是大图形态，按 TILE 解析图标；一次批量解析避免逐条查资产表
         val bookmarks = userShareBookmarkMapper.bookmarksByShareId(id)
         val logoMap = siteAssetResolver.resolveBatch(bookmarks.mapNotNull { it.bookmarkId }, DisplayMode.TILE)
-        bookmarks.forEach { it.initDisplay(logoMap[it.bookmarkId]) }
+        bookmarks.forEach { it.initDisplay(logoMap[it.bookmarkId], DisplayMode.TILE) }
         return SharePublicVO(
             id = share.id,
             note = share.note,

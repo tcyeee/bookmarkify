@@ -1,15 +1,22 @@
 package top.tcyeee.bookmarkify.entity.dto
 
 
-/* 书签地址 */
+/**
+ * 书签地址的规范化结果。canonical key 是 (host, urlPath, urlQuery, urlFragment) 四元组，
+ * 规范化规则见 [top.tcyeee.bookmarkify.utils.UrlCanonicalizer]。
+ *
+ * `urlQuery` / `urlFragment` 用空串而不是 null 表示「没有」，与库里三列的存法一致 ——
+ * 省得查询和判空要同时处理两种"没有"。
+ */
 data class BookmarkUrlWrapper(
     var urlRaw: String, // https://tool.chinaz.com/linksTesting/list?url=bilibili.com&type=1
     var urlScheme: String, // https
-    var urlHost: String, // tool.chinaz.com
+    var urlHost: String, // tool.chinaz.com（含端口）
     var urlRoot: String, // https://tool.chinaz.com
-    var urlFull: String, // https://tool.chinaz.com/linksTesting/list
+    var urlFull: String, // https://tool.chinaz.com/linksTesting/list?type=1&url=bilibili.com —— 抓取目标，带规范化后的参数
     var urlPath: String?, // /linksTesting/list
-    var urlQuery: String?, // url=bilibili.com&type=1
+    var urlQuery: String, // type=1&url=bilibili.com（已剥离追踪参数并按 key 排序）
+    var urlFragment: String = "", // 仅路由型 fragment（#/… / #!…），页内锚点已丢弃
 )
 
 /* 页面请求头 */

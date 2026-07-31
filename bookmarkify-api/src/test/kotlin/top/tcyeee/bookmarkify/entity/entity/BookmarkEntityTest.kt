@@ -26,8 +26,9 @@ class BookmarkEntityTest {
             urlRoot = "https://example.com",
             urlFull = "https://example.com/",
             urlPath = "/",
-            urlQuery = null,
-        )
+            urlQuery = "",
+        ),
+        siteId = "site-example",
     ).apply { this.updateTime = updateTime }
 
     @Test

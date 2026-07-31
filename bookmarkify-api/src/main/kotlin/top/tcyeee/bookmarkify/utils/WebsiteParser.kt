@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.*
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import java.net.URL
 
@@ -34,11 +33,9 @@ object WebsiteParser {
             .also { log.debug("[parse] 图标初始化完成: distinctIconCount={}", it.distinctIcons?.size) }
     }
 
-    fun urlToBookmark(urlRowStr: String): BookmarkEntity {
-        log.debug("[urlToBookmark] 原始URL: {}", urlRowStr)
-        return urlWrapper(urlRowStr).let { BookmarkEntity(it) }
-            .also { log.debug("[urlToBookmark] BookmarkEntity创建完成: id={}", it.id) }
-    }
+    // urlToBookmark 已移除：canonical 记录必须先有所属 site 才能建（品牌名/图标/NSFW/域名活性都在
+    // 那一层），而这个工具类既拿不到也不该拿 SiteService。建记录统一走
+    // IBookmarkService.getOrCreateCanonical，它同时负责 site 的 get-or-create 与并发收敛。
 
     /**
      * 格式化URL字符串
@@ -58,20 +55,30 @@ object WebsiteParser {
         val url: URL = runCatching { URLUtil.toUrlForHttp(urlStr) }.getOrElse {
             throw CommonException(ErrorType.E303, "${ErrorType.E303.code()}:${it.message}")
         }
-        // canonical 书签按 (host, path) 去重（见 BookmarkServiceImpl.getOrCreateByUrl），
-        // 所以这里要把「无路径」和「根路径斜杠」等价的写法收敛成同一个 key：
-        // 空路径 -> "/"，非根路径去掉末尾斜杠，避免同一页面因为写法不同产生两条 canonical 记录。
-        val normalizedPath = url.path.ifBlank { "/" }.let { if (it.length > 1 && it.endsWith("/")) it.dropLast(1) else it }
+        // canonical 书签按 (host, path, query, 路由型 fragment) 四元组去重
+        // （见 BookmarkServiceImpl.getOrCreateByUrl），规则全部收在 UrlCanonicalizer 里。
+        //
+        // query 必须参与：youtube.com/watch?v=A 与 ?v=B 是两个完全不同的页面，此前 query 被整个
+        // 丢掉，两者收敛成同一条记录，抓取目标还退化成了 https://www.youtube.com/watch（不是任何
+        // 一个视频）。详见根目录 SITE_LAYERING_DESIGN.md §1。
+        val canonical = UrlCanonicalizer.canonicalize(url.path, url.query, url.ref)
 
         return BookmarkUrlWrapper(
             urlScheme = url.protocol,
             urlHost = url.authority,
-            urlQuery = url.query,
-            urlPath = normalizedPath,
+            urlQuery = canonical.query,
+            urlFragment = canonical.fragment,
+            urlPath = canonical.path,
             urlRaw = urlStr,
             urlRoot = "${url.protocol}://${url.host}",
-            urlFull = "${url.protocol}://${url.host}${normalizedPath}",
-        ).also { log.debug("[urlWrapper] 解析结果: scheme={}, host={}, path={}, query={}", it.urlScheme, it.urlHost, it.urlPath, it.urlQuery) }
+            // 用 authority 而不是 host：带端口的地址（localhost:3000）拼掉端口就指向了另一个服务
+            urlFull = canonical.rawUrl(url.protocol, url.authority),
+        ).also {
+            log.debug(
+                "[urlWrapper] 解析结果: scheme={}, host={}, path={}, query={}, fragment={}",
+                it.urlScheme, it.urlHost, it.urlPath, it.urlQuery, it.urlFragment,
+            )
+        }
     }
 
     /**

@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server.asset
 
 import top.tcyeee.bookmarkify.entity.dto.scrape.AssetExtractor
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
+import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
@@ -61,6 +62,20 @@ object AssetRolePolicy {
     /** 未知出处一律按社交图之外的最低档处理，不至于让新枚举把整条流程打挂。 */
     fun classify(extractor: AssetExtractor): Pair<AssetRole, AssetQuality> =
         TABLE[extractor] ?: (AssetRole.FAVICON to AssetQuality.DEGRADED)
+
+    /**
+     * 这个用途的图该挂在哪一层 —— 也是一条**策略**，不是事实，所以和 role 的判定放在一起。
+     *
+     * 判据仍是那个问题：换同域下另一个页面，这张图会变吗？图标不会（全站一套），
+     * 社交图和截图会（就是页面内容本身）。详见根目录 `SITE_LAYERING_DESIGN.md` §5。
+     *
+     * 必须在 [assignRoles] **之后**调用：第三遍会把借来的 favicon 改判成 LOGO，
+     * 归属得按最终的 role 算（这两者都归 SITE，结论不变，但顺序上的依赖是真实存在的）。
+     */
+    fun ownerTypeOf(role: AssetRole): AssetOwnerType = when (role) {
+        AssetRole.FAVICON, AssetRole.LOGO -> AssetOwnerType.SITE
+        AssetRole.SOCIAL, AssetRole.SCREENSHOT -> AssetOwnerType.PAGE
+    }
 
     /**
      * 给一批**同一书签**的资产定角色、定质量、定 primary，返回可直接落库的列表。

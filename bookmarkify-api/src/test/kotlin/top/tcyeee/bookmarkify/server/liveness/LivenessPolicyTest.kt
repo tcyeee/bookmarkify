@@ -115,4 +115,95 @@ class LivenessPolicyTest {
         assertFalse(LivenessPolicy.shouldArchive(LivenessPolicy.ARCHIVE_AFTER_FAILURES - 1))
         assertTrue(LivenessPolicy.shouldArchive(LivenessPolicy.ARCHIVE_AFTER_FAILURES))
     }
+
+    // ────── 域名级活性：防的是"局部证据推出全局结论" ──────
+
+    private val D = PingOutcome.DEAD
+    private val A = PingOutcome.ALIVE
+    private val U = PingOutcome.UNKNOWN
+
+    /**
+     * 这条是整个站点层短路机制的安全底线。
+     *
+     * 用户收藏的大多是深链，而深链失效（视频被删、仓库归档）与域名死活无关。若一个被删的视频
+     * 就能把 youtube.com 判死，下一轮该域名下所有页面都会被短路成失联、不再实际探测 ——
+     * 一次误判级联成整站误判，且再没有探测能纠正它。
+     */
+    @Test
+    fun `页面全挂但根地址通着时绝不判定域名死亡`() {
+        assertEquals(
+            LivenessPolicy.SiteVerdict.UNCHANGED,
+            LivenessPolicy.siteVerdict(listOf(D, D, D), rootOutcome = A),
+            "根地址通着说明域名健在，那些页面是真的没了",
+        )
+    }
+
+    @Test
+    fun `页面全挂且根地址也挂了才判定域名死亡`() {
+        assertEquals(
+            LivenessPolicy.SiteVerdict.DEAD,
+            LivenessPolicy.siteVerdict(listOf(D, D), rootOutcome = D),
+        )
+    }
+
+    @Test
+    fun `没探根地址时不足以判死`() {
+        assertEquals(
+            LivenessPolicy.SiteVerdict.UNCHANGED,
+            LivenessPolicy.siteVerdict(listOf(D, D), rootOutcome = null),
+        )
+    }
+
+    /** UNKNOWN 是我方链路的问题，混进来就不算"全部失联"，更不能拿它判死 */
+    @Test
+    fun `掺了无结论就不算全部失联`() {
+        assertEquals(
+            LivenessPolicy.SiteVerdict.UNCHANGED,
+            LivenessPolicy.siteVerdict(listOf(D, U), rootOutcome = D),
+        )
+        assertEquals(
+            LivenessPolicy.SiteVerdict.UNCHANGED,
+            LivenessPolicy.siteVerdict(listOf(U, U), rootOutcome = D),
+        )
+    }
+
+    @Test
+    fun `根地址无结论时保持原状`() {
+        assertEquals(
+            LivenessPolicy.SiteVerdict.UNCHANGED,
+            LivenessPolicy.siteVerdict(listOf(D, D), rootOutcome = U),
+        )
+    }
+
+    /** 判活不需要根地址确认：任意一个页面通了，域名必然活着 */
+    @Test
+    fun `任意页面存活即判定域名存活且无需根地址`() {
+        assertEquals(
+            LivenessPolicy.SiteVerdict.ALIVE,
+            LivenessPolicy.siteVerdict(listOf(D, A, D), rootOutcome = null),
+        )
+        // 即使根地址探测失败（首页可能被防火墙挡了），有页面通就说明域名是活的
+        assertEquals(
+            LivenessPolicy.SiteVerdict.ALIVE,
+            LivenessPolicy.siteVerdict(listOf(A), rootOutcome = D),
+        )
+    }
+
+    @Test
+    fun `一个页面都没探到时无从判断`() {
+        assertEquals(
+            LivenessPolicy.SiteVerdict.UNCHANGED,
+            LivenessPolicy.siteVerdict(emptyList(), rootOutcome = D),
+            "本轮没有该域名的探测样本，不该凭根地址一次结果就改动它",
+        )
+    }
+
+    /** 单个页面失联 + 根地址失联：样本虽小，但根地址已经是域名级的直接证据 */
+    @Test
+    fun `单个页面配合根地址确认也可判死`() {
+        assertEquals(
+            LivenessPolicy.SiteVerdict.DEAD,
+            LivenessPolicy.siteVerdict(listOf(D), rootOutcome = D),
+        )
+    }
 }

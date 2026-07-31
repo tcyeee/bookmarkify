@@ -71,7 +71,7 @@ Browser ────────────────────────
 bookmarkify-web ──── REST+WS ────► bookmarkify-api ◄── REST+WS ───┘
 (Nuxt, port 3000)    satoken       (Spring Boot, :8001 local / :7001 prod)
                      header         │
-                                    ├── PostgreSQL (schema: bookmarkify)
+                                    ├── PostgreSQL (database: bookmarkify, schema: public)
                                     ├── Redis (session/cache)
                                     ├── @Async executor (in-process parsing)
                                     └── POST /scrape ──► bookmarkify-scrapper

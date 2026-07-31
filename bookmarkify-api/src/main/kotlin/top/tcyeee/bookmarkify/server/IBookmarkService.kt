@@ -143,8 +143,20 @@ interface IBookmarkService : IService<BookmarkEntity> {
      */
     fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity>
 
-    /** 按 host 域名匹配任意一条书签（忽略路径），不存在时返回 null；用于域名级别的存在性判断 */
-    fun findByHost(host: String): BookmarkEntity?
+    /**
+     * 按 host 查该域名的**首页**记录，不存在时返回 null。
+     *
+     * 刻意不是「匹配任意一条」：域名下已收录过某个深链（如某个 YouTube 视频），并不代表首页也收录了，
+     * 这两件事对收录判断的结论完全不同。旧实现是 `eq(urlHost).one()`，在同一 host 有多条路径时
+     * 会直接抛异常。
+     */
+    fun findRootPageByHost(host: String): BookmarkEntity?
+
+    /**
+     * 按网址获取或创建 canonical 页面记录（顺带保证 `site` 行存在），不触发抓取。
+     * 需要抓取的调用方自己判断 [BookmarkEntity.parseStatus] 后发事件。
+     */
+    fun getOrCreateCanonical(url: String): BookmarkEntity
 
     /**
      * 管理员「一键分类」批量检查全部 canonical 书签是否 NSFW(涉黄/涉赌等违规内容)，命中的直接回写 nsfw=true。

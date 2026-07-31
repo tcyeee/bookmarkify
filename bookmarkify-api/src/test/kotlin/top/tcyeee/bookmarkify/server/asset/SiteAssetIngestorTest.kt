@@ -6,6 +6,7 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import top.tcyeee.bookmarkify.entity.dto.scrape.ImageFormat
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.scrape.Screenshot
+import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
@@ -34,7 +35,7 @@ class SiteAssetIngestorTest {
     private val response: ScrapeResponse by lazy { mapper.readValue(fixture.readText()) }
 
     private fun project() =
-        SiteAssetIngestor.project("bm-1", "https://github.com/vbenjs/vue-vben-admin", response, 421, mapper)
+        SiteAssetIngestor.project("site-1", "bm-1", "https://github.com/vbenjs/vue-vben-admin", response, 421, mapper)
 
     @Test
     fun `snapshot keeps the whole response for later backfill`() {
@@ -122,6 +123,40 @@ class SiteAssetIngestorTest {
         }
     }
 
+    /**
+     * 归属分层：图标归站点、社交图与截图归页面。
+     *
+     * 这条决定了同域名 1000 个页面是共用一份 favicon 还是各存一份 —— 后者是改造前的行为，
+     * 代价是 1000 次下载+OSS 上传、1000 次人工调内边距。
+     */
+    @Test
+    fun `icons belong to the site while page-specific images belong to the page`() {
+        val assets = project().assets
+
+        assets.filter { it.role == AssetRole.FAVICON || it.role == AssetRole.LOGO }.forEach {
+            assertEquals(AssetOwnerType.SITE, it.ownerType, "${it.extractor} 是站点级图标")
+            assertEquals("site-1", it.ownerId)
+        }
+        assets.filter { it.role == AssetRole.SOCIAL }.forEach {
+            assertEquals(AssetOwnerType.PAGE, it.ownerType, "og:image 是这一个页面的内容")
+            assertEquals("bm-1", it.ownerId)
+        }
+        assertTrue(assets.isNotEmpty())
+    }
+
+    /**
+     * 借用 favicon 充当 LOGO 后归属仍是 SITE。
+     *
+     * 这是 assignOwner 必须排在 assignRoles **之后**的原因：角色在第三遍才定终局，
+     * 提前算归属就会按中间态的 role 归错层。
+     */
+    @Test
+    fun `an asset re-roled into LOGO keeps site ownership`() {
+        val borrowed = project().assets.filter { it.role == AssetRole.LOGO }
+        assertTrue(borrowed.isNotEmpty())
+        assertTrue(borrowed.all { it.ownerType == AssetOwnerType.SITE && it.ownerId == "site-1" })
+    }
+
     /** 摄取产物直接喂给选取策略，两种模式各取所需 */
     @Test
     fun `projection feeds straight into per-mode resolution`() {
@@ -154,7 +189,7 @@ class SiteAssetIngestorTest {
             )
         )
         val shot = SiteAssetIngestor
-            .project("bm-3", "https://github.com/vbenjs/vue-vben-admin", withShot, 900, mapper)
+            .project("site-1", "bm-3", "https://github.com/vbenjs/vue-vben-admin", withShot, 900, mapper)
             .assets.single { it.role == AssetRole.SCREENSHOT }
 
         assertEquals("scrapper/screenshots/abc123.webp", shot.storageUrl)
@@ -173,7 +208,7 @@ class SiteAssetIngestorTest {
             screenshot = Screenshot(dataUrl = "data:image/webp;base64,AAAA", width = 800, height = 600)
         )
         val assets = SiteAssetIngestor
-            .project("bm-4", "https://github.com/vbenjs/vue-vben-admin", withInlineShot, 900, mapper)
+            .project("site-1", "bm-4", "https://github.com/vbenjs/vue-vben-admin", withInlineShot, 900, mapper)
             .assets
 
         assertTrue(assets.none { it.role == AssetRole.SCREENSHOT })

@@ -265,6 +265,34 @@ export const useBookmarkStore = defineStore('homeItems', {
       }
       return bad
     },
+
+    // 兜底去重（历史踩坑#10）：跨卡片拖拽若两侧同步不彻底，同一 id 会同时残留在根列表和某个
+    // 文件夹的 children 里——v-for :key 重复不会报错也不会合并渲染两行，而是让该 id 在多个
+    // order 列表里各计一次，folder 卡片标题旁的 ({{ children.length }}) 就会比实际书签数多。
+    // 只保留 id 第一次出现的位置，跨列表的重复项直接丢弃。
+    dedupeLayout(): boolean {
+      const seen = new Set<string>()
+      let changed = false
+      for (const key of Object.keys(this.order)) {
+        const deduped = (this.order[key] ?? []).filter((id) => {
+          if (seen.has(id)) return false
+          seen.add(id)
+          return true
+        })
+        if (deduped.length !== this.order[key]?.length) {
+          changed = true
+          this.order[key] = deduped
+        }
+      }
+      if (changed) {
+        console.error(
+          '%c[重大事故]',
+          'color:#fff;background:#dc2626;font-weight:bold;padding:1px 6px;border-radius:3px',
+          '检测到同一 id 同时存在于多个列表，已去重（仅保留首次出现）',
+        )
+      }
+      return changed
+    },
   },
 
   // 显式指定 localStorage：裸 `persist: true` 在本项目未配置模块级 storage 时，
@@ -272,5 +300,21 @@ export const useBookmarkStore = defineStore('homeItems', {
   // base64 图标）写入必然静默失败/截断，导致缓存永远无法在 F5 后存活。与
   // preference.store 写法保持一致。
   // pendingTimeouts 是进程内定时器句柄，刷新后必然失效，排除在持久化范围外。
-  persist: { storage: piniaPluginPersistedstate.localStorage(), paths: ['nodes', 'order', 'lastFetchedAt'] },
+  // afterHydrate 在水合完成后立即跑一次 dedupeLayout：坏数据可能是很久以前的一次拖拽留下的，
+  // 只在下次 setLayout() 才检查为时已晚——用户在这之前已经看到错误计数了。
+  persist: {
+    storage: piniaPluginPersistedstate.localStorage(),
+    paths: ['nodes', 'order', 'lastFetchedAt'],
+    afterHydrate: (ctx) => {
+      const order = ctx.store.order as Record<string, string[]>
+      const seen = new Set<string>()
+      for (const key of Object.keys(order)) {
+        order[key] = (order[key] ?? []).filter((id) => {
+          if (seen.has(id)) return false
+          seen.add(id)
+          return true
+        })
+      }
+    },
+  },
 })

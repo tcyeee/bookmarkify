@@ -50,7 +50,7 @@ class UserLayoutNodeServiceImpl(
     private fun bookmarkShowMap(uid: String): Map<String, BookmarkShow> {
         val shows = bookmarkUserLinkMapper.allBookmarkByUid(uid)
         val logoMap = siteAssetResolver.resolveBatch(shows.mapNotNull { it.bookmarkId }, DisplayMode.TILE)
-        return shows.onEach { it.initDisplay(logoMap[it.bookmarkId]) }.associateBy { it.layoutNodeId!! }
+        return shows.onEach { it.initDisplay(logoMap[it.bookmarkId], DisplayMode.TILE) }.associateBy { it.layoutNodeId!! }
     }
 
     @Transactional
