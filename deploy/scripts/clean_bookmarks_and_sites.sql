@@ -1,19 +1,10 @@
 -- ============================================================================
--- 清空系统中所有「书签」与「站点(site)」数据
+-- ⚠️ 不可逆 清空系统中所有「书签」与「站点(site)」数据
 --
 -- 使用场景：契约/资产模型改动后需要全量重抓，或本地/测试环境重置。
 -- 保留：user_info、user_preference(仅清空排序 JSON)、background_*、category 字典、
 --       layout_node_function、system_config、access_token、admin_grid_config。
---
--- ⚠️ 不可逆。执行前请先备份：
---    pg_dump -h $HOST -U $USER -n bookmarkify -Fc -f before_clean.dump <DB>
---
--- ⚠️ 建议在 API 停机时执行：@Async 解析线程若正在跑，可能在清理后再写回半条数据。
---
--- 执行：psql -h $HOST -U $USER -d <DB> -v ON_ERROR_STOP=1 -f clean_bookmarks_and_sites.sql
 -- ============================================================================
-
-\set ON_ERROR_STOP on
 
 BEGIN;
 
