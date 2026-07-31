@@ -1,6 +1,7 @@
 import type {
   AssetRole,
   BookmarkEntity,
+  BookmarkLockedField,
   DisplayMode,
   SiteAsset,
   SiteDisplayPref,
@@ -70,6 +71,13 @@ export function lacksRealLogo(assets: SiteAsset[] | undefined): boolean {
 export const DISPLAY_MODE_LABEL: Record<DisplayMode, string> = {
   LIST: "列表（小图 + 全名）",
   TILE: "大图（大图 + 短名）",
+};
+
+/** 人工锁定字段的中文名：锁住的字段不会被下一轮自动抓取覆盖 */
+export const BOOKMARK_LOCKED_FIELD_LABEL: Record<BookmarkLockedField, string> = {
+  APP_NAME: "简称已锁定",
+  DESCRIPTION: "描述已锁定",
+  TITLE: "标题已锁定",
 };
 
 /** 出处枚举的中文释义，鼠标悬浮时解释每个取值 */

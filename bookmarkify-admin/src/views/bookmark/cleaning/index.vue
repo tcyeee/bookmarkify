@@ -1,47 +1,23 @@
 <script lang="ts" setup>
 import type { BookmarkEntity, BookmarkSearchParams } from "#/api/bookmark";
 
-import {
-  computed,
-  defineAsyncComponent,
-  onUnmounted,
-  reactive,
-  ref,
-} from "vue";
+import { defineAsyncComponent, reactive, ref } from "vue";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
 
 import {
-  checkBookmarkLivenessApi,
-  findSimilarSitesApi,
   getBookmarkListApi,
-  ingestSimilarSitesApi,
-  recategorizeBookmarkApi,
   refreshBookmarkApi,
   updateBookmarkBasicInfoApi,
-  updateBookmarkCategoriesApi,
-  type BookmarkLivenessResult,
   type BookmarkParseStatus,
-  type SimilarSite,
 } from "#/api/bookmark";
-import { getCategoryListApi, type CategoryEntity } from "#/api/category";
-import {
-  createIngestSocket,
-  type IngestSocketHandle,
-} from "#/api/similarIngestSocket";
 import { ElMessage } from "element-plus";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 
 import BookmarkAssetCell from "../BookmarkAssetCell.vue";
-import {
-  DISPLAY_MODE_LABEL,
-  EXTRACTOR_LEGEND,
-  faviconOf,
-  logoOf,
-  socialOf,
-} from "../siteAsset";
-import BookmarkIcon from "../liveness/BookmarkIcon.vue";
+import BookmarkDetailDialog from "../BookmarkDetailDialog.vue";
+import { faviconOf, logoOf, socialOf } from "../siteAsset";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
@@ -55,13 +31,6 @@ const ElTag = defineAsyncComponent(() =>
     import("element-plus/es/components/tag/index"),
     import("element-plus/es/components/tag/style/css"),
   ]).then(([res]) => res.ElTag)
-);
-
-const ElSwitch = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/switch/index"),
-    import("element-plus/es/components/switch/style/css"),
-  ]).then(([res]) => res.ElSwitch)
 );
 
 const ElDialog = defineAsyncComponent(() =>
@@ -106,6 +75,7 @@ const ElButton = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElButton)
 );
 
+// 详情弹窗直接拿表格行对象：弹窗里的改动就地写回该行，表格无需二次同步
 const detailVisible = ref(false);
 const currentRow = ref<BookmarkEntity | null>(null);
 
@@ -114,150 +84,6 @@ const DESC_MAX = 15;
 function truncate(text: string | undefined, max = DESC_MAX) {
   if (!text) return "";
   return text.length > max ? `${text.slice(0, max)}…` : text;
-}
-
-/** 详情弹窗要展示「全部信息」，所以库里存的 scheme/host/path 三段在这里拼回原始地址 */
-const currentUrl = computed(() => {
-  const row = currentRow.value;
-  if (!row) return "";
-  return `${row.urlScheme}://${row.urlHost}${row.urlPath ?? ""}`;
-});
-
-function formatBytes(bytes?: number) {
-  if (!bytes && bytes !== 0) return "-";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
-}
-
-const ASSET_ROLE_LABEL: Record<string, string> = {
-  FAVICON: "小图标",
-  LOGO: "高清 LOGO",
-  SCREENSHOT: "页面截图",
-  SOCIAL: "社交分享图",
-};
-
-const categoryDict = ref<CategoryEntity[]>([]);
-const editingCategoryIds = ref<string[]>([]);
-const savingCategories = ref(false);
-const recategorizing = ref(false);
-
-const similarSites = ref<SimilarSite[]>([]);
-const loadingSimilar = ref(false);
-const similarLoaded = ref(false);
-
-async function findSimilar() {
-  if (!currentRow.value) return;
-  loadingSimilar.value = true;
-  try {
-    similarSites.value = await findSimilarSitesApi(currentRow.value.id);
-    similarLoaded.value = true;
-  } finally {
-    loadingSimilar.value = false;
-  }
-}
-
-// ── 一键收录 ──
-const ingesting = ref(false);
-// domain -> 状态：LOADING(收录中) / INGESTED(已收录) / SKIPPED(已跳过) / EXISTS(本地已有)
-const ingestStatus = ref<Record<string, string>>({});
-let ingestSocket: IngestSocketHandle | null = null;
-let pendingDomains = new Set<string>();
-
-// 待收录：本地不存在且本次尚未处理过的站点
-const ingestTargets = computed(() =>
-  similarSites.value.filter((s) => !s.exists && !ingestStatus.value[s.domain]),
-);
-
-function closeIngestSocket() {
-  ingestSocket?.close();
-  ingestSocket = null;
-}
-
-function resetIngest() {
-  closeIngestSocket();
-  ingesting.value = false;
-  ingestStatus.value = {};
-  pendingDomains = new Set();
-}
-
-async function oneClickIngest() {
-  if (!currentRow.value) return;
-  const targets = ingestTargets.value.map((s) => s.domain);
-  if (targets.length === 0) return;
-
-  ingesting.value = true;
-  pendingDomains = new Set(targets);
-  // 先把目标站点标记为「收录中」
-  const next = { ...ingestStatus.value };
-  targets.forEach((d) => (next[d] = "LOADING"));
-  ingestStatus.value = next;
-
-  // 开 WS 接收逐站进度（关弹窗或全部完成即断开）
-  closeIngestSocket();
-  ingestSocket = createIngestSocket((update) => {
-    ingestStatus.value = {
-      ...ingestStatus.value,
-      [update.domain]: update.status,
-    };
-    pendingDomains.delete(update.domain);
-    if (pendingDomains.size === 0) {
-      ingesting.value = false;
-      closeIngestSocket();
-    }
-  });
-
-  try {
-    await ingestSimilarSitesApi(currentRow.value.id, targets);
-  } catch {
-    resetIngest();
-  }
-}
-
-onUnmounted(() => closeIngestSocket());
-
-// ── 书签检测：直接调用 scrapper 重新抓取一次，展示其给出的全部字段 ──
-const checkingLiveness = ref(false);
-const livenessChecked = ref(false);
-const livenessResult = ref<BookmarkLivenessResult | null>(null);
-
-function resetLiveness() {
-  livenessChecked.value = false;
-  livenessResult.value = null;
-}
-
-async function checkLiveness() {
-  if (!currentRow.value) return;
-  checkingLiveness.value = true;
-  try {
-    const result = await checkBookmarkLivenessApi(currentRow.value.id);
-    livenessResult.value = result;
-    livenessChecked.value = true;
-    currentRow.value.isActivity = result.isActivity;
-    currentRow.value.parseStatus = result.parseStatus;
-    currentRow.value.antiCrawlerBlocked = result.antiCrawlerBlocked;
-    if (result.errorMsg) currentRow.value.parseErrMsg = result.errorMsg;
-    syncRowLiveness(currentRow.value.id, result);
-    ElMessage[result.success ? "success" : "warning"](
-      result.success
-        ? "检测完成，网站存活"
-        : `检测完成，网站不可访问${result.errorMsg ? `：${result.errorMsg}` : ""}`,
-    );
-  } catch {
-    // 同上：抓取服务自身不可用时接口直接报错，提示已由拦截器弹出
-  } finally {
-    checkingLiveness.value = false;
-  }
-}
-
-function syncRowLiveness(id: string, result: BookmarkLivenessResult) {
-  const row = gridApi.grid?.getTableData().fullData.find((r: BookmarkEntity) => r.id === id);
-  if (row) {
-    row.isActivity = result.isActivity;
-    row.parseStatus = result.parseStatus;
-    row.antiCrawlerBlocked = result.antiCrawlerBlocked;
-    if (result.errorMsg) row.parseErrMsg = result.errorMsg;
-  }
 }
 
 // ── 行内「更新」：重新抓取网站信息并直接覆盖持久化 ──
@@ -309,52 +135,6 @@ async function handleSaveBasicInfo() {
   }
 }
 
-async function loadCategoryDict() {
-  if (categoryDict.value.length === 0) {
-    categoryDict.value = await getCategoryListApi();
-  }
-}
-
-async function saveCategories() {
-  if (!currentRow.value) return;
-  savingCategories.value = true;
-  try {
-    const updated = await updateBookmarkCategoriesApi(
-      currentRow.value.id,
-      editingCategoryIds.value,
-    );
-    currentRow.value.categories = updated;
-    syncRowCategories(currentRow.value.id, updated);
-    ElMessage.success("分类已保存");
-  } finally {
-    savingCategories.value = false;
-  }
-}
-
-async function recategorize() {
-  if (!currentRow.value) return;
-  recategorizing.value = true;
-  try {
-    const updated = await recategorizeBookmarkApi(currentRow.value.id);
-    currentRow.value.categories = updated;
-    editingCategoryIds.value = updated.map((c) => c.id);
-    syncRowCategories(currentRow.value.id, updated);
-    ElMessage.success(
-      updated.length > 0 ? "AI 归类完成" : "AI 未返回分类（检查词表是否为空）",
-    );
-  } finally {
-    recategorizing.value = false;
-  }
-}
-
-function syncRowCategories(
-  id: string,
-  categories: BookmarkEntity["categories"],
-) {
-  const row = gridApi.grid?.getTableData().fullData.find((r: BookmarkEntity) => r.id === id);
-  if (row) row.categories = categories;
-}
-
 const searchForm = reactive<Pick<BookmarkSearchParams, "name" | "status">>({
   name: "",
   status: undefined,
@@ -375,12 +155,6 @@ function handleRowClick({ row, column }: { row: BookmarkEntity; column: any }) {
   if (column?.field === "rowActions") return;
   currentRow.value = row;
   detailVisible.value = true;
-  editingCategoryIds.value = (row.categories ?? []).map((c) => c.id);
-  similarSites.value = [];
-  similarLoaded.value = false;
-  resetIngest();
-  resetLiveness();
-  loadCategoryDict();
 }
 
 function handleSearch() {
@@ -441,7 +215,12 @@ const gridOptions: VxeGridProps<BookmarkEntity> = {
   },
 };
 
-const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
+// 行点击必须走 gridEvents：Grid 包装组件的根节点是个 div，模板上写 @cell-click 只会
+// 作为原生监听落到那个 div 上（DOM 没有 cell-click 事件），内层 VxeGrid 收不到
+const [Grid, gridApi] = useVbenVxeGrid({
+  gridOptions,
+  gridEvents: { cellClick: handleRowClick },
+});
 </script>
 
 <template>
@@ -474,7 +253,7 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
           </div>
         </ElForm>
       </div>
-      <Grid @cell-click="handleRowClick">
+      <Grid>
         <template #favicon="{ row }">
           <BookmarkAssetCell :src="faviconOf(row)" />
         </template>
@@ -530,404 +309,9 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
           </ElButton>
         </template>
       </Grid>
-      <ElDialog
-        v-model="detailVisible"
-        title="书签详情"
-        width="720px"
-        @close="
-          resetIngest();
-          resetLiveness();
-        "
-      >
-        <div v-if="currentRow" class="detail-body space-y-4 pr-1 text-sm">
-          <!-- 卡片一：基础信息 -->
-          <ElCard shadow="never" class="detail-card">
-            <template #header>
-              <span class="font-medium">基础信息</span>
-            </template>
-            <div class="flex gap-6">
-              <!-- 左：头像 + 状态 + 活跃 -->
-              <div class="flex w-32 flex-col items-center gap-3">
-                <BookmarkIcon
-                  :src="logoOf(currentRow) ?? faviconOf(currentRow)"
-                  :size="64"
-                  
-                />
-                <div>
-                  <ElTag v-if="currentRow.parseStatus === 'SUCCESS'" type="success" size="small">
-                    成功
-                  </ElTag>
-                  <ElTag v-else-if="currentRow.parseStatus === 'PENDING'" type="info" size="small">
-                    等待中
-                  </ElTag>
-                  <ElTag v-else-if="currentRow.parseStatus === 'UNREACHABLE'" type="danger" size="small">
-                    抓取失败
-                  </ElTag>
-                  <ElTag
-                    v-else-if="currentRow.parseStatus === 'ARCHIVED'"
-                    type="warning"
-                    size="small"
-                    title="连续失败达到阈值，已停止巡检；手动刷新/检测可恢复"
-                  >
-                    已归档
-                  </ElTag>
-                  <ElTag v-else size="small">
-                    {{ currentRow.parseStatus || "未知" }}
-                  </ElTag>
-                  <ElTag v-if="currentRow.antiCrawlerBlocked" type="warning" size="small" class="ml-1">
-                    反爬拦截
-                  </ElTag>
-                  <ElTag v-if="currentRow.nsfw" type="danger" size="small" class="ml-1">
-                    NSFW
-                  </ElTag>
-                </div>
-                <div class="flex items-center gap-2">
-                  <ElSwitch :model-value="currentRow.isActivity" active-color="#13ce66" inactive-color="#ff4949" disabled />
-                  <span class="text-gray-500">{{ currentRow.isActivity ? "活跃" : "不活跃" }}</span>
-                </div>
-              </div>
-              <!-- 右：其余信息 -->
-              <div class="flex-1 space-y-2">
-                <div class="flex">
-                  <span class="w-20 text-gray-500">App Name</span>
-                  <span class="flex-1 font-medium break-all">{{ currentRow.appName || "-" }}</span>
-                </div>
-                <div class="flex">
-                  <span class="w-20 text-gray-500">标题</span>
-                  <span class="flex-1 font-medium break-all">{{ currentRow.title || "-" }}</span>
-                </div>
-                <div class="flex">
-                  <span class="w-20 text-gray-500">域名</span>
-                  <span class="flex-1 break-all">{{ currentRow.urlHost }}</span>
-                </div>
-                <div class="flex">
-                  <span class="w-20 text-gray-500">完整地址</span>
-                  <a
-                    :href="currentUrl"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="flex-1 break-all text-blue-500"
-                  >
-                    {{ currentUrl }}
-                  </a>
-                </div>
-                <div class="flex">
-                  <span class="w-20 text-gray-500">描述</span>
-                  <span class="flex-1 break-all">{{ currentRow.description || "-" }}</span>
-                </div>
-                <div class="flex">
-                  <span class="w-20 text-gray-500">创建时间</span>
-                  <span class="flex-1">{{ formatDateTime(currentRow.createTime) }}</span>
-                </div>
-                <div class="flex">
-                  <span class="w-20 text-gray-500">更新时间</span>
-                  <span class="flex-1">
-                    {{ currentRow.updateTime ? formatDateTime(currentRow.updateTime) : "-" }}
-                  </span>
-                </div>
-                <div class="flex">
-                  <span class="w-20 text-gray-500">书签 ID</span>
-                  <span class="flex-1 break-all text-gray-400">{{ currentRow.id }}</span>
-                </div>
-                <div v-if="currentRow.parseErrMsg" class="flex">
-                  <span class="w-20 text-gray-500">错误信息</span>
-                  <span class="flex-1 break-all text-red-500">{{ currentRow.parseErrMsg }}</span>
-                </div>
-              </div>
-            </div>
-          </ElCard>
 
-          <!-- 卡片二：分类 -->
-          <ElCard shadow="never" class="detail-card">
-            <template #header>
-              <span class="font-medium">分类</span>
-            </template>
-            <div class="mb-2 flex flex-wrap gap-1">
-              <ElTag
-                v-for="c in currentRow.categories ?? []"
-                :key="c.id"
-                size="small"
-                :color="c.color || undefined"
-                :style="c.color ? { color: '#fff', borderColor: c.color } : {}"
-              >
-                {{ c.name }}
-              </ElTag>
-              <span
-                v-if="(currentRow.categories ?? []).length === 0"
-                class="text-gray-400"
-              >
-                暂无分类
-              </span>
-            </div>
-            <ElSelectV2
-              v-model="editingCategoryIds"
-              :options="categoryDict.map((c) => ({ label: c.name, value: c.id }))"
-              multiple
-              clearable
-              placeholder="选择分类"
-              style="width: 100%"
-            />
-            <div class="mt-2 flex justify-end gap-2">
-              <ElButton
-                type="primary"
-                size="small"
-                :loading="savingCategories"
-                @click="saveCategories"
-              >
-                保存分类
-              </ElButton>
-              <ElButton
-                size="small"
-                :loading="recategorizing"
-                @click="recategorize"
-              >
-                重新 AI 归类
-              </ElButton>
-            </div>
-          </ElCard>
+      <BookmarkDetailDialog v-model="detailVisible" :bookmark="currentRow" />
 
-          <!-- 卡片三：图片资产 —— 后台刻意展示**全部**声明的图，而不是选好的那一张 -->
-          <ElCard shadow="never" class="detail-card">
-            <template #header>
-              <span class="font-medium">
-                图片资产（{{ (currentRow.assets ?? []).length }}）
-              </span>
-            </template>
-            <ul v-if="(currentRow.assets ?? []).length > 0" class="space-y-2">
-              <li
-                v-for="a in currentRow.assets"
-                :key="a.id"
-                class="flex gap-3 rounded border border-gray-100 p-2"
-              >
-                <BookmarkAssetCell
-                  :src="a.url"
-                  :wide="a.role === 'SOCIAL' || a.role === 'SCREENSHOT'"
-                />
-                <div class="min-w-0 flex-1 space-y-1">
-                  <div class="flex flex-wrap items-center gap-1">
-                    <ElTag size="small" type="primary">
-                      {{ ASSET_ROLE_LABEL[a.role] ?? a.role }}
-                    </ElTag>
-                    <!-- extractor 是抓取服务报告的事实（图从哪个标签来），悬浮给中文释义 -->
-                    <ElTag size="small" type="info" :title="EXTRACTOR_LEGEND[a.extractor] ?? a.extractor">
-                      {{ a.extractor }}
-                    </ElTag>
-                    <ElTag
-                      size="small"
-                      :type="a.quality === 'TRUSTED' ? 'success' : 'warning'"
-                    >
-                      {{ a.quality === "TRUSTED" ? "可信" : "降级" }}
-                    </ElTag>
-                    <ElTag v-if="a.isPrimary" size="small" type="success">主图</ElTag>
-                    <ElTag v-if="a.isVector" size="small" type="info">矢量</ElTag>
-                    <ElTag
-                      v-if="a.duplicateOfOther"
-                      size="small"
-                      type="warning"
-                      title="与本书签其它资产字节相同 —— 说明该站没有独立 LOGO"
-                    >
-                      与其它图重复
-                    </ElTag>
-                  </div>
-                  <div class="text-gray-500">
-                    {{ a.width && a.height ? `${a.width}×${a.height}` : "尺寸未知" }}
-                    · {{ formatBytes(a.byteSize) }}
-                    · {{ a.mime || "类型未知" }}
-                  </div>
-                  <div v-if="a.contentHash" class="truncate text-xs text-gray-400" :title="a.contentHash">
-                    hash: {{ a.contentHash }}
-                  </div>
-                  <div class="truncate text-xs text-gray-400" :title="a.resolvedUrl">
-                    源地址: {{ a.resolvedUrl }}
-                  </div>
-                  <div v-if="a.errorMsg" class="break-all text-red-500">
-                    {{ a.errorMsg }}
-                  </div>
-                </div>
-              </li>
-            </ul>
-            <div v-else class="text-gray-400">该站没有抓到任何图片</div>
-          </ElCard>
-
-          <!-- 卡片四：显示设置 —— 大图/列表两种模式的取图优先级相反，所以按模式分行 -->
-          <ElCard shadow="never" class="detail-card">
-            <template #header>
-              <span class="font-medium">显示设置</span>
-            </template>
-            <ul v-if="(currentRow.displayPrefs ?? []).length > 0" class="space-y-2">
-              <li
-                v-for="p in currentRow.displayPrefs"
-                :key="p.displayMode"
-                class="flex items-center gap-3 rounded border border-gray-100 p-2"
-              >
-                <BookmarkAssetCell :src="p.previewUrl" />
-                <div class="min-w-0 flex-1 space-y-1">
-                  <div class="flex flex-wrap items-center gap-1 font-medium">
-                    <span>{{ DISPLAY_MODE_LABEL[p.displayMode] ?? p.displayMode }}</span>
-                    <ElTag
-                      v-if="p.monogram"
-                      size="small"
-                      type="warning"
-                      title="该模式下没有合适的图，会渲染首字母色块"
-                    >
-                      首字母色块
-                    </ElTag>
-                    <ElTag v-if="p.pinnedAssetId" size="small" type="info">已钉图</ElTag>
-                  </div>
-                  <div class="text-gray-500">
-                    内边距 {{ p.iconPadding }}% · 背景
-                    <span
-                      v-if="p.iconBgColor"
-                      class="ml-1 inline-block h-3 w-3 rounded-sm border align-middle"
-                      :style="{ backgroundColor: p.iconBgColor }"
-                    />
-                    {{ p.iconBgColor || "默认" }}
-                  </div>
-                </div>
-              </li>
-            </ul>
-            <div v-else class="text-gray-400">未设置，按默认值渲染</div>
-          </ElCard>
-
-          <!-- 卡片五：相似网站（点击操作栏按钮后出现） -->
-          <ElCard v-if="similarLoaded" shadow="never" class="detail-card">
-            <template #header>
-              <span class="font-medium">相似网站</span>
-            </template>
-            <ul v-if="similarSites.length > 0" class="space-y-2">
-              <li
-                v-for="s in similarSites"
-                :key="s.domain"
-                class="rounded border border-gray-100 p-2"
-              >
-                <div class="flex flex-wrap items-center gap-2 font-medium">
-                  <span>{{ s.name }}</span>
-                  <a
-                    :href="`https://${s.domain}`"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-blue-500"
-                  >
-                    {{ s.domain }}
-                  </a>
-                  <!-- 逐站收录状态优先于「本地已有」标记 -->
-                  <ElTag
-                    v-if="ingestStatus[s.domain] === 'LOADING'"
-                    type="info"
-                    size="small"
-                  >
-                    收录中
-                  </ElTag>
-                  <ElTag
-                    v-else-if="ingestStatus[s.domain] === 'INGESTED'"
-                    type="success"
-                    size="small"
-                  >
-                    已收录
-                  </ElTag>
-                  <ElTag
-                    v-else-if="ingestStatus[s.domain] === 'SKIPPED'"
-                    type="danger"
-                    size="small"
-                  >
-                    已跳过
-                  </ElTag>
-                  <ElTag
-                    v-else-if="s.exists || ingestStatus[s.domain] === 'EXISTS'"
-                    type="warning"
-                    size="small"
-                  >
-                    本地已有
-                  </ElTag>
-                </div>
-                <div class="text-gray-500">{{ s.reason }}</div>
-              </li>
-            </ul>
-            <div v-else class="text-gray-400">未找到相似网站</div>
-            <div v-if="similarSites.length > 0" class="mt-3 flex justify-end">
-              <ElButton
-                type="primary"
-                size="small"
-                :loading="ingesting"
-                :disabled="ingestTargets.length === 0"
-                @click="oneClickIngest"
-              >
-                一键收录{{
-                  ingestTargets.length ? `（${ingestTargets.length}）` : ""
-                }}
-              </ElButton>
-            </div>
-          </ElCard>
-
-          <!-- 卡片六：书签检测（点击操作栏按钮后出现，直接展示 scrapper 返回的全部字段） -->
-          <ElCard v-if="livenessChecked" shadow="never" class="detail-card">
-            <template #header>
-              <span class="font-medium">检测结果</span>
-            </template>
-            <div v-if="livenessResult" class="space-y-2">
-              <div class="flex flex-wrap items-center gap-2">
-                <ElTag :type="livenessResult.success ? 'success' : 'danger'" size="small">
-                  {{ livenessResult.success ? "存活" : "不可访问" }}
-                </ElTag>
-                <span v-if="livenessResult.source" class="text-gray-500">
-                  来源：{{ livenessResult.source }}
-                </span>
-                <ElTag v-if="livenessResult.cached" type="info" size="small">
-                  命中缓存
-                </ElTag>
-              </div>
-              <div v-if="livenessResult.title" class="flex">
-                <span class="w-20 text-gray-500">新标题</span>
-                <span class="flex-1 break-all">{{ livenessResult.title }}</span>
-              </div>
-              <div v-if="livenessResult.description" class="flex">
-                <span class="w-20 text-gray-500">新描述</span>
-                <span class="flex-1 break-all">{{ livenessResult.description }}</span>
-              </div>
-              <div v-if="livenessResult.errorMsg" class="flex">
-                <span class="w-20 text-gray-500">错误信息</span>
-                <span class="flex-1 break-all text-red-500">{{ livenessResult.errorMsg }}</span>
-              </div>
-              <div
-                v-if="livenessResult.favicon || livenessResult.logo || livenessResult.image || livenessResult.screenshot"
-                class="flex flex-wrap gap-4 pt-1"
-              >
-                <div v-if="livenessResult.favicon" class="flex flex-col items-center gap-1">
-                  <img :src="livenessResult.favicon" alt="favicon" class="h-10 w-10 rounded border object-contain" />
-                  <span class="text-xs text-gray-400">favicon</span>
-                </div>
-                <div v-if="livenessResult.logo" class="flex flex-col items-center gap-1">
-                  <img :src="livenessResult.logo" alt="logo" class="h-10 w-10 rounded border object-contain" />
-                  <span class="text-xs text-gray-400">logo</span>
-                </div>
-                <div v-if="livenessResult.image" class="flex flex-col items-center gap-1">
-                  <img :src="livenessResult.image" alt="image" class="h-16 w-28 rounded border object-cover" />
-                  <span class="text-xs text-gray-400">image</span>
-                </div>
-                <div v-if="livenessResult.screenshot" class="flex flex-col items-center gap-1">
-                  <img :src="livenessResult.screenshot" alt="screenshot" class="h-16 w-28 rounded border object-cover" />
-                  <span class="text-xs text-gray-400">screenshot</span>
-                </div>
-              </div>
-            </div>
-          </ElCard>
-        </div>
-        <template #footer>
-          <ElButton
-            :loading="checkingLiveness"
-            @click="checkLiveness"
-          >
-            检测活性
-          </ElButton>
-          <ElButton
-            :loading="loadingSimilar"
-            @click="findSimilar"
-          >
-            查找相似网站
-          </ElButton>
-          <ElButton @click="detailVisible = false">关闭</ElButton>
-        </template>
-      </ElDialog>
       <ElDialog v-model="editDialogVisible" title="修改基础信息" width="480px">
         <ElForm :model="editForm" label-width="60px">
           <ElFormItem label="标题">
@@ -963,19 +347,5 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
   font-weight: 400 !important;
   line-height: 32px;
   color: var(--el-text-color-regular);
-}
-
-/* 详情展示的字段变多后，弹窗自身撑不下，正文单独滚动，底部按钮固定可见 */
-.detail-body {
-  max-height: 66vh;
-  overflow-y: auto;
-}
-
-.detail-card :deep(.el-card__header) {
-  padding: 10px 16px;
-}
-
-.detail-card :deep(.el-card__body) {
-  padding: 16px;
 }
 </style>

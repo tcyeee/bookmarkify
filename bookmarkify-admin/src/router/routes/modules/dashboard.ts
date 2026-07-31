@@ -80,11 +80,13 @@ const routes: RouteRecordRaw[] = [
   },
   {
     meta: {
-      icon: 'lucide:radar',
-      title: 'Scrapper管理',
+      icon: 'lucide:plug',
+      title: '第三方管理',
     },
-    name: 'Scrapper',
-    path: '/scrapper',
+    // 分组下每个子页面的 path 按它对接的第三方服务命名（/scrapper、/ai），
+    // 分组本身只是个不落地的容器，沿用旧路径反而会让 AI 页看着像 scrapper 的一部分
+    name: 'ThirdParty',
+    path: '/third-party',
     children: [
       {
         name: 'ScrapperCallLog',
@@ -102,6 +104,15 @@ const routes: RouteRecordRaw[] = [
         meta: {
           icon: 'carbon:debug',
           title: 'Scrapper 测试台',
+        },
+      },
+      {
+        name: 'AiCallLog',
+        path: '/ai/call-log',
+        component: () => import('#/views/ai/call-log/index.vue'),
+        meta: {
+          icon: 'carbon:machine-learning-model',
+          title: 'AI检测管理',
         },
       },
     ],

@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server
 import top.tcyeee.bookmarkify.entity.dto.AiReviewOutcome
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.dto.NsfwCheckResult
+import top.tcyeee.bookmarkify.entity.dto.ProposedCategory
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
@@ -53,6 +54,22 @@ interface IApiService {
         host: String,
         candidates: List<CategoryCandidate>,
     ): List<String>
+
+    /**
+     * 通过 DeepSeek 为网站提议分类，**允许提出词表里没有的新分类**。
+     *
+     * 与 [inferCategories] 是两条刻意分开的路径：那条是闭词表的，模型只能从 [candidates] 里挑，
+     * 词表为空时直接返回空 —— 自动抓取链路必须用它，否则每收录一个站点都可能往字典里塞个新词，
+     * 分类体系会被爬虫写崩。这条是开词表的，只给管理员在后台显式点击时用。
+     *
+     * @return 提议的分类（slug 已归一化为 `[a-z0-9-]`，含既有词与新词）；失败或无结果返回空列表。
+     */
+    fun proposeCategories(
+        title: String?,
+        description: String?,
+        host: String,
+        existing: List<CategoryCandidate>,
+    ): List<ProposedCategory>
 
     /**
      * 通过 DeepSeek（纯知识，不联网）推荐若干功能/定位相似的网站。

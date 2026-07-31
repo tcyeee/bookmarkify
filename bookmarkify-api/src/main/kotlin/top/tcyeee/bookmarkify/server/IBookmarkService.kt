@@ -16,6 +16,7 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
  */
 import com.baomidou.mybatisplus.core.metadata.IPage
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
+import top.tcyeee.bookmarkify.entity.BookmarkAssetRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkLivenessVO
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
@@ -92,6 +93,13 @@ interface IBookmarkService : IService<BookmarkEntity> {
 
     /** 管理员「一键更新」：重新抓取网站信息并直接覆盖持久化标题/简介/图标/高清 LOGO，同步落库 isActivity/parseStatus */
     fun adminRefresh(bookmarkId: String): BookmarkAdminVO
+
+    /**
+     * 管理员「图片资产 · 重新抓取」：只重抓图片，不覆盖标题/简介、不解锁人工锁、不改动书签活性。
+     *
+     * 本次没抓到图时保留库中现有图片（由 SiteAssetWriter 保证），所以"抓不到"不会把已有图片清空。
+     */
+    fun adminRefetchAssets(bookmarkId: String): BookmarkAssetRefetchVO
 
     /**
      * 「网站管理」页任意 URL 活性检测在抓取成功后的落库同步：仅当该 URL 已对应某条 canonical 书签(按

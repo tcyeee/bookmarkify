@@ -19,11 +19,21 @@ data class DeepSeekMessage(
 // ────── Response ──────
 
 data class DeepSeekResponse(
+    /** 服务端实际使用的模型，可能与请求里写的不同（如别名被解析成具体版本） */
+    val model: String? = null,
     val choices: List<DeepSeekChoice>? = null,
+    val usage: DeepSeekUsage? = null,
 )
 
 data class DeepSeekChoice(
     val message: DeepSeekMessage? = null,
+)
+
+/** token 用量。只用于调用日志，业务逻辑不读它。 */
+data class DeepSeekUsage(
+    @JsonProperty("prompt_tokens") val promptTokens: Int? = null,
+    @JsonProperty("completion_tokens") val completionTokens: Int? = null,
+    @JsonProperty("total_tokens") val totalTokens: Int? = null,
 )
 
 // ────── AI 内容审核结果 ──────

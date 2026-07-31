@@ -1,17 +1,16 @@
 <script lang="ts" setup>
-import type { ScrapperCallLogSearchParams, ScrapperCallLogVO } from "#/api/scrapper-call-log";
+import type { AiCallLogSearchParams, AiCallLogVO } from "#/api/ai-call-log";
 
 import { defineAsyncComponent, reactive, ref } from "vue";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
 
-import { getAdminScrapperCallLogListApi } from "#/api/scrapper-call-log";
+import { getAdminAiCallLogListApi } from "#/api/ai-call-log";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 
-import BookmarkDetailDialog from "#/views/bookmark/BookmarkDetailDialog.vue";
-
-import ScrapeResultDialog from "./ScrapeResultDialog.vue";
+import AiCallDetailDialog from "./AiCallDetailDialog.vue";
+import { AI_SCENE_LABEL, AI_SCENE_LEGEND } from "./scene";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
@@ -76,92 +75,61 @@ const ElTooltip = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElTooltip)
 );
 
-const searchForm = reactive<Pick<ScrapperCallLogSearchParams, "urlHost" | "success">>({
-  urlHost: "",
+const searchForm = reactive<Pick<AiCallLogSearchParams, "scene" | "subject" | "success">>({
+  subject: "",
+  scene: undefined,
   success: undefined,
 });
 
-// ── 书签解析对话框：失败行点"重试"后重新调用 scrapper 并展示其返回的全部信息 ──
-const parseDialogVisible = ref(false);
-const parseUrl = ref("");
-
-function handleRetry(row: ScrapperCallLogVO) {
-  parseUrl.value = row.url;
-  parseDialogVisible.value = true;
-}
-
-// ── 书签详情弹窗：日志表只存了抓过哪个地址，没有书签 ID，交给弹窗按域名+路径反查 ──
+// ── 详情弹窗：列表接口已带回请求/响应原文，点行直接展示，不再请求详情接口 ──
 const detailVisible = ref(false);
-const detailUrl = ref("");
+const detailRow = ref<AiCallLogVO | null>(null);
 
-function handleCellClick({ row, column }: { row: ScrapperCallLogVO; column: any }) {
-  if (column?.field === "rowActions") return;
-  detailUrl.value = row.url;
+function handleCellClick({ row }: { row: AiCallLogVO }) {
+  detailRow.value = row;
   detailVisible.value = true;
 }
-
-// 日志表未存 favicon，直接按域名取站点根目录的 favicon.ico，加载失败时换成兜底地球图标
-const FALLBACK_FAVICON = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`
-)}`;
-
-function faviconOf(urlHost: string) {
-  return urlHost ? `https://${urlHost}/favicon.ico` : FALLBACK_FAVICON;
-}
-
-function onFaviconError(event: Event) {
-  const img = event.target as HTMLImageElement;
-  // 已经是兜底图还报错就不再重置，避免 error 事件死循环
-  if (img.src !== FALLBACK_FAVICON) img.src = FALLBACK_FAVICON;
-}
-
-/** 来源枚举释义，鼠标悬浮在"来源"表头时展示 */
-const SOURCE_LEGEND: Array<[string, string]> = [
-  ["og", "命中 Open Graph 标签(og:title/og:description/og:image)，优先级最高"],
-  ["twitter_card", "无 OG，命中 Twitter Card 标签(twitter:title 等)"],
-  ["json_ld", "无 OG/Twitter，命中页面 JSON-LD 结构化数据(name/description/image)"],
-  ["html", "以上均未命中，回退到 <title> 标签与 meta[name=description]"],
-  ["headless", "普通 HTTP 抓取失败，由无头浏览器渲染后抓取，并附带页面截图"],
-];
 
 function handleSearch() {
   gridApi.reload();
 }
 
 function handleReset() {
-  searchForm.urlHost = "";
+  searchForm.subject = "";
+  searchForm.scene = undefined;
   searchForm.success = undefined;
   gridApi.reload();
 }
 
-const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
-  id: "admin-scrapper-call-log",
+const gridOptions: VxeGridProps<AiCallLogVO> = {
+  id: "admin-ai-call-log",
   columns: [
     { type: "seq", title: "#", width: 50 },
-    { field: "urlHost", title: "域名", minWidth: 180, slots: { default: "urlHost" } },
-    { field: "url", title: "请求URL", minWidth: 240, showOverflow: "tooltip" },
+    { field: "scene", title: "场景", width: 130, slots: { default: "scene", header: "sceneHeader" } },
+    { field: "subject", title: "判定对象", minWidth: 200, showOverflow: "tooltip" },
+    { field: "model", title: "模型", width: 140 },
     { field: "success", title: "结果", width: 90, slots: { default: "success" } },
     { field: "httpStatus", title: "HTTP状态", width: 100 },
-    { field: "source", title: "来源", width: 120, slots: { header: "sourceHeader" } },
-    { field: "cached", title: "缓存命中", width: 100, slots: { default: "cached" } },
+    { field: "totalTokens", title: "token", width: 110, slots: { default: "tokens" } },
     { field: "durationMs", title: "耗时(ms)", width: 100 },
-    { field: "errorMsg", title: "错误信息", minWidth: 200, slots: { default: "errorMsg" } },
+    { field: "responseBody", title: "模型输出", minWidth: 220, slots: { default: "output" } },
+    { field: "errorMsg", title: "错误信息", minWidth: 180, slots: { default: "errorMsg" } },
     {
       field: "createTime",
       title: "调用时间",
-      width: 200,
+      width: 180,
       formatter: ({ cellValue }) => formatDateTime(cellValue),
     },
-    // field 必填：点击行要弹书签详情，靠它把「操作」列排除在外
-    { field: "rowActions", title: "操作", width: 90, fixed: "right", slots: { default: "action" } },
   ],
   toolbarConfig: { custom: true, refresh: true },
-  pagerConfig: { pageSize: 50 },
+  // 每行都带着请求/响应原文（各自最多 8000 字符），页大小取小一些，避免一页拉回几 MB
+  pagerConfig: { pageSize: 20 },
   proxyConfig: {
     ajax: {
       query: async ({ page }) => {
-        const res = await getAdminScrapperCallLogListApi({
-          urlHost: searchForm.urlHost || undefined,
+        const res = await getAdminAiCallLogListApi({
+          subject: searchForm.subject || undefined,
+          scene: searchForm.scene,
           success: searchForm.success,
           currentPage: page.currentPage,
           pageSize: page.pageSize,
@@ -171,6 +139,16 @@ const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
     },
   },
 };
+
+/** 列表里只显示模型输出的正文，解析不出来（失败/纯文本错误页）就留空，详情弹窗里有原文 */
+function outputOf(row: AiCallLogVO): string {
+  if (!row.responseBody) return "";
+  try {
+    return JSON.parse(row.responseBody)?.choices?.[0]?.message?.content ?? "";
+  } catch {
+    return "";
+  }
+}
 
 // 行点击必须走 gridEvents：Grid 包装组件的根节点是个 div，模板上写 @cell-click 只会
 // 作为原生监听落到那个 div 上（DOM 没有 cell-click 事件），内层 VxeGrid 收不到
@@ -185,13 +163,24 @@ const [Grid, gridApi] = useVbenVxeGrid({
     <ElCard shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
-          <span>Scrapper 调用日志</span>
+          <span>AI 检测管理</span>
+          <span class="text-xs text-gray-400">记录与第三方 AI(DeepSeek) 的全部通讯，点击任意行查看完整 prompt 与响应</span>
         </div>
       </template>
       <div class="mb-4">
         <ElForm :inline="true" :model="searchForm">
-          <ElFormItem label="域名">
-            <ElInput v-model="searchForm.urlHost" placeholder="urlHost 模糊搜索" clearable />
+          <ElFormItem label="判定对象">
+            <ElInput v-model="searchForm.subject" placeholder="域名/标题 模糊搜索" clearable />
+          </ElFormItem>
+          <ElFormItem label="场景">
+            <ElSelect v-model="searchForm.scene" placeholder="全部" clearable style="width: 160px">
+              <ElOption
+                v-for="[value, label] in Object.entries(AI_SCENE_LABEL)"
+                :key="value"
+                :label="label"
+                :value="value"
+              />
+            </ElSelect>
           </ElFormItem>
           <ElFormItem label="状态">
             <ElSelect v-model="searchForm.success" placeholder="全部" clearable style="width: 120px">
@@ -206,27 +195,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
         </ElForm>
       </div>
       <Grid>
-        <template #urlHost="{ row }">
-          <span class="inline-flex items-center justify-end gap-1.5">
-            <img
-              :src="faviconOf(row.urlHost)"
-              alt=""
-              class="h-4 w-4 shrink-0 rounded-sm object-contain"
-              @error="onFaviconError"
-            />
-            <span class="truncate">{{ row.urlHost }}</span>
-          </span>
-        </template>
-        <template #sourceHeader="{ column }">
+        <template #sceneHeader="{ column }">
           <ElTooltip placement="top">
             <template #content>
               <div class="max-w-md space-y-1 text-xs leading-relaxed">
-                <div class="font-medium">命中来源(scrapper 解析元数据的实际出处)</div>
-                <div v-for="[key, desc] in SOURCE_LEGEND" :key="key">
-                  <span class="font-mono">{{ key }}</span>
+                <div class="font-medium">调用场景(这次通讯是为哪件业务发起的)</div>
+                <div v-for="[key, desc] in AI_SCENE_LEGEND" :key="key">
+                  <span class="font-medium">{{ AI_SCENE_LABEL[key] }}</span>
                   ：{{ desc }}
                 </div>
-                <div class="text-gray-300">抓取失败时该列为空</div>
               </div>
             </template>
             <span class="cursor-help underline decoration-dotted underline-offset-4">
@@ -234,18 +211,27 @@ const [Grid, gridApi] = useVbenVxeGrid({
             </span>
           </ElTooltip>
         </template>
-        <template #action="{ row }">
-          <ElButton v-if="!row.success" link type="primary" size="small" @click.stop="handleRetry(row)">
-            重试
-          </ElButton>
-          <span v-else>-</span>
+        <template #scene="{ row }">
+          {{ AI_SCENE_LABEL[row.scene] ?? row.scene }}
         </template>
         <template #success="{ row }">
           <ElTag v-if="row.success" type="success" size="small"> 成功 </ElTag>
           <ElTag v-else type="danger" size="small"> 失败 </ElTag>
         </template>
-        <template #cached="{ row }">
-          <ElTag v-if="row.cached" type="info" size="small"> 命中 </ElTag>
+        <template #tokens="{ row }">
+          <ElTooltip
+            v-if="row.totalTokens"
+            :content="`输入 ${row.promptTokens ?? '-'} / 输出 ${row.completionTokens ?? '-'}`"
+            placement="top"
+          >
+            <span class="cursor-help">{{ row.totalTokens }}</span>
+          </ElTooltip>
+          <span v-else>-</span>
+        </template>
+        <template #output="{ row }">
+          <ElTooltip v-if="outputOf(row)" :content="outputOf(row)" placement="top">
+            <span class="line-clamp-1">{{ outputOf(row) }}</span>
+          </ElTooltip>
           <span v-else>-</span>
         </template>
         <template #errorMsg="{ row }">
@@ -257,7 +243,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
       </Grid>
     </ElCard>
 
-    <ScrapeResultDialog v-model="parseDialogVisible" :url="parseUrl" />
-    <BookmarkDetailDialog v-model="detailVisible" :lookup-url="detailUrl" />
+    <AiCallDetailDialog v-model="detailVisible" :row="detailRow" />
   </Page>
 </template>

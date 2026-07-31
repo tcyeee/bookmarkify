@@ -1054,10 +1054,53 @@ class BookmarkServiceImpl(
         return loadCategoryVOs(bookmarkId)
     }
 
+    /**
+     * 后台「重新 AI 归类」：走开词表那条路径 —— AI 提议的新分类会被建进 `category` 字典。
+     *
+     * 自动抓取链路仍然用闭词表的 [IBookmarkCategoryService.categorize]，两者不能互换：
+     * 让爬虫有权写分类字典，收录量一上来分类体系就散了。
+     */
     override fun adminRecategorize(bookmarkId: String): List<CategoryVO> {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
-        bookmarkCategoryService.categorize(bookmark)
+        bookmarkCategoryService.categorizeAllowingNew(bookmark)
         return loadCategoryVOs(bookmarkId)
+    }
+
+    /**
+     * 后台「图片资产 · 重新抓取」：只重抓图片，**不碰标题/简介，也不解锁人工锁**。
+     *
+     * 与「一键更新」([adminRefresh]) 刻意分开：那个是"整条记录以抓取值为准"，会覆盖标题简介并
+     * 解锁 TITLE/DESCRIPTION；管理员只想补一张缺失的 LOGO 时用它，手工改过的标题会被静默改回去。
+     *
+     * "抓到的没有就不覆盖"这条语义由 [SiteAssetWriter.persist] 自己保证：本次没抓到该层资产时
+     * 它保留库中现值，不清空。
+     */
+    override fun adminRefetchAssets(bookmarkId: String): BookmarkAssetRefetchVO {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+        log.debug("[adminRefetchAssets] 管理员重抓图片资产: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
+        val startedAt = System.currentTimeMillis()
+        // BYPASS：不绕开 scrapper 缓存的话"重新抓取"可能直接命中上一次的结果，等于没抓
+        return runCatching {
+            apiService.scrape(bookmark.rawUrl, apiService.scrapeRequest(bookmark.rawUrl, CacheMode.BYPASS))
+        }.fold(
+            onSuccess = { vo ->
+                siteAssetWriter.persist(
+                    bookmark.siteId, bookmarkId, bookmark.rawUrl, vo, elapsedMs(startedAt), bookmark.isRootPage,
+                )
+                val count = vo.assets.size
+                log.debug("[adminRefetchAssets] 抓取成功: bookmarkId=$bookmarkId, scrapedAssets=$count")
+                BookmarkAssetRefetchVO(success = true, scrapedAssetCount = count, bookmark = adminDetail(bookmarkId))
+            },
+            onFailure = { e ->
+                // 抓取服务本身不可用要如实报错，不能伪装成"这个站没有图"
+                if (e.isScrapperUnavailable()) throw e
+                recordScrapeFailure(bookmark, e, startedAt)
+                log.debug("[adminRefetchAssets] 抓取失败: bookmarkId=$bookmarkId, err=${e.message}")
+                BookmarkAssetRefetchVO(
+                    success = false, scrapedAssetCount = 0, errorMsg = e.message, bookmark = adminDetail(bookmarkId),
+                )
+            },
+        )
     }
 
     override fun adminSimilarSites(bookmarkId: String): List<SimilarSite> {

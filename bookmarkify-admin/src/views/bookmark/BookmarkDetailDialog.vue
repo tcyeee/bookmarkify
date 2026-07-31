@@ -1,0 +1,894 @@
+<script lang="ts" setup>
+import type { BookmarkEntity, BookmarkLivenessResult, SimilarSite } from "#/api/bookmark";
+import type { CategoryEntity } from "#/api/category";
+
+import { computed, defineAsyncComponent, onUnmounted, ref, watch } from "vue";
+
+import { formatDateTime } from "@vben/utils";
+import { ElMessage } from "element-plus";
+
+import {
+  checkBookmarkLivenessApi,
+  findBookmarkByUrlApi,
+  findSimilarSitesApi,
+  getSiblingBookmarksApi,
+  ingestSimilarSitesApi,
+  recategorizeBookmarkApi,
+  refetchBookmarkAssetsApi,
+  updateBookmarkCategoriesApi,
+} from "#/api/bookmark";
+import { getCategoryListApi } from "#/api/category";
+import { createIngestSocket, type IngestSocketHandle } from "#/api/similarIngestSocket";
+
+import BookmarkAssetCell from "./BookmarkAssetCell.vue";
+import BookmarkIcon from "./liveness/BookmarkIcon.vue";
+import {
+  BOOKMARK_LOCKED_FIELD_LABEL,
+  DISPLAY_MODE_LABEL,
+  EXTRACTOR_LEGEND,
+  faviconOf,
+  logoOf,
+} from "./siteAsset";
+
+/**
+ * 书签详情弹窗。
+ *
+ * 后台的三个入口（书签管理表格 / 图标平铺墙 / scrapper 调用日志）此前各有一套详情展示，
+ * 字段互相缺斤少两。这里收成一个组件：**展示后端下发的全部字段**，包括抓取事实（图片资产、
+ * 出处、hash）、人工策略（分类、显示设置、字段锁）与巡检调度状态。
+ *
+ * 两种取数方式：
+ * - [bookmark] 直接给行对象（表格页已有完整数据，且就地改动会同步回表格行）；
+ * - [lookupUrl] 只有一个 URL（调用日志表存的是抓取记录，不带书签 ID），按域名反查。
+ */
+const props = defineProps<{
+  /** 已有的书签行对象；组件会就地修改它，调用方的表格行随之更新 */
+  bookmark?: BookmarkEntity | null;
+  /** 仅有 URL 时按域名+路径反查书签；[bookmark] 存在时忽略 */
+  lookupUrl?: string;
+}>();
+
+const emit = defineEmits<{
+  /** 弹窗内的操作改动了书签（分类/活性等），供调用方刷新自己的数据 */
+  (e: "updated", bookmark: BookmarkEntity): void;
+}>();
+
+const visible = defineModel<boolean>({ default: false });
+
+const ElCard = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/card/index"),
+    import("element-plus/es/components/card/style/css"),
+  ]).then(([res]) => res.ElCard),
+);
+
+const ElTag = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/tag/index"),
+    import("element-plus/es/components/tag/style/css"),
+  ]).then(([res]) => res.ElTag),
+);
+
+const ElSwitch = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/switch/index"),
+    import("element-plus/es/components/switch/style/css"),
+  ]).then(([res]) => res.ElSwitch),
+);
+
+const ElDialog = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/dialog/index"),
+    import("element-plus/es/components/dialog/style/css"),
+  ]).then(([res]) => res.ElDialog),
+);
+
+const ElSelectV2 = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/select-v2/index"),
+    import("element-plus/es/components/select-v2/style/css"),
+  ]).then(([res]) => res.ElSelectV2),
+);
+
+const ElButton = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/button/index"),
+    import("element-plus/es/components/button/style/css"),
+  ]).then(([res]) => res.ElButton),
+);
+
+// ── 当前书签：外部给的行对象优先，否则用 lookupUrl 反查到的那条 ──────────────────
+const resolved = ref<BookmarkEntity | null>(null);
+const looking = ref(false);
+const lookupFailed = ref(false);
+
+const current = computed<BookmarkEntity | null>(
+  () => props.bookmark ?? resolved.value,
+);
+
+const currentUrl = computed(() => {
+  const row = current.value;
+  if (!row) return "";
+  return `${row.urlScheme}://${row.urlHost}${row.urlPath ?? ""}`;
+});
+
+const dialogTitle = computed(() => {
+  const row = current.value;
+  if (!row) return "书签详情";
+  return `书签详情 · ${row.appName || row.title || row.urlHost}`;
+});
+
+async function lookup() {
+  if (!props.lookupUrl) return;
+  looking.value = true;
+  lookupFailed.value = false;
+  try {
+    const found = await findBookmarkByUrlApi(props.lookupUrl);
+    resolved.value = found;
+    lookupFailed.value = found === null;
+  } catch {
+    lookupFailed.value = true;
+  } finally {
+    looking.value = false;
+  }
+}
+
+// ── 分类：展示 + 人工覆盖 + 重新 AI 归类 ────────────────────────────────────────
+const categoryDict = ref<CategoryEntity[]>([]);
+const editingCategoryIds = ref<string[]>([]);
+const savingCategories = ref(false);
+const recategorizing = ref(false);
+
+async function loadCategoryDict(force = false) {
+  if (force || categoryDict.value.length === 0) {
+    categoryDict.value = await getCategoryListApi();
+  }
+}
+
+async function saveCategories() {
+  const row = current.value;
+  if (!row) return;
+  savingCategories.value = true;
+  try {
+    row.categories = await updateBookmarkCategoriesApi(
+      row.id,
+      editingCategoryIds.value,
+    );
+    emit("updated", row);
+    ElMessage.success("分类已保存");
+  } finally {
+    savingCategories.value = false;
+  }
+}
+
+/**
+ * 重新 AI 归类。后端走的是**开词表**路径：AI 觉得现有分类都不贴切时会新建分类并落进分类字典，
+ * 所以字典必须强制重拉 —— 否则刚建出来的那几个在下拉框里根本选不到，看着像"归类没生效"。
+ */
+async function recategorize() {
+  const row = current.value;
+  if (!row) return;
+  recategorizing.value = true;
+  try {
+    const updated = await recategorizeBookmarkApi(row.id);
+    row.categories = updated;
+    editingCategoryIds.value = updated.map((c) => c.id);
+    await loadCategoryDict(true);
+    emit("updated", row);
+    ElMessage[updated.length > 0 ? "success" : "warning"](
+      updated.length > 0
+        ? `AI 归类完成：${updated.map((c) => c.name).join("、")}`
+        : "AI 未返回分类",
+    );
+  } finally {
+    recategorizing.value = false;
+  }
+}
+
+// ── 图片资产重新抓取：只重抓图，本次没抓到时后端保留原图，不会把已有图片清空 ──────
+const refetchingAssets = ref(false);
+
+async function refetchAssets() {
+  const row = current.value;
+  if (!row) return;
+  refetchingAssets.value = true;
+  try {
+    const res = await refetchBookmarkAssetsApi(row.id);
+    row.assets = res.bookmark.assets;
+    row.displayPrefs = res.bookmark.displayPrefs;
+    emit("updated", row);
+    if (res.success && res.scrapedAssetCount > 0) {
+      ElMessage.success(`抓到 ${res.scrapedAssetCount} 张图片，已更新`);
+    } else if (res.success) {
+      ElMessage.warning("本次一张图都没抓到，已保留原有图片");
+    } else {
+      ElMessage.warning(
+        `抓取失败，已保留原有图片${res.errorMsg ? `：${res.errorMsg}` : ""}`,
+      );
+    }
+  } catch {
+    // 抓取服务不可用(E307)等由请求拦截器统一提示
+  } finally {
+    refetchingAssets.value = false;
+  }
+}
+
+// ── 关联网站之一：同域名下已收录的其它页面 ───────────────────────────────────────
+const siblings = ref<BookmarkEntity[]>([]);
+const loadingSiblings = ref(false);
+
+async function loadSiblings() {
+  const row = current.value;
+  if (!row) return;
+  loadingSiblings.value = true;
+  try {
+    siblings.value = await getSiblingBookmarksApi(row.urlHost, row.id);
+  } catch {
+    siblings.value = [];
+  } finally {
+    loadingSiblings.value = false;
+  }
+}
+
+// ── 关联网站之二：AI 推荐的相似站点（点按钮才查，会走一次大模型） ────────────────
+const similarSites = ref<SimilarSite[]>([]);
+const loadingSimilar = ref(false);
+const similarLoaded = ref(false);
+
+async function findSimilar() {
+  const row = current.value;
+  if (!row) return;
+  loadingSimilar.value = true;
+  try {
+    similarSites.value = await findSimilarSitesApi(row.id);
+    similarLoaded.value = true;
+  } finally {
+    loadingSimilar.value = false;
+  }
+}
+
+// ── 一键收录：异步逐站收录，进度经 WebSocket 推回 ────────────────────────────────
+const ingesting = ref(false);
+// domain -> 状态：LOADING(收录中) / INGESTED(已收录) / SKIPPED(已跳过) / EXISTS(本地已有)
+const ingestStatus = ref<Record<string, string>>({});
+let ingestSocket: IngestSocketHandle | null = null;
+let pendingDomains = new Set<string>();
+
+const ingestTargets = computed(() =>
+  similarSites.value.filter((s) => !s.exists && !ingestStatus.value[s.domain]),
+);
+
+function closeIngestSocket() {
+  ingestSocket?.close();
+  ingestSocket = null;
+}
+
+function resetIngest() {
+  closeIngestSocket();
+  ingesting.value = false;
+  ingestStatus.value = {};
+  pendingDomains = new Set();
+}
+
+async function oneClickIngest() {
+  const row = current.value;
+  if (!row) return;
+  const targets = ingestTargets.value.map((s) => s.domain);
+  if (targets.length === 0) return;
+
+  ingesting.value = true;
+  pendingDomains = new Set(targets);
+  const next = { ...ingestStatus.value };
+  targets.forEach((d) => (next[d] = "LOADING"));
+  ingestStatus.value = next;
+
+  closeIngestSocket();
+  ingestSocket = createIngestSocket((update) => {
+    ingestStatus.value = { ...ingestStatus.value, [update.domain]: update.status };
+    pendingDomains.delete(update.domain);
+    if (pendingDomains.size === 0) {
+      ingesting.value = false;
+      closeIngestSocket();
+    }
+  });
+
+  try {
+    await ingestSimilarSitesApi(row.id, targets);
+  } catch {
+    resetIngest();
+  }
+}
+
+onUnmounted(() => closeIngestSocket());
+
+// ── 活性检测：直接调 scrapper 重抓一次，展示其返回的全部字段 ─────────────────────
+const checkingLiveness = ref(false);
+const livenessChecked = ref(false);
+const livenessResult = ref<BookmarkLivenessResult | null>(null);
+
+function resetLiveness() {
+  livenessChecked.value = false;
+  livenessResult.value = null;
+}
+
+async function checkLiveness() {
+  const row = current.value;
+  if (!row) return;
+  checkingLiveness.value = true;
+  try {
+    const result = await checkBookmarkLivenessApi(row.id);
+    livenessResult.value = result;
+    livenessChecked.value = true;
+    row.isActivity = result.isActivity;
+    row.parseStatus = result.parseStatus;
+    row.antiCrawlerBlocked = result.antiCrawlerBlocked;
+    if (result.errorMsg) row.parseErrMsg = result.errorMsg;
+    emit("updated", row);
+    ElMessage[result.success ? "success" : "warning"](
+      result.success
+        ? "检测完成，网站存活"
+        : `检测完成，网站不可访问${result.errorMsg ? `：${result.errorMsg}` : ""}`,
+    );
+  } catch {
+    // 抓取服务自身不可用时接口直接报错，提示已由请求拦截器弹出
+  } finally {
+    checkingLiveness.value = false;
+  }
+}
+
+// ── 打开/关闭时的状态复位 ──────────────────────────────────────────────────────
+watch(visible, (opened) => {
+  if (!opened) {
+    resetIngest();
+    resetLiveness();
+    return;
+  }
+  similarSites.value = [];
+  similarLoaded.value = false;
+  siblings.value = [];
+  resetIngest();
+  resetLiveness();
+  loadCategoryDict();
+  if (props.bookmark) {
+    resolved.value = null;
+    editingCategoryIds.value = (props.bookmark.categories ?? []).map((c) => c.id);
+    loadSiblings();
+  } else {
+    resolved.value = null;
+    lookup().then(() => {
+      if (!resolved.value) return;
+      editingCategoryIds.value = (resolved.value.categories ?? []).map((c) => c.id);
+      loadSiblings();
+    });
+  }
+});
+
+// ── 展示辅助 ──────────────────────────────────────────────────────────────────
+const ASSET_ROLE_LABEL: Record<string, string> = {
+  FAVICON: "小图标",
+  LOGO: "高清 LOGO",
+  SCREENSHOT: "页面截图",
+  SOCIAL: "社交分享图",
+};
+
+const PARSE_STATUS_META: Record<
+  string,
+  { label: string; tip?: string; type: "danger" | "info" | "success" | "warning" }
+> = {
+  ARCHIVED: {
+    label: "已归档",
+    type: "warning",
+    tip: "连续失败达到阈值，已停止巡检；手动刷新/检测可恢复",
+  },
+  PENDING: { label: "等待中", type: "info" },
+  SUCCESS: { label: "成功", type: "success" },
+  UNREACHABLE: { label: "抓取失败", type: "danger" },
+};
+
+const parseStatusMeta = computed(() => {
+  const status = current.value?.parseStatus;
+  return (
+    (status && PARSE_STATUS_META[status]) ?? {
+      label: status || "未知",
+      type: "info" as const,
+      tip: undefined,
+    }
+  );
+});
+
+function formatBytes(bytes?: number) {
+  if (!bytes && bytes !== 0) return "-";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function formatTime(value?: string) {
+  return value ? formatDateTime(value) : "-";
+}
+
+function siblingUrl(row: BookmarkEntity) {
+  return `${row.urlScheme}://${row.urlHost}${row.urlPath ?? ""}`;
+}
+</script>
+
+<template>
+  <ElDialog v-model="visible" :title="dialogTitle" width="820px" top="6vh" append-to-body>
+    <div v-if="looking" class="py-10 text-center text-sm text-gray-400">查询书签中…</div>
+
+    <div v-else-if="!current" class="py-10 text-center text-sm text-gray-400">
+      {{ lookupFailed ? "该地址尚未收录为书签" : "没有可展示的书签" }}
+    </div>
+
+    <div v-else class="detail-body space-y-4 pr-1 text-sm">
+      <!-- 卡片一：基础信息 -->
+      <ElCard shadow="never" class="detail-card">
+        <template #header>
+          <span class="font-medium">基础信息</span>
+        </template>
+        <div class="flex gap-6">
+          <!-- 左：图标 + 状态 + 活跃 -->
+          <div class="flex w-32 shrink-0 flex-col items-center gap-3">
+            <BookmarkIcon :src="logoOf(current) ?? faviconOf(current)" :size="64" />
+            <div class="flex flex-wrap justify-center gap-1">
+              <ElTag :type="parseStatusMeta.type" size="small" :title="parseStatusMeta.tip">
+                {{ parseStatusMeta.label }}
+              </ElTag>
+              <ElTag v-if="current.antiCrawlerBlocked" type="warning" size="small">
+                反爬拦截
+              </ElTag>
+              <ElTag v-if="current.nsfw" type="danger" size="small">NSFW</ElTag>
+              <ElTag v-if="current.verifyFlag" type="success" size="small" title="已人工认证">
+                已认证
+              </ElTag>
+            </div>
+            <div class="flex items-center gap-2">
+              <ElSwitch
+                :model-value="current.isActivity"
+                active-color="#13ce66"
+                inactive-color="#ff4949"
+                disabled
+              />
+              <span class="text-gray-500">{{ current.isActivity ? "活跃" : "不活跃" }}</span>
+            </div>
+          </div>
+          <!-- 右：全部字段 -->
+          <div class="min-w-0 flex-1 space-y-2">
+            <div class="flex">
+              <span class="w-20 shrink-0 text-gray-500">App Name</span>
+              <span class="flex-1 font-medium break-all">{{ current.appName || "-" }}</span>
+            </div>
+            <div class="flex">
+              <span class="w-20 shrink-0 text-gray-500">标题</span>
+              <span class="flex-1 font-medium break-all">{{ current.title || "-" }}</span>
+            </div>
+            <div class="flex">
+              <span class="w-20 shrink-0 text-gray-500">域名</span>
+              <span class="flex-1 break-all">{{ current.urlHost }}</span>
+            </div>
+            <div class="flex">
+              <span class="w-20 shrink-0 text-gray-500">完整地址</span>
+              <a
+                :href="currentUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex-1 break-all text-blue-500"
+              >
+                {{ currentUrl }}
+              </a>
+            </div>
+            <div class="flex">
+              <span class="w-20 shrink-0 text-gray-500">描述</span>
+              <span class="flex-1 break-all">{{ current.description || "-" }}</span>
+            </div>
+            <div class="flex">
+              <span class="w-20 shrink-0 text-gray-500">创建时间</span>
+              <span class="flex-1">{{ formatTime(current.createTime) }}</span>
+            </div>
+            <div class="flex">
+              <span class="w-20 shrink-0 text-gray-500">更新时间</span>
+              <span class="flex-1">{{ formatTime(current.updateTime) }}</span>
+            </div>
+            <div class="flex">
+              <span class="w-20 shrink-0 text-gray-500">书签 ID</span>
+              <span class="flex-1 break-all text-gray-400">{{ current.id }}</span>
+            </div>
+            <div v-if="current.parseErrMsg" class="flex">
+              <span class="w-20 shrink-0 text-gray-500">错误信息</span>
+              <span class="flex-1 break-all text-red-500">{{ current.parseErrMsg }}</span>
+            </div>
+          </div>
+        </div>
+      </ElCard>
+
+      <!-- 卡片二：巡检调度 —— 回答「这条为什么还没被复查」「为什么一直没变」 -->
+      <ElCard shadow="never" class="detail-card">
+        <template #header>
+          <span class="font-medium">巡检与人工锁</span>
+        </template>
+        <div class="grid grid-cols-2 gap-x-6 gap-y-2">
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">上次抓到内容</span>
+            <span class="flex-1">{{ formatTime(current.lastParseAt) }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">上次探测</span>
+            <span class="flex-1">{{ formatTime(current.lastCheckAt) }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">下次巡检</span>
+            <span class="flex-1">{{ formatTime(current.nextCheckAt) }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">连续失败</span>
+            <span class="flex-1" :class="{ 'text-red-500': (current.consecutiveFail ?? 0) > 0 }">
+              {{ current.consecutiveFail ?? 0 }} 次
+            </span>
+          </div>
+          <div class="col-span-2 flex">
+            <span class="w-24 shrink-0 text-gray-500">人工锁定字段</span>
+            <span class="flex flex-1 flex-wrap gap-1">
+              <ElTag
+                v-for="f in current.lockedFields ?? []"
+                :key="f"
+                size="small"
+                type="warning"
+                title="管理员手工改过，自动抓取不会覆盖"
+              >
+                {{ BOOKMARK_LOCKED_FIELD_LABEL[f] ?? f }}
+              </ElTag>
+              <span v-if="(current.lockedFields ?? []).length === 0" class="text-gray-400">
+                无（全部字段可被自动抓取覆盖）
+              </span>
+            </span>
+          </div>
+        </div>
+      </ElCard>
+
+      <!-- 卡片三：分类 -->
+      <ElCard shadow="never" class="detail-card">
+        <template #header>
+          <span class="font-medium">分类</span>
+        </template>
+        <div class="mb-2 flex flex-wrap gap-1">
+          <ElTag
+            v-for="c in current.categories ?? []"
+            :key="c.id"
+            size="small"
+            :color="c.color || undefined"
+            :style="c.color ? { color: '#fff', borderColor: c.color } : {}"
+          >
+            {{ c.name }}
+          </ElTag>
+          <span v-if="(current.categories ?? []).length === 0" class="text-gray-400">
+            暂无分类
+          </span>
+        </div>
+        <ElSelectV2
+          v-model="editingCategoryIds"
+          :options="categoryDict.map((c) => ({ label: c.name, value: c.id }))"
+          multiple
+          clearable
+          placeholder="选择分类"
+          style="width: 100%"
+        />
+        <div class="mt-2 flex justify-end gap-2">
+          <ElButton type="primary" size="small" :loading="savingCategories" @click="saveCategories">
+            保存分类
+          </ElButton>
+          <ElButton size="small" :loading="recategorizing" @click="recategorize">
+            重新 AI 归类
+          </ElButton>
+        </div>
+      </ElCard>
+
+      <!-- 卡片四：图片资产 —— 后台刻意展示**全部**声明的图，而不是选好的那一张 -->
+      <ElCard shadow="never" class="detail-card">
+        <template #header>
+          <div class="flex items-center gap-3">
+            <span class="font-medium">图片资产（{{ (current.assets ?? []).length }}）</span>
+            <ElButton
+              size="small"
+              :loading="refetchingAssets"
+              title="只重抓图片，不改标题/简介；本次没抓到时保留原有图片"
+              @click="refetchAssets"
+            >
+              重新抓取
+            </ElButton>
+          </div>
+        </template>
+        <ul v-if="(current.assets ?? []).length > 0" class="space-y-2">
+          <li
+            v-for="a in current.assets"
+            :key="a.id"
+            class="flex gap-3 rounded border border-gray-100 p-2"
+          >
+            <BookmarkAssetCell
+              :src="a.url"
+              :wide="a.role === 'SOCIAL' || a.role === 'SCREENSHOT'"
+            />
+            <div class="min-w-0 flex-1 space-y-1">
+              <div class="flex flex-wrap items-center gap-1">
+                <ElTag size="small" type="primary">
+                  {{ ASSET_ROLE_LABEL[a.role] ?? a.role }}
+                </ElTag>
+                <!-- extractor 是抓取服务报告的事实（图从哪个标签来），悬浮给中文释义 -->
+                <ElTag
+                  size="small"
+                  type="info"
+                  :title="EXTRACTOR_LEGEND[a.extractor] ?? a.extractor"
+                >
+                  {{ a.extractor }}
+                </ElTag>
+                <ElTag size="small" :type="a.quality === 'TRUSTED' ? 'success' : 'warning'">
+                  {{ a.quality === "TRUSTED" ? "可信" : "降级" }}
+                </ElTag>
+                <ElTag v-if="a.isPrimary" size="small" type="success">主图</ElTag>
+                <ElTag v-if="a.isVector" size="small" type="info">矢量</ElTag>
+                <ElTag
+                  v-if="a.duplicateOfOther"
+                  size="small"
+                  type="warning"
+                  title="与本书签其它资产字节相同 —— 说明该站没有独立 LOGO"
+                >
+                  与其它图重复
+                </ElTag>
+              </div>
+              <div class="text-gray-500">
+                {{ a.width && a.height ? `${a.width}×${a.height}` : "尺寸未知" }}
+                · {{ formatBytes(a.byteSize) }}
+                · {{ a.mime || "类型未知" }}
+              </div>
+              <div v-if="a.contentHash" class="truncate text-xs text-gray-400" :title="a.contentHash">
+                hash: {{ a.contentHash }}
+              </div>
+              <div class="truncate text-xs text-gray-400" :title="a.resolvedUrl">
+                源地址: {{ a.resolvedUrl }}
+              </div>
+              <div v-if="a.errorMsg" class="break-all text-red-500">{{ a.errorMsg }}</div>
+            </div>
+          </li>
+        </ul>
+        <div v-else class="text-gray-400">该站没有抓到任何图片</div>
+      </ElCard>
+
+      <!-- 卡片五：显示设置 —— 大图/列表两种模式的取图优先级相反，所以按模式分行 -->
+      <ElCard shadow="never" class="detail-card">
+        <template #header>
+          <span class="font-medium">显示设置</span>
+        </template>
+        <ul v-if="(current.displayPrefs ?? []).length > 0" class="space-y-2">
+          <li
+            v-for="p in current.displayPrefs"
+            :key="p.displayMode"
+            class="flex items-center gap-3 rounded border border-gray-100 p-2"
+          >
+            <BookmarkAssetCell :src="p.previewUrl" />
+            <div class="min-w-0 flex-1 space-y-1">
+              <div class="flex flex-wrap items-center gap-1 font-medium">
+                <span>{{ DISPLAY_MODE_LABEL[p.displayMode] ?? p.displayMode }}</span>
+                <ElTag
+                  v-if="p.monogram"
+                  size="small"
+                  type="warning"
+                  title="该模式下没有合适的图，会渲染首字母色块"
+                >
+                  首字母色块
+                </ElTag>
+                <ElTag v-if="p.pinnedAssetId" size="small" type="info">已钉图</ElTag>
+              </div>
+              <div class="text-gray-500">
+                内边距 {{ p.iconPadding }}% · 背景
+                <span
+                  v-if="p.iconBgColor"
+                  class="ml-1 inline-block h-3 w-3 rounded-sm border align-middle"
+                  :style="{ backgroundColor: p.iconBgColor }"
+                />
+                {{ p.iconBgColor || "默认" }}
+              </div>
+            </div>
+          </li>
+        </ul>
+        <div v-else class="text-gray-400">未设置，按默认值渲染</div>
+      </ElCard>
+
+      <!-- 卡片六：关联网站 —— 同域名下已收录的其它页面 + AI 推荐的相似站点 -->
+      <ElCard shadow="never" class="detail-card">
+        <template #header>
+          <div class="flex items-center gap-3">
+            <span class="font-medium">关联网站</span>
+            <ElButton
+              size="small"
+              :loading="loadingSimilar"
+              title="调用 DeepSeek 推荐功能/定位相似的其它网站"
+              @click="findSimilar"
+            >
+              查找相似网站
+            </ElButton>
+          </div>
+        </template>
+
+        <div class="mb-1 text-gray-500">
+          同域名下的其它页面（{{ siblings.length }}）
+        </div>
+        <div v-if="loadingSiblings" class="text-gray-400">加载中…</div>
+        <ul v-else-if="siblings.length > 0" class="space-y-2">
+          <li
+            v-for="s in siblings"
+            :key="s.id"
+            class="flex items-center gap-3 rounded border border-gray-100 p-2"
+          >
+            <BookmarkAssetCell :src="logoOf(s) ?? faviconOf(s)" />
+            <div class="min-w-0 flex-1">
+              <div class="truncate font-medium" :title="s.title || s.appName || ''">
+                {{ s.title || s.appName || "（无标题）" }}
+              </div>
+              <a
+                :href="siblingUrl(s)"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="block truncate text-xs text-blue-500"
+                :title="siblingUrl(s)"
+              >
+                {{ s.urlPath || "/" }}
+              </a>
+            </div>
+            <ElTag
+              :type="PARSE_STATUS_META[s.parseStatus]?.type ?? 'info'"
+              size="small"
+              class="shrink-0"
+            >
+              {{ PARSE_STATUS_META[s.parseStatus]?.label ?? s.parseStatus }}
+            </ElTag>
+          </li>
+        </ul>
+        <div v-else class="text-gray-400">该域名下只收录了当前这一个页面</div>
+
+        <div class="mt-4 mb-1 text-gray-500">AI 推荐的相似网站</div>
+        <ul v-if="similarLoaded && similarSites.length > 0" class="space-y-2">
+          <li v-for="s in similarSites" :key="s.domain" class="rounded border border-gray-100 p-2">
+            <div class="flex flex-wrap items-center gap-2 font-medium">
+              <span>{{ s.name }}</span>
+              <a
+                :href="`https://${s.domain}`"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-blue-500"
+              >
+                {{ s.domain }}
+              </a>
+              <!-- 逐站收录状态优先于「本地已有」标记 -->
+              <ElTag v-if="ingestStatus[s.domain] === 'LOADING'" type="info" size="small">
+                收录中
+              </ElTag>
+              <ElTag v-else-if="ingestStatus[s.domain] === 'INGESTED'" type="success" size="small">
+                已收录
+              </ElTag>
+              <ElTag v-else-if="ingestStatus[s.domain] === 'SKIPPED'" type="danger" size="small">
+                已跳过
+              </ElTag>
+              <ElTag
+                v-else-if="s.exists || ingestStatus[s.domain] === 'EXISTS'"
+                type="warning"
+                size="small"
+              >
+                本地已有
+              </ElTag>
+            </div>
+            <div class="text-gray-500">{{ s.reason }}</div>
+          </li>
+        </ul>
+        <div v-else-if="similarLoaded" class="text-gray-400">未找到相似网站</div>
+        <div v-else class="text-gray-400">尚未查询，点击上方「查找相似网站」</div>
+        <div v-if="similarSites.length > 0" class="mt-3 flex justify-end">
+          <ElButton
+            type="primary"
+            size="small"
+            :loading="ingesting"
+            :disabled="ingestTargets.length === 0"
+            @click="oneClickIngest"
+          >
+            一键收录{{ ingestTargets.length ? `（${ingestTargets.length}）` : "" }}
+          </ElButton>
+        </div>
+      </ElCard>
+
+      <!-- 卡片七：活性检测结果（点底部按钮后出现，直接展示 scrapper 返回的全部字段） -->
+      <ElCard v-if="livenessChecked" shadow="never" class="detail-card">
+        <template #header>
+          <span class="font-medium">检测结果</span>
+        </template>
+        <div v-if="livenessResult" class="space-y-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <ElTag :type="livenessResult.success ? 'success' : 'danger'" size="small">
+              {{ livenessResult.success ? "存活" : "不可访问" }}
+            </ElTag>
+            <span v-if="livenessResult.source" class="text-gray-500">
+              来源：{{ livenessResult.source }}
+            </span>
+            <ElTag v-if="livenessResult.cached" type="info" size="small">命中缓存</ElTag>
+          </div>
+          <div v-if="livenessResult.title" class="flex">
+            <span class="w-20 shrink-0 text-gray-500">新标题</span>
+            <span class="flex-1 break-all">{{ livenessResult.title }}</span>
+          </div>
+          <div v-if="livenessResult.description" class="flex">
+            <span class="w-20 shrink-0 text-gray-500">新描述</span>
+            <span class="flex-1 break-all">{{ livenessResult.description }}</span>
+          </div>
+          <div v-if="livenessResult.errorMsg" class="flex">
+            <span class="w-20 shrink-0 text-gray-500">错误信息</span>
+            <span class="flex-1 break-all text-red-500">{{ livenessResult.errorMsg }}</span>
+          </div>
+          <div
+            v-if="
+              livenessResult.favicon ||
+              livenessResult.logo ||
+              livenessResult.image ||
+              livenessResult.screenshot
+            "
+            class="flex flex-wrap gap-4 pt-1"
+          >
+            <div v-if="livenessResult.favicon" class="flex flex-col items-center gap-1">
+              <img
+                :src="livenessResult.favicon"
+                alt="favicon"
+                class="h-10 w-10 rounded border object-contain"
+              />
+              <span class="text-xs text-gray-400">favicon</span>
+            </div>
+            <div v-if="livenessResult.logo" class="flex flex-col items-center gap-1">
+              <img
+                :src="livenessResult.logo"
+                alt="logo"
+                class="h-10 w-10 rounded border object-contain"
+              />
+              <span class="text-xs text-gray-400">logo</span>
+            </div>
+            <div v-if="livenessResult.image" class="flex flex-col items-center gap-1">
+              <img
+                :src="livenessResult.image"
+                alt="image"
+                class="h-16 w-28 rounded border object-cover"
+              />
+              <span class="text-xs text-gray-400">image</span>
+            </div>
+            <div v-if="livenessResult.screenshot" class="flex flex-col items-center gap-1">
+              <img
+                :src="livenessResult.screenshot"
+                alt="screenshot"
+                class="h-16 w-28 rounded border object-cover"
+              />
+              <span class="text-xs text-gray-400">screenshot</span>
+            </div>
+          </div>
+        </div>
+      </ElCard>
+    </div>
+
+    <template #footer>
+      <!-- 调用方追加的页面专属操作（如图标平铺页的「图标设置」） -->
+      <slot name="extra-actions" :bookmark="current" />
+      <ElButton :disabled="!current" :loading="checkingLiveness" @click="checkLiveness">
+        检测活性
+      </ElButton>
+      <ElButton @click="visible = false">关闭</ElButton>
+    </template>
+  </ElDialog>
+</template>
+
+<style scoped>
+/* 详情字段很多，弹窗自身撑不下，正文单独滚动，底部按钮固定可见 */
+.detail-body {
+  max-height: 66vh;
+  overflow-y: auto;
+}
+
+.detail-card :deep(.el-card__header) {
+  padding: 10px 16px;
+}
+
+.detail-card :deep(.el-card__body) {
+  padding: 16px;
+}
+</style>

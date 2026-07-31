@@ -89,7 +89,24 @@ export interface BookmarkEntity {
   categories?: CategoryVO[];
   /** 疑似涉黄/涉赌等违规内容(NSFW)，由 DeepSeek 判断 */
   nsfw: boolean;
+  /** 人工认证：信息已核对 */
+  verifyFlag?: boolean;
+
+  /* 巡检调度状态：后台需要能回答「这条为什么还没被复查」「为什么一直没变」 */
+  /** 上次成功抓到内容的时间 */
+  lastParseAt?: string;
+  /** 上次活性探测时间(不论结论) */
+  lastCheckAt?: string;
+  /** 下次巡检时间(调度游标) */
+  nextCheckAt?: string;
+  /** 连续探测失败次数，驱动指数退避与归档 */
+  consecutiveFail?: number;
+  /** 被人工锁定、不会被自动抓取覆盖的字段 */
+  lockedFields?: BookmarkLockedField[];
 }
+
+/** 管理员手工改过、自动抓取不允许覆盖的字段 */
+export type BookmarkLockedField = 'APP_NAME' | 'DESCRIPTION' | 'TITLE';
 
 export interface BookmarkSearchParams {
   name?: string;
@@ -234,6 +251,91 @@ export async function refreshBookmarkApi(bookmarkId: string) {
   return requestClient.post<BookmarkEntity>(
     `/admin/bookmark/${bookmarkId}/refresh`,
   );
+}
+
+/** 「图片资产 · 重新抓取」的结果 */
+export interface BookmarkAssetRefetchResult {
+  /** 本次抓取是否成功 */
+  success: boolean;
+  /**
+   * 本次抓取到的图片张数。
+   *
+   * 为 0 时后端会**保留**库里原有的图片而不是清空，所以前后资产数量可能一样 ——
+   * 光比数量分不清「没变化」和「抓崩了但保住了旧图」，靠这个字段区分。
+   */
+  scrapedAssetCount: number;
+  errorMsg?: string;
+  /** 落库后的最新书签详情 */
+  bookmark: BookmarkEntity;
+}
+
+/**
+ * 图片资产重新抓取：只重抓图片，不覆盖标题/简介、不解锁人工锁。
+ *
+ * 与「一键更新」({@link refreshBookmarkApi}) 的区别就在这里 —— 那个会把手工改过的标题
+ * 一并改回抓取值。只想补一张缺失的 LOGO 时用这个。
+ */
+export async function refetchBookmarkAssetsApi(bookmarkId: string) {
+  return requestClient.post<BookmarkAssetRefetchResult>(
+    `/admin/bookmark/${bookmarkId}/assets/refetch`,
+  );
+}
+
+/** 一次拉取同域名书签的上限：后台单域名收录几百个页面已属极端，够用且不至于拖慢弹窗 */
+const HOST_LOOKUP_PAGE_SIZE = 200;
+
+/**
+ * 按域名取出该域名下已收录的全部书签。
+ *
+ * 后端的 `/admin/bookmark/all` 只有一个模糊 `name`（同时 like appName/title/description/urlHost），
+ * 所以这里必须再按 urlHost 精确过滤一次，否则标题里恰好含该域名的其它站点也会混进来。
+ */
+async function listByHost(urlHost: string): Promise<BookmarkEntity[]> {
+  if (!urlHost) return [];
+  const res = await getBookmarkListApi({
+    name: urlHost,
+    currentPage: 1,
+    pageSize: HOST_LOOKUP_PAGE_SIZE,
+  });
+  return res.records.filter((r) => r.urlHost === urlHost);
+}
+
+/**
+ * 用一个原始 URL 反查已收录的书签。
+ *
+ * scrapper 调用日志表存的是「抓过哪个地址」，没有书签 ID —— 那张表记录的抓取有可能压根
+ * 没落成书签。所以这里按 域名 + 路径 去找：路径命中优先，否则退回该域名的首页那条，
+ * 都没有就返回 null（调用方据此提示「尚未收录」，而不是弹一个空壳详情）。
+ */
+export async function findBookmarkByUrlApi(
+  url: string,
+): Promise<BookmarkEntity | null> {
+  let host = '';
+  let path = '/';
+  try {
+    const parsed = new URL(url);
+    host = parsed.host;
+    path = parsed.pathname || '/';
+  } catch {
+    return null;
+  }
+  const candidates = await listByHost(host);
+  if (candidates.length === 0) return null;
+  return (
+    candidates.find((r) => (r.urlPath || '/') === path) ??
+    candidates.find((r) => (r.urlPath || '/') === '/') ??
+    candidates[0] ??
+    null
+  );
+}
+
+/** 同域名下已收录的其它页面（排除自身），用于详情弹窗的「关联网站」 */
+export async function getSiblingBookmarksApi(
+  urlHost: string,
+  excludeId: string,
+): Promise<BookmarkEntity[]> {
+  const list = await listByHost(urlHost);
+  return list.filter((r) => r.id !== excludeId);
 }
 
 /** 手动编辑书签基础信息（标题/简介），返回更新后的书签 */

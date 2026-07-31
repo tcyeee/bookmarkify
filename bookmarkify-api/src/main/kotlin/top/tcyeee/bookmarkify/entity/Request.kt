@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.entity.*
+import top.tcyeee.bookmarkify.entity.enums.AiCallScene
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
@@ -186,6 +187,23 @@ data class ScrapperCallLogSearchParams(
         }
         success?.let { query.eq(ScrapperCallLogEntity::success, it) }
         return query.orderByDesc(ScrapperCallLogEntity::createTime)
+    }
+}
+
+/** 管理后台第三方 AI 调用日志查询入参 */
+data class AiCallLogSearchParams(
+    @field:Schema(description = "判定对象(域名/标题)模糊搜索") var subject: String? = null,
+    @field:Schema(description = "业务场景") var scene: AiCallScene? = null,
+    @field:Schema(description = "是否成功") var success: Boolean? = null,
+) : PageBean() {
+    fun toWrapper(): Wrapper<AiCallLogEntity> {
+        val query = KtQueryWrapper(AiCallLogEntity::class.java)
+        if (!subject.isNullOrBlank()) {
+            query.like(AiCallLogEntity::subject, subject)
+        }
+        scene?.let { query.eq(AiCallLogEntity::scene, it) }
+        success?.let { query.eq(AiCallLogEntity::success, it) }
+        return query.orderByDesc(AiCallLogEntity::createTime)
     }
 }
 

@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import top.tcyeee.bookmarkify.entity.AppNameSuggestVO
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
+import top.tcyeee.bookmarkify.entity.BookmarkAssetRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkBasicInfoUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkCategoriesParams
 import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
@@ -101,6 +102,11 @@ class AdminBookmarkManageController(
     @PostMapping("/{bookmarkId}/liveness")
     fun checkBookmarkLiveness(@PathVariable bookmarkId: String): BookmarkLivenessVO =
         bookmarkService.adminCheckLiveness(bookmarkId)
+
+    // 图片资产重新抓取：只重抓图片，不覆盖标题/简介、不解锁人工锁；本次没抓到则保留原图
+    @PostMapping("/{bookmarkId}/assets/refetch")
+    fun refetchAssets(@PathVariable bookmarkId: String): BookmarkAssetRefetchVO =
+        bookmarkService.adminRefetchAssets(bookmarkId)
 
     // 「一键更新」：重新抓取网站信息并直接覆盖持久化标题/简介/图标/高清 LOGO，同步落库 isActivity/parseStatus
     @PostMapping("/{bookmarkId}/refresh")
