@@ -34,7 +34,13 @@ import { ElMessage } from "element-plus";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 
 import BookmarkAssetCell from "../BookmarkAssetCell.vue";
-import { faviconOf, logoOf, socialOf } from "../siteAsset";
+import {
+  DISPLAY_MODE_LABEL,
+  EXTRACTOR_LEGEND,
+  faviconOf,
+  logoOf,
+  socialOf,
+} from "../siteAsset";
 import BookmarkIcon from "../liveness/BookmarkIcon.vue";
 
 const ElCard = defineAsyncComponent(() =>
@@ -102,6 +108,34 @@ const ElButton = defineAsyncComponent(() =>
 
 const detailVisible = ref(false);
 const currentRow = ref<BookmarkEntity | null>(null);
+
+/** 列表里描述只给一眼的量，完整文本靠 title 悬浮和详情弹窗看 */
+const DESC_MAX = 15;
+function truncate(text: string | undefined, max = DESC_MAX) {
+  if (!text) return "";
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+/** 详情弹窗要展示「全部信息」，所以库里存的 scheme/host/path 三段在这里拼回原始地址 */
+const currentUrl = computed(() => {
+  const row = currentRow.value;
+  if (!row) return "";
+  return `${row.urlScheme}://${row.urlHost}${row.urlPath ?? ""}`;
+});
+
+function formatBytes(bytes?: number) {
+  if (!bytes && bytes !== 0) return "-";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+const ASSET_ROLE_LABEL: Record<string, string> = {
+  FAVICON: "小图标",
+  LOGO: "高清 LOGO",
+  SCREENSHOT: "页面截图",
+  SOCIAL: "社交分享图",
+};
 
 const categoryDict = ref<CategoryEntity[]>([]);
 const editingCategoryIds = ref<string[]>([]);
@@ -370,6 +404,8 @@ const gridOptions: VxeGridProps<BookmarkEntity> = {
     { field: "assetSocial", title: "社交图", width: 90, slots: { default: "og" } },
     { field: "appName", title: "App Name", minWidth: 120 },
     { field: "title", title: "标题", minWidth: 220 },
+    // 只截前 15 个字，完整描述在悬浮 title 与详情弹窗里
+    { field: "description", title: "网站描述", minWidth: 160, slots: { default: "description" } },
     { field: "urlHost", title: "域名", minWidth: 180 },
     { field: "parseStatus", title: "状态", width: 140, slots: { default: "parseStatus" } },
     { field: "antiCrawlerBlocked", title: "反爬拦截", width: 90, slots: { default: "antiCrawlerBlocked" } },
@@ -448,6 +484,12 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
         <template #og="{ row }">
           <BookmarkAssetCell :src="socialOf(row)" wide />
         </template>
+        <template #description="{ row }">
+          <span v-if="row.description" :title="row.description">
+            {{ truncate(row.description) }}
+          </span>
+          <span v-else class="text-gray-400">-</span>
+        </template>
         <template #parseStatus="{ row }">
           <ElTag v-if="row.parseStatus === 'SUCCESS'" type="success" size="small">
             成功
@@ -491,13 +533,13 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
       <ElDialog
         v-model="detailVisible"
         title="书签详情"
-        width="640px"
+        width="720px"
         @close="
           resetIngest();
           resetLiveness();
         "
       >
-        <div v-if="currentRow" class="space-y-4 text-sm">
+        <div v-if="currentRow" class="detail-body space-y-4 pr-1 text-sm">
           <!-- 卡片一：基础信息 -->
           <ElCard shadow="never" class="detail-card">
             <template #header>
@@ -559,12 +601,33 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
                   <span class="flex-1 break-all">{{ currentRow.urlHost }}</span>
                 </div>
                 <div class="flex">
+                  <span class="w-20 text-gray-500">完整地址</span>
+                  <a
+                    :href="currentUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="flex-1 break-all text-blue-500"
+                  >
+                    {{ currentUrl }}
+                  </a>
+                </div>
+                <div class="flex">
                   <span class="w-20 text-gray-500">描述</span>
                   <span class="flex-1 break-all">{{ currentRow.description || "-" }}</span>
                 </div>
                 <div class="flex">
                   <span class="w-20 text-gray-500">创建时间</span>
                   <span class="flex-1">{{ formatDateTime(currentRow.createTime) }}</span>
+                </div>
+                <div class="flex">
+                  <span class="w-20 text-gray-500">更新时间</span>
+                  <span class="flex-1">
+                    {{ currentRow.updateTime ? formatDateTime(currentRow.updateTime) : "-" }}
+                  </span>
+                </div>
+                <div class="flex">
+                  <span class="w-20 text-gray-500">书签 ID</span>
+                  <span class="flex-1 break-all text-gray-400">{{ currentRow.id }}</span>
                 </div>
                 <div v-if="currentRow.parseErrMsg" class="flex">
                   <span class="w-20 text-gray-500">错误信息</span>
@@ -623,7 +686,110 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
             </div>
           </ElCard>
 
-          <!-- 卡片三：相似网站（点击操作栏按钮后出现） -->
+          <!-- 卡片三：图片资产 —— 后台刻意展示**全部**声明的图，而不是选好的那一张 -->
+          <ElCard shadow="never" class="detail-card">
+            <template #header>
+              <span class="font-medium">
+                图片资产（{{ (currentRow.assets ?? []).length }}）
+              </span>
+            </template>
+            <ul v-if="(currentRow.assets ?? []).length > 0" class="space-y-2">
+              <li
+                v-for="a in currentRow.assets"
+                :key="a.id"
+                class="flex gap-3 rounded border border-gray-100 p-2"
+              >
+                <BookmarkAssetCell
+                  :src="a.url"
+                  :wide="a.role === 'SOCIAL' || a.role === 'SCREENSHOT'"
+                />
+                <div class="min-w-0 flex-1 space-y-1">
+                  <div class="flex flex-wrap items-center gap-1">
+                    <ElTag size="small" type="primary">
+                      {{ ASSET_ROLE_LABEL[a.role] ?? a.role }}
+                    </ElTag>
+                    <!-- extractor 是抓取服务报告的事实（图从哪个标签来），悬浮给中文释义 -->
+                    <ElTag size="small" type="info" :title="EXTRACTOR_LEGEND[a.extractor] ?? a.extractor">
+                      {{ a.extractor }}
+                    </ElTag>
+                    <ElTag
+                      size="small"
+                      :type="a.quality === 'TRUSTED' ? 'success' : 'warning'"
+                    >
+                      {{ a.quality === "TRUSTED" ? "可信" : "降级" }}
+                    </ElTag>
+                    <ElTag v-if="a.isPrimary" size="small" type="success">主图</ElTag>
+                    <ElTag v-if="a.isVector" size="small" type="info">矢量</ElTag>
+                    <ElTag
+                      v-if="a.duplicateOfOther"
+                      size="small"
+                      type="warning"
+                      title="与本书签其它资产字节相同 —— 说明该站没有独立 LOGO"
+                    >
+                      与其它图重复
+                    </ElTag>
+                  </div>
+                  <div class="text-gray-500">
+                    {{ a.width && a.height ? `${a.width}×${a.height}` : "尺寸未知" }}
+                    · {{ formatBytes(a.byteSize) }}
+                    · {{ a.mime || "类型未知" }}
+                  </div>
+                  <div v-if="a.contentHash" class="truncate text-xs text-gray-400" :title="a.contentHash">
+                    hash: {{ a.contentHash }}
+                  </div>
+                  <div class="truncate text-xs text-gray-400" :title="a.resolvedUrl">
+                    源地址: {{ a.resolvedUrl }}
+                  </div>
+                  <div v-if="a.errorMsg" class="break-all text-red-500">
+                    {{ a.errorMsg }}
+                  </div>
+                </div>
+              </li>
+            </ul>
+            <div v-else class="text-gray-400">该站没有抓到任何图片</div>
+          </ElCard>
+
+          <!-- 卡片四：显示设置 —— 大图/列表两种模式的取图优先级相反，所以按模式分行 -->
+          <ElCard shadow="never" class="detail-card">
+            <template #header>
+              <span class="font-medium">显示设置</span>
+            </template>
+            <ul v-if="(currentRow.displayPrefs ?? []).length > 0" class="space-y-2">
+              <li
+                v-for="p in currentRow.displayPrefs"
+                :key="p.displayMode"
+                class="flex items-center gap-3 rounded border border-gray-100 p-2"
+              >
+                <BookmarkAssetCell :src="p.previewUrl" />
+                <div class="min-w-0 flex-1 space-y-1">
+                  <div class="flex flex-wrap items-center gap-1 font-medium">
+                    <span>{{ DISPLAY_MODE_LABEL[p.displayMode] ?? p.displayMode }}</span>
+                    <ElTag
+                      v-if="p.monogram"
+                      size="small"
+                      type="warning"
+                      title="该模式下没有合适的图，会渲染首字母色块"
+                    >
+                      首字母色块
+                    </ElTag>
+                    <ElTag v-if="p.pinnedAssetId" size="small" type="info">已钉图</ElTag>
+                  </div>
+                  <div class="text-gray-500">
+                    内边距 {{ p.iconPadding }}% · 背景
+                    <span
+                      v-if="p.iconBgColor"
+                      class="ml-1 inline-block h-3 w-3 rounded-sm border align-middle"
+                      :style="{ backgroundColor: p.iconBgColor }"
+                    />
+                    {{ p.iconBgColor || "默认" }}
+                  </div>
+                </div>
+              </li>
+            </ul>
+            <div v-else class="text-gray-400">未设置，按默认值渲染</div>
+          </ElCard>
+
+          <!-- 卡片五：相似网站（点击操作栏按钮后出现） -->
           <ElCard v-if="similarLoaded" shadow="never" class="detail-card">
             <template #header>
               <span class="font-medium">相似网站</span>
@@ -693,7 +859,7 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
             </div>
           </ElCard>
 
-          <!-- 卡片四：书签检测（点击操作栏按钮后出现，直接展示 scrapper 返回的全部字段） -->
+          <!-- 卡片六：书签检测（点击操作栏按钮后出现，直接展示 scrapper 返回的全部字段） -->
           <ElCard v-if="livenessChecked" shadow="never" class="detail-card">
             <template #header>
               <span class="font-medium">检测结果</span>
@@ -797,6 +963,12 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
   font-weight: 400 !important;
   line-height: 32px;
   color: var(--el-text-color-regular);
+}
+
+/* 详情展示的字段变多后，弹窗自身撑不下，正文单独滚动，底部按钮固定可见 */
+.detail-body {
+  max-height: 66vh;
+  overflow-y: auto;
 }
 
 .detail-card :deep(.el-card__header) {

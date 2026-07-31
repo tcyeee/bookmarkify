@@ -23,6 +23,28 @@ enum class AssetRole {
 }
 
 /**
+ * 资产挂在哪一层。
+ *
+ * 分界线不是新造的概念，就是 [AssetRole] 本身 —— 换同域下另一个页面，这张图会变吗？
+ *
+ * | role | 归属 | 理由 |
+ * |---|---|---|
+ * | [AssetRole.FAVICON] / [AssetRole.LOGO] | [SITE] | 全站一套，同域所有页面共享 |
+ * | [AssetRole.SOCIAL] / [AssetRole.SCREENSHOT] | [PAGE] | 每页不同，就是页面内容本身 |
+ *
+ * 这个分层是本次改造省下大头开销的地方：同域名 1000 个页面此前要各存一份 favicon、
+ * 各下载上传一次、管理员各调一次内边距，现在都是每域名一次。
+ * 详见根目录 `SITE_LAYERING_DESIGN.md` §5。
+ */
+enum class AssetOwnerType {
+    /** 归属 `site.id`：全站共享的图标 */
+    SITE,
+
+    /** 归属 `bookmark.id`：只属于这一个页面的图 */
+    PAGE,
+}
+
+/**
  * 资产的可信度分级，同样由 `extractor` 推导。
  *
  * 关键用途：`APPLE_TOUCH_ICON` / `LINK_ICON` 被映射成 [AssetRole.LOGO] 时只是**降级候选**

@@ -6,6 +6,7 @@ import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.entity.ScrapeSnapshotEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.entity.SitePageMetaEntity
+import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import java.time.LocalDateTime
@@ -35,6 +36,7 @@ object SiteAssetIngestor {
      * @param mapper 用于把原始块序列化进 jsonb 列
      */
     fun project(
+        siteId: String,
         bookmarkId: String,
         url: String,
         response: ScrapeResponse,
@@ -72,11 +74,29 @@ object SiteAssetIngestor {
             )
         }
 
-        val assets = AssetRolePolicy.assignRoles(
+        // 归属必须在 assignRoles 之后算：那一步的第三遍会把借来的 favicon 改判成 LOGO，
+        // 归属得按最终的 role 来定。
+        val declared = AssetRolePolicy.assignRoles(
             response.assets.mapNotNull { toEntity(bookmarkId, it) }
-        ) + screenshotAsset(bookmarkId, url, response)
+        ).onEach { it.assignOwner(siteId) }
+
+        val assets = declared + screenshotAsset(bookmarkId, url, response)
 
         return Projection(snapshot, pageMeta, assets)
+    }
+
+    /**
+     * 按最终 role 决定挂在 site 还是 bookmark 上。
+     *
+     * `bookmarkId` 保持原值不动 —— 它降级成了纯溯源信息（"这张图当初是从哪个页面抓到的"），
+     * 归属看 `ownerType` / `ownerId`。
+     */
+    private fun SiteAssetEntity.assignOwner(siteId: String) {
+        ownerType = AssetRolePolicy.ownerTypeOf(role)
+        ownerId = when (ownerType) {
+            AssetOwnerType.SITE -> siteId
+            AssetOwnerType.PAGE -> bookmarkId.orEmpty()
+        }
     }
 
     /** 抓取失败时只留快照，便于事后排查为什么失败。 */
@@ -146,6 +166,9 @@ object SiteAssetIngestor {
         return listOf(
             SiteAssetEntity(
                 bookmarkId = bookmarkId,
+                // 截图就是这一个页面的内容，天然属于 PAGE 层
+                ownerType = AssetOwnerType.PAGE,
+                ownerId = bookmarkId,
                 role = AssetRole.SCREENSHOT,
                 extractor = "HEADLESS_CAPTURE",
                 quality = AssetQuality.TRUSTED,

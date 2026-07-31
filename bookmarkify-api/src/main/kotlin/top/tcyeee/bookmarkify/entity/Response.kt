@@ -15,6 +15,7 @@ import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
+import top.tcyeee.bookmarkify.server.asset.BookmarkDisplayPolicy
 import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
 import top.tcyeee.bookmarkify.utils.OssUtils
 import java.time.LocalDateTime
@@ -49,31 +50,75 @@ data class BookmarkShow(
     @field:Schema(description = "图标信息(按展示模式解析后的结果)") var logo: BookmarkLogoShowVO = BookmarkLogoShowVO(),
     @field:Schema(description = "网站活性") var isActivity: Boolean? = null,
     @JsonIgnore @field:Schema(description = "用户ID") var uid: String? = null,
-    @JsonIgnore @field:Schema(description = "Host(用于拿不到name的情况下最后显示Title)") var urlHost: String? = null,
-    @JsonIgnore @field:Schema(description = "在有manifest的情况下,替换title") var appName: String? = null,
+    @JsonIgnore @field:Schema(description = "Host(什么都拿不到时的最后兜底)") var urlHost: String? = null,
     @JsonIgnore @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)，供分享审核使用") var nsfw: Boolean = false,
     @field:Schema(description = "用户桌面排布节点ID(书签管理页批量删除/移入文件夹等操作使用此ID，而非 bookmarkUserLinkId)") var layoutNodeId: String? = null,
     @field:Schema(description = "所属文件夹节点ID，无所属文件夹时为 null") var folderId: String? = null,
     @field:Schema(description = "所属文件夹名称，无所属文件夹时为 null") var folderName: String? = null,
+
+    /* ── 以下是 [initDisplay] 计算 [title] 的输入，不直接下发给前端 ──
+     * 三层各自的标题分开带上来，由 BookmarkDisplayPolicy 决定用哪个。此前它们被压成一个
+     * title 字段，于是"用户改过标题"和"从页面拷来的快照"不可区分，优先级也就无从谈起。 */
+    @JsonIgnore @field:Schema(description = "用户自己改的标题；null 表示没改过") var userTitle: String? = null,
+    @JsonIgnore @field:Schema(description = "页面标题(bookmark.title)") var pageTitle: String? = null,
+    @JsonIgnore @field:Schema(description = "站点短名(site.short_name)") var siteShortName: String? = null,
+    @JsonIgnore @field:Schema(description = "站点全名(site.brand_name)") var siteBrandName: String? = null,
+    @JsonIgnore @field:Schema(description = "是否站点首页，决定文案优先级") var rootPage: Boolean = true,
 ) {
-    constructor(userlink: BookmarkUserLink, bookmark: BookmarkEntity?) : this() {
-        bookmark?.let { BeanUtil.copyProperties(it, this) }
-        BeanUtil.copyProperties(userlink, this)
+    /**
+     * 由实体装配。
+     *
+     * **刻意不再用 `BeanUtil.copyProperties` 覆盖式拷贝。** 原来是先拷 bookmark、再拷 userlink，
+     * 靠后者覆盖前者来实现"用户值优先"。这在 `bookmark_user_link.title` 改成「没改过就是 NULL」
+     * 之后会直接坏掉：hutool 默认连 null 一起拷，于是绝大多数书签的页面标题会被一个 null 冲掉。
+     * 逐字段显式赋值，优先级交给 [BookmarkDisplayPolicy]，不再依赖拷贝顺序这种隐式契约。
+     */
+    constructor(userlink: BookmarkUserLink, bookmark: BookmarkEntity?, site: SiteEntity?) : this() {
+        bookmarkId = userlink.bookmarkId
         bookmarkUserLinkId = userlink.id
+        uid = userlink.uid
+        layoutNodeId = userlink.layoutNodeId
+        urlFull = userlink.urlFull
+        pinned = userlink.pinned
+        linkType = userlink.linkType
+
+        userTitle = userlink.title
+        description = userlink.description ?: bookmark?.description
+
+        pageTitle = bookmark?.title
+        urlHost = bookmark?.urlHost ?: site?.host
+        isActivity = bookmark?.isActivity
+        rootPage = bookmark?.isRootPage ?: true
         urlBase = bookmark?.let { "${it.urlScheme}://${it.urlHost}" }
+
+        siteShortName = site?.shortName
+        siteBrandName = site?.brandName
+        // 同 mapper SQL 的过渡期处理：两层任一命中都算命中
+        nsfw = (site?.nsfw ?: false) || (bookmark?.nsfw ?: false)
     }
 
     /**
-     * 注入按展示模式解析出的图标，并设置备用 title：简称 → 标题 → host。
+     * 注入按展示模式解析出的图标与最终文案。
      *
      * [resolved] 刻意不给默认值。图片从 bookmark_logo 的扁平列改成 site_asset 一行一图后，
      * 图标改由调用方经 [SiteAssetResolver] 解析注入，而 [logo] 字段自身有默认值——于是漏注入的
      * 调用点照样编译通过，前端只会静默退化成首字母色块，没有任何报错。桌面主视图与添加/导入
      * 完成后的两处 WebSocket 推送都是这么丢的。参数必填，让编译器替我们守住这条边界。
+     *
+     * [mode] 同理必填：文案优先级与图标优先级在两种模式下都不一样，而且**必须取同一个值** ——
+     * 用 TILE 选图、用 LIST 选文案会得到一个自相矛盾的格子。
      */
-    fun initDisplay(resolved: SiteAssetResolver.ResolvedLogo?): BookmarkShow {
+    fun initDisplay(resolved: SiteAssetResolver.ResolvedLogo?, mode: DisplayMode): BookmarkShow {
         logo = BookmarkLogoShowVO.from(resolved)
-        title = appName?.takeIf { it.isNotBlank() } ?: title?.takeIf { it.isNotBlank() } ?: urlHost
+        title = BookmarkDisplayPolicy.title(
+            userTitle = userTitle,
+            pageTitle = pageTitle,
+            siteShortName = siteShortName,
+            siteBrandName = siteBrandName,
+            urlHost = urlHost,
+            isRootPage = rootPage,
+            mode = mode,
+        )
         return this
     }
 }

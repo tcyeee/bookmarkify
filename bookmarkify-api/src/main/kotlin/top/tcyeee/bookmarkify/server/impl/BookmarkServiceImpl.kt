@@ -54,6 +54,7 @@ import top.tcyeee.bookmarkify.mapper.*
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkLivenessConfigService
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.server.ISiteService
 import top.tcyeee.bookmarkify.config.event.BookmarkEnrichEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseAndNoticeEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseAndResetUserItemEvent
@@ -80,6 +81,7 @@ class BookmarkServiceImpl(
     private val siteAssetResolver: SiteAssetResolver,
     private val siteAssetWriter: SiteAssetWriter,
     private val siteDisplayPrefService: SiteDisplayPrefService,
+    private val siteService: ISiteService,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val layoutNodeFunctionMapper: LayoutNodeFunctionMapper,
     private val bookmarkCategoryService: IBookmarkCategoryService,
@@ -105,11 +107,23 @@ class BookmarkServiceImpl(
                 bookmarkUserLinkMapper.insert(pair.map { it.second })
             }.run {}
 
-    override fun findByHost(host: String): BookmarkEntity? = ktQuery().eq(BookmarkEntity::urlHost, host).one()
+    /**
+     * 某域名的**首页**是否已收录。
+     *
+     * 原先是 `ktQuery().eq(urlHost, host).one()`，这在同一 host 下存在两条路径时会直接抛异常
+     * （MyBatis-Plus 的 `one()` 不允许多行）—— 而按路径去重之后这是必然会出现的情况。
+     * 唯一的调用方（相似站点收录）真正想问的是「这个域名的首页收没收过」，所以收窄成按
+     * canonical 根页面查询：域名下有别的深链被收录过，不代表首页也有了。
+     */
+    override fun findRootPageByHost(host: String): BookmarkEntity? =
+        siteService.findByHost(host)?.let { getByCanonical(it.id, "/", "", "") }
 
     override fun findListByUrl(urls: List<String>): List<BookmarkEntity> =
         urls.mapNotNull { runCatching { WebsiteParser.urlWrapper(it) }.getOrNull() }
-            .mapNotNull { getByUrl(it.urlHost, it.urlPath ?: "/") }
+            .mapNotNull { getByUrl(it) }
+
+    override fun getOrCreateCanonical(url: String): BookmarkEntity =
+        getOrCreateByUrl(WebsiteParser.urlWrapper(url))
 
     @Transactional
     override fun setDefaultFunction(uid: String) =
@@ -155,6 +169,8 @@ class BookmarkServiceImpl(
             if (bookmarkIds.isEmpty()) emptyMap() else baseMapper.selectByIds(bookmarkIds).associateBy { it.id }
         // 前台桌面是大图 + 短名的形态，按 TILE 模式解析图标
         val logoMap = siteAssetResolver.resolveBatch(bookmarkIds, DisplayMode.TILE)
+        // 站点层带上品牌名/短名/NSFW：文案优先级要用它们，一次批量取回避免 N+1
+        val siteMap = siteService.mapByIds(bookmarkEntityMap.values.map { it.siteId })
 
         // 所属文件夹：布局节点(layoutNodeId) -> 父节点(parentId) -> 父节点名称，两次批量查询避免 N+1
         val layoutNodeIds = result.records.map { it.layoutNodeId }
@@ -164,7 +180,9 @@ class BookmarkServiceImpl(
 
         return result.convert {
             val folder = layoutNodeMap[it.layoutNodeId]?.parentId?.let { fid -> folderMap[fid] }
-            BookmarkShow(it, bookmarkEntityMap[it.bookmarkId]).initDisplay(logoMap[it.bookmarkId]).apply {
+            val bookmark = bookmarkEntityMap[it.bookmarkId]
+            BookmarkShow(it, bookmark, siteMap[bookmark?.siteId])
+                .initDisplay(logoMap[it.bookmarkId], DisplayMode.TILE).apply {
                 folderId = folder?.id
                 folderName = folder?.name
             }
@@ -474,23 +492,50 @@ class BookmarkServiceImpl(
         if (candidates.isEmpty()) return
 
         log.debug("[$taskLabel] 本次待检查书签数: ${candidates.size}")
+
+        // ── 站点层短路 ──
+        // 域名已经判定死亡的，不再逐页探测：一个挂掉的域名有 1000 个页面，就是 1000 次 15s 超时
+        // 换同一个结论。每个这样的域名只对根地址探一次，看它是不是恢复了。
+        val siteMap = siteService.mapByIds(candidates.map { it.siteId })
+        val (pagesOfDeadSites, pagesOfLiveSites) = candidates.partition { siteMap[it.siteId]?.isAlive == false }
+        val recovery = probeRoots(pagesOfDeadSites.mapNotNull { siteMap[it.siteId] })
+        // 根地址通了 → 域名恢复，这些页面回到正常逐页探测的路径
+        val revived = pagesOfDeadSites.filter { recovery[it.siteId] == PingOutcome.ALIVE }
+        val shortCircuited: List<Pair<BookmarkEntity, PingOutcome>> = pagesOfDeadSites
+            .filterNot { recovery[it.siteId] == PingOutcome.ALIVE }
+            // 根地址无结论（我方链路的问题）时给 UNKNOWN，不能记在站点账上
+            .map { it to (recovery[it.siteId] ?: PingOutcome.UNKNOWN) }
+        // 用 debug 而非 info：ServiceImpl 自带的 log 字段遮蔽了项目的 log 扩展属性，
+        // 而那个接口没有 info 方法（同 persistProbeResult 里的那条注释）。
+        // 短路条数会并入本轮的汇总行，那里才是看走势的地方。
+        if (shortCircuited.isNotEmpty()) log.debug(
+            "[$taskLabel] 站点已判定死亡，短路 ${shortCircuited.size} 个页面的探测（省下同样多次超时等待）"
+        )
+
         // 并行探测。串行时最坏耗时是 batchSize × 单条超时(15s)，200 条要 50 分钟、贴着调度周期；
         // 并发度受 scrapper 的全局并发上限约束，见 AsyncConfig.PING_CONCURRENCY 的说明。
-        val probed: List<Pair<BookmarkEntity, PingOutcome>> = candidates
+        val actuallyProbed: List<Pair<BookmarkEntity, PingOutcome>> = (pagesOfLiveSites + revived)
             .map { bookmark ->
                 bookmark to CompletableFuture.supplyAsync({ apiService.pingWebsite(bookmark.rawUrl) }, pingExecutor)
             }
             // 先全部投递、再统一 join：边投边等就退化成串行了
             .map { (bookmark, future) -> bookmark to future.join() }
 
-        val breakerReason = LivenessPolicy.breakerReason(probed.map { it.second })
+        // **熔断只看真正探测过的结果。** 短路出来的那些 DEAD 不是探测结论，是上一轮的结论在复用；
+        // 把它们混进来会凭空拉高失联比例，让「>90% DEAD」这条规则在一个健康的系统里误触发 ——
+        // 而那条规则本来是用来发现"scrapper 通着但出口坏了、于是诚实地把一切报成死"的。
+        val breakerReason = LivenessPolicy.breakerReason(actuallyProbed.map { it.second })
+
+        val probed = actuallyProbed + shortCircuited
         // 熔断时依旧落 ping 日志：这批结果本身就是判断「我方哪里坏了」的证据，
         // 不落等于把唯一的现场也丢了。只是 triggeredParse 全为 false，且不改动任何书签。
         val triggeredParseOfEach = probed.map { (bookmark, outcome) ->
             breakerReason == null && triggeredParseOf(bookmark, outcome)
         }
+        // 只为**真正探测过**的页面落 ping 日志：这张表的语义是"一次探测一行"，
+        // 把短路的也写进去会让失联率、探测耗时这些基于它的统计全部失真。
         pingLogMapper.insert(
-            probed.mapIndexed { index, (bookmark, outcome) ->
+            actuallyProbed.mapIndexed { index, (bookmark, outcome) ->
                 BookmarkPingLogEntity(
                     bookmarkId = bookmark.id,
                     urlHost = bookmark.urlHost,
@@ -511,10 +556,13 @@ class BookmarkServiceImpl(
             if (triggeredParse) eventPublisher.publishEvent(BookmarkParseEvent(bookmark.id))
         }
 
+        updateSiteLiveness(taskLabel, actuallyProbed, siteMap, recovery)
+
         // 一轮一条汇总，胜过几百条 debug：判断「检测间隔配置是否追得上」「站点失联率是否异常」
         // 靠的是这几个数字随时间的走势，逐条日志既翻不动也留不久。
         log.warn(
             "[$taskLabel] 本轮完成: 候选=${candidates.size}/积压=$totalBacklog, " +
+                "实际探测=${actuallyProbed.size}/站点层短路=${shortCircuited.size}, " +
                 "存活=${probed.count { it.second == PingOutcome.ALIVE }}, " +
                 "失联=${probed.count { it.second == PingOutcome.DEAD }}, " +
                 "无结论=${probed.count { it.second == PingOutcome.UNKNOWN }}, " +
@@ -522,6 +570,83 @@ class BookmarkServiceImpl(
                 "耗时=${System.currentTimeMillis() - startedAt}ms"
         )
     }
+
+    // ────── 站点层活性 ──────
+
+    /**
+     * 对一批站点的**根地址**各探一次，返回 siteId → 结论。
+     *
+     * 探根地址而不是探某个页面：判断的是"这个域名还在不在"，而具体页面 404 是常态。
+     */
+    private fun probeRoots(sites: List<SiteEntity>): Map<String, PingOutcome> {
+        val distinct = sites.distinctBy { it.id }
+        if (distinct.isEmpty()) return emptyMap()
+        return distinct
+            .map { site -> site to CompletableFuture.supplyAsync({ apiService.pingWebsite(site.rootUrl) }, pingExecutor) }
+            .associate { (site, future) -> site.id to future.join() }
+    }
+
+    /**
+     * 按本轮的页面探测结果推进 `site.is_alive`。
+     *
+     * 判定规则本身是纯函数 [LivenessPolicy.siteVerdict]（那里写着为什么"页面全挂"不等于"域名死了"）；
+     * 这里只负责取数、按需补探根地址、落库。
+     *
+     * 补探根地址的时机刻意压到最小：只有「本轮全部页面失联、且该域名当前还被认为活着」的站点才
+     * 需要一次根地址探测。健康的域名一次都不会多探。
+     */
+    private fun updateSiteLiveness(
+        taskLabel: String,
+        probed: List<Pair<BookmarkEntity, PingOutcome>>,
+        siteMap: Map<String, SiteEntity>,
+        recovery: Map<String, PingOutcome>,
+    ) = runCatching {
+        // 站点层短路时探到的"域名已恢复"，先落回来
+        recovery.filterValues { it == PingOutcome.ALIVE }.keys
+            .forEach { siteService.recordLiveness(it, alive = true) }
+
+        val bySite = probed.filter { it.first.siteId.isNotBlank() }
+            .groupBy { it.first.siteId }
+            .mapValues { (_, group) -> group.map { it.second } }
+
+        // 只有"页面全挂"的站点才需要根地址确认；判活那一侧不需要额外探测。
+        // 已经是死的也不必再探：那批走的是站点层短路，recovery 刚探过。
+        val needRootProbe = bySite
+            .filterKeys { siteMap[it]?.isAlive != false }
+            .filterValues { LivenessPolicy.siteVerdict(it, rootOutcome = null) == LivenessPolicy.SiteVerdict.UNCHANGED }
+            .filterValues { outcomes -> outcomes.isNotEmpty() && outcomes.all { it == PingOutcome.DEAD } }
+            .keys
+        // 根页面本身就在本轮候选里时直接复用那条结果，别重复探一次
+        val rootFromBatch = probed.filter { it.first.isRootPage }.associate { it.first.siteId to it.second }
+        val rootOutcome = rootFromBatch + probeRoots(needRootProbe.filter { it !in rootFromBatch }.mapNotNull { siteMap[it] })
+
+        var dead = 0
+        var alive = 0
+        var unchanged = 0
+        bySite.forEach { (siteId, outcomes) ->
+            when (LivenessPolicy.siteVerdict(outcomes, rootOutcome[siteId])) {
+                LivenessPolicy.SiteVerdict.ALIVE -> {
+                    // 本来就活着的不必重复写库，只有"从死转活"才是一次状态变更
+                    if (siteMap[siteId]?.isAlive == false) {
+                        siteService.recordLiveness(siteId, alive = true)
+                        alive++
+                    }
+                }
+                LivenessPolicy.SiteVerdict.DEAD -> {
+                    siteService.recordLiveness(siteId, alive = false)
+                    dead++
+                }
+                LivenessPolicy.SiteVerdict.UNCHANGED -> unchanged++
+            }
+        }
+        if (dead > 0 || alive > 0) log.warn(
+            "[$taskLabel] 站点活性更新: 经根地址确认死亡=$dead, 恢复存活=$alive, " +
+                "证据不足保持原状=$unchanged(含『页面已消失但域名健在』), 补探根地址=${needRootProbe.size}"
+        )
+    }.onFailure {
+        // 站点层活性只是优化探测开销的辅助信息，算错不该反过来影响已经落库的页面巡检结果
+        log.warn("[$taskLabel] 站点活性更新失败(忽略): ${it.message}")
+    }.let { }
 
     // ────── 巡检调度状态的推进 ──────
 
@@ -735,9 +860,10 @@ class BookmarkServiceImpl(
             .set(BookmarkEntity::appName, params.appName)
             .set(BookmarkEntity::lockedFields, bookmark.lockedFields)
             .update()
-        // 显示设置按（书签 × 展示模式）分行：72px 大图上的内边距/背景色，与 16px 列表行
-        // 完全是两回事，不该互相影响
+        // 显示设置按（站点 × 展示模式）分行：72px 大图上的内边距/背景色，与 16px 列表行
+        // 完全是两回事，不该互相影响；而它们调的都是站点图标的观感，所以键是站点而非书签
         siteDisplayPrefService.save(
+            siteId = bookmark.siteId,
             bookmarkId = bookmarkId,
             mode = params.displayMode,
             iconPadding = params.iconPadding,
@@ -840,7 +966,7 @@ class BookmarkServiceImpl(
         if (params.useNewIcon || params.useNewLogo) {
             // 回放的是 adminRefetch 暂存在 Redis 里的那次抓取结果，本次没发生网络请求，
             // 耗时记 0 是准确的（真实耗时属于当初那次抓取）
-            siteAssetWriter.persist(bookmarkId, bookmark.rawUrl, vo, 0)
+            siteAssetWriter.persist(bookmark.siteId, bookmarkId, bookmark.rawUrl, vo, 0, bookmark.isRootPage)
         }
         bookmark.updateTime = LocalDateTime.now()
         // 管理员刚刚亲眼确认过这份内容是新的，等价于一次成功的重新抓取：
@@ -869,7 +995,7 @@ class BookmarkServiceImpl(
                     // 「一键更新」是管理员显式要求采用抓取值，标题/简介此后不再是人工值 → 解锁
                     unlock(BookmarkLockedField.TITLE, BookmarkLockedField.DESCRIPTION)
                 }
-                siteAssetWriter.persist(bookmarkId, bookmark.rawUrl, vo, elapsedMs(startedAt))
+                siteAssetWriter.persist(bookmark.siteId, bookmarkId, bookmark.rawUrl, vo, elapsedMs(startedAt), bookmark.isRootPage)
                 log.debug("[adminRefresh] 更新成功: bookmarkId=$bookmarkId, title=${bookmark.title}")
             },
             onFailure = { e ->
@@ -894,7 +1020,7 @@ class BookmarkServiceImpl(
 
     override fun adminSyncFromExternalScrape(url: String, vo: ScrapeResponse): Boolean {
         val urlWrapper = WebsiteParser.urlWrapper(url)
-        val bookmark = getByUrl(urlWrapper.urlHost, urlWrapper.urlPath ?: "/") ?: return false
+        val bookmark = getByUrl(urlWrapper) ?: return false
         log.debug("[adminSyncFromExternalScrape] 网站管理活性检测命中已有书签，同步落库: bookmarkId=${bookmark.id}, url=$url")
         bookmark.apply {
             title = vo.title
@@ -905,7 +1031,7 @@ class BookmarkServiceImpl(
             updateTime = LocalDateTime.now()
             scheduleAfterParseSuccess()
         }
-        siteAssetWriter.persist(bookmark.id, bookmark.rawUrl, vo, 0)
+        siteAssetWriter.persist(bookmark.siteId, bookmark.id, bookmark.rawUrl, vo, 0, bookmark.isRootPage)
         baseMapper.updateById(bookmark)
         log.debug("[adminSyncFromExternalScrape] 同步完成: bookmarkId=${bookmark.id}, title=${bookmark.title}")
         return true
@@ -965,7 +1091,7 @@ class BookmarkServiceImpl(
     /** 收录单个相似站点：本地已有→EXISTS；抓取失败(不可达=幻觉/失效)→删除记录并 SKIPPED；抓到(SUCCESS)→INGESTED。 */
     private fun ingestOneSimilar(domain: String): String {
         val wrapper = WebsiteParser.urlWrapper("https://${domain.trim().substringAfter("://")}")
-        findByHost(wrapper.urlHost)?.let { return "EXISTS" }
+        findRootPageByHost(wrapper.urlHost)?.let { return "EXISTS" }
         val bookmark = getOrCreateByUrl(wrapper)
         // 抓取可能抛异常（本地解析器）或落 UNREACHABLE（scrapper 不可达）；统一以「最终落库状态」判定，
         // 抓到正文(SUCCESS，反爬页面也算)才保留，其余一律删除——保证幻觉域名绝不留在库里。
@@ -1085,7 +1211,16 @@ class BookmarkServiceImpl(
             // 冒泡到事件监听器，被 runCatching 吞掉且不回写任何状态，用户端只会看到一个转不动的
             // 加载占位符。这里退化为与「ping 不通」一致的处理：落一条 UNREACHABLE 记录，让节点照常收口。
             log.error("[parseAndResetUserItem] 解析异常，标记为不可用: urlHost=${urlWrapper.urlHost}, urlPath=${urlWrapper.urlPath}", ex)
-            (getByUrl(urlWrapper.urlHost, urlWrapper.urlPath ?: "/") ?: BookmarkEntity(urlWrapper)).apply {
+            // 只认已存在的记录：能走到这里的绝大多数情况是「canonical 记录建好了、抓取那步炸了」，
+            // 回查必然命中。反过来连记录都没有，说明连 site/bookmark 的插入本身都失败了（库层面
+            // 的问题），此时没有 siteId 可用，硬造一条 site_id 为空的孤儿页面记录只会污染数据 ——
+            // 按「网址解析不出来」的同一套方式收口，让节点照常翻成普通磁贴。
+            val existing = getByUrl(urlWrapper) ?: run {
+                log.warn("[parseAndResetUserItem] canonical 记录不存在且无法创建，作为无源书签收口: rawUrl=$rawUrl")
+                finishNodeWithoutBookmark(uid, userLinkId, layoutNodeId)
+                return
+            }
+            existing.apply {
                 isActivity = false
                 parseStatus = ParseStatusEnum.UNREACHABLE
                 parseErrMsg = "parse failed: ${ex.message}"
@@ -1198,37 +1333,61 @@ class BookmarkServiceImpl(
         return parsed
     }
 
-    /** 通过 DeepSeek 判断书签是否 NSFW（成人/赌博等），结果(含理由)写回 bookmark.nsfw/nsfwReason；失败静默，不影响解析主流程。 */
+    /**
+     * 通过 DeepSeek 判断**站点**是否 NSFW（成人/赌博等），结果写回 `site.nsfw` / `site.nsfw_reason`。
+     * 失败静默，不影响解析主流程。
+     *
+     * 判定挂在站点而不是页面上：涉黄/涉赌是域名的属性，同一个域名下 1000 个页面各判一次，
+     * 就是 1000 次 10s 的 LLM 往返换同一个结论。**同一站点只判一次** —— 已经判过的（有 reason
+     * 或已标记）直接跳过，这也让"重抓一批深链"不再连带触发一批重复判定。
+     *
+     * 判定输入仍然用页面的标题/描述：站点自己没有文字，首页或任一页面的文案就是判据。
+     */
     private fun checkNsfw(bookmark: BookmarkEntity) {
+        val siteId = bookmark.siteId.takeIf { it.isNotBlank() } ?: run {
+            log.debug("[checkNsfw] 书签未挂站点，跳过: bookmarkId=${bookmark.id}")
+            return
+        }
         runCatching {
-            val result = apiService.inferNsfw(bookmark.title, bookmark.description, bookmark.urlHost)
-            bookmark.nsfw = result.nsfw
-            bookmark.nsfwReason = result.reason
-            if (result.nsfw) {
-                ktUpdate().eq(BookmarkEntity::id, bookmark.id)
-                    .set(BookmarkEntity::nsfw, true)
-                    .set(BookmarkEntity::nsfwReason, result.reason)
-                    .update()
+            val site = siteService.getById(siteId) ?: return
+            // 已判过就不再判：结论对整个域名是一样的
+            if (site.nsfw || site.nsfwReason != null) {
+                log.debug("[checkNsfw] 该站点已判定过，跳过: siteId=$siteId, host=${site.host}, nsfw=${site.nsfw}")
+                return
             }
-        }.onFailure { log.warn("[checkNsfw] NSFW 检测失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}") }
+            val result = apiService.inferNsfw(bookmark.title, bookmark.description, bookmark.urlHost)
+            siteService.markNsfw(siteId, result.nsfw, result.reason)
+        }.onFailure {
+            log.warn("[checkNsfw] NSFW 检测失败(忽略): bookmarkId=${bookmark.id}, siteId=$siteId, err=${it.message}")
+        }
     }
 
+    /**
+     * 管理员「一键分类」的 NSFW 全量重判。
+     *
+     * 遍历的是**站点**而不是书签：判定本就是域名级的，按书签遍历会在同一域名上重复烧 LLM 往返。
+     * 判定输入取该站点下任意一个已抓到标题的页面（优先首页）。
+     *
+     * @return (站点总数, 命中数)
+     */
     override fun checkNsfwForAll(): Pair<Int, Int> {
-        val all = list()
+        val sites = siteService.list()
+        // 每个站点挑一条有标题的页面当判定输入，首页优先；一次查询取回全部页面避免 N+1
+        val sampleBySite = list()
+            .filter { !it.title.isNullOrBlank() && it.siteId.isNotBlank() }
+            .groupBy { it.siteId }
+            .mapValues { (_, pages) -> pages.firstOrNull { it.isRootPage } ?: pages.first() }
+
         var flagged = 0
-        all.forEach { bookmark ->
+        sites.forEach { site ->
+            val sample = sampleBySite[site.id] ?: return@forEach
             runCatching {
-                val result = apiService.inferNsfw(bookmark.title, bookmark.description, bookmark.urlHost)
-                if (result.nsfw) {
-                    flagged++
-                    ktUpdate().eq(BookmarkEntity::id, bookmark.id)
-                        .set(BookmarkEntity::nsfw, true)
-                        .set(BookmarkEntity::nsfwReason, result.reason)
-                        .update()
-                }
-            }.onFailure { log.warn("[checkNsfwForAll] NSFW 检测失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}") }
+                val result = apiService.inferNsfw(sample.title, sample.description, site.host)
+                if (result.nsfw) flagged++
+                siteService.markNsfw(site.id, result.nsfw, result.reason)
+            }.onFailure { log.warn("[checkNsfwForAll] NSFW 检测失败(忽略): siteId=${site.id}, host=${site.host}, err=${it.message}") }
         }
-        return all.size to flagged
+        return sites.size to flagged
     }
 
     /**
@@ -1315,8 +1474,19 @@ class BookmarkServiceImpl(
                 // 没有任何一个会回来补这条。抓取此时已经结束，合并进一个短事务不增加持锁时间。
                 txTemplate.execute {
                     baseMapper.insertOrUpdate(bookmark)
-                    siteAssetWriter.persist(bookmark.id, bookmark.rawUrl, vo, elapsedMs(startedAt))
+                    siteAssetWriter.persist(bookmark.siteId, bookmark.id, bookmark.rawUrl, vo, elapsedMs(startedAt), bookmark.isRootPage)
                 }
+                // 站点级文字信息（品牌名/短名）落到 site 那一层。写入强度按「抓的是不是首页」分档：
+                // 首页是权威来源、可以覆盖；深链只在站点侧还没有值时回填 —— 否则某个视频页里写歪的
+                // og:site_name 会把整站品牌名带跑。失败不能影响页面本身的解析结果，故降级为日志。
+                runCatching {
+                    siteService.applyCrawledMeta(
+                        siteId = bookmark.siteId,
+                        brandName = vo.meta?.siteName,
+                        shortName = vo.shortName,
+                        fromRootPage = bookmark.isRootPage,
+                    )
+                }.onFailure { log.warn("[parseByApi] 站点信息回写失败(忽略): siteId=${bookmark.siteId}, err=${it.message}") }
                 log.debug("[parseByApi] 第三方API解析全部完成: bookmarkId=${bookmark.id}, assets=${vo.assets.size}")
                 bookmark
             },
@@ -1393,7 +1563,7 @@ class BookmarkServiceImpl(
         vo.assets = toAssetVOs(siteAssetResolver.assetsOf(bookmarkId))
 
         vo.displayPrefs = DisplayMode.entries.map { mode ->
-            val pref = siteDisplayPrefService.find(bookmarkId, mode)
+            val pref = siteDisplayPrefService.find(bookmark.siteId, mode)
             val resolved = siteAssetResolver.resolveOne(bookmarkId, mode)
             SiteDisplayPrefVO(
                 displayMode = mode,
@@ -1462,25 +1632,45 @@ class BookmarkServiceImpl(
      */
     private fun showForDesktop(userLinkId: String): BookmarkShow =
         bookmarkUserLinkMapper.findShowById(userLinkId)
-            .let { it.initDisplay(it.bookmarkId?.let { id -> siteAssetResolver.resolveOne(id, DisplayMode.TILE) }) }
+            .let { it.initDisplay(it.bookmarkId?.let { id -> siteAssetResolver.resolveOne(id, DisplayMode.TILE) }, DisplayMode.TILE) }
 
-    private fun getByUrl(urlHost: String, urlPath: String): BookmarkEntity? =
-        ktQuery().eq(BookmarkEntity::urlHost, urlHost).eq(BookmarkEntity::urlPath, urlPath).one()
+    /** 按 canonical 四元组精确命中一条页面记录。 */
+    private fun getByCanonical(siteId: String, urlPath: String, urlQuery: String, urlFragment: String): BookmarkEntity? =
+        ktQuery().eq(BookmarkEntity::siteId, siteId)
+            .eq(BookmarkEntity::urlPath, urlPath)
+            .eq(BookmarkEntity::urlQuery, urlQuery)
+            .eq(BookmarkEntity::urlFragment, urlFragment)
+            .one()
+
+    private fun getByUrl(siteId: String, w: BookmarkUrlWrapper): BookmarkEntity? =
+        getByCanonical(siteId, w.urlPath ?: "/", w.urlQuery, w.urlFragment)
+
+    /** 同上，但站点未知时用（先按 host 找 site；site 都没有就必然没有页面记录）。 */
+    private fun getByUrl(w: BookmarkUrlWrapper): BookmarkEntity? =
+        siteService.findByHost(w.urlHost)?.let { getByUrl(it.id, w) }
 
     /**
-     * 按 (urlHost, urlPath) 获取或创建 canonical 书签。
-     * `bookmark` 表在 (url_host, url_path) 上有联合唯一约束：并发插入同一 (host, path) 时，落败的一方
-     * 捕获唯一键冲突后回查已存在记录，保证「一页一条」，杜绝重复 canonical 记录。
-     * 之所以不能只按 host 去重：同一域名下不同路径是完全不同的页面（不同 GitHub 仓库、不同 Notion
-     * 页面……），各自的标题/简称/图标不能共用同一次抓取结果。
+     * 按 canonical 四元组 (siteId, urlPath, urlQuery, urlFragment) 获取或创建页面记录，
+     * 顺带保证它所属的 `site` 行存在。
+     *
+     * `bookmark` 在这四列上有联合唯一约束：并发插入同一页面时，落败的一方捕获唯一键冲突后回查，
+     * 保证「一页一条」。
+     *
+     * 为什么 query 必须进 key：同一域名下不同路径**和不同参数**是完全不同的页面（不同 GitHub 仓库、
+     * 不同 YouTube 视频），各自的标题/图标不能共用同一次抓取结果。此前 key 只有 (host, path)，
+     * `?v=A` 与 `?v=B` 收敛成一条，抓取目标还退化成了不存在的 `/watch`。
+     *
+     * 两次 getOrCreate 都刻意留在事务**之外**（[getOrCreateByHost] 的注释同理）：它们靠捕获唯一键
+     * 冲突后回查来收敛，而 PostgreSQL 里一旦事务内触发约束冲突，整个事务就进入 aborted 状态，
+     * 回查那条 SELECT 也会一并失败。
      */
     private fun getOrCreateByUrl(urlWrapper: BookmarkUrlWrapper): BookmarkEntity {
-        val path = urlWrapper.urlPath ?: "/"
-        getByUrl(urlWrapper.urlHost, path)?.let { return it }
+        val site = siteService.getOrCreateByHost(urlWrapper.urlHost, urlWrapper.urlScheme)
+        getByUrl(site.id, urlWrapper)?.let { return it }
         return try {
-            BookmarkEntity(urlWrapper).also { save(it) }
+            BookmarkEntity(urlWrapper, site.id).also { save(it) }
         } catch (e: DuplicateKeyException) {
-            getByUrl(urlWrapper.urlHost, path) ?: throw e
+            getByUrl(site.id, urlWrapper) ?: throw e
         }
     }
 

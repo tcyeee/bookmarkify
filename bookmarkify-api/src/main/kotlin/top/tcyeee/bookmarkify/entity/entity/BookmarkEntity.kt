@@ -14,6 +14,8 @@ import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLockedField
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.utils.ChromeBookmarkRawData
+import top.tcyeee.bookmarkify.utils.LockedFieldCodec
+import top.tcyeee.bookmarkify.utils.UrlCanonicalizer
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 import java.io.Serializable
 import java.time.LocalDateTime
@@ -30,15 +32,21 @@ data class BookmarkEntity(
 
     /* URL相关 */
     @TableId var id: String,
-    @field:Max(200) @field:Schema(description = "书签根域名") var urlHost: String,        // sfz.uzuzuz.com.cn
-    // canonical 书签按 (urlHost, urlPath) 联合去重/抓取，而不是只按 urlHost：
-    // 同一域名下不同路径（如不同 GitHub 仓库、不同 Notion 页面）是完全不同的页面，
-    // 各自应有自己的标题/简称/图标，不能共用同一条记录。根路径统一存 "/"。
-    @field:Max(500) @field:Schema(description = "书签路径(与 urlHost 联合构成去重/抓取的唯一标识)") var urlPath: String = "/",
+    // 所属站点。品牌名/短名/favicon/logo/NSFW/域名活性都在 site 那一层，本表只管页面级事实。
+    @field:Max(40) @field:Schema(description = "所属站点ID") var siteId: String = "",
+    @field:Max(200) @field:Schema(description = "书签根域名(site.host 的冗余副本，只读)") var urlHost: String, // sfz.uzuzuz.com.cn
+    // canonical 书签按 (siteId, urlPath, urlQuery, urlFragment) 四元组去重/抓取：
+    // 同一域名下不同路径、不同参数（不同 GitHub 仓库、不同 YouTube 视频）是完全不同的页面，
+    // 各自应有自己的标题/图标，不能共用同一条记录。规范化规则见 UrlCanonicalizer。
+    @field:Max(500) @field:Schema(description = "书签路径，根路径存 \"/\"") var urlPath: String = "/",
+    @field:Max(1000) @field:Schema(description = "规范化后的查询参数，无参数存空串") var urlQuery: String = "",
+    @field:Max(500) @field:Schema(description = "路由型 fragment(#/… / #!…)，页内锚点不存") var urlFragment: String = "",
     @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
     /* 基础信息 */
-    @field:Max(100) @field:Schema(description = "书签简称") var appName: String? = null,
+    // appName 是历史遗留：语义上它是**站点短名**（manifest.short_name），已迁往 site.short_name。
+    // 保留到清理批次（SITE_LAYERING_DESIGN.md §8 第 6 步）执行前，新代码不要再读写它。
+    @field:Max(100) @field:Schema(description = "书签简称(过渡期保留，权威值见 site.short_name)") var appName: String? = null,
     @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
     @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
 
@@ -46,7 +54,9 @@ data class BookmarkEntity(
 
     /* 状态信息 */
     @JsonIgnore @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.PENDING,
-    @JsonIgnore @field:Schema(description = "网站是否活跃") var isActivity: Boolean = false,
+    // 页面级活性：这**一个页面**能否打开。域名级活性在 site.is_alive —— 域名活着而具体页面 404
+    // 是常态（视频被删、仓库归档），反过来域名死了就没必要逐页去探测。
+    @JsonIgnore @field:Schema(description = "该页面是否可访问(域名级活性见 site.is_alive)") var isActivity: Boolean = false,
     @JsonIgnore @field:Schema(description = "抓取成功但页面疑似反爬虫/WAF挑战页,内容可能不可靠") var antiCrawlerBlocked: Boolean = false,
     @JsonIgnore @field:Schema(description = "手动认证状态") var verifyFlag: Boolean = false, // 如果该书签信息都没问题, 添加手动认证状态以后, 即可被搜索到
     @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)，由 DeepSeek 判断") var nsfw: Boolean = false,
@@ -68,32 +78,37 @@ data class BookmarkEntity(
     @field:Schema(description = "管理员手工锁定、不允许自动抓取覆盖的字段(逗号分隔)")
     var lockedFields: String? = null,
 ) {
-    // 拼接后的完整网站（含路径，抓取/ping 都以这个具体页面为目标，而不是域名根路径）
-    val rawUrl get() = "${this.urlScheme}://${this.urlHost}${this.urlPath}"
+    /**
+     * 抓取/ping 的目标：**这一个具体页面**，含规范化后的参数与路由型 fragment。
+     *
+     * query 曾经不在这里，于是 `youtube.com/watch?v=A` 的抓取目标退化成 `.../watch` ——
+     * 一个不存在的页面，抓回来的标题对任何视频都是错的。顺序由 [UrlCanonicalizer.CanonicalParts]
+     * 统一负责（`?` 在 `#` 之前），别在这里手拼。
+     */
+    val rawUrl: String
+        get() = UrlCanonicalizer.CanonicalParts(urlPath, urlQuery, urlFragment)
+            .rawUrl(urlScheme, urlHost)
+
+    /** 是不是站点首页。展示策略与站点品牌名的写入强度都按它分叉。 */
+    val isRootPage: Boolean get() = urlPath == "/" && urlQuery.isEmpty() && urlFragment.isEmpty()
 
     // JSON格式化后的数据
     val json: String? get() = JSONUtil.toJsonStr(this)
 
-    // 通过URL初始化
-    constructor(url: BookmarkUrlWrapper) : this(
+    /**
+     * 通过 URL 初始化。[siteId] 必填 —— 页面必须先有站点：品牌名/图标/NSFW/域名活性都挂在
+     * site 上，没有 siteId 的页面拿不到任何展示信息，而这种漏挂在编译期看不出来。
+     */
+    constructor(url: BookmarkUrlWrapper, siteId: String) : this(
         id = IdUtil.fastUUID(),
+        siteId = siteId,
         urlHost = url.urlHost,
         urlPath = url.urlPath ?: "/",
+        urlQuery = url.urlQuery,
+        urlFragment = url.urlFragment,
         urlScheme = url.urlScheme,
         parseStatus = ParseStatusEnum.PENDING,
     )
-
-    constructor(chromeRowDate: ChromeBookmarkRawData) : this(
-        id = IdUtil.fastUUID(),
-        title = chromeRowDate.title,
-        urlHost = "",
-        urlScheme = "",
-    ) {
-        val bookmarkUrl: BookmarkUrlWrapper = WebsiteParser.urlWrapper(chromeRowDate.url)
-        urlHost = bookmarkUrl.urlHost
-        urlPath = bookmarkUrl.urlPath ?: "/"
-        urlScheme = bookmarkUrl.urlScheme
-    }
 
     fun successInit(wrapper: BookmarkWrapper) {
         this.appName = wrapper.name
@@ -108,11 +123,7 @@ data class BookmarkEntity(
     }
 
     /** 已锁定的字段集合。无法识别的取值直接忽略，别让一行脏数据把整条书签的解析拖崩。 */
-    val lockedFieldSet: Set<BookmarkLockedField>
-        get() = lockedFields?.split(',')
-            ?.mapNotNull { raw -> BookmarkLockedField.entries.firstOrNull { it.name == raw.trim() } }
-            ?.toSet()
-            ?: emptySet()
+    val lockedFieldSet: Set<BookmarkLockedField> get() = LockedFieldCodec.decode(lockedFields)
 
     fun isLocked(field: BookmarkLockedField): Boolean = field in lockedFieldSet
 
@@ -123,8 +134,8 @@ data class BookmarkEntity(
     fun unlock(vararg fields: BookmarkLockedField) = setLockedFields(lockedFieldSet - fields.toSet())
 
     private fun setLockedFields(fields: Set<BookmarkLockedField>) {
-        // 空集合存 NULL 而不是空字符串：省得查询和判空要同时处理两种"没有锁"的表示
-        lockedFields = fields.takeIf { it.isNotEmpty() }?.joinToString(",") { it.name }
+        // 空集合存 NULL 而不是空字符串，规则与 site.locked_fields 共用，见 LockedFieldCodec
+        lockedFields = LockedFieldCodec.encode(fields)
     }
 
     /**
@@ -152,7 +163,16 @@ data class BookmarkUserLink(
     @field:Max(40) @field:Schema(description = "书签ID") val bookmarkId: String?,  // 书签ID可能为null,在用户批量添加的时候,只会添加用户自定义书签,而不会关联到源书签
     @field:Max(40) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
 
-    @field:Max(200) @field:Schema(description = "书签标题(用户写的)") val title: String? = null,
+    /**
+     * 用户自己写的标题。**`null` 表示用户没改过**，不是"改成了空"。
+     *
+     * 创建时刻意**不**从 `bookmark.title` 拷一份快照过来。拷过来之后"用户手改的值"和"创建时
+     * 的快照"在数据上完全不可区分，于是永远判断不出新一次抓取该不该覆盖它 —— 这也是为什么
+     * 页面改版后用户的标题要么永远是旧的、要么被静默冲掉，取决于当时走了哪条代码路径。
+     * 留 NULL 之后覆盖策略是显然的：NULL 用页面标题，非 NULL 是用户的、永不覆盖。
+     * 见根目录 `SITE_LAYERING_DESIGN.md` §6。
+     */
+    @field:Max(200) @field:Schema(description = "书签标题(用户写的)；null 表示没改过") val title: String? = null,
     @field:Max(1000) @field:Schema(description = "书签备注(用户写的)") val description: String? = null,
     @field:Max(1000) @field:Schema(description = "书签完整URL(带参数)") val urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
     @field:Schema(description = "书签链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
@@ -163,11 +183,17 @@ data class BookmarkUserLink(
     @JsonIgnore @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "是否删除") val deleted: Boolean = false,
 ) {
+    /**
+     * 用户添加一个网址时的关联记录。
+     *
+     * [urlFull] 存的是**用户给的原始网址**（含全部参数），不是规范化后的地址 —— 用户点击永远
+     * 走这一列。规范化只服务于去重与抓取目标，有的链接去掉未知参数就打不开。
+     *
+     * [title] / [description] 留空，见字段注释：抓取来的标题属于页面层，不该在这里存一份快照。
+     */
     constructor(rawUrl: String, uid: String, nodeId: String, bookmark: BookmarkEntity) : this(
         uid = uid,
         bookmarkId = bookmark.id,
-        title = bookmark.title,
-        description = bookmark.description,
         urlFull = rawUrl,
         layoutNodeId = nodeId,
         linkType = WebsiteParser.classifyLinkType(bookmark.urlHost),
@@ -176,8 +202,6 @@ data class BookmarkUserLink(
     constructor(bookmark: BookmarkEntity, nodeId: String, uid: String) : this(
         uid = uid,
         bookmarkId = bookmark.id,
-        title = bookmark.title,
-        description = bookmark.description,
         urlFull = bookmark.rawUrl,
         layoutNodeId = nodeId,
         linkType = WebsiteParser.classifyLinkType(bookmark.urlHost),

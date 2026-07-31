@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Language:** Kotlin 2.1.20 on JVM 21
 - **Framework:** Spring Boot 3.5.0-M2
 - **Build:** Gradle 8.9
-- **Database:** PostgreSQL (schema: `bookmarkify`)
+- **Database:** PostgreSQL (database `bookmarkify`, tables live in schema `public`)
 - **ORM:** MyBatis-Plus 3.5.15
 - **Cache/Session:** Redis (Spring Data Redis)
 - **Async:** Spring `@Async` + `ApplicationEvent` (in-process background parsing; no message broker)

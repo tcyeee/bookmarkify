@@ -4,6 +4,7 @@ import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
+import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
@@ -22,7 +23,19 @@ import java.time.LocalDateTime
 @TableName("site_asset")
 data class SiteAssetEntity(
     @TableId var id: String = IdUtil.fastUUID(),
-    @field:Schema(description = "所属书签ID") var bookmarkId: String = "",
+
+    /* 归属。分界线沿用 role，不新造概念：FAVICON/LOGO 天生是站点级（全站一套），
+     * SOCIAL/SCREENSHOT 天生是页面级（就是页面内容本身）。见 AssetOwnerType。 */
+    @field:Schema(description = "归属层级") var ownerType: AssetOwnerType = AssetOwnerType.PAGE,
+    @field:Schema(description = "归属ID：SITE 时是 site.id，PAGE 时是 bookmark.id") var ownerId: String = "",
+
+    /**
+     * 最初由哪个页面的抓取带回来的，**仅供溯源**。归属一律看 [ownerType] / [ownerId]。
+     *
+     * 站点图标是所有页面共享的一行，"属于哪个 bookmark" 这个问题对它没有意义 ——
+     * 留着这一列只是为了排查"这张图当初是从哪个页面抓到的"。
+     */
+    @field:Schema(description = "最初由哪个页面抓来的(溯源用，勿用于归属判断)") var bookmarkId: String? = null,
 
     @field:Schema(description = "用途(本服务推导)") var role: AssetRole = AssetRole.FAVICON,
     @field:Schema(description = "出处(scrapper 报告的事实)") var extractor: String = "",
@@ -88,15 +101,20 @@ data class SitePageMetaEntity(
 )
 
 /**
- * 展示偏好：按（书签 × [DisplayMode]）分行。
+ * 展示偏好：按（**站点** × [DisplayMode]）分行。
  *
  * **只由人工写入。** 重抓流程写 [SitePageMetaEntity] 与 [SiteAssetEntity]，永不触碰这张表 ——
  * 旧的 `bookmark_logo` 把抓取事实与人工偏好混在一起，导致每次重抓都得做小心翼翼的部分更新。
+ *
+ * 键从「书签」改成「站点」：内边距、背景色、钉死哪张图，调的都是**站点图标**的观感，
+ * 同域名下每个页面各存一份等于让管理员把同一件事做 N 遍。
  */
 @TableName("site_display_pref")
 data class SiteDisplayPrefEntity(
     @TableId var id: String = IdUtil.fastUUID(),
-    @field:Schema(description = "所属书签ID") var bookmarkId: String = "",
+    @field:Schema(description = "所属站点ID") var siteId: String = "",
+    /** 历史列：最初在哪个页面上调的，仅供溯源，业务代码不读。 */
+    @field:Schema(description = "最初在哪个页面上调的(溯源用)") var bookmarkId: String? = null,
     @field:Schema(description = "展示模式") var displayMode: DisplayMode = DisplayMode.TILE,
     @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
     @field:Schema(description = "图标背景色") var iconBgColor: String? = null,

@@ -17,7 +17,12 @@
 
 BEGIN;
 
-SET search_path TO bookmarkify;
+-- 表实际建在 public 下，不是 bookmarkify 下。
+-- 这里原本写的是 `SET search_path TO bookmarkify`，而生产库压根没有这个 schema
+-- （`SELECT nspname FROM pg_namespace` 只有 public）—— 那样执行会在第一条 TRUNCATE 就
+-- 报 relation does not exist。根 CLAUDE.md 里「PostgreSQL (schema: bookmarkify)」
+-- 同样是错的，那是库名而非 schema 名。
+SET search_path TO public;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 1. 站点数据(site_*)：抓取事实 + 人工显示偏好
