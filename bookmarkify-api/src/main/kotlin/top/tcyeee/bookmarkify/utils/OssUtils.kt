@@ -6,6 +6,7 @@ import com.aliyun.oss.OSS
 import org.springframework.web.multipart.MultipartFile
 import com.aliyun.oss.OSSClientBuilder
 import com.aliyun.oss.model.GeneratePresignedUrlRequest
+import com.aliyun.oss.model.ListObjectsV2Request
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
@@ -68,6 +69,18 @@ class OssUtils {
         private lateinit var domain: String
         private lateinit var customDomain: String
 
+        /** 常规对象的签名有效期。key 可能被覆盖写，所以不能签太久 */
+        const val DEFAULT_TTL_MILLIS: Long = 3600 * 1000
+
+        /**
+         * 内容寻址对象的签名有效期。
+         *
+         * 这类 key 由字节的 sha256 得出，内容永不改变 —— 换句话说 URL 不存在"过期后指向别的
+         * 东西"的风险，短有效期换不来任何正确性，只是白白削掉缓存命中率。配合
+         * [signWithResize] 的窗口对齐，同一天内同一张图拿到的是逐字节相同的 URL。
+         */
+        const val IMMUTABLE_TTL_MILLIS: Long = 24 * 3600 * 1000
+
         /**
          * 解析配置生成访问域名（支持自定义域名）
          */
@@ -103,8 +116,11 @@ class OssUtils {
          *
          * @param ref object key 或完整 URL
          * @param size 目标边长；null 或 <=0 表示不缩放（矢量图必须走这条）
+         * @param immutable 该对象的字节是否永不改变（内容寻址的对象即是）。为 true 时签发
+         *   [IMMUTABLE_TTL_MILLIS] 的长效链接：对象不会变，短有效期换不来任何正确性，只是
+         *   让浏览器和 CDN 更频繁地 cache miss，而每次回源都要付一次按次计费的 OSS 图片处理
          */
-        fun signAsset(ref: String?, size: Int? = null): String? {
+        fun signAsset(ref: String?, size: Int? = null, immutable: Boolean = false): String? {
             val raw = ref?.trim()?.takeIf { it.isNotBlank() } ?: return null
             val key = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) {
                 // 存量完整 URL：只有指向我们自己的桶才有 key 可言，外链原样返回
@@ -114,7 +130,8 @@ class OssUtils {
             }
             if (key.isBlank()) return raw
             val dim = size?.takeIf { it > 0 }
-            return runCatching { signWithResize(key, dim, dim) }
+            val ttl = if (immutable) IMMUTABLE_TTL_MILLIS else DEFAULT_TTL_MILLIS
+            return runCatching { signWithResize(key, dim, dim, ttl) }
                 .onFailure { log.warn("[signAsset] 签名失败, 回退原值: ref={}, err={}", raw, it.message) }
                 .getOrDefault(raw)
         }
@@ -136,6 +153,39 @@ class OssUtils {
             runCatching { ossClient.putObject(bucket, path, inputStream) }
                 .getOrElse { throw CommonException(ErrorType.E224, it.message) }
                 .also { log.debug("[upload] OSS存储成功: bucket={}, path={}", bucket, path) }
+
+        /**
+         * 列出某前缀下的**全部** object key 及其字节数。
+         *
+         * 这是对账任务（`FILE-SYSTEM-REFACTOR.md` P2）唯一的桶侧数据源，也是整套治理方案里
+         * 不可替代的一环：账本与桶之间没有事务 —— scrapper 先 PUT 再由 API 落行，中间任何一步
+         * 失败都会在桶里留下一个**库里无人知晓**的对象。这类孤儿只能从桶这一侧发现，
+         * 任何纯数据库的手段都看不见它们。
+         *
+         * 自动翻页到底（每页 1000 条），返回 key → 字节数。
+         *
+         * @param maxKeys 安全阀：扫到这么多对象就停下并记警告。桶失控时不至于把整个列表读进堆里
+         */
+        fun listAllObjects(prefix: String, maxKeys: Int = 200_000): Map<String, Long> {
+            val result = LinkedHashMap<String, Long>()
+            var token: String? = null
+            do {
+                val request = ListObjectsV2Request(bucket).apply {
+                    this.prefix = prefix
+                    this.maxKeys = 1000
+                    this.continuationToken = token
+                }
+                val page = ossClient.listObjectsV2(request)
+                page.objectSummaries.forEach { result[it.key] = it.size }
+                token = page.nextContinuationToken
+                if (result.size >= maxKeys) {
+                    log.warn("[listAllObjects] 达到安全上限，提前结束: prefix={}, scanned={}", prefix, result.size)
+                    return result
+                }
+            } while (page.isTruncated)
+            log.debug("[listAllObjects] prefix={}, objects={}", prefix, result.size)
+            return result
+        }
 
         /**
          * 删除OSS对象（用于替换旧文件，如头像/背景图重新上传后清理旧文件）
@@ -166,7 +216,7 @@ class OssUtils {
             objectName: String,
             width: Int? = null,
             height: Int? = null,
-            expirationMillis: Long = 3600 * 1000
+            expirationMillis: Long = DEFAULT_TTL_MILLIS
         ): String {
             log.debug("[signWithResize] objectName={}, width={}, height={}, expirationMillis={}", objectName, width, height, expirationMillis)
             return try {
@@ -230,7 +280,7 @@ class OssUtils {
          *
          * @param file 上传的文件
          * @param fileType 文件类型（含大小限制和目标路径）
-         * @return Pair(currentName: UUID文件名, ext: 后缀)，用于构建 UserFile
+         * @return Pair(currentName: UUID文件名, ext: 后缀)，由调用方拼成 object key 并记入账本
          */
         fun uploadUserFile(file: MultipartFile, fileType: FileType): Pair<String, String> {
             log.debug("[uploadUserFile] fileType={}, fileName={}, contentType={}, size={}", fileType, file.originalFilename, file.contentType, file.size)

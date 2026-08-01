@@ -17,13 +17,12 @@ const DEFAULT_KEY_PREFIX: &str = "scrapper";
 /// MAX_IMAGE_BYTES (10MB) and OSS is a separate leg from the page scrape itself.
 const UPLOAD_TIMEOUT_SECS: u64 = 30;
 
-
 /// Aliyun OSS V1 (HMAC-SHA1) request signature, base64-encoded.
 /// See https://help.aliyun.com/document_detail/31951.html — `Authorization: OSS
 /// <AccessKeyId>:<signature>` where `signature = base64(hmac_sha1(secret, string_to_sign))`.
 fn sign_hmac_sha1_base64(secret: &str, string_to_sign: &str) -> String {
-    let mut mac = Hmac::<Sha1>::new_from_slice(secret.as_bytes())
-        .expect("HMAC accepts a key of any length");
+    let mut mac =
+        Hmac::<Sha1>::new_from_slice(secret.as_bytes()).expect("HMAC accepts a key of any length");
     mac.update(string_to_sign.as_bytes());
     use base64::{engine::general_purpose::STANDARD, Engine};
     STANDARD.encode(mac.finalize().into_bytes())
@@ -53,8 +52,8 @@ impl OssClient {
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| DEFAULT_KEY_PREFIX.to_string());
 
-        let mut builder = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(UPLOAD_TIMEOUT_SECS));
+        let mut builder =
+            reqwest::Client::builder().timeout(std::time::Duration::from_secs(UPLOAD_TIMEOUT_SECS));
         if let Some(proxy_url) = std::env::var("PROXY_URL").ok().filter(|s| !s.is_empty()) {
             match reqwest::Proxy::all(&proxy_url) {
                 Ok(proxy) => builder = builder.proxy(proxy),
@@ -73,22 +72,42 @@ impl OssClient {
         })
     }
 
+    /// Screenshot keys stay addressed by **page URL**, unlike assets.
+    ///
+    /// This is deliberate, not an oversight. URL addressing is self-overwriting, so a page
+    /// re-crawled a hundred times occupies exactly one object. Content addressing would mint
+    /// a new object every single crawl — a screenshot differs on every capture — giving
+    /// unbounded growth in exchange for a deduplication benefit that is precisely zero.
     pub fn screenshot_key(&self, page_url: &str) -> String {
         let hash = hex::encode(Sha256::digest(page_url.as_bytes()));
         format!("{}/screenshots/{hash}.png", self.key_prefix)
     }
 
-    /// `folder` is the sub-directory under the scrapper prefix, e.g. `"og"` or `"logo"`.
-    pub fn asset_key(&self, asset_url: &str, folder: &str, content_type: Option<&str>) -> String {
-        let hash = hex::encode(Sha256::digest(asset_url.as_bytes()));
-        let ext = ext_from_content_type(content_type.unwrap_or(""));
-        format!("{}/{folder}/{hash}.{ext}", self.key_prefix)
+    /// Content-addressed asset key: `<prefix>/<folder>/<sha256-of-bytes>`.
+    ///
+    /// Two properties follow from hashing the **bytes** rather than the source URL:
+    ///
+    /// - **Deduplication.** The same image reachable at several URLs — the common case for
+    ///   favicons served from a shared CDN — collapses onto one object.
+    /// - **Immutability.** A key's contents never change, so a signed GET may carry a long
+    ///   TTL. URL addressing had the opposite property: a site swapping its logo overwrote
+    ///   the object behind an unchanged key.
+    ///
+    /// **No file extension**, by design. Identical bytes can be declared `image/png` by one
+    /// site and `application/octet-stream` by another; deriving the suffix from the declared
+    /// content type would produce two keys for one hash and break the consumer's uniqueness
+    /// constraint on it. The MIME type travels in the response instead.
+    ///
+    /// `content_hash` accepts both the `sha256:<hex>` wire form and a bare hex digest.
+    pub fn asset_key(&self, content_hash: &str, folder: &str) -> String {
+        let digest = content_hash.rsplit(':').next().unwrap_or(content_hash);
+        format!("{}/{folder}/{digest}", self.key_prefix)
     }
 
-    /// Uploads bytes to OSS at `key`. Keys are derived from the source URL (SHA-256),
-    /// so the same source URL always maps to the same OSS key. PUT is unconditional —
-    /// no deduplication check is performed (no cheap way to check existence without a
-    /// HEAD request first, which isn't worth the extra round trip for this workload).
+    /// Uploads bytes to OSS at `key`. PUT is unconditional — no existence check is performed
+    /// (there is no cheap way to test for it without a preceding HEAD, not worth the extra
+    /// round trip for this workload). With content-addressed keys a redundant PUT is harmless
+    /// anyway: it rewrites the identical bytes.
     /// 失败时按指数退避重试最多 3 次；每次尝试的超时由 `self.http` 的构建配置
     /// （`UPLOAD_TIMEOUT_SECS`）保证，无需在这里再包一层。
     ///
@@ -132,9 +151,10 @@ impl OssClient {
     }
 
     /// Signs and sends a single `PUT` directly against the OSS virtual-hosted-style
-    /// endpoint (`https://{bucket}.{endpoint}/{key}`). Object keys here are always our
-    /// own SHA-256 hex digests plus a known extension (see `screenshot_key`/`asset_key`),
-    /// so no path-segment escaping is needed for the URL or the canonicalized resource.
+    /// endpoint (`https://{bucket}.{endpoint}/{key}`). Object keys here are always our own
+    /// SHA-256 hex digests — bare for assets, plus a `.png` suffix for screenshots (see
+    /// `screenshot_key`/`asset_key`) — so no path-segment escaping is needed for the URL or
+    /// the canonicalized resource.
     async fn upload_bytes_once(
         &self,
         key: &str,
@@ -145,8 +165,7 @@ impl OssClient {
         // No custom x-oss-* headers and no Content-MD5 header sent, so both are
         // represented as the empty string in the string-to-sign (per the OSS v1 spec).
         let canonicalized_resource = format!("/{}/{}", self.bucket, key);
-        let string_to_sign =
-            format!("PUT\n\n{content_type}\n{date}\n{canonicalized_resource}");
+        let string_to_sign = format!("PUT\n\n{content_type}\n{date}\n{canonicalized_resource}");
         let signature = sign_hmac_sha1_base64(&self.key_secret, &string_to_sign);
         let authorization = format!("OSS {}:{}", self.key_id, signature);
 
@@ -182,24 +201,12 @@ impl OssClient {
 
         Ok(())
     }
-
 }
 
 /// 上传失败的分类。只在本模块内部流转，用于决定"重试还是立刻放弃"。
 struct UploadError {
     retryable: bool,
     inner: ScrapeError,
-}
-
-fn ext_from_content_type(ct: &str) -> &str {
-    match ct.split(';').next().unwrap_or("").trim() {
-        "image/jpeg" | "image/jpg" => "jpg",
-        "image/gif" => "gif",
-        "image/webp" => "webp",
-        "image/svg+xml" => "svg",
-        "image/x-icon" | "image/vnd.microsoft.icon" => "ico",
-        _ => "png",
-    }
 }
 
 #[cfg(test)]
@@ -229,32 +236,46 @@ mod tests {
     }
 
     #[test]
-    fn asset_key_defaults_to_png() {
-        let url = "https://example.com/logo";
-        let hash = hex::encode(Sha256::digest(url.as_bytes()));
+    fn asset_key_is_the_content_digest_without_extension() {
+        let hash = format!("sha256:{}", hex::encode(Sha256::digest(b"the bytes")));
         assert_eq!(
-            client_with_prefix("scrapper").asset_key(url, "logo", None),
-            format!("scrapper/logo/{hash}.png")
+            client_with_prefix("scrapper").asset_key(&hash, "asset"),
+            format!(
+                "scrapper/asset/{}",
+                hex::encode(Sha256::digest(b"the bytes"))
+            )
         );
     }
 
+    /// 契约上 `contentHash` 带 `sha256:` 前缀，但裸 hex 也该被接受 —— key 里只放摘要本身，
+    /// 否则冒号会进 object key，给桶策略和排查平添麻烦。
     #[test]
-    fn asset_key_uses_jpeg_content_type() {
-        let url = "https://example.com/photo";
-        let hash = hex::encode(Sha256::digest(url.as_bytes()));
-        assert_eq!(
-            client_with_prefix("scrapper").asset_key(url, "og", Some("image/jpeg")),
-            format!("scrapper/og/{hash}.jpg")
-        );
+    fn asset_key_accepts_bare_hex_digest_too() {
+        let bare = hex::encode(Sha256::digest(b"x"));
+        let prefixed = format!("sha256:{bare}");
+        let c = client_with_prefix("scrapper");
+        assert_eq!(c.asset_key(&bare, "asset"), c.asset_key(&prefixed, "asset"));
     }
 
+    /// 内容寻址的**全部意义**：同一张图挂在不同 URL 下，落到同一个 key，只存一份。
+    /// URL 寻址下这两次上传会产生两个对象。
     #[test]
-    fn asset_key_uses_webp_content_type() {
-        let url = "https://cdn.example.com/img";
-        let hash = hex::encode(Sha256::digest(url.as_bytes()));
+    fn identical_bytes_from_different_urls_collapse_onto_one_key() {
+        let hash = format!("sha256:{}", hex::encode(Sha256::digest(b"same favicon")));
+        let c = client_with_prefix("scrapper");
+        assert_eq!(c.asset_key(&hash, "asset"), c.asset_key(&hash, "asset"));
+    }
+
+    /// 截图刻意不参与内容寻址：它每次抓都不一样，改成内容寻址等于无上界增长，
+    /// 而去重收益恰好是零。这条断言是那个决定的护栏。
+    #[test]
+    fn screenshot_key_stays_url_addressed_and_self_overwriting() {
+        let c = client_with_prefix("scrapper");
+        let first = c.screenshot_key("https://example.com/page");
+        let second = c.screenshot_key("https://example.com/page");
         assert_eq!(
-            client_with_prefix("scrapper").asset_key(url, "og", Some("image/webp")),
-            format!("scrapper/og/{hash}.webp")
+            first, second,
+            "同一页面的截图必须落同一个 key（自我覆盖，存储量有上界）"
         );
     }
 
@@ -263,8 +284,11 @@ mod tests {
     #[test]
     fn key_prefix_is_configurable_and_applies_to_all_keys() {
         let c = client_with_prefix("tenant-a/crawler");
-        assert!(c.screenshot_key("https://example.com").starts_with("tenant-a/crawler/screenshots/"));
-        assert!(c.asset_key("https://example.com/i.png", "asset", None)
+        assert!(c
+            .screenshot_key("https://example.com")
+            .starts_with("tenant-a/crawler/screenshots/"));
+        assert!(c
+            .asset_key("sha256:deadbeef", "asset")
             .starts_with("tenant-a/crawler/asset/"));
     }
 

@@ -12,6 +12,9 @@ import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLockedField
+import top.tcyeee.bookmarkify.entity.enums.OssAddressing
+import top.tcyeee.bookmarkify.entity.enums.OssObjectSource
+import top.tcyeee.bookmarkify.entity.enums.OssObjectState
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
@@ -598,4 +601,54 @@ data class AccessTokenCreatedVO(
 data class ExtensionSiteInfoVO(
     @field:Schema(description = "网站标题") var title: String? = null,
     @field:Schema(description = "网站图标，base64 data URL") var favicon: String? = null,
+)
+
+/** 管理后台展示的一条 OSS 对象账本记录 */
+data class OssObjectVO(
+    @field:Schema(description = "文件ID") var id: String,
+    @field:Schema(description = "object key") var objectKey: String,
+    @field:Schema(description = "字节 sha256") var contentHash: String? = null,
+    @field:Schema(description = "key 推导方式") var addressing: OssAddressing,
+    @field:Schema(description = "写入方") var source: OssObjectSource,
+    @field:Schema(description = "字节数") var size: Long? = null,
+    @field:Schema(description = "MIME") var mime: String? = null,
+    @field:Schema(description = "像素宽") var width: Int? = null,
+    @field:Schema(description = "像素高") var height: Int? = null,
+    @field:Schema(description = "对账结论") var state: OssObjectState,
+    @field:Schema(description = "最近一次在桶里被确认存在的时间") var lastSeenAt: LocalDateTime? = null,
+    @field:Schema(description = "最近一次被引用的时间") var lastRefAt: LocalDateTime? = null,
+    @field:Schema(description = "入账时间") var createTime: LocalDateTime = LocalDateTime.now(),
+    /** 后台预览用的限时签名地址。私有读桶里裸 key 直接访问必然 403，必须签过才能看 */
+    @field:Schema(description = "预览地址(限时签名)") var previewUrl: String? = null,
+) {
+    constructor(entity: OssObjectEntity) : this(
+        id = entity.id,
+        objectKey = entity.objectKey,
+        addressing = entity.addressing,
+        source = entity.source,
+        state = entity.state,
+    ) {
+        BeanUtil.copyProperties(entity, this)
+        previewUrl = OssUtils.signAsset(entity.objectKey, if (entity.isVector) null else 128)
+    }
+}
+
+/**
+ * 一轮 OSS 对账的结果。
+ *
+ * [orphans] 是这份报告真正的产出：桶里存在、但扫遍所有引用方表都没人指向的对象。
+ * 当前阶段只统计不删除。
+ */
+data class OssReconcileReport(
+    @field:Schema(description = "本轮扫描的 key 前缀") var scannedPrefixes: List<String> = emptyList(),
+    @field:Schema(description = "桶中对象总数") var bucketObjects: Int = 0,
+    @field:Schema(description = "对账前账本行数") var ledgerRowsBefore: Int = 0,
+    @field:Schema(description = "桶里有、账本缺，本轮补记的行数") var backfilled: Int = 0,
+    @field:Schema(description = "账本有、桶里已不存在，标记为 DELETED 的行数") var markedDeleted: Int = 0,
+    @field:Schema(description = "仍被引用的对象数") var referenced: Int = 0,
+    @field:Schema(description = "无人引用的孤儿对象数") var orphans: Int = 0,
+    @field:Schema(description = "孤儿对象占用字节数(可回收空间)") var orphanBytes: Long = 0,
+    @field:Schema(description = "本轮实际回收的对象数(未开启回收时恒为0)") var reclaimed: Int = 0,
+    @field:Schema(description = "耗时(ms)") var durationMs: Long = 0,
+    @field:Schema(description = "失败原因，成功时为空") var errorMsg: String? = null,
 )

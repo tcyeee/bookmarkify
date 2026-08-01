@@ -7,6 +7,8 @@ import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.AiCallScene
+import top.tcyeee.bookmarkify.entity.enums.OssObjectSource
+import top.tcyeee.bookmarkify.entity.enums.OssObjectState
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
@@ -204,6 +206,24 @@ data class AiCallLogSearchParams(
         scene?.let { query.eq(AiCallLogEntity::scene, it) }
         success?.let { query.eq(AiCallLogEntity::success, it) }
         return query.orderByDesc(AiCallLogEntity::createTime)
+    }
+}
+
+/** 管理后台 OSS 对象账本查询入参 */
+data class OssObjectSearchParams(
+    @field:Schema(description = "object key 模糊搜索") var objectKey: String? = null,
+    @field:Schema(description = "写入方") var source: OssObjectSource? = null,
+    @field:Schema(description = "对账结论") var state: OssObjectState? = null,
+) : PageBean() {
+    fun toWrapper(): Wrapper<OssObjectEntity> {
+        val query = KtQueryWrapper(OssObjectEntity::class.java)
+        if (!objectKey.isNullOrBlank()) {
+            query.like(OssObjectEntity::objectKey, objectKey)
+        }
+        source?.let { query.eq(OssObjectEntity::source, it) }
+        state?.let { query.eq(OssObjectEntity::state, it) }
+        // 孤儿排前面：这张表存在的意义就是让人先看到"哪些东西没人要"
+        return query.orderByDesc(OssObjectEntity::createTime)
     }
 }
 

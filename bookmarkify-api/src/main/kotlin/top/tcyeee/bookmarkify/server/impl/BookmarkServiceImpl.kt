@@ -1571,14 +1571,25 @@ class BookmarkServiceImpl(
         val dupHashes = assets.mapNotNull { it.contentHash }
             .groupingBy { it }.eachCount().filterValues { it > 1 }.keys
 
+        // 一次取全这批资产的账本行，别在下面的 map 里逐张查
+        val objectByFileId = siteAssetResolver.objectsOf(assets)
+
         return assets.map { a ->
             SiteAssetAdminVO(
                 id = a.id,
                 role = a.role,
                 extractor = a.extractor,
                 quality = a.quality,
-                // 私有读桶里的对象直连会 403，后台预览换成签名地址
-                url = OssUtils.signAsset(a.storageUrl, if (a.isVector) null else size) ?: a.resolvedUrl,
+                // 私有读桶里的对象直连会 403，后台预览换成签名地址。
+                // file_id 优先，storage_url 兜底（未回填的行与存量完整 URL）
+                url = a.fileId?.let { objectByFileId[it] }
+                    .let { row ->
+                        OssUtils.signAsset(
+                            row?.objectKey ?: a.storageUrl,
+                            if (a.isVector) null else size,
+                            row?.immutable == true,
+                        )
+                    } ?: a.resolvedUrl,
                 resolvedUrl = a.resolvedUrl,
                 width = a.width,
                 height = a.height,

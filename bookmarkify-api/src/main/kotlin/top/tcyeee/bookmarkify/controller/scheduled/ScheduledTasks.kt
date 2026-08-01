@@ -5,6 +5,7 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.server.IBookmarkPingLogService
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.server.IOssReconcileService
 
 /**
  * @author tcyeee
@@ -14,6 +15,7 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 class ScheduledTasks(
     private val bookmarkService: IBookmarkService,
     private val bookmarkPingLogService: IBookmarkPingLogService,
+    private val ossReconcileService: IOssReconcileService,
 ) {
     @Description("每5分钟对账一次未完成解析的书签")
     @Scheduled(cron = "0 */5 * * * ?")
@@ -45,4 +47,18 @@ class ScheduledTasks(
     @Description("每天凌晨 3 点清理过期的活性探测日志，避免这张只增不减的表无限膨胀")
     @Scheduled(cron = "0 0 3 * * ?")
     fun purgeExpiredPingLogs() = bookmarkPingLogService.purgeExpired()
+
+    /**
+     * 放在凌晨 4 点：要把桶里几万个 key 全部列一遍并与库比对，与白天的抓取、巡检错开。
+     *
+     * 频率取每天一次而不是每小时 —— 这是**盘点**不是巡检，孤儿对象多存一天没有任何代价，
+     * 而每小时列一次全桶要付实打实的 ListObjects 调用费。
+     *
+     * 是否真的回收由 `bookmarkify.oss.reclaim-orphans` 决定，默认只报不删。
+     */
+    @Description("每天凌晨 4 点对账 OSS：桶↔账本↔引用方三方比对，标记孤儿对象")
+    @Scheduled(cron = "0 0 4 * * ?")
+    fun reconcileOssObjects() {
+        ossReconcileService.reconcile()
+    }
 }

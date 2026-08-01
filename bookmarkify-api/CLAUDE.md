@@ -164,7 +164,7 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 | `layout_node_function` | System function items attached to a layout node (e.g., Settings) |
 | `user_preference` | Per-user preferences (background, layout, sort order) |
 | `background_config` / `background_image` / `background_gradient` | Background settings |
-| `user_file` | Uploaded file records (avatar, background) |
+| `oss_object` | **The ledger for every object in the OSS bucket** — one row per set of bytes, no owner. Replaced `user_file`; see root `FILE-SYSTEM-REFACTOR.md` |
 | `site_asset` / `site_page_meta` / `scrape_snapshot` / `site_display_pref` | Crawl results + display prefs (replaced `bookmark_logo`; see root `CLAUDE.md`) |
 | `bookmark_ping_log` | One row per liveness probe (`outcome` = ALIVE/DEAD/UNKNOWN), purged after 90 days |
 | `ai_call_log` | One row per DeepSeek call, **including request/response bodies** — see below |
@@ -237,7 +237,7 @@ Read this before touching `pingSweep`, `LivenessPolicy`, or the `next_check_at` 
 - **Service layer:** Interface `I*Service` + implementation `*ServiceImpl` extending MyBatis-Plus `ServiceImpl<Mapper, Entity>`
 - **Request/Response DTOs:** Centralized in `entity/Request.kt` and `entity/Response.kt`
 - **Error codes:** Defined in `config/exception/ErrorType.kt` (E101–E999)
-- **Logging:** `LoggingExtensions.kt` provides `logger()` delegate for any class
+- **Logging:** `LoggingExtensions.kt` provides a `log` extension property on any receiver. **It does not work inside `ServiceImpl` subclasses** — MyBatis-Plus's `ServiceImpl` carries its own `org.apache.ibatis.logging.Log` member that shadows it, and that interface has no `info()` and no placeholder overloads. There, declare `private val logger = LoggerFactory.getLogger(javaClass)` (as `SiteServiceImpl` / `UserServiceImpl` do)
 - **User context:** `BaseUtils.uid()` and `BaseUtils.user()` retrieve current user from Sa-Token session
 - **Tests:** minimal coverage in `src/test/kotlin/` (currently a handful of unit tests for parsing/password utils) — this is not a fully tested codebase, don't assume behavior is spec'd by tests
 

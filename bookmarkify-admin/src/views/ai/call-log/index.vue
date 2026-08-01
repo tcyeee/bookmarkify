@@ -112,7 +112,14 @@ const gridOptions: VxeGridProps<AiCallLogVO> = {
     { field: "httpStatus", title: "HTTP状态", width: 100 },
     { field: "totalTokens", title: "token", width: 110, slots: { default: "tokens" } },
     { field: "durationMs", title: "耗时(ms)", width: 100 },
-    { field: "responseBody", title: "模型输出", minWidth: 220, slots: { default: "output" } },
+    // 全文展示，不做单行截断：showOverflow=false 才能换行并撑开行高（全局默认是 true）
+    {
+      field: "responseBody",
+      title: "模型输出",
+      minWidth: 360,
+      showOverflow: false,
+      slots: { default: "output" },
+    },
     { field: "errorMsg", title: "错误信息", minWidth: 180, slots: { default: "errorMsg" } },
     {
       field: "createTime",
@@ -140,13 +147,17 @@ const gridOptions: VxeGridProps<AiCallLogVO> = {
   },
 };
 
-/** 列表里只显示模型输出的正文，解析不出来（失败/纯文本错误页）就留空，详情弹窗里有原文 */
+/**
+ * 列表里展示模型输出的完整正文。
+ * 解析不出正文（失败/纯文本错误页/结构异常）时退回原始响应体，保证任何情况下都能看到 AI 返回了什么。
+ */
 function outputOf(row: AiCallLogVO): string {
-  if (!row.responseBody) return "";
+  const raw = row.responseBody ?? "";
+  if (!raw) return "";
   try {
-    return JSON.parse(row.responseBody)?.choices?.[0]?.message?.content ?? "";
+    return JSON.parse(raw)?.choices?.[0]?.message?.content ?? raw;
   } catch {
-    return "";
+    return raw;
   }
 }
 
@@ -229,9 +240,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
           <span v-else>-</span>
         </template>
         <template #output="{ row }">
-          <ElTooltip v-if="outputOf(row)" :content="outputOf(row)" placement="top">
-            <span class="line-clamp-1">{{ outputOf(row) }}</span>
-          </ElTooltip>
+          <!-- 全文展示；超长响应在单元格内滚动，避免一行把整个表格撑爆 -->
+          <div
+            v-if="outputOf(row)"
+            class="max-h-40 overflow-auto py-1 text-xs leading-relaxed break-words whitespace-pre-wrap"
+          >
+            {{ outputOf(row) }}
+          </div>
           <span v-else>-</span>
         </template>
         <template #errorMsg="{ row }">

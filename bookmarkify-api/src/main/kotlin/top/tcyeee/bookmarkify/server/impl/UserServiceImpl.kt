@@ -8,6 +8,7 @@ import cn.hutool.crypto.SecureUtil
 import cn.hutool.http.HttpUtil
 import cn.hutool.json.JSONUtil
 import com.baomidou.mybatisplus.core.metadata.IPage
+import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import jakarta.servlet.http.Cookie
 import jakarta.servlet.http.HttpServletResponse
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.cache.RedisType
+import org.slf4j.LoggerFactory
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
@@ -23,10 +25,11 @@ import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
 import top.tcyeee.bookmarkify.entity.entity.*
-import top.tcyeee.bookmarkify.mapper.FileMapper
 import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.mapper.UserPreferenceMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.server.IFileService
+import top.tcyeee.bookmarkify.server.IOssObjectService
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.utils.BaseUtils
 import top.tcyeee.bookmarkify.utils.CurrentEnvironment
@@ -47,13 +50,17 @@ class UserServiceImpl(
     private val backSettingService: BackgroundConfigServiceImpl,
     private val bacGradientService: BackgroundGradientServiceImpl,
     private val bacImageService: BackgroundImageServiceImpl,
-    private val fileMapper: FileMapper,
-    private val fileService: FileServiceImpl,
+    private val ossObjectService: IOssObjectService,
+    private val fileService: IFileService,
     private val projectConfig: ProjectConfig,
     private val mailUtils: MailUtils,
     private val bookmarkService: IBookmarkService,
     private val userPreferenceMapper: UserPreferenceMapper
 ) : IUserService, ServiceImpl<UserMapper, UserInfoEntity>() {
+
+    // 不能用全局的 `log` 扩展属性: ServiceImpl 自带一个 org.apache.ibatis.logging.Log 成员会把它遮蔽,
+    // 那个接口没有 info() 也没有占位符重载。同 SiteServiceImpl / BookmarkCategoryServiceImpl 的做法。
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     /**
      * 获取用户信息
@@ -65,15 +72,12 @@ class UserServiceImpl(
             .let { UserInfoShow(it, it.avatarPath()) }
 
     // 返回原始 OSS 路径（如 avatar/xxx.svg），不签名，可安全持久化
-    fun UserInfoEntity.avatarPath(): String? {
-        if (StrUtil.isBlank(this.avatarFileId)) return null
-        return fileMapper.selectById(this.avatarFileId)?.fullPath
-    }
+    fun UserInfoEntity.avatarPath(): String? =
+        ossObjectService.findById(this.avatarFileId)?.objectKey
 
     override fun avatarSignedUrl(uid: String): String? {
         val user = getById(uid) ?: return null
-        if (StrUtil.isBlank(user.avatarFileId)) return null
-        return fileMapper.selectById(user.avatarFileId)?.fullUrlWithSign(300)
+        return ossObjectService.findById(user.avatarFileId)?.signedUrl(300)
     }
 
     /**
@@ -538,10 +542,12 @@ class UserServiceImpl(
         val oldFileId = getById(uid)?.avatarFileId
         val file = fileService.updateAvatar(BaseUtils.uid(), multipartFile)
         ktUpdate().eq(UserInfoEntity::id, uid).set(UserInfoEntity::avatarFileId, file.id).update()
-        // 新头像已关联成功后，再清理旧头像（OSS 对象 + user_file 行），避免旧文件永久孤立在存储桶中
-        if (!oldFileId.isNullOrBlank()) {
-            fileMapper.selectById(oldFileId)?.let { OssUtils.delete(it.fullPath) }
-            fileMapper.deleteById(oldFileId)
+        // 新头像已关联成功后，再清理旧头像，避免旧文件永久孤立在存储桶中
+        if (!oldFileId.isNullOrBlank() && oldFileId != file.id) {
+            ossObjectService.findById(oldFileId)?.let {
+                OssUtils.delete(it.objectKey)
+                ossObjectService.markDeleted(it.id)
+            }
         }
         return file.currentName
     }
@@ -569,13 +575,57 @@ class UserServiceImpl(
             .set(UserInfoEntity::googleEmail, null)
             .set(UserInfoEntity::githubId, null)
             .set(UserInfoEntity::githubLogin, null)
+            .set(UserInfoEntity::avatarFileId, null)
             .update()
         if (deleted) {
+            purgeUploadedFiles(uid, user.avatarFileId)
             // 注销成功后立即失效服务端会话，satoken 即时作废
             StpKit.USER.session.clear()
             StpKit.USER.logout()
         }
         return deleted
+    }
+
+    /**
+     * 清理注销用户上传的全部文件（头像 + 自定义背景图）。
+     *
+     * 软删除只是让账号登不上去，OSS 里的字节还在、key 还可推导。头像和背景图是用户主动上传的
+     * **真数据**，`docs/oss-architecture.md` §2 定的规矩是它们必须随 DB 行同步删除 —— 换头像
+     * （[updateAvatar]）和删背景图（[BackgroundImageServiceImpl.deleteUserImage]）一直是这么做的，
+     * 唯独注销这条路径漏了，于是注销后对象永久留在桶里。
+     *
+     * 顺序与 [BackgroundImageServiceImpl.deleteUserImage] 保持一致：**先删库行，再删 OSS 对象**。
+     * 反过来一旦库删除失败，就会留下一条指向已消失对象的记录。OSS 删除失败只记警告
+     * （[OssUtils.delete] 本身吞异常），残留对象由桶的生命周期规则兜底 —— 用户视角文件已经没了。
+     *
+     * `isDefault = true` 的背景图是系统预置、多用户共享的，只解除关联绝不碰对象。
+     *
+     * 整体包在 [runCatching] 里：清理失败不该让"账号已注销"这个已经生效的结果回滚 ——
+     * 用户按下注销按钮拿到失败提示、账号却已经没了是更糟的结果。漏掉的对象由对账任务兜底。
+     */
+    private fun purgeUploadedFiles(uid: String, avatarFileId: String?) {
+        runCatching {
+            val bacImages = bacImageService.ktQuery()
+                .eq(BackgroundImageEntity::uid, uid)
+                .eq(BackgroundImageEntity::isDefault, false)
+                .list()
+            val fileIds = (bacImages.map { it.fileId } + listOfNotNull(avatarFileId))
+                .filter { it.isNotBlank() }
+                .distinct()
+            if (fileIds.isEmpty()) return@runCatching
+
+            val objects = ossObjectService.findByIds(fileIds).values
+
+            if (bacImages.isNotEmpty()) bacImageService.removeByIds(bacImages.map { it.id })
+            objects.forEach {
+                OssUtils.delete(it.objectKey)
+                ossObjectService.markDeleted(it.id)
+            }
+
+            logger.info("[del] 已清理注销用户的上传文件: uid={}, files={}, objects={}", uid, fileIds.size, objects.size)
+        }.onFailure {
+            logger.warn("[del] 注销用户文件清理失败(忽略): uid={}, err={}", uid, it.message)
+        }
     }
 
     override fun updateUsername(username: String): Boolean =
