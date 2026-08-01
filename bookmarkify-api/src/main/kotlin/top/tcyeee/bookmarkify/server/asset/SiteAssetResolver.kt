@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
+import top.tcyeee.bookmarkify.entity.entity.OssObjectEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
@@ -13,6 +14,7 @@ import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.SiteAssetMapper
 import top.tcyeee.bookmarkify.mapper.SiteDisplayPrefMapper
+import top.tcyeee.bookmarkify.server.IOssObjectService
 import top.tcyeee.bookmarkify.utils.OssUtils
 
 /**
@@ -31,6 +33,7 @@ class SiteAssetResolver(
     private val siteAssetMapper: SiteAssetMapper,
     private val siteDisplayPrefMapper: SiteDisplayPrefMapper,
     private val bookmarkMapper: BookmarkMapper,
+    private val ossObjectService: IOssObjectService,
 ) {
 
     /**
@@ -79,9 +82,13 @@ class SiteAssetResolver(
         // 回退到源站直连是**降级**，不是正常形态：说明这些图没进我方 OSS，可用性依赖第三方站点。
         // 逐张打日志会把列表渲染刷爆，因此按批聚合成一行——这条降级以前是完全静默的，
         // 结果整站图片长期热链而监控上毫无痕迹
+        // 一次取全本批资产的账本行，把 file_id 换成真正的 object key。**必须批量** ——
+        // 首页一屏几十个图标，在 presentUrl 里逐张查库就是教科书式的 N+1
+        val objectByFileId = objectsOf(assetsByBookmark.values.flatten())
+
         var hotlinked = 0
         val resolved = ids.associateWith { id ->
-            build(assetsByBookmark[id].orEmpty(), prefBySite[siteIdOf[id]], mode) { hotlinked++ }
+            build(assetsByBookmark[id].orEmpty(), prefBySite[siteIdOf[id]], mode, objectByFileId) { hotlinked++ }
         }
         if (hotlinked > 0) log.warn(
             "[SiteAssetResolver] {}/{} 个书签回退到源站直连图片(未落 OSS)，" +
@@ -204,11 +211,25 @@ class SiteAssetResolver(
 
     // ────── 组装 ──────
 
+    /**
+     * 一批资产的 `file_id` → `object_key`。
+     *
+     * 对外暴露成一个显式的 Map 而不是让 [presentUrl] 自己去查，是为了逼着调用方在批量入口处
+     * 就把这次查询做掉 —— `SiteAssetResolver` 的全部方法都是列表场景，任何"用的时候再查"
+     * 的写法在这里都会退化成 N+1。
+     */
+    fun objectsOf(assets: Collection<SiteAssetEntity>): Map<String, OssObjectEntity> {
+        val fileIds = assets.mapNotNull { it.fileId?.takeIf { id -> id.isNotBlank() } }.distinct()
+        if (fileIds.isEmpty()) return emptyMap()
+        return ossObjectService.findByIds(fileIds)
+    }
+
     /** @param onHotlink 选中的图没落 OSS、只能给源站直连地址时回调，供调用方聚合告警 */
     private fun build(
         assets: List<SiteAssetEntity>,
         prefs: List<SiteDisplayPrefEntity>?,
         mode: DisplayMode,
+        objectByFileId: Map<String, OssObjectEntity>,
         onHotlink: () -> Unit,
     ): ResolvedLogo {
         val pref = prefs?.firstOrNull { it.displayMode == mode }
@@ -231,7 +252,7 @@ class SiteAssetResolver(
         }
 
         return ResolvedLogo(
-            url = presentUrl(chosen, mode, onHotlink),
+            url = presentUrl(chosen, mode, objectByFileId, onHotlink),
             role = chosen.role,
             quality = chosen.quality,
             isVector = chosen.isVector,
@@ -250,8 +271,17 @@ class SiteAssetResolver(
      *
      * 矢量图不缩放（本就与分辨率无关，缩放反而会被栅格化）。
      */
-    private fun presentUrl(asset: SiteAssetEntity, mode: DisplayMode, onHotlink: () -> Unit): String? {
-        val storage = asset.storageUrl?.takeIf { it.isNotBlank() }
+    private fun presentUrl(
+        asset: SiteAssetEntity,
+        mode: DisplayMode,
+        objectByFileId: Map<String, OssObjectEntity>,
+        onHotlink: () -> Unit,
+    ): String? {
+        // file_id 优先：它是与存储层解耦后的正式来源。storage_url 只作为兜底 ——
+        // 覆盖迁移尚未回填的行、以及改造前写入的完整 URL 存量
+        val ledgerRow = asset.fileId?.let { objectByFileId[it] }
+        val storage = ledgerRow?.objectKey
+            ?: asset.storageUrl?.takeIf { it.isNotBlank() }
         // 没落到我们自己的 OSS（抓取时只做了 PROBE，或那张图当时下载失败），只能给源站直连
         // 地址。这是降级路径：源站防盗链、改版 404、境外站点不可达都会直接砸到用户脸上
             ?: return asset.resolvedUrl.takeIf { it.isNotBlank() }?.also {
@@ -262,7 +292,12 @@ class SiteAssetResolver(
                 onHotlink()
             }
 
-        // storage 可能是 object key（新契约）或存量的完整 URL，signAsset 统一处理这两种形态
-        return OssUtils.signAsset(storage, if (asset.isVector) null else renderSize(mode))
+        // storage 可能是 object key（新契约）或存量的完整 URL，signAsset 统一处理这两种形态。
+        // 内容寻址的对象字节永不改变，签长效链接换缓存命中率（回源一次要付一次 OSS 图片处理费）
+        return OssUtils.signAsset(
+            storage,
+            if (asset.isVector) null else renderSize(mode),
+            ledgerRow?.immutable == true,
+        )
     }
 }

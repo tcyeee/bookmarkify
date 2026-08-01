@@ -257,7 +257,7 @@ async fn enrich_one(
         byte_size: Some(bytes.len() as u64),
         mime: Some(mime.clone()),
         is_vector: Some(is_vector),
-        content_hash: Some(content_hash),
+        content_hash: Some(content_hash.clone()),
         error: None,
         ..asset.clone()
     };
@@ -270,7 +270,9 @@ async fn enrich_one(
         }
         AssetDownload::Upload => {
             let oss = oss.ok_or_else(|| "oss not configured".to_string())?;
-            let key = oss.asset_key(&asset.resolved_url, "asset", Some(&mime));
+            // key 取自**字节**而不是源 URL：同一张图挂在多个 URL 下只存一份，且 key 一旦写入
+            // 内容永不改变（源站换图会得到新 key，而不是覆盖旧 key 的内容）
+            let key = oss.asset_key(&content_hash, "asset");
             out.storage_key = Some(
                 oss.upload_bytes(&key, &bytes, &mime)
                     .await

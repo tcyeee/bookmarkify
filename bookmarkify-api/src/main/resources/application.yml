@@ -54,9 +54,21 @@ bookmarkify:
       access-key-secret: ${BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_SECRET}
       bucket-name: ${BOOKMARKIFY_ALIYUN_OSS_BUCKET_NAME}
       domain-name: ${BOOKMARKIFY_ALIYUN_OSS_DOMAIN} # 自定义域名 https://i.tcyeee.top
+  oss:
+    # 对账时是否真的删除孤儿对象。默认关闭：对账本身只要跑起来就有价值（补上"桶里到底有什么"
+    # 这个盲区），而删除不可逆——引用方收集逻辑漏一处，被删的就是用户头像。
+    # 上线顺序：先只报不删跑几轮，人工核对孤儿清单确实是垃圾，再打开。
+    reclaim-orphans: ${BOOKMARKIFY_OSS_RECLAIM_ORPHANS:false}
+    # 孤儿观察期(天)。挡的是"scrapper 已 PUT、API 还没落行"那个时序窗口——
+    # 没有它，一次撞上对账的正常抓取会被当场清掉刚传上去的图
+    orphan-grace-days: ${BOOKMARKIFY_OSS_ORPHAN_GRACE_DAYS:30}
+    reconcile-max-keys: 200000  # 单前缀扫描上限，防止桶失控时把整个列表读进堆
   scrapper:
     base-url: ${BOOKMARKIFY_SCRAPPER_BASE_URL:http://bookmarkify-scraper:3000}  # 自部署 scrapper 服务地址（接替 iframely）
     auth-token: ${BOOKMARKIFY_SCRAPPER_AUTH_TOKEN:}  # 对应 scrapper 的 SCRAPER_AUTH_TOKEN；留空则不发送鉴权 header
+    # 必须与 scrapper 的 OSS_KEY_PREFIX 一致。只被对账任务用来决定扫桶里的哪一段前缀；
+    # 配错会让那段对象漏扫（不会误判成孤儿，故不会误删），治理失效而已
+    key-prefix: ${BOOKMARKIFY_SCRAPPER_KEY_PREFIX:scrapper}
     # 抓到的图片一律落我方 OSS（assets.download=UPLOAD）。关掉只会退化成 PROBE：图照样下载
     # 但算完 hash 就丢，库里只剩源站直连地址，首页图标的可用性等于外包给了第三方站点。
     # 仅排障时临时关闭，不要在任何环境常态关闭。

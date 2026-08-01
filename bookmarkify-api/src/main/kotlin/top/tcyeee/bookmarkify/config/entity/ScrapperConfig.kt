@@ -17,6 +17,16 @@ data class ScrapperConfig(
     var authToken: String = "",
 
     /**
+     * scrapper 写入 OSS 时用的 key 前缀，**必须与 scrapper 侧的 `OSS_KEY_PREFIX` 一致**。
+     *
+     * API 自己从不用它拼 key（key 由 scrapper 生成并回报），唯一的用途是让对账任务
+     * （`FILE-SYSTEM-REFACTOR.md` P2）知道该扫桶里的哪一段前缀。配错的后果是那一整段对象
+     * 扫不到、全部被漏记 —— 注意**不会**误判成孤儿（孤儿是"扫到了但没人引用"），
+     * 所以配错只是让治理失效，不会导致误删。
+     */
+    var keyPrefix: String = "scrapper",
+
+    /**
      * 抓到的图片是否落我方 OSS（对应 `assets.download = UPLOAD`）。
      *
      * **默认必须是 true。** 关掉之后 scrapper 只做 PROBE —— 图片正文照样下载（算 contentHash

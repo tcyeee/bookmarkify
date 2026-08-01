@@ -82,6 +82,7 @@ Key flows:
 - **Adding a bookmark:** Web → API stores a `BOOKMARK_LOADING` placeholder → publishes a Spring `ApplicationEvent` → an `@Async` listener triggers `/scrape` on the scrapper → result saved and pushed to the browser via WebSocket (`HOME_ITEM_UPDATE`).
 - **Auth:** Every visitor gets an anonymous session via `/auth/track`. The `satoken` cookie/header is used on all requests — not `Authorization`. Registered users "upgrade" the anonymous session.
 - **Storage:** Files (avatars, icons, social images, screenshots) go to Alibaba Cloud OSS. The bucket is **private-read** — what's stored in the DB is an **object key**, never a usable URL, so anything served to a browser must go through **`OssUtils.signAsset`**, which signs it and applies the per-display-mode resize. `signAsset` also accepts the legacy full URLs still present in older `site_asset` rows. The scrapper writes bytes but owns none of this: it returns `storageKey`, and the domain / signing / resizing are all API policy — see `docs/oss-architecture.md`.
+- **Object governance:** every object in the bucket is tracked in the `oss_object` ledger, and every referrer (`user_info.avatar_file_id`, `background_image.file_id`, `site_asset.file_id`) stores a **ledger id, not a key** — so the key layout can change without touching business tables. A daily reconciliation sweep diffs bucket ↔ ledger ↔ referrers to find orphans. Read `FILE-SYSTEM-REFACTOR.md` before touching anything that writes to or deletes from OSS; in particular, **adding a new referrer requires updating `OssReconcileServiceImpl.collectReferencedKeys`** — miss it and those objects get classified as orphans.
 
 ## Site Assets & the Scrapper Contract
 
@@ -98,7 +99,7 @@ Concretely, the scrapper's response contains `extractor` — *which tag/field th
 | `extractor` (fact — where it came from) | scrapper | `LINK_ICON`, `APPLE_TOUCH_ICON`, `MANIFEST_ICON`, `JSON_LD_ORG_LOGO`, `OG_IMAGE` |
 | `role` (policy — what we use it for) | API | `FAVICON`, `LOGO`, `SOCIAL`, `SCREENSHOT` |
 | `quality` (policy — how much we trust it) | API | `TRUSTED`, `DEGRADED` |
-| `storageKey` (fact — where the bytes landed) | scrapper | `scrapper/asset/<sha256>.png` |
+| `storageKey` (fact — where the bytes landed) | scrapper | `scrapper/asset/<sha256-of-bytes>` |
 | the URL a browser gets (policy — domain, signature, resize) | API | `OssUtils.signAsset` |
 
 The last row is the same rule applied to storage: the scrapper reports *which key it wrote*, never a
@@ -187,6 +188,7 @@ bookmarkify-api/.../server/asset/
 - **The local Jsoup path (`parseLocally`) no longer produces images.** Only the scrapper path writes `site_asset`. Two parsers each writing their own icon model is exactly what this refactor removed.
 - **`fetch.tls` and `diagnostics.robots` are deliberately omitted,** not populated with guesses — the underlying capability isn't implemented yet.
 - **Migrations are hand-applied** (`deploy/migrations/`, no Flyway) and the deploy workflow does *not* run them. Order matters: create tables → deploy → full re-crawl → only then `2026-07-29_drop_bookmark_logo.sql`.
+- **`2026-08-02_file_id_indirection.sql` must be applied *before* deploying the API.** The new code reads `oss_object` and no longer reads `user_file` — deploying first turns every avatar and background image blank. `2026-08-03_oss_object_hash_unique.sql` is the opposite: it must wait until *after* a full re-crawl has moved every asset onto content-addressed keys, and it fails loudly with a pre-check rather than half-applying.
 - **The 2026-07-30 batch must be applied *before* deploying the API** — the new code reads columns that don't exist yet (`bookmark.next_check_at`, `bookmark.locked_fields`, `bookmark_ping_log.outcome`). Run `2026-07-30_missing_table_ddl.sql` first (it only fills in `CREATE TABLE IF NOT EXISTS` for tables whose DDL was never committed), then `_ping_outcome`, `_bookmark_check_schedule`, `_bookmark_locked_fields`. All are idempotent.
 - **`2026-07-31_ai_call_log.sql` should be applied before deploying the API.** Every DeepSeek call now writes a row to `ai_call_log`; a missing table only produces `warn` lines (the insert is wrapped in `runCatching`, business logic is unaffected) — but that is exactly the audit trail the table exists for, so a late migration means a silent hole in the history.
 - **Sibling `CLAUDE.md` files carry the details:** the liveness sweep contract (tri-state ping, breaker, `next_check_at`, backoff, field locks) is in `bookmarkify-api/CLAUDE.md` under "Liveness sweeps".

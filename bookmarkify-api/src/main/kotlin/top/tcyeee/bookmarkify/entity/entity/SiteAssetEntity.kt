@@ -51,6 +51,21 @@ data class SiteAssetEntity(
     @field:Schema(description = "落对象存储后的 object key（存量数据可能是完整 URL）")
     var storageUrl: String? = null,
 
+    /**
+     * 指向 `oss_object` 的引用，**读路径的首选来源**。
+     *
+     * 存 id 而不是 key，是为了把这张表与存储层的 key 布局隔开：将来 key 怎么变（去扩展名、
+     * 改内容寻址、换前缀），只需重写 `oss_object.object_key` 一列，这里一行都不用动。
+     *
+     * 可空，且**永远会有可空的理由**：只做了 PROBE 的资产、指向外站直连的资产根本没落对象
+     * 存储；再加上改造前写入的完整 URL 存量。见 `FILE-SYSTEM-REFACTOR.md` §6 约束 B。
+     *
+     * 不参与 `SiteAssetWriter.isIdenticalToExisting` 的比较：入账按 key 幂等，同一个 key
+     * 永远拿到同一个 id，所以它是 [storageUrl] 的函数，比了也提供不了新信息 —— 反而在账本
+     * 暂时不可用时（id 为空而 key 有值）会让每次重抓都误判成"变了"。
+     */
+    @field:Schema(description = "对象账本ID(oss_object.id)") var fileId: String? = null,
+
     @field:Schema(description = "真实像素宽") var width: Int? = null,
     @field:Schema(description = "真实像素高") var height: Int? = null,
     @field:Schema(description = "字节数") var byteSize: Long? = null,

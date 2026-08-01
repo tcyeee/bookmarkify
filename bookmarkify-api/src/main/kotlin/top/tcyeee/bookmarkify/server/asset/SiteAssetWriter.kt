@@ -12,9 +12,14 @@ import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.entity.SitePageMetaEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
+import top.tcyeee.bookmarkify.entity.enums.AssetRole
+import top.tcyeee.bookmarkify.entity.enums.OssAddressing
+import top.tcyeee.bookmarkify.entity.enums.OssObjectSource
 import top.tcyeee.bookmarkify.mapper.ScrapeSnapshotMapper
 import top.tcyeee.bookmarkify.mapper.SiteAssetMapper
 import top.tcyeee.bookmarkify.mapper.SitePageMetaMapper
+import top.tcyeee.bookmarkify.server.IOssObjectService
+import top.tcyeee.bookmarkify.server.OssObjectSpec
 import top.tcyeee.bookmarkify.utils.OssUtils
 
 /**
@@ -31,6 +36,7 @@ class SiteAssetWriter(
     private val siteAssetMapper: SiteAssetMapper,
     private val objectMapper: ObjectMapper,
     private val scrapperConfig: ScrapperConfig,
+    private val ossObjectService: IOssObjectService,
 ) {
 
     /**
@@ -65,6 +71,8 @@ class SiteAssetWriter(
     ) {
         val p = SiteAssetIngestor.project(siteId, bookmarkId, url, response, durationMs, objectMapper)
 
+        registerObjects(p.assets)
+
         scrapeSnapshotMapper.insert(p.snapshot)
 
         p.pageMeta?.let { meta ->
@@ -85,6 +93,52 @@ class SiteAssetWriter(
             "[SiteAssetWriter] 落库完成: bookmarkId={}, siteId={}, isRootPage={}, siteAssets={}, pageAssets={}, hasMeta={}",
             bookmarkId, siteId, isRootPage, siteAssets.size, pageAssets.size, p.pageMeta != null
         )
+    }
+
+    /**
+     * 把本次抓取真正落进桶里的对象记入 `oss_object`（见 `FILE-SYSTEM-REFACTOR.md` P1）。
+     *
+     * **记的是"scrapper 往桶里写了什么"，不是"库里留下了哪几行"**，所以它放在投影之后、任何
+     * 落库分支之前 —— 走整体替换、走深链补齐、还是被 [isIdenticalToExisting] 整批跳过，对象都
+     * 已经实实在在地 PUT 进去了，账本必须照记。
+     *
+     * 同理，[IOssObjectService.register] 用的是独立事务：抓取事务回滚撤销不了 scrapper 在事务
+     * 之外完成的上传，那笔账也就不该跟着回滚 —— 否则就正好漏掉"落库失败留下的孤儿对象"这一类，
+     * 而那恰恰是账本最需要抓住的东西。
+     *
+     * 寻址方式按 role 分流，对应 scrapper 侧 `asset_key` / `screenshot_key` 的两套算法：
+     * 普通资产是 `sha256(字节)`（可去重、对象不可变），**截图仍是 `sha256(页面URL)`** ——
+     * 截图每次抓都不一样，内容寻址等于无上界增长，而去重收益恰好是零，故刻意保留自我覆盖的
+     * URL 寻址。这一列决定了对账任务判定"这个对象能不能参与去重"，配错不会误删但会让去重失效。
+     */
+    private fun registerObjects(assets: List<SiteAssetEntity>) {
+        val specs = assets.mapNotNull { a ->
+            a.storageUrl?.trim()?.takeIf { it.isNotEmpty() }?.let { key ->
+                OssObjectSpec(
+                    objectKey = key,
+                    source = OssObjectSource.SCRAPPER,
+                    addressing = if (a.role == AssetRole.SCREENSHOT) {
+                        OssAddressing.SOURCE_URL
+                    } else {
+                        OssAddressing.CONTENT
+                    },
+                    contentHash = a.contentHash,
+                    size = a.byteSize,
+                    mime = a.mime,
+                    width = a.width,
+                    height = a.height,
+                    isVector = a.isVector,
+                )
+            }
+        }
+        if (specs.isEmpty()) return
+
+        // 把账本行ID盖回资产行。入账按 key 幂等，所以同一个 key 每次都拿到同一个 id ——
+        // 这正是 isIdenticalToExisting 能继续认出"站点没改版"的前提。
+        val idByKey = ossObjectService.registerAll(specs)
+        assets.forEach { a ->
+            a.storageUrl?.trim()?.takeIf { it.isNotEmpty() }?.let { key -> a.fileId = idByKey[key] }
+        }
     }
 
     /**
@@ -185,12 +239,14 @@ class SiteAssetWriter(
      * 清理入口。
      *
      * 三条安全边界，缺一不可：
-     * 1. **跨书签引用计数**。scrapper 的 object key 是源图 URL 的 SHA-256，因此共用同一张
-     *    favicon 的多个书签会指向**同一个 key**，只看本书签就删会删掉别人还在用的图。
+     * 1. **跨书签引用计数**。object key 现在是图片字节的 SHA-256（内容寻址），共用同一张
+     *    favicon 的多个站点会指向**同一个 key**，只看本书签就删会删掉别人还在用的图。
+     *    内容寻址让这条边界比以前更吃紧 —— 以前只有同一个源 URL 才会撞 key，现在只要字节
+     *    相同就会撞，跨站共用的概率大幅上升。
      * 2. **只删裸 key**。`storage_url` 里还有改造前写入的完整 URL，可能指向外部域名，一律不碰。
      * 3. **提交后才删**。事务回滚时行还在、对象却没了才是最糟的结果，所以挂在 afterCommit 上。
      *
-     * 即便判断失误代价也有限：key 由源 URL 决定，下一次重抓会用同样的 key 把对象重新传上去。
+     * 即便判断失误代价也有限：key 由字节决定，下一次重抓算出同样的 hash、传回同一个 key。
      */
     private fun scheduleOrphanCleanup(ownerId: String, candidates: Set<String>) {
         if (!scrapperConfig.reclaimOrphanAssets) return
