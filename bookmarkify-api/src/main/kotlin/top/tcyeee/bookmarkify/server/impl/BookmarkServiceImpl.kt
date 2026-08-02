@@ -1681,12 +1681,12 @@ class BookmarkServiceImpl(
     /**
      * 查单条用户书签的桌面展示视图。
      *
-     * 桌面是「大图 + 短名」形态，按 [DisplayMode.TILE] 解析图标。SQL 本身不再联图标表
-     * （图片已改为 site_asset 一行一图），漏了这一步前端就只能渲染首字母色块。
+     * 桌面现在是「小图 + 全名」的列表形态（`pages/index.vue`），按 [DisplayMode.LIST] 解析图标与文案。
+     * SQL 本身不再联图标表（图片已改为 site_asset 一行一图），漏了这一步前端就只能渲染首字母色块。
      */
     private fun showForDesktop(userLinkId: String): BookmarkShow =
         bookmarkUserLinkMapper.findShowById(userLinkId)
-            .let { it.initDisplay(it.bookmarkId?.let { id -> siteAssetResolver.resolveOne(id, DisplayMode.TILE) }, DisplayMode.TILE) }
+            .let { it.initDisplay(it.bookmarkId?.let { id -> siteAssetResolver.resolveOne(id, DisplayMode.LIST) }, DisplayMode.LIST) }
 
     /** 按 canonical 四元组精确命中一条页面记录。 */
     private fun getByCanonical(siteId: String, urlPath: String, urlQuery: String, urlFragment: String): BookmarkEntity? =

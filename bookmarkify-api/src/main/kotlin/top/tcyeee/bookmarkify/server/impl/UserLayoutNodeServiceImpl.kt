@@ -45,12 +45,13 @@ class UserLayoutNodeServiceImpl(
     /**
      * 用户全部书签的展示视图，按 layoutNodeId 索引。
      *
-     * 桌面是「大图 + 短名」形态，故按 [DisplayMode.TILE] 解析图标；一次批量解析避免逐个书签查资产表。
+     * 桌面现在是「小图 + 全名」的列表形态（`pages/index.vue`），故按 [DisplayMode.LIST] 解析图标与文案；
+     * 一次批量解析避免逐个书签查资产表。
      */
     private fun bookmarkShowMap(uid: String): Map<String, BookmarkShow> {
         val shows = bookmarkUserLinkMapper.allBookmarkByUid(uid)
-        val logoMap = siteAssetResolver.resolveBatch(shows.mapNotNull { it.bookmarkId }, DisplayMode.TILE)
-        return shows.onEach { it.initDisplay(logoMap[it.bookmarkId], DisplayMode.TILE) }.associateBy { it.layoutNodeId!! }
+        val logoMap = siteAssetResolver.resolveBatch(shows.mapNotNull { it.bookmarkId }, DisplayMode.LIST)
+        return shows.onEach { it.initDisplay(logoMap[it.bookmarkId], DisplayMode.LIST) }.associateBy { it.layoutNodeId!! }
     }
 
     @Transactional
