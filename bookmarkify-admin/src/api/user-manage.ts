@@ -6,6 +6,12 @@ export interface UserAdminVO {
   deviceId: string;
   email?: string | null;
   phone?: string | null;
+  /** 头像签名地址：私有桶里存的是 object key，后端签好才下发；无头像时为 null */
+  avatarUrl?: null | string;
+  /** 绑定的 Google 邮箱，未绑定为 null */
+  googleEmail?: null | string;
+  /** 绑定的 GitHub 用户名，未绑定为 null */
+  githubLogin?: null | string;
   role: string;
   deleted: boolean;
   disabled: boolean;

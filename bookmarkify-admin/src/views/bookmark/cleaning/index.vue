@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { BookmarkEntity, BookmarkSearchParams } from "#/api/bookmark";
+import type { UserAdminVO } from "#/api/user-manage";
 
 import { defineAsyncComponent, reactive, ref } from "vue";
 
@@ -14,6 +15,9 @@ import {
 } from "#/api/bookmark";
 import { ElMessage } from "element-plus";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
+
+import UserDetailDialog from "#/views/user/UserDetailDialog.vue";
+import UserIdentityCell from "#/views/user/UserIdentityCell.vue";
 
 import BookmarkAssetCell from "../BookmarkAssetCell.vue";
 import BookmarkDetailDialog from "../BookmarkDetailDialog.vue";
@@ -78,6 +82,16 @@ const ElButton = defineAsyncComponent(() =>
 // 详情弹窗直接拿表格行对象：弹窗里的改动就地写回该行，表格无需二次同步
 const detailVisible = ref(false);
 const currentRow = ref<BookmarkEntity | null>(null);
+
+// 收录者详情：列表接口已带回完整的用户视图，点开不再发请求
+const userVisible = ref(false);
+const currentUser = ref<null | UserAdminVO>(null);
+
+function handleOwnerClick(row: BookmarkEntity) {
+  if (!row.owner) return;
+  currentUser.value = row.owner;
+  userVisible.value = true;
+}
 
 /** 列表里描述只给一眼的量，完整文本靠 title 悬浮和详情弹窗看 */
 const DESC_MAX = 15;
@@ -152,7 +166,8 @@ const statusOptions: {
 ];
 
 function handleRowClick({ row, column }: { row: BookmarkEntity; column: any }) {
-  if (column?.field === "rowActions") return;
+  // 操作列与收录者列有自己的点击语义，落到这里会把书签详情一起弹出来
+  if (column?.field === "rowActions" || column?.field === "owner") return;
   currentRow.value = row;
   detailVisible.value = true;
 }
@@ -181,6 +196,8 @@ const gridOptions: VxeGridProps<BookmarkEntity> = {
     // 只截前 15 个字，完整描述在悬浮 title 与详情弹窗里
     { field: "description", title: "网站描述", minWidth: 160, slots: { default: "description" } },
     { field: "urlHost", title: "域名", minWidth: 180 },
+    // 最早把这条书签加进来的用户。头像与昵称同格显示，点开看该用户的完整信息
+    { field: "owner", title: "收录用户", minWidth: 160, slots: { default: "owner" } },
     { field: "parseStatus", title: "状态", width: 140, slots: { default: "parseStatus" } },
     { field: "antiCrawlerBlocked", title: "反爬拦截", width: 90, slots: { default: "antiCrawlerBlocked" } },
     { field: "nsfw", title: "NSFW", width: 90, slots: { default: "nsfw" } },
@@ -269,6 +286,22 @@ const [Grid, gridApi] = useVbenVxeGrid({
           </span>
           <span v-else class="text-gray-400">-</span>
         </template>
+        <template #owner="{ row }">
+          <div v-if="row.owner" class="owner-cell" @click.stop="handleOwnerClick(row)">
+            <UserIdentityCell :user="row.owner" />
+            <!-- 只显示一个头像会让人以为全站就这一个人收藏了它，多人时把总数标出来 -->
+            <ElTag
+              v-if="row.ownerCount > 1"
+              type="info"
+              size="small"
+              disable-transitions
+              :title="`共 ${row.ownerCount} 位用户收录`"
+            >
+              +{{ row.ownerCount - 1 }}
+            </ElTag>
+          </div>
+          <span v-else class="text-gray-400">-</span>
+        </template>
         <template #parseStatus="{ row }">
           <ElTag v-if="row.parseStatus === 'SUCCESS'" type="success" size="small">
             成功
@@ -312,6 +345,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
       <BookmarkDetailDialog v-model="detailVisible" :bookmark="currentRow" />
 
+      <UserDetailDialog v-model="userVisible" :user="currentUser" />
+
       <ElDialog v-model="editDialogVisible" title="修改基础信息" width="480px">
         <ElForm :model="editForm" label-width="60px">
           <ElFormItem label="标题">
@@ -342,6 +377,18 @@ const [Grid, gridApi] = useVbenVxeGrid({
 </template>
 
 <style scoped>
+.owner-cell {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.owner-cell:hover {
+  color: var(--el-color-primary);
+}
+
 .search-bar :deep(.el-form-item__label) {
   height: 32px;
   font-weight: 400 !important;

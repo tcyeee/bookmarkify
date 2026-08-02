@@ -9,12 +9,13 @@
       :style="[logoSizeStyle, logoStyle]">
       <!-- 本地/IP 类型书签：后端不抓取信息，用与「不可访问」同色的灰底 + 白色圆点图标 -->
       <Icon v-if="isPlainCircle" icon="mdi:dots-circle" class="shrink-0 text-white" :style="glyphStyle" />
-      <!-- 服务端已按展示模式选好唯一一张图，前端不再在多个图位之间取舍 -->
+      <!-- 服务端已按展示模式选好唯一一张图，前端不再在多个图位之间取舍。
+           src 走本地持久缓存解析（见 resolveCachedIconBlob），命中时零网络请求 -->
       <img
-        v-else-if="imageUrl && !iconError"
-        :key="imageUrl"
+        v-else-if="displaySrc && !iconError"
+        :key="displaySrc"
         :style="imageStyle"
-        :src="imageUrl"
+        :src="displaySrc"
         alt=""
         draggable="false"
         @error="onIconError"
@@ -53,9 +54,10 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import { BookmarkLinkType, type BookmarkShow } from '@typing'
+import { resolveCachedIconBlob } from '@utils'
 
 // preferHd 已移除：用哪张图是服务端按展示模式决定的（AssetRolePolicy），
 // 前端再传一个偏好只会和服务端策略打架。原先这个 prop 也从未被任何调用方传过。
@@ -95,6 +97,41 @@ const isInactive = computed(() => props.value?.isActivity === false)
 
 // monogram 为 true 表示"该站没有够格的图"，此时不渲染图片
 const imageUrl = computed(() => (props.value.logo?.monogram ? '' : props.value.logo?.url || ''))
+
+// 实际渲染用的地址：优先走本地持久缓存（命中则是 objectURL，零网络请求），
+// 缓存未命中/解析失败时退回签名地址直连，保证展示不受影响
+const displaySrc = ref('')
+let displayObjectUrl: string | null = null
+
+function releaseDisplayObjectUrl() {
+  if (displayObjectUrl) {
+    URL.revokeObjectURL(displayObjectUrl)
+    displayObjectUrl = null
+  }
+}
+
+watch(
+  imageUrl,
+  async (url) => {
+    releaseDisplayObjectUrl()
+    if (!url) {
+      displaySrc.value = ''
+      return
+    }
+    const blob = await resolveCachedIconBlob(url)
+    // 异步期间图片可能已经切换（换书签/换图），丢弃过期结果
+    if (imageUrl.value !== url) return
+    if (blob) {
+      displayObjectUrl = URL.createObjectURL(blob)
+      displaySrc.value = displayObjectUrl
+    } else {
+      displaySrc.value = url
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(releaseDisplayObjectUrl)
 
 const logoSizeStyle = computed(() => ({ width: `${logoSize.value}px`, height: `${logoSize.value}px` }))
 

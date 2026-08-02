@@ -106,6 +106,10 @@ async fn main() {
         // 报进 `fetch.redirectChain`，并让每一跳都重新过一次 SSRF 校验。开着自动跟随
         // 会让那个循环永远看不到 3xx，`finalUrl` 也会停留在初始 URL 上。
         .redirect(reqwest::redirect::Policy::none())
+        // 关掉自动跟随的代价是 cookie 也不会跨跳保留，而不少站点正是在 301 那一跳下发
+        // 风控 cookie（B 站的 buvid3 就是），拿不到就在下一跳被 412 拦下。开着 jar 后，
+        // 手动跟随的每一跳和 `warm_up_origin` 的预热请求才能共享同一份 cookie。
+        .cookie_store(true)
         .timeout(Duration::from_secs(timeout_secs));
 
     if let Some(url) = proxy_url {
@@ -487,8 +491,13 @@ async fn scrape_handler(
             ) {
                 state.cache.set_error(&body.url).await;
             }
-            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "scrape failed: {e:?}");
-            return scrape_error_response(e);
+            // 状态码失败用 describe()：Debug 会把正文片段连同转义一起糊成一行，读不了
+            let reason = match &e {
+                scraper::ScrapeError::HttpStatus(d) => d.describe(),
+                other => format!("{other:?}"),
+            };
+            tracing::info!(domain, elapsed_ms = start.elapsed().as_millis(), "scrape failed: {reason}");
+            return scrape_error_response(e, start.elapsed().as_millis() as u64);
         }
     };
 
@@ -736,15 +745,19 @@ fn error_response(status: StatusCode, code: &str, detail: Option<String>) -> Res
         .into_response()
 }
 
-fn scrape_error_response(e: scraper::ScrapeError) -> Response {
+fn scrape_error_response(e: scraper::ScrapeError, elapsed_ms: u64) -> Response {
     use scraper::ScrapeError as E;
     match e {
         E::InvalidUrl => error_response(StatusCode::UNPROCESSABLE_ENTITY, "INVALID_URL", None),
         E::ForbiddenTarget(msg) => {
             error_response(StatusCode::FORBIDDEN, "FORBIDDEN_TARGET", Some(msg))
         }
-        E::Timeout => error_response(StatusCode::GATEWAY_TIMEOUT, "TIMEOUT", None),
+        E::Timeout(msg) => error_response(StatusCode::GATEWAY_TIMEOUT, "TIMEOUT", Some(msg)),
         E::FetchFailed(msg) => error_response(StatusCode::BAD_GATEWAY, "FETCH_FAILED", Some(msg)),
+        // 沿用 FETCH_FAILED 这个错误码：调用方（API 的 classifyScrapperError）据它判定
+        // "目标站点打不开"，新增码会掉进 else 分支被误判成我方服务故障。细节走 detail
+        // 和 fetch 两个字段透出，机器可读的那份放 fetch。
+        E::HttpStatus(d) => http_status_error_response(*d, elapsed_ms),
         E::HeadlessFailed(msg) => {
             error_response(StatusCode::BAD_GATEWAY, "HEADLESS_FAILED", Some(msg))
         }
@@ -752,6 +765,38 @@ fn scrape_error_response(e: scraper::ScrapeError) -> Response {
             error_response(StatusCode::SERVICE_UNAVAILABLE, "OSS_FAILED", Some(msg))
         }
     }
+}
+
+/// 非 2xx 失败：把现场同时填进 `detail`（给人看）和 `fetch`（给机器看）。
+///
+/// `ErrorResponse.fetch` 契约上一直写着"失败前已经拿到的传输层事实，用于排障"，
+/// 但此前从没有人往里填过东西。
+fn http_status_error_response(d: scraper::HttpErrorDetail, elapsed_ms: u64) -> Response {
+    let fetch = contract::FetchInfo {
+        final_url: d.final_url.clone(),
+        redirect_chain: d
+            .redirects
+            .iter()
+            .map(|(url, status)| contract::Redirect { url: url.clone(), status: *status })
+            .collect(),
+        http_status: d.status,
+        layer_used: contract::RenderLayer::Http,
+        from_cache: false,
+        content_type: d.content_type.clone(),
+        charset: None,
+        byte_size: None,
+        tls: None,
+        timing_ms: contract::Timing { total: elapsed_ms, ..Default::default() },
+    };
+    (
+        StatusCode::BAD_GATEWAY,
+        Json(contract::ErrorResponse {
+            error: "FETCH_FAILED".to_string(),
+            detail: Some(d.describe()),
+            fetch: Some(fetch),
+        }),
+    )
+        .into_response()
 }
 
 #[cfg(test)]
@@ -785,9 +830,11 @@ mod tests {
 
     fn test_state() -> AppState {
         AppState {
-            // 与 main() 一致关掉自动跟随，否则 fetch_html 的手动跟随拿不到 3xx
+            // 与 main() 一致：关掉自动跟随（否则 fetch_html 的手动跟随拿不到 3xx），
+            // 开 cookie jar（否则跨跳/预热拿到的 cookie 留不住）
             client: reqwest::Client::builder()
                 .redirect(reqwest::redirect::Policy::none())
+                .cookie_store(true)
                 .build()
                 .expect("test client"),
             headless_timeout_secs: 5,
@@ -873,6 +920,178 @@ mod tests {
         });
 
         base
+    }
+
+    /// 起一个复刻 B 站风控行为的测试站，返回 (监听地址, 收到的请求头快照)。
+    ///
+    /// 规则与线上观察到的一致：
+    /// - `/` 永远 200，并在响应里下发 `wm=1` cookie；
+    /// - `/guarded` 在**没有** `wm=1` cookie 时返回 412 拦截页，有则 200。
+    ///
+    /// 这正是"根域名正常、带 path 的 412"那个现象的最小复现。
+    async fn spawn_guarded_site() -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let seen: Arc<std::sync::Mutex<Vec<String>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen_bg = seen.clone();
+
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else { break };
+                let seen = seen_bg.clone();
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 4096];
+                    let Ok(n) = sock.read(&mut buf).await else { return };
+                    let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let path = req.split_whitespace().nth(1).unwrap_or("/").to_string();
+                    let has_cookie = req.to_ascii_lowercase().contains("cookie: wm=1");
+                    seen.lock().unwrap().push(req);
+
+                    let ok = |body: &str| {
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nSet-Cookie: wm=1; Path=/\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                            body.len()
+                        )
+                        .into_bytes()
+                    };
+                    let resp: Vec<u8> = match (path.as_str(), has_cookie) {
+                        ("/", _) => ok("<html><head><title>Home</title></head><body>home</body></html>"),
+                        ("/guarded", true) => {
+                            ok("<html><head><title>Guarded Page</title></head><body>ok</body></html>")
+                        }
+                        ("/guarded", false) => {
+                            let body = "<html><head><style>b{}</style></head><body><h1>访问被拒绝</h1></body></html>";
+                            format!(
+                                "HTTP/1.1 412 Precondition Failed\r\nContent-Type: text/html\r\nServer: waf-test\r\nSet-Cookie: wm=1; Path=/\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                                body.len()
+                            )
+                            .into_bytes()
+                        }
+                        _ => b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec(),
+                    };
+                    let _ = sock.write_all(&resp).await;
+                    let _ = sock.shutdown().await;
+                });
+            }
+        });
+
+        (base, seen)
+    }
+
+    /// Layer 1 必须发出一整套浏览器请求头，而不是只发一个 UA。
+    ///
+    /// 只带 UA、`accept: */*`、无 `Sec-Fetch-*` 的请求是 WAF 最容易识别的爬虫特征。
+    #[tokio::test]
+    async fn layer1_sends_a_consistent_browser_header_set() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let (base, seen) = spawn_guarded_site().await;
+
+        let app = build_router(test_state(), 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({
+                "url": format!("{base}/"),
+                "render": { "mode": "HTTP" },
+                "assets": { "download": "PROBE" }
+            }),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        assert_eq!(status, StatusCode::OK, "body: {json}");
+
+        // 只看导航请求：资产/favicon 走的是 pipeline 的普通下载，不该被当成文档导航
+        let raw = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|r| r.starts_with("GET / "))
+            .expect("应有一次对 / 的导航请求")
+            .to_ascii_lowercase();
+        for header in [
+            "accept: text/html",
+            "accept-language:",
+            "accept-encoding:", // 由 reqwest 的 gzip/brotli/deflate 特性自动带上
+            "sec-fetch-dest: document",
+            "sec-fetch-mode: navigate",
+            "sec-fetch-site: none",
+            "upgrade-insecure-requests: 1",
+        ] {
+            assert!(raw.contains(header), "缺少请求头 {header}，实际:\n{raw}");
+        }
+        assert!(!raw.contains("accept: */*"), "不该再退回 reqwest 默认的 accept: */*");
+    }
+
+    /// 被反爬拦下时先访问根路径拿 cookie 再重试——正是 B 站 `/video/BVxxx` 那个场景。
+    #[tokio::test]
+    async fn anti_bot_block_recovers_via_origin_warm_up() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let (base, seen) = spawn_guarded_site().await;
+
+        let app = build_router(test_state(), 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({
+                "url": format!("{base}/guarded"),
+                "render": { "mode": "HTTP" },
+                "assets": { "download": "PROBE" }
+            }),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+
+        assert_eq!(status, StatusCode::OK, "预热重试后应当抓成功，body: {json}");
+        assert_eq!(json["meta"]["title"], "Guarded Page");
+
+        // 抓完还会去取 favicon，只校验前三条导航请求的次序
+        let paths: Vec<String> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|r| r.split_whitespace().nth(1).map(str::to_string))
+            .take(3)
+            .collect();
+        assert_eq!(paths, vec!["/guarded", "/", "/guarded"], "应为 拦截 → 预热根路径 → 重试");
+    }
+
+    /// 无法恢复的状态码要给出完整现场，而不是 reqwest 那句干巴巴的 error_for_status。
+    #[tokio::test]
+    async fn http_status_failure_reports_a_detailed_diagnosis() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let (base, _seen) = spawn_guarded_site().await;
+
+        let app = build_router(test_state(), 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({
+                "url": format!("{base}/nope"),
+                "render": { "mode": "HTTP" },
+                "assets": { "download": "PROBE" }
+            }),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+
+        assert_eq!(status, StatusCode::BAD_GATEWAY);
+        // 错误码保持不变：API 侧靠它区分"目标站点的问题"与"我方服务的问题"
+        assert_eq!(json["error"], "FETCH_FAILED");
+        let detail = json["detail"].as_str().unwrap_or_default();
+        assert!(detail.contains("HTTP 404 Not Found"), "{detail}");
+        assert!(detail.contains("目标页面不存在"), "应给出排障方向: {detail}");
+        assert!(detail.contains("/nope"), "应指明是哪个 URL: {detail}");
+        // 机器可读的那份走 fetch —— 这个字段契约里一直有，此前从没填过
+        assert_eq!(json["fetch"]["httpStatus"], 404);
+        assert_eq!(json["fetch"]["layerUsed"], "HTTP");
     }
 
     /// 端到端跑通整条链路，并逐条验证本次重构的核心承诺。

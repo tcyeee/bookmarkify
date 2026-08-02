@@ -8,8 +8,11 @@ edition = "2021"
 axum = "0.7"
 # 异步运行时
 tokio = { version = "1", features = ["full"] }
-# Layer 1：HTTP 抓取客户端
-reqwest = { version = "0.12", features = ["json", "stream"] }
+# Layer 1：HTTP 抓取客户端。
+# cookies：反爬预热要靠 cookie jar 把根路径下发的 cookie 带到目标页（见 scraper::warm_up_origin）；
+# gzip/brotli/deflate：让 reqwest 自动带 Accept-Encoding 并解压——一个不声明压缩支持的
+# "Chrome" 是显眼的爬虫特征，顺带也省带宽
+reqwest = { version = "0.12", features = ["json", "stream", "cookies", "gzip", "brotli", "deflate"] }
 # HTML 解析（CSS 选择器）
 scraper = "0.19"
 # 序列化 / 反序列化

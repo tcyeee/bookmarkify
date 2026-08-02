@@ -31,6 +31,7 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IFileService
 import top.tcyeee.bookmarkify.server.IOssObjectService
 import top.tcyeee.bookmarkify.server.IUserService
+import top.tcyeee.bookmarkify.server.admin.AdminUserViewAssembler
 import top.tcyeee.bookmarkify.utils.BaseUtils
 import top.tcyeee.bookmarkify.utils.CurrentEnvironment
 import top.tcyeee.bookmarkify.utils.MailUtils
@@ -55,7 +56,8 @@ class UserServiceImpl(
     private val projectConfig: ProjectConfig,
     private val mailUtils: MailUtils,
     private val bookmarkService: IBookmarkService,
-    private val userPreferenceMapper: UserPreferenceMapper
+    private val userPreferenceMapper: UserPreferenceMapper,
+    private val adminUserViewAssembler: AdminUserViewAssembler,
 ) : IUserService, ServiceImpl<UserMapper, UserInfoEntity>() {
 
     // 不能用全局的 `log` 扩展属性: ServiceImpl 自带一个 org.apache.ibatis.logging.Log 成员会把它遮蔽,
@@ -633,6 +635,16 @@ class UserServiceImpl(
 
     // 旧的手机号绑定/改绑实现绕过验证码，已随手机号功能一并删除。绑定/改绑统一走 verifyEmail 的验证码校验路径。
 
-    override fun adminListAll(params: UserSearchParams): IPage<UserAdminVO> =
-        baseMapper.selectPage(params.toPage(), params.toWrapper()).convert { UserAdminVO(it) }
+    override fun adminListAll(params: UserSearchParams): IPage<UserAdminVO> {
+        val entityPage = baseMapper.selectPage(params.toPage(), params.toWrapper())
+        val users = entityPage.records.toList()
+        val page = entityPage.convert { UserAdminVO(it) }
+        // 头像签名要查 oss_object 账本。账本里查不到(旧数据/已清理)时留 null，
+        // 前端退回首字母色块 —— 不该因为一张头像让整个用户列表 500
+        runCatching {
+            val avatars = adminUserViewAssembler.avatarUrls(users)
+            page.records.forEach { vo -> vo.avatarUrl = avatars[vo.id] }
+        }.onFailure { logger.warn("[adminListAll] 用户头像签名失败(忽略): {}", it.message) }
+        return page
+    }
 }

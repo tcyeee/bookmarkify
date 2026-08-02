@@ -10,10 +10,15 @@ pub enum ScrapeError {
     InvalidUrl,
     /// 目标主机被 SSRF 防护策略拒绝（私有/回环/链路本地等）
     ForbiddenTarget(String),
-    /// HTTP 请求或无头浏览器操作超时
-    Timeout,
-    /// HTTP 请求失败（网络错误、非 2xx 响应等），附带错误描述
+    /// HTTP 请求或无头浏览器操作超时，附带超时发生在哪一步
+    Timeout(String),
+    /// 传输层失败（DNS、连接、TLS、响应体读取等），附带错误描述。
+    ///
+    /// **不含**"服务器正常应答但状态码不是 2xx"——那是 [`ScrapeError::HttpStatus`]，
+    /// 两者的排障方向完全不同：这里是"没连上"，那里是"连上了但被拒绝"。
     FetchFailed(String),
+    /// 目标站点返回了非 2xx 状态码，附带完整现场（见 [`HttpErrorDetail`]）
+    HttpStatus(Box<HttpErrorDetail>),
     /// 无头浏览器启动或页面加载失败，附带错误描述
     HeadlessFailed(String),
     /// OSS 上传失败，附带错误描述
@@ -195,7 +200,7 @@ pub async fn validate_target_host(url: &reqwest::Url) -> Result<(), ScrapeError>
     let port = url.port_or_known_default().unwrap_or(443);
     let addrs = tokio::net::lookup_host(format!("{host}:{port}"))
         .await
-        .map_err(|e| ScrapeError::FetchFailed(format!("dns lookup failed: {e}")))?;
+        .map_err(|e| ScrapeError::FetchFailed(format!("DNS 解析 {host} 失败: {e}")))?;
 
     let mut had_any = false;
     for addr in addrs {
@@ -208,7 +213,7 @@ pub async fn validate_target_host(url: &reqwest::Url) -> Result<(), ScrapeError>
         }
     }
     if !had_any {
-        return Err(ScrapeError::FetchFailed(format!("dns lookup returned no addresses for {host}")));
+        return Err(ScrapeError::FetchFailed(format!("DNS 解析 {host} 没有返回任何地址")));
     }
     Ok(())
 }
@@ -231,8 +236,249 @@ pub struct HttpCapture {
 pub const DEFAULT_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
      AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 
+/// 顶层导航的 `Accept`，取自 Chrome 136。
+///
+/// reqwest 默认发的是 `accept: */*`——一个自称 Chrome 却这么要资源的请求，
+/// 是 WAF 最容易识别的爬虫特征之一。
+const DEFAULT_ACCEPT: &str = "text/html,application/xhtml+xml,application/xml;q=0.9,\
+     image/avif,image/webp,image/apng,*/*;q=0.8";
+
+/// 未指定 `render.locale` 时的 `Accept-Language`。
+/// 一个语言偏好都不声明同样反常，浏览器永远会带。
+const DEFAULT_ACCEPT_LANGUAGE: &str = "zh-CN,zh;q=0.9,en;q=0.8";
+
+/// 客户端提示，必须与 [`DEFAULT_UA`] 里的 Chrome 大版本号保持一致——
+/// 对不上正是"伪造 UA"的判定依据。
+const SEC_CH_UA: &str = r#""Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99""#;
+const SEC_CH_UA_PLATFORM: &str = r#""macOS""#;
+
 /// 最多跟随的重定向跳数。
 const MAX_REDIRECTS: usize = 10;
+
+/// 出错响应正文最多读这么多字节——只用来做诊断片段，不需要完整正文。
+const MAX_ERROR_BODY_BYTES: usize = 16 * 1024;
+
+/// 诊断片段最终保留的字符数。
+const ERROR_SNIPPET_CHARS: usize = 300;
+
+/// 值得"换个姿势再试一次"的状态码：站点应答正常，只是拒绝了这次请求。
+///
+/// 不含 429（限流下立刻重试只会更糟）和 5xx（站点自身故障，重试姿势帮不上忙）。
+const RETRYABLE_ANTI_BOT: [u16; 3] = [403, 406, 412];
+
+/// 一次"服务器答了，但不是 2xx"的完整现场。
+///
+/// 单独建模而不是塞进 `FetchFailed(String)`，是因为这两类失败的排障方向相反：
+/// 传输层失败要查网络和 DNS，状态码失败要查请求本身长什么样。原来 reqwest 的
+/// `error_for_status()` 只给一句 `HTTP status client error (412 ...) for url (...)`，
+/// 既看不到重定向链，也看不到站点在正文里写了什么原因。
+#[derive(Debug)]
+pub struct HttpErrorDetail {
+    /// 最初请求的 URL（重定向前）
+    pub requested_url: String,
+    /// 真正返回这个状态码的 URL
+    pub final_url: String,
+    /// 走到这里经过的重定向链
+    pub redirects: Vec<(String, u16)>,
+    pub status: u16,
+    pub content_type: Option<String>,
+    /// 响应的 `Server` 头，用于识别 WAF（如 `cloudflare`、`Tengine`）
+    pub server: Option<String>,
+    /// 正文里的可读片段：拦截页往往会写明原因
+    pub body_snippet: Option<String>,
+    /// 是否已经做过根路径预热重试（见 [`warm_up_origin`]）
+    pub warmed_up: bool,
+}
+
+impl HttpErrorDetail {
+    /// 消费响应，读出状态、关键响应头与正文片段。
+    async fn capture(
+        requested_url: &str,
+        final_url: &reqwest::Url,
+        redirects: &[(String, u16)],
+        response: reqwest::Response,
+        warmed_up: bool,
+    ) -> Self {
+        let status = response.status().as_u16();
+        let header = |name: reqwest::header::HeaderName| {
+            response.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_string)
+        };
+        let content_type = header(reqwest::header::CONTENT_TYPE);
+        let server = header(reqwest::header::SERVER);
+        // 正文读失败无所谓——它只是诊断信息，不能让"读不到正文"盖掉真正的状态码错误
+        let body_snippet = read_body_capped(response, MAX_ERROR_BODY_BYTES)
+            .await
+            .ok()
+            .and_then(|bytes| text_snippet(&bytes, ERROR_SNIPPET_CHARS));
+
+        Self {
+            requested_url: requested_url.to_string(),
+            final_url: final_url.to_string(),
+            redirects: redirects.to_vec(),
+            status,
+            content_type,
+            server,
+            body_snippet,
+            warmed_up,
+        }
+    }
+
+    /// 这次拦截是否值得做一轮根路径预热后重试。
+    ///
+    /// 根路径本身被拒就没得救了（预热请求的就是它），所以只对带 path 的 URL 生效。
+    fn worth_warming_up(&self) -> bool {
+        RETRYABLE_ANTI_BOT.contains(&self.status)
+            && !self.warmed_up
+            && reqwest::Url::parse(&self.requested_url).is_ok_and(|u| u.path() != "/")
+    }
+
+    /// 面向人的一行诊断，最终会经 API 原样透出到管理后台。
+    pub fn describe(&self) -> String {
+        let reason = reqwest::StatusCode::from_u16(self.status)
+            .ok()
+            .and_then(|s| s.canonical_reason())
+            .unwrap_or("Unknown");
+        let mut out = format!("目标站点返回 HTTP {} {reason}", self.status);
+
+        let mut parts: Vec<String> = Vec::new();
+        if self.final_url != self.requested_url {
+            parts.push(format!("请求 {} 最终落在 {}", self.requested_url, self.final_url));
+        } else {
+            parts.push(format!("请求 {}", self.requested_url));
+        }
+        if !self.redirects.is_empty() {
+            let chain = self
+                .redirects
+                .iter()
+                .map(|(u, s)| format!("{s} {u}"))
+                .collect::<Vec<_>>()
+                .join(" → ");
+            parts.push(format!("重定向 {} 跳: {chain}", self.redirects.len()));
+        }
+        if let Some(server) = &self.server {
+            parts.push(format!("server={server}"));
+        }
+        if let Some(ct) = &self.content_type {
+            parts.push(format!("content-type={ct}"));
+        }
+        if self.warmed_up {
+            parts.push("已做根路径 cookie 预热并重试，仍被拒".to_string());
+        }
+        if let Some(hint) = status_hint(self.status) {
+            parts.push(hint.to_string());
+        }
+        if let Some(snippet) = &self.body_snippet {
+            parts.push(format!("响应正文: {snippet}"));
+        }
+
+        out.push_str(" (");
+        out.push_str(&parts.join("; "));
+        out.push(')');
+        out
+    }
+}
+
+/// 按状态码给一句"该往哪个方向查"的提示。
+fn status_hint(status: u16) -> Option<&'static str> {
+    match status {
+        401 | 403 | 406 | 412 => Some(
+            "疑似反爬/风控拦截——站点是连得通的，它主动拒绝了本次请求。\
+             常见原因：请求指纹不像浏览器、缺少站点下发的 cookie、出口 IP 信誉低",
+        ),
+        429 => Some("触发目标站点限流，应降低抓取频率后再试"),
+        404 | 410 => Some("目标页面不存在，多半是链接本身已失效"),
+        451 => Some("目标站点以法律原因拒绝提供该内容"),
+        500..=599 => Some("目标站点自身故障，与本次请求的姿势无关"),
+        _ => None,
+    }
+}
+
+/// 把 HTML 错误页压成一行可读片段：跳过 script/style、去标签、合并空白、截断。
+///
+/// 拦截页正文常常九成是脚本，直接截前 N 个字符只会得到一堆 JS。
+fn text_snippet(bytes: &[u8], max_chars: usize) -> Option<String> {
+    let raw = String::from_utf8_lossy(bytes);
+    let lower = raw.to_ascii_lowercase();
+    let mut text = String::new();
+    let mut i = 0usize;
+
+    while i < raw.len() {
+        let Some(lt) = lower[i..].find('<').map(|p| i + p) else {
+            text.push_str(&raw[i..]);
+            break;
+        };
+        text.push_str(&raw[i..lt]);
+        // 标签换成空格，否则 `</h1><p>` 会把前后两段文字粘成一个词
+        text.push(' ');
+
+        // <script>/<style> 整块跳过，连同它们的正文
+        let block = ["script", "style"]
+            .into_iter()
+            .find(|tag| lower[lt..].starts_with(&format!("<{tag}")));
+        // 无论哪种情况都先越过本标签的 '>'
+        i = match lower[lt..].find('>') {
+            Some(p) => lt + p + 1,
+            None => raw.len(),
+        };
+        if let Some(tag) = block {
+            i = match lower[i..].find(&format!("</{tag}")) {
+                // 闭合标签自身也一并吃掉，靠下一轮循环处理它就行
+                Some(p) => i + p,
+                None => raw.len(),
+            };
+        }
+    }
+
+    let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.is_empty() {
+        return None;
+    }
+    let truncated: String = collapsed.chars().take(max_chars).collect();
+    Some(if truncated.chars().count() < collapsed.chars().count() {
+        format!("{truncated}…")
+    } else {
+        truncated
+    })
+}
+
+/// 给一次 Layer 1 请求装上完整的浏览器请求头。
+///
+/// 只发 UA 而不发其余头，等于自曝是脚本。`Sec-Fetch-*` 这组头浏览器无法被 JS 覆盖，
+/// 因此是 WAF 判定"这是不是真实导航"的主要依据；`Sec-CH-UA` 只在安全上下文里发，
+/// 所以 http 目标要跟着省略，否则又成了另一种不一致。
+fn apply_browser_headers(
+    req: reqwest::RequestBuilder,
+    url: &reqwest::Url,
+    user_agent: &str,
+    locale: &str,
+    sec_fetch_site: &str,
+    referer: Option<&str>,
+) -> reqwest::RequestBuilder {
+    use reqwest::header::{ACCEPT, ACCEPT_LANGUAGE, REFERER, USER_AGENT};
+
+    // Accept-Encoding 交给 reqwest 的 gzip/brotli/deflate 特性自动带上并解压，
+    // 手工设置反而会关掉自动解压，让我们拿到一堆压缩字节。
+    let mut req = req
+        .header(USER_AGENT, user_agent)
+        .header(ACCEPT, DEFAULT_ACCEPT)
+        .header(ACCEPT_LANGUAGE, locale)
+        .header("upgrade-insecure-requests", "1")
+        .header("sec-fetch-dest", "document")
+        .header("sec-fetch-mode", "navigate")
+        .header("sec-fetch-site", sec_fetch_site)
+        .header("sec-fetch-user", "?1");
+
+    if url.scheme() == "https" {
+        req = req
+            .header("sec-ch-ua", SEC_CH_UA)
+            .header("sec-ch-ua-mobile", "?0")
+            .header("sec-ch-ua-platform", SEC_CH_UA_PLATFORM);
+    }
+    if let Some(referer) = referer {
+        req = req.header(REFERER, referer);
+    }
+    req
+}
 
 /// 通过普通 HTTP 请求（Layer 1）取回页面 HTML。
 ///
@@ -241,32 +487,118 @@ const MAX_REDIRECTS: usize = 10;
 /// 每一跳都重新跑一次 SSRF 校验 —— 共享客户端的 `SsrfSafeResolver` 已在 DNS 层兜底，
 /// 这里再挡一道，顺便让被拦下的那一跳能给出明确原因。
 ///
-/// `client` 必须配置为 `redirect::Policy::none()`，否则拿不到中间跳。
+/// 被反爬拦下时（见 [`RETRYABLE_ANTI_BOT`]）会做一轮**根路径预热**后重试，见
+/// [`warm_up_origin`]。
+///
+/// `client` 必须同时配置为 `redirect::Policy::none()`（否则拿不到中间跳）和
+/// `cookie_store(true)`（否则预热拿到的 cookie 留不住，重试等于白做）。
 pub async fn fetch_html(
     url: &str,
     client: &reqwest::Client,
     user_agent: Option<&str>,
     locale: Option<&str>,
 ) -> Result<HttpCapture, ScrapeError> {
+    let first = fetch_html_once(url, client, user_agent, locale, None).await;
+
+    let Err(ScrapeError::HttpStatus(detail)) = first else {
+        return first;
+    };
+    if !detail.worth_warming_up() {
+        return Err(ScrapeError::HttpStatus(detail));
+    }
+
+    let Some(origin_root) = warm_up_origin(url, client, user_agent, locale).await else {
+        return Err(ScrapeError::HttpStatus(detail));
+    };
+    tracing::info!(
+        url,
+        status = detail.status,
+        "anti-bot status, retrying after origin warm-up"
+    );
+    fetch_html_once(url, client, user_agent, locale, Some(&origin_root)).await
+}
+
+/// 反爬预热：先访问站点根路径，把它下发的 cookie 收进 jar，再让调用方重试目标 URL。
+///
+/// B 站是最典型的例子：`/` 永远 200 并在响应里下发 `buvid3`/`b_nut`，而
+/// `/video/BVxxx` 这类内容页在没有这些 cookie 时直接 412。真实浏览器天然满足这个
+/// 前提（用户总是先到过站内某处），裸抓不会——所以这里补上那一步。
+///
+/// 返回根路径 URL 供重试时作 `Referer`；预热本身失败则返回 `None`（照原错误报出去，
+/// 预热是尽力而为的补救，不该制造新的失败原因）。
+async fn warm_up_origin(
+    url: &str,
+    client: &reqwest::Client,
+    user_agent: Option<&str>,
+    locale: Option<&str>,
+) -> Option<String> {
+    let mut root = reqwest::Url::parse(url).ok()?;
+    root.set_path("/");
+    root.set_query(None);
+    root.set_fragment(None);
+
+    validate_target_host(&root).await.ok()?;
+    let req = apply_browser_headers(
+        client.get(root.clone()),
+        &root,
+        user_agent.unwrap_or(DEFAULT_UA),
+        locale.unwrap_or(DEFAULT_ACCEPT_LANGUAGE),
+        "none",
+        None,
+    );
+    match req.send().await {
+        Ok(resp) => {
+            tracing::debug!(root = %root, status = resp.status().as_u16(), "warm-up done");
+            Some(root.to_string())
+        }
+        Err(e) => {
+            tracing::debug!(root = %root, "warm-up failed: {e}");
+            None
+        }
+    }
+}
+
+/// 单趟抓取：解析 → 逐跳跟随重定向 → 读正文。`referer` 非空表示这是预热后的重试。
+async fn fetch_html_once(
+    url: &str,
+    client: &reqwest::Client,
+    user_agent: Option<&str>,
+    locale: Option<&str>,
+    referer: Option<&str>,
+) -> Result<HttpCapture, ScrapeError> {
     let mut current = reqwest::Url::parse(url).map_err(|_| ScrapeError::InvalidUrl)?;
     let mut redirects: Vec<(String, u16)> = Vec::new();
+    let user_agent = user_agent.unwrap_or(DEFAULT_UA);
+    let locale = locale.unwrap_or(DEFAULT_ACCEPT_LANGUAGE);
 
     for _ in 0..=MAX_REDIRECTS {
         validate_url_scheme(&current)?;
         validate_target_host(&current).await?;
 
-        let mut req = client
-            .get(current.clone())
-            .header(reqwest::header::USER_AGENT, user_agent.unwrap_or(DEFAULT_UA));
-        if let Some(locale) = locale {
-            req = req.header(reqwest::header::ACCEPT_LANGUAGE, locale);
-        }
+        // 首跳来自"地址栏/书签"，故 sec-fetch-site: none；重定向跳则按与上一跳的
+        // 同源关系上报，跟浏览器一致
+        let sec_fetch_site = match redirects.last() {
+            None => "none",
+            Some((prev, _)) => match reqwest::Url::parse(prev) {
+                Ok(prev) if prev.origin() == current.origin() => "same-origin",
+                _ => "cross-site",
+            },
+        };
+        let req = apply_browser_headers(
+            client.get(current.clone()),
+            &current,
+            user_agent,
+            locale,
+            sec_fetch_site,
+            // 浏览器不会凭空给重定向加 Referer，所以只在首跳带预热来源
+            referer.filter(|_| redirects.is_empty()),
+        );
 
         let response = req.send().await.map_err(|e| {
             if e.is_timeout() {
-                ScrapeError::Timeout
+                ScrapeError::Timeout(format!("请求 {current} 超时: {e}"))
             } else {
-                ScrapeError::FetchFailed(e.to_string())
+                ScrapeError::FetchFailed(format!("请求 {current} 失败: {e}"))
             }
         })?;
 
@@ -280,18 +612,26 @@ pub async fn fetch_html(
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_string);
             if let Some(loc) = location {
-                let next = current
-                    .join(&loc)
-                    .map_err(|_| ScrapeError::FetchFailed(format!("bad redirect target: {loc}")))?;
+                let next = current.join(&loc).map_err(|_| {
+                    ScrapeError::FetchFailed(format!("{current} 的重定向目标非法: {loc}"))
+                })?;
                 redirects.push((current.to_string(), status.as_u16()));
                 current = next;
                 continue;
             }
         }
 
-        let response = response
-            .error_for_status()
-            .map_err(|e| ScrapeError::FetchFailed(e.to_string()))?;
+        if !status.is_success() {
+            let detail = HttpErrorDetail::capture(
+                url,
+                &current,
+                &redirects,
+                response,
+                referer.is_some(),
+            )
+            .await;
+            return Err(ScrapeError::HttpStatus(Box::new(detail)));
+        }
 
         let content_type = response
             .headers()
@@ -302,7 +642,7 @@ pub async fn fetch_html(
 
         let bytes = read_body_capped(response, MAX_HTML_BYTES)
             .await
-            .map_err(ScrapeError::FetchFailed)?;
+            .map_err(|e| ScrapeError::FetchFailed(format!("读取 {current} 响应体失败: {e}")))?;
         let byte_size = bytes.len() as u64;
 
         return Ok(HttpCapture {
@@ -317,7 +657,7 @@ pub async fn fetch_html(
     }
 
     Err(ScrapeError::FetchFailed(format!(
-        "too many redirects (>{MAX_REDIRECTS})"
+        "{url} 重定向超过 {MAX_REDIRECTS} 跳仍未到达终点"
     )))
 }
 
@@ -334,6 +674,85 @@ fn charset_of(content_type: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn detail(status: u16, requested: &str) -> HttpErrorDetail {
+        HttpErrorDetail {
+            requested_url: requested.to_string(),
+            final_url: requested.to_string(),
+            redirects: Vec::new(),
+            status,
+            content_type: None,
+            server: None,
+            body_snippet: None,
+            warmed_up: false,
+        }
+    }
+
+    #[test]
+    fn snippet_skips_script_and_style_bodies() {
+        let html = r#"<html><head><style>body{color:red}</style>
+            <script>var a = "not text at all";</script></head>
+            <body><h1>访问被拒绝</h1><p>请求 ID: abc123</p></body></html>"#;
+        let s = text_snippet(html.as_bytes(), 300).unwrap();
+        assert_eq!(s, "访问被拒绝 请求 ID: abc123", "脚本/样式正文不该混进诊断片段");
+    }
+
+    #[test]
+    fn snippet_truncates_with_ellipsis() {
+        let body = "x".repeat(50);
+        let s = text_snippet(body.as_bytes(), 10).unwrap();
+        assert_eq!(s, "xxxxxxxxxx…");
+    }
+
+    #[test]
+    fn snippet_is_none_when_body_has_no_text() {
+        assert!(text_snippet(b"<html><body></body></html>", 300).is_none());
+    }
+
+    #[test]
+    fn describe_carries_status_reason_and_hint() {
+        let mut d = detail(412, "https://www.bilibili.com/video/BV1");
+        d.server = Some("nginx".to_string());
+        d.redirects = vec![("https://bilibili.com/video/BV1".to_string(), 301)];
+        let msg = d.describe();
+        assert!(msg.contains("HTTP 412 Precondition Failed"), "{msg}");
+        assert!(msg.contains("疑似反爬"), "{msg}");
+        assert!(msg.contains("301 https://bilibili.com/video/BV1"), "重定向链应可见: {msg}");
+        assert!(msg.contains("server=nginx"), "{msg}");
+    }
+
+    #[test]
+    fn describe_marks_a_failed_warm_up_retry() {
+        let mut d = detail(403, "https://example.com/a");
+        d.warmed_up = true;
+        assert!(d.describe().contains("预热"), "重试过就该说明，否则看不出已经试过了");
+    }
+
+    #[test]
+    fn warm_up_only_for_anti_bot_statuses_on_sub_paths() {
+        assert!(detail(412, "https://a.com/video/x").worth_warming_up());
+        assert!(detail(403, "https://a.com/video/x").worth_warming_up());
+        // 根路径就是预热要请求的那个 URL，重试没有意义
+        assert!(!detail(412, "https://a.com/").worth_warming_up());
+        // 限流下立刻重试只会更糟
+        assert!(!detail(429, "https://a.com/video/x").worth_warming_up());
+        // 站点自身故障，换姿势没用
+        assert!(!detail(503, "https://a.com/video/x").worth_warming_up());
+        assert!(!detail(404, "https://a.com/video/x").worth_warming_up());
+    }
+
+    #[test]
+    fn warm_up_happens_at_most_once() {
+        let mut d = detail(412, "https://a.com/video/x");
+        d.warmed_up = true;
+        assert!(!d.worth_warming_up());
+    }
+
+    #[test]
+    fn sec_ch_ua_version_matches_the_default_ua() {
+        assert!(DEFAULT_UA.contains("Chrome/136."));
+        assert!(SEC_CH_UA.contains(r#""Google Chrome";v="136""#));
+    }
 
     #[test]
     fn validate_url_scheme_rejects_file_scheme() {
