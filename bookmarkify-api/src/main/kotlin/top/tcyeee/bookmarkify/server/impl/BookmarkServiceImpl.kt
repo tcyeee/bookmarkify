@@ -1191,7 +1191,7 @@ class BookmarkServiceImpl(
     /** 解析书签，然后保存到数据库，同时通知到用户 */
     override fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
         log.debug("[parseAndNotice-4] 开始书签解析: uid=$uid, bookmarkId=$bookmarkId, userLinkId=$userLinkId, nodeId=$nodeId")
-        runCatching { parseBookmark(baseMapper.selectById(bookmarkId)) }.onFailure { ex ->
+        val resolved = runCatching { parseBookmark(baseMapper.selectById(bookmarkId)) }.onFailure { ex ->
             // 解析链路中的未预期异常（而非「抓取失败」这类已内部兜底为 UNREACHABLE 的正常业务失败）不能让节点
             // 永久停在 BOOKMARK_LOADING——此前这里的异常会一路冒泡到事件监听器，被其 runCatching 吞掉且
             // 不回写任何状态，用户端只会看到一个转不动的加载占位符。与 parseAndResetUserItem 保持一致，
@@ -1205,7 +1205,20 @@ class BookmarkServiceImpl(
                 scheduleAfterParseFailure()
                 baseMapper.insertOrUpdate(this)
             }
+        }.getOrNull()
+
+        // parseByApi 在「抓取服务本身不可用」(isScrapperUnavailable) 时会刻意把书签留在 PENDING，
+        // 交给 checkAll() 之后重投递——那是我方故障，不是这个网站真的挂了。但 checkAll() 重投递的是
+        // BookmarkParseEvent（只调 parseAndSave，不通知任何用户），如果这里照常把节点收口成 BOOKMARK
+        // 并推送，用户看到的就是一个永久定格的"断网"占位符：不仅把我方故障误报成网站失联，节点还从
+        // BOOKMARK_LOADING 状态消失，永远脱离 drainStuckLoading() 的重投递范围——checkAll() 事后即使
+        // 重新抓取成功，也没有任何机制会把结果回传给这个已经"收口"的节点。
+        // 因此仍是 PENDING 时直接返回，节点继续留在 LOADING，等 drainStuckLoading() 按陈旧阈值补投递。
+        if (resolved?.parseStatus == ParseStatusEnum.PENDING) {
+            log.debug("[parseAndNotice-4] 书签仍为 PENDING(多半是抓取服务暂不可用)，节点保持 LOADING 等待重投递: nodeId=$nodeId, bookmarkId=$bookmarkId")
+            return
         }
+
         // 抓取要花几十秒，这期间用户完全可能把这个还在转圈的书签删掉。节点没了就无事可做，
         // 早退出即可——原先这里直接对 selectById 的结果解引用，会抛 NPE 冒泡到监听器被吞掉，
         // 表面上什么都没发生，日志里却多一条看不懂的堆栈。
@@ -1272,6 +1285,17 @@ class BookmarkServiceImpl(
                 baseMapper.insertOrUpdate(this)
             }
         }
+
+        // 与 parseAndNotice 同理：parseByApi 在「抓取服务本身不可用」时会刻意把 entity 留在 PENDING，
+        // 交给 drainStuckLoading 之后重投递。这里若仍照常重绑 + 收口成 BOOKMARK，节点会永久脱离
+        // BOOKMARK_LOADING 状态、也脱离 drainStuckLoading 的重投递范围，且 bookmark_id 提前绑死在一条
+        // 还没抓到内容的记录上。保持不重绑、不收口、直接返回，节点(及 bookmark_id='LOADING' 占位)
+        // 原样留给下一轮 drainStuckLoading 重新触发本方法。
+        if (entity.parseStatus == ParseStatusEnum.PENDING) {
+            log.debug("[parseAndResetUserItem] 书签仍为 PENDING(多半是抓取服务暂不可用)，节点保持 LOADING 等待重投递: rawUrl=$rawUrl")
+            return
+        }
+
         // 抓取已结束，下面两处写入（重绑 userLink + 更新节点类型）需原子提交，放进短事务。
         // 节点找不到不是异常：抓取要花几十秒，这期间用户完全可能把还在转圈的书签删掉。
         // 原先抛 E999 只会在日志里留下一条误导性的错误堆栈，实际什么都不用做。
