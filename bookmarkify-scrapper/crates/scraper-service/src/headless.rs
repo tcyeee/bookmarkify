@@ -14,6 +14,13 @@ pub struct HeadlessCapture {
     pub html: String,
     /// PNG 截图字节；Chrome 未返回截图时为 None
     pub screenshot_bytes: Option<Vec<u8>>,
+    /// 本次导航的 HTTP 状态码。
+    ///
+    /// **拿到 HTML 不等于抓成功**：风控拦截页同样是一篇有 `<title>` 的正常文档，
+    /// 只是状态码是 403/412。没有这个字段，调用方只能把"出错啦! - bilibili.com"
+    /// 当作站点标题存下来。spider 还会把 Chrome 自己的网络错误页（`ERR_*`，它们
+    /// 以 200 返回）归一化成 599，所以非 2xx 一律代表这篇 HTML 不可信。
+    pub status: u16,
 }
 
 /// 全局互斥锁，保证同一时刻只有一个无头 Chrome 操作在运行。
@@ -35,8 +42,9 @@ static HEADLESS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 /// - `want_screenshot`：为 false 时跳过截图，省下一次编码与传输
 ///
 /// # 返回
-/// 成功时返回 `Ok(HeadlessCapture)`（渲染后的 HTML + 可选截图）；失败时返回对应的
-/// `ScrapeError`：
+/// 成功时返回 `Ok(HeadlessCapture)`（渲染后的 HTML + 导航状态码 + 可选截图）。注意
+/// **非 2xx 不算失败**：拦截页也是页面，是否采信交给调用方按场景判断（见
+/// [`HeadlessCapture::status`]）。失败时返回对应的 `ScrapeError`：
 /// - `InvalidUrl`：URL 格式非法
 /// - `Timeout`：超过 `timeout_secs` 仍未完成
 /// - `HeadlessFailed`：Chrome 未返回页面或页面 HTML 为空
@@ -138,7 +146,11 @@ pub async fn capture_headless(
         return Err(ScrapeError::HeadlessFailed(format!("无头浏览器抓 {url} 返回了空 HTML")));
     }
 
-    Ok(HeadlessCapture { html, screenshot_bytes: page.screenshot_bytes.clone() })
+    Ok(HeadlessCapture {
+        html,
+        screenshot_bytes: page.screenshot_bytes.clone(),
+        status: page.status_code.as_u16(),
+    })
 }
 
 #[cfg(test)]
@@ -154,6 +166,7 @@ mod tests {
         assert!(!r.html.is_empty(), "html should not be empty");
         // 元数据由 extract 层解析，这里只验证拿到了渲染后的文档
         assert!(r.html.contains("<title"), "rendered html should contain a title tag");
+        assert_eq!(r.status, 200, "导航状态码应如实透出，而不是恒定 200");
         assert!(r.screenshot_bytes.is_none(), "未要求截图时不该产出截图");
     }
 

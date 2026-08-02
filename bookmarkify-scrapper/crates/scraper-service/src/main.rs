@@ -425,18 +425,19 @@ async fn scrape_handler(
     };
 
     let mut warnings: Vec<String> = Vec::new();
+    let go_headless = || {
+        headless::capture_headless(
+            &body.url,
+            state.headless_timeout_secs,
+            state.headless_idle_wait_secs,
+            viewport,
+            want_screenshot,
+        )
+    };
     let fetched = match effective_mode {
         RenderMode::Headless => {
             tracing::info!(domain, "scraping (layer2/headless)");
-            headless::capture_headless(
-                &body.url,
-                state.headless_timeout_secs,
-                state.headless_idle_wait_secs,
-                viewport,
-                want_screenshot,
-            )
-            .await
-            .map(|c| Fetched::from_headless(&body.url, c))
+            go_headless().await.map(|c| Fetched::from_headless(&body.url, c))
         }
         RenderMode::Http => {
             tracing::info!(domain, "scraping (layer1)");
@@ -467,15 +468,57 @@ async fn scrape_handler(
                         "layer1 no title, falling back to layer2"
                     );
                     warnings.push("layer1 produced no title, fell back to headless".to_string());
-                    headless::capture_headless(
-                        &body.url,
-                        state.headless_timeout_secs,
-                        state.headless_idle_wait_secs,
-                        viewport,
-                        want_screenshot,
-                    )
-                    .await
-                    .map(|c| Fetched::from_headless(&body.url, c))
+                    go_headless().await.map(|c| Fetched::from_headless(&body.url, c))
+                }
+                // 反爬拦截同样该回退 Layer 2 —— 而且比"没标题"更该。站点是连得通的，
+                // 它要的正是一个能跑 JS、指纹像人的真实浏览器，那就是 Layer 2 本身。
+                // 裸抓这边已经用尽了手段（浏览器头集 + 根路径 cookie 预热），再改姿势
+                // 也只是继续伪装；换成真浏览器才是换了个物种。
+                Err(scraper::ScrapeError::HttpStatus(mut detail)) if detail.is_anti_bot() => {
+                    // 熔断优先：这个 host 近期已经验证过"无头也过不去"。结论有了就别再
+                    // 为它启 Chrome —— 容器内存只有 1GB，全量重抓时同站几百条 URL 各启
+                    // 一次浏览器，是这台机器最经不起的开销。
+                    if state.cache.is_headless_futile(&body.url).await {
+                        tracing::info!(domain, status = detail.status, "layer2 known futile, skipping");
+                        detail.headless_retry =
+                            Some("该站点近期已验证无头浏览器同样被拦，本次跳过".to_string());
+                        Err(scraper::ScrapeError::HttpStatus(detail))
+                    } else {
+                        tracing::info!(
+                            domain,
+                            status = detail.status,
+                            "layer1 blocked by anti-bot, falling back to layer2"
+                        );
+                        match go_headless().await {
+                            Ok(c) if (200..300).contains(&c.status) => {
+                                warnings.push(format!(
+                                    "layer1 被反爬拦截（HTTP {}），已改由无头浏览器抓取",
+                                    detail.status
+                                ));
+                                Ok(Fetched::from_headless(&body.url, c))
+                            }
+                            // 无头也被拦下：拿到的是拦截页，它有标题有正文，照常入库就会
+                            // 变成一条标题为"出错啦"的书签 —— 比直接报错糟得多。原样报
+                            // Layer 1 的错误，它带着完整现场（重定向链、Server、正文片段）。
+                            Ok(c) => {
+                                tracing::info!(domain, status = c.status, "layer2 blocked as well");
+                                state.cache.mark_headless_futile(&body.url).await;
+                                detail.headless_retry = Some(format!("导航返回 HTTP {}", c.status));
+                                Err(scraper::ScrapeError::HttpStatus(detail))
+                            }
+                            // 无头自身失败（超时 / Chrome 起不来，后者在小内存机器上多半
+                            // 就是 OOM）同样进熔断：这种状态下继续开浏览器只会雪上加霜。
+                            Err(e) => {
+                                tracing::warn!(domain, "layer2 fallback failed: {e:?}");
+                                state.cache.mark_headless_futile(&body.url).await;
+                                detail.headless_retry = Some(match &e {
+                                    scraper::ScrapeError::Timeout(m) => format!("超时（{m}）"),
+                                    other => format!("{other:?}"),
+                                });
+                                Err(scraper::ScrapeError::HttpStatus(detail))
+                            }
+                        }
+                    }
                 }
                 other => other.map(Fetched::from_http),
             }
@@ -500,6 +543,18 @@ async fn scrape_handler(
             return scrape_error_response(e, start.elapsed().as_millis() as u64);
         }
     };
+
+    // 无头路径下的非 2xx：内容多半是拦截页或 Chrome 自己的错误页。反爬回退那条分支
+    // 已经直接拒收这种结果（它手里有更好的错误可报）；这里是其余进到 Layer 2 的路径
+    // ——显式 HEADLESS、截图请求、无标题回退——它们没有可回退的东西，所以保留内容，
+    // 但把疑点写进 warnings，别让调用方把拦截页当成站点本身。
+    if fetched.layer == contract::RenderLayer::Headless && !(200..300).contains(&fetched.http_status)
+    {
+        warnings.push(format!(
+            "无头浏览器导航返回 HTTP {}，页面内容可能是拦截页或错误页",
+            fetched.http_status
+        ));
+    }
 
     // ── 阶段 2：纯提取 ────────────────────────────────────────────────────
     let mut extracted = extract::extract_page(&fetched.html, &fetched.final_url, &body.extract);
@@ -651,7 +706,7 @@ impl Fetched {
             final_url,
             // Chrome 内部的跳转不经过我们，拿不到链路；留空而不是编造
             redirects: Vec::new(),
-            http_status: 200,
+            http_status: c.status,
             content_type: Some("text/html".to_string()),
             charset: Some("utf-8".to_string()),
             layer: contract::RenderLayer::Headless,
@@ -986,8 +1041,9 @@ mod tests {
                         ("/guarded", true) => {
                             ok("<html><head><title>Guarded Page</title></head><body>ok</body></html>")
                         }
-                        ("/guarded", false) => {
-                            let body = "<html><head><style>b{}</style></head><body><h1>访问被拒绝</h1></body></html>";
+                        // 拿到 cookie 也照拒——模拟"预热救不回来"，用于验证无头回退
+                        ("/guarded", false) | ("/hardguard", _) => {
+                            let body = "<html><head><style>b{}</style><title>出错啦</title></head><body><h1>访问被拒绝</h1></body></html>";
                             format!(
                                 "HTTP/1.1 412 Precondition Failed\r\nContent-Type: text/html\r\nServer: waf-test\r\nSet-Cookie: wm=1; Path=/\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                                 body.len()
@@ -1133,6 +1189,50 @@ mod tests {
             .take(3)
             .collect();
         assert_eq!(paths, vec!["/guarded", "/", "/guarded"], "应为 拦截 → 预热根路径 → 重试");
+    }
+
+    /// 预热也救不回来的反爬拦截，AUTO 模式必须再换无头浏览器试一次。
+    ///
+    /// 这里的站点连带 cookie 的请求也照拒，所以 Layer 2 同样会撞上 412 —— 于是本例
+    /// 同时钉住两条承诺：**回退确实发生了**（`detail` 里写明），以及**拦截页不会被
+    /// 当成正常页面收下**（那样书签标题就会变成"出错啦"，比报错糟得多）。
+    ///
+    /// 需要本机有 Chrome；Chrome 缺席时 `capture_headless` 报 HeadlessFailed，两条断言
+    /// 依然成立，只是走的是"无头自身失败"那个分支。
+    ///
+    /// **跑之前先 `RUST_MIN_STACK=16777216`**：debug 构建下 spider/chromiumoxide 的调用
+    /// 栈超出测试线程默认的 2MB，任何经由 router 触发无头抓取的用例都会栈溢出（与本
+    /// 分支无关，显式 `mode: HEADLESS` 一样溢出）。release 构建不受影响。
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[ignore]
+    async fn anti_bot_falls_back_to_headless_and_refuses_the_block_page() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let (base, _seen) = spawn_guarded_site().await;
+
+        // 默认的 5s 预算只够走到超时分支，那样验不到"拦截页被拒收"这条
+        let state = AppState { headless_timeout_secs: 30, headless_idle_wait_secs: 3, ..test_state() };
+        let app = build_router(state, 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({
+                "url": format!("{base}/hardguard"),
+                "render": { "mode": "AUTO" },
+                "assets": { "download": "PROBE" }
+            }),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+
+        assert_eq!(status, StatusCode::BAD_GATEWAY, "拦截页不该被当作抓取成功: {json}");
+        assert_eq!(json["error"], "FETCH_FAILED");
+        let detail = json["detail"].as_str().unwrap_or_default();
+        assert!(detail.contains("HTTP 412"), "应保留 Layer 1 的原始现场: {detail}");
+        assert!(detail.contains("已回退无头浏览器重试"), "回退过就该写明: {detail}");
+        // 拦截页的标题绝不能漏成站点标题
+        assert!(json["meta"].is_null(), "失败响应不该带元数据: {json}");
     }
 
     /// 无法恢复的状态码要给出完整现场，而不是 reqwest 那句干巴巴的 error_for_status。

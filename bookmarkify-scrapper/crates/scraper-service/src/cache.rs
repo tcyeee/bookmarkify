@@ -13,7 +13,18 @@ pub struct ScrapeCache {
     inner: Cache<String, Arc<ScrapeResponse>>,
     /// 近期失败 URL 的负缓存（60s TTL），防止重复触发高开销的 headless 抓取
     errors: Cache<String, ()>,
+    /// 「无头浏览器在这个 **host** 上也打不开」的熔断记录，见 [`HEADLESS_FUTILE_TTL_SECS`]
+    headless_futile: Cache<String, ()>,
 }
+
+/// 无头熔断的存活时间。
+///
+/// 比 60s 的 URL 负缓存长得多，因为两者防的不是一件事：负缓存防的是同一条 URL 被
+/// 反复重试，而这里防的是**同一个站点的成千上万条 URL 各自启动一次 Chrome**。B 站
+/// 一个账号下能有几百条 `/video/BVxxx`，全量重抓时若每条都试一次无头，在 1GB 的容器
+/// 里就是几百次 Chrome 启停 —— 站点拒的是我们这台机器，不是那条 URL，第一次就该
+/// 得出结论并记住它。
+const HEADLESS_FUTILE_TTL_SECS: u64 = 900;
 
 impl ScrapeCache {
     /// 创建一个新的 `ScrapeCache` 实例。
@@ -32,6 +43,10 @@ impl ScrapeCache {
             errors: Cache::builder()
                 .max_capacity(1_000)
                 .time_to_live(Duration::from_secs(60))
+                .build(),
+            headless_futile: Cache::builder()
+                .max_capacity(1_000)
+                .time_to_live(Duration::from_secs(HEADLESS_FUTILE_TTL_SECS))
                 .build(),
         }
     }
@@ -62,6 +77,30 @@ impl ScrapeCache {
         if let Some(key) = Self::normalize(url) {
             self.errors.insert(key, ()).await;
         }
+    }
+
+    /// 这个 URL 所属的 host 近期是否已被验证「连无头浏览器也打不开」。
+    ///
+    /// 为真时调用方应当**跳过无头回退**：结论已经有了，再启一次 Chrome 只是白烧内存。
+    pub async fn is_headless_futile(&self, url: &str) -> bool {
+        let Some(host) = Self::host_key(url) else { return false };
+        self.headless_futile.get(&host).await.is_some()
+    }
+
+    /// 记下「这个 host 上无头浏览器也没成功」。按 host 而非 URL 记 —— 反爬拦的是来访者，
+    /// 不是某一条路径。
+    pub async fn mark_headless_futile(&self, url: &str) {
+        if let Some(host) = Self::host_key(url) {
+            self.headless_futile.insert(host, ()).await;
+        }
+    }
+
+    /// 取 URL 的 `scheme://host` 作为熔断键。同站的 http/https 分开记：
+    /// 一边能过另一边被拦是常见的（https 才有的风控规则、http 直接 301 到风控页）。
+    fn host_key(url: &str) -> Option<String> {
+        let parsed = reqwest::Url::parse(url).ok()?;
+        let host = parsed.host_str()?;
+        Some(format!("{}://{host}", parsed.scheme()))
     }
 
     /// 将抓取结果存入缓存，以规范化后的 URL 作为键。
@@ -178,6 +217,23 @@ mod tests {
             got.unwrap().meta.as_ref().and_then(|m| m.title.clone()),
             r.meta.as_ref().and_then(|m| m.title.clone())
         );
+    }
+
+    /// 熔断按 host 记：同站的另一条路径也应当直接跳过无头，这正是省内存的关键。
+    #[tokio::test]
+    async fn headless_futile_is_keyed_by_host_not_url() {
+        let cache = ScrapeCache::new(3600);
+        assert!(!cache.is_headless_futile("https://www.bilibili.com/video/BV1").await);
+
+        cache.mark_headless_futile("https://www.bilibili.com/video/BV1").await;
+        assert!(
+            cache.is_headless_futile("https://www.bilibili.com/video/BV2").await,
+            "同站另一条 URL 必须命中熔断，否则全量重抓会为每条 URL 各启一次 Chrome"
+        );
+        // 别的站点不受影响
+        assert!(!cache.is_headless_futile("https://example.com/x").await);
+        // scheme 也是键的一部分：http 与 https 的风控规则常常不同
+        assert!(!cache.is_headless_futile("http://www.bilibili.com/video/BV1").await);
     }
 
     #[tokio::test]
