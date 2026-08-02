@@ -288,6 +288,12 @@ pub struct HttpErrorDetail {
     pub body_snippet: Option<String>,
     /// 是否已经做过根路径预热重试（见 [`warm_up_origin`]）
     pub warmed_up: bool,
+    /// 无头浏览器回退的结局，`None` 表示没走到那一步。
+    ///
+    /// 由 AUTO 模式的调用方回填（见 `main.rs`）：Layer 1 被反爬拦下后会改用 Layer 2
+    /// 再试，只有那一次也没成功才会把本错误报出去——不写明这一步，运维会以为我们
+    /// 从没试过浏览器。
+    pub headless_retry: Option<String>,
 }
 
 impl HttpErrorDetail {
@@ -320,6 +326,7 @@ impl HttpErrorDetail {
             server,
             body_snippet,
             warmed_up,
+            headless_retry: None,
         }
     }
 
@@ -330,6 +337,14 @@ impl HttpErrorDetail {
         RETRYABLE_ANTI_BOT.contains(&self.status)
             && !self.warmed_up
             && reqwest::Url::parse(&self.requested_url).is_ok_and(|u| u.path() != "/")
+    }
+
+    /// 这次拒绝是不是"站点连得通，只是不认这次请求"——即值得换个抓取姿势重来。
+    ///
+    /// 与 [`worth_warming_up`](Self::worth_warming_up) 的区别在于不限 path：根路径被
+    /// 反爬拦下时预热无从谈起（预热请求的就是它），但换无头浏览器仍然有戏。
+    pub fn is_anti_bot(&self) -> bool {
+        RETRYABLE_ANTI_BOT.contains(&self.status)
     }
 
     /// 面向人的一行诊断，最终会经 API 原样透出到管理后台。
@@ -363,6 +378,9 @@ impl HttpErrorDetail {
         }
         if self.warmed_up {
             parts.push("已做根路径 cookie 预热并重试，仍被拒".to_string());
+        }
+        if let Some(outcome) = &self.headless_retry {
+            parts.push(format!("已回退无头浏览器重试: {outcome}"));
         }
         if let Some(hint) = status_hint(self.status) {
             parts.push(hint.to_string());
@@ -766,6 +784,7 @@ mod tests {
             server: None,
             body_snippet: None,
             warmed_up: false,
+            headless_retry: None,
         }
     }
 
@@ -827,6 +846,27 @@ mod tests {
         let mut d = detail(412, "https://a.com/video/x");
         d.warmed_up = true;
         assert!(!d.worth_warming_up());
+    }
+
+    #[test]
+    fn describe_marks_a_failed_headless_retry() {
+        let mut d = detail(412, "https://www.bilibili.com/video/BV1");
+        d.headless_retry = Some("导航返回 HTTP 412".to_string());
+        let msg = d.describe();
+        assert!(msg.contains("无头浏览器"), "回退过 Layer 2 就该说明: {msg}");
+        assert!(msg.contains("导航返回 HTTP 412"), "{msg}");
+    }
+
+    #[test]
+    fn anti_bot_covers_the_retryable_statuses_on_any_path() {
+        for status in RETRYABLE_ANTI_BOT {
+            assert!(detail(status, "https://a.com/video/x").is_anti_bot(), "{status}");
+            // 预热在根路径上没意义，但换无头浏览器仍然有戏
+            assert!(detail(status, "https://a.com/").is_anti_bot(), "{status}");
+        }
+        assert!(!detail(429, "https://a.com/video/x").is_anti_bot());
+        assert!(!detail(503, "https://a.com/video/x").is_anti_bot());
+        assert!(!detail(404, "https://a.com/video/x").is_anti_bot());
     }
 
     fn url(s: &str) -> reqwest::Url {

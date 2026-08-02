@@ -65,6 +65,10 @@ POST /scrape
   └─ Layer 1: reqwest HTTP fetch → parse HTML metadata
        └─ title found? → cache + return
        └─ no title (JS-rendered) → Layer 2
+       └─ 403/406/412 (anti-bot) → origin warm-up retry → still blocked? → Layer 2
+             └─ host already in the headless breaker (900s)? → skip Layer 2 entirely, don't spend a Chrome
+             └─ Layer 2 navigation also non-2xx? → trip the breaker for this host,
+                report the Layer 1 error, NOT the block page
   └─ Layer 2: headless Chrome (spider-rs) → render → extract + screenshot
        └─ OSS configured? → upload image/logo/screenshot concurrently (non-fatal on failure) → cache + return
        └─ no OSS → convert favicon to base64 → cache + return
@@ -96,11 +100,13 @@ Errors are JSON `{"error": "<type>", "detail": "<optional>"}`. Status mapping: `
 - `with_limit(2)` (not `1`) to scrape only the seed page: spider's budget check treats `budget == 1` as already over-budget, so `with_limit(1)` skips even the seed page and returns zero pages.
 - Clears `chromiumoxide-runner/SingletonLock` before each run to recover from prior Chrome crashes (falls back to `remove_dir_all` on the whole runner dir if the single-file removal fails for a reason other than "not found").
 - Features: stealth mode, request interception, idle-network wait (configurable via `HEADLESS_IDLE_WAIT_SECS`, separate from `HEADLESS_TIMEOUT_SECS`), PNG screenshot capture into `screenshot_bytes`.
-- Integration tests are `#[ignore]` — run explicitly when Chrome is available.
+- **`HeadlessCapture.status` is the navigation status code, and a non-2xx there means the HTML is untrustworthy.** A WAF block page is a perfectly well-formed document with a `<title>` — without this field the caller stores "出错啦! - bilibili.com" as the site title. spider also normalizes Chrome's own `ERR_*` pages (served as 200) to 599. `capture_headless` itself does *not* treat non-2xx as an error: the anti-bot fallback rejects such a result outright (it has a better error to report), while the other Layer 2 entry points keep the content and push a warning.
+- Integration tests are `#[ignore]` — run explicitly when Chrome is available. Any test that drives headless **through the router** also needs `RUST_MIN_STACK=16777216`: spider/chromiumoxide's debug-build frames overflow the test thread's default 2MB stack. Release builds are unaffected.
 
-**`cache.rs`** — In-memory LRU cache via moka, holding two independent `moka::future::Cache` instances.
+**`cache.rs`** — In-memory LRU cache via moka, holding three independent `moka::future::Cache` instances.
 - Positive cache (`inner`): 10 000-entry capacity, TTL = `CACHE_TTL_SECS` (default 3600s). URL normalization before keying: lowercase host, sort query params, strip fragment (`normalize()`, shared by get/set).
 - Negative cache (`errors`): 1 000-entry capacity, fixed 60s TTL, keyed the same way. `get_error()`/`set_error()` back the "recently failed, retry after 60s" fast-reject path in `main.rs`; only `Timeout`/`FetchFailed`/`HeadlessFailed` populate it — `InvalidUrl`/`ForbiddenTarget` do not, since those aren't transient.
+- Headless breaker (`headless_futile`): 1 000-entry capacity, 900s TTL, keyed by **`scheme://host`, not URL**. Set when the anti-bot Layer 2 fallback fails (blocked or Chrome error); checked before that fallback launches Chrome at all. The long TTL and coarse key are both deliberate — a re-crawl of one account's few hundred bilibili `/video/BVxxx` links must cost **one** Chrome launch, not a few hundred, because the prod container is capped at `mem_limit: 1g` and a browser tree is the single largest thing that runs in it. The site is rejecting this machine, not that path.
 
 **`oss.rs`** — Optional Alibaba Cloud OSS upload, signed and sent directly over `reqwest` (no SDK dependency).
 - `OssClient::from_env()` returns `None` when any OSS_* var is missing; OSS is silently disabled. It builds its own `reqwest::Client` (30s timeout, honors `PROXY_URL`) — separate from the page-scrape client since uploads can be several MB and shouldn't share `REQUEST_TIMEOUT_SECS`.
