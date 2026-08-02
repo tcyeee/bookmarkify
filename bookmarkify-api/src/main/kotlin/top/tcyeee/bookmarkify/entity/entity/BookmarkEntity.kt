@@ -7,7 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
-import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Size
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
 import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
@@ -33,22 +33,22 @@ data class BookmarkEntity(
     /* URL相关 */
     @TableId var id: String,
     // 所属站点。品牌名/短名/favicon/logo/NSFW/域名活性都在 site 那一层，本表只管页面级事实。
-    @field:Max(40) @field:Schema(description = "所属站点ID") var siteId: String = "",
-    @field:Max(200) @field:Schema(description = "书签根域名(site.host 的冗余副本，只读)") var urlHost: String, // sfz.uzuzuz.com.cn
+    @field:Size(max = 40) @field:Schema(description = "所属站点ID") var siteId: String = "",
+    @field:Size(max = 200) @field:Schema(description = "书签根域名(site.host 的冗余副本，只读)") var urlHost: String, // sfz.uzuzuz.com.cn
     // canonical 书签按 (siteId, urlPath, urlQuery, urlFragment) 四元组去重/抓取：
     // 同一域名下不同路径、不同参数（不同 GitHub 仓库、不同 YouTube 视频）是完全不同的页面，
     // 各自应有自己的标题/图标，不能共用同一条记录。规范化规则见 UrlCanonicalizer。
-    @field:Max(500) @field:Schema(description = "书签路径，根路径存 \"/\"") var urlPath: String = "/",
-    @field:Max(1000) @field:Schema(description = "规范化后的查询参数，无参数存空串") var urlQuery: String = "",
-    @field:Max(500) @field:Schema(description = "路由型 fragment(#/… / #!…)，页内锚点不存") var urlFragment: String = "",
-    @field:Max(10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
+    @field:Size(max = 500) @field:Schema(description = "书签路径，根路径存 \"/\"") var urlPath: String = "/",
+    @field:Size(max = 1000) @field:Schema(description = "规范化后的查询参数，无参数存空串") var urlQuery: String = "",
+    @field:Size(max = 500) @field:Schema(description = "路由型 fragment(#/… / #!…)，页内锚点不存") var urlFragment: String = "",
+    @field:Size(max = 10) @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
     /* 基础信息 */
     // appName 是历史遗留：语义上它是**站点短名**（manifest.short_name），已迁往 site.short_name。
     // 保留到清理批次（SITE_LAYERING_DESIGN.md §8 第 6 步）执行前，新代码不要再读写它。
-    @field:Max(100) @field:Schema(description = "书签简称(过渡期保留，权威值见 site.short_name)") var appName: String? = null,
-    @field:Max(200) @field:Schema(description = "书签标题") var title: String? = null,
-    @field:Max(1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
+    @field:Size(max = 100) @field:Schema(description = "书签简称(过渡期保留，权威值见 site.short_name)") var appName: String? = null,
+    @field:Size(max = 200) @field:Schema(description = "书签标题") var title: String? = null,
+    @field:Size(max = 1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
 
     // 图标相关信息已迁往 site_asset / site_display_pref：一行一图 + 按展示模式分行的显示偏好。
 
@@ -60,7 +60,7 @@ data class BookmarkEntity(
     @JsonIgnore @field:Schema(description = "抓取成功但页面疑似反爬虫/WAF挑战页,内容可能不可靠") var antiCrawlerBlocked: Boolean = false,
     @JsonIgnore @field:Schema(description = "手动认证状态") var verifyFlag: Boolean = false, // 如果该书签信息都没问题, 添加手动认证状态以后, 即可被搜索到
     @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)，由 DeepSeek 判断") var nsfw: Boolean = false,
-    @JsonIgnore @field:Max(50) @field:Schema(description = "NSFW 判定理由，由 DeepSeek 给出，供人工审核/排查使用") var nsfwReason: String? = null,
+    @JsonIgnore @field:Size(max = 50) @field:Schema(description = "NSFW 判定理由，由 DeepSeek 给出，供人工审核/排查使用") var nsfwReason: String? = null,
     @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
@@ -74,7 +74,7 @@ data class BookmarkEntity(
     @JsonIgnore @field:Schema(description = "连续探测失败次数，驱动指数退避与归档") var consecutiveFail: Int = 0,
 
     @JsonIgnore
-    @field:Max(200)
+    @field:Size(max = 200)
     @field:Schema(description = "管理员手工锁定、不允许自动抓取覆盖的字段(逗号分隔)")
     var lockedFields: String? = null,
 ) {
@@ -159,9 +159,9 @@ data class BookmarkEntity(
 @TableName("bookmark_user_link")
 data class BookmarkUserLink(
     @TableId val id: String = IdUtil.fastUUID(),
-    @field:Max(40) @field:Schema(description = "用户ID") var uid: String,
-    @field:Max(40) @field:Schema(description = "书签ID") val bookmarkId: String?,  // 书签ID可能为null,在用户批量添加的时候,只会添加用户自定义书签,而不会关联到源书签
-    @field:Max(40) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
+    @field:Size(max = 40) @field:Schema(description = "用户ID") var uid: String,
+    @field:Size(max = 40) @field:Schema(description = "书签ID") val bookmarkId: String?,  // 书签ID可能为null,在用户批量添加的时候,只会添加用户自定义书签,而不会关联到源书签
+    @field:Size(max = 40) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
 
     /**
      * 用户自己写的标题。**`null` 表示用户没改过**，不是"改成了空"。
@@ -172,9 +172,9 @@ data class BookmarkUserLink(
      * 留 NULL 之后覆盖策略是显然的：NULL 用页面标题，非 NULL 是用户的、永不覆盖。
      * 见根目录 `SITE_LAYERING_DESIGN.md` §6。
      */
-    @field:Max(200) @field:Schema(description = "书签标题(用户写的)；null 表示没改过") val title: String? = null,
-    @field:Max(1000) @field:Schema(description = "书签备注(用户写的)") val description: String? = null,
-    @field:Max(1000) @field:Schema(description = "书签完整URL(带参数)") val urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
+    @field:Size(max = 200) @field:Schema(description = "书签标题(用户写的)；null 表示没改过") val title: String? = null,
+    @field:Size(max = 1000) @field:Schema(description = "书签备注(用户写的)") val description: String? = null,
+    @field:Size(max = 1000) @field:Schema(description = "书签完整URL(带参数)") val urlFull: String,    // http://sfz.uzuzuz.com.cn/?region=150303%26birthday=19520807%26sex=2%26num=19%26r=82,
     @field:Schema(description = "书签链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
 
     @field:Schema(description = "是否置顶") var pinned: Boolean = false,

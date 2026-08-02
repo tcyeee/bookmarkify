@@ -163,7 +163,16 @@ CREATE INDEX idx_oss_object_state ON oss_object(state, last_ref_at);
 | **P2** ✅ | 回填存量 + 对账任务（**只报不删**） | 后台能看到孤儿清单；抽样核对准确 | 零，不执行删除 |
 | **P3** ✅ | 读路径切 `file_id`：先 avatar / background，再 `site_asset` | 前端渲染无变化 | 中，风险集中在 `site_asset` |
 | **P4** ✅ | `user_file` 表退场 | 无代码引用 | 低 |
-| **P5** ✅ | 内容寻址（scrapper `asset_key` + 去扩展名 + 长 TTL 签名）+ GC 转正 | 去重生效；孤儿被真实回收 | 中高，需两服务同批发布 |
+| **P5** ⚠️ 代码已发布、**数据未迁完** | 内容寻址（scrapper `asset_key` + 去扩展名 + 长 TTL 签名）+ GC 转正 | 去重生效；孤儿被真实回收 | 中高，需两服务同批发布 |
+
+> **P5 的状态不要按 ✅ 读。** 代码两侧都上线了，但**全量重抓没有完成** —— 库里仍有升级前
+> 写入的 `sha256(源URL).<ext>` 形态的 key 与升级后的内容寻址 key 并存，同一份字节两个 key、
+> 一个 hash。直接后果是 `2026-08-03_oss_object_hash_unique.sql` 的前置检查会 `RAISE EXCEPTION`
+> 中止（这是脚本设计对了，显式失败好过留下半成品索引）。
+>
+> 排查与修复见 `deploy/migrations/2026-08-04_addressing_and_schema_cleanup.sql` 的注释。
+> **不要靠"标 DELETED"绕过** —— 那些旧 key 目前都还有 `site_asset` 指着，标掉即是悬空引用。
+> 唯一正确的路径是重抓持有旧 key 的站点，让引用自然转移到新 key 上。
 
 **迁移执行顺序**（手工，无 Flyway）：
 
