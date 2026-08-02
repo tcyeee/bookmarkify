@@ -95,6 +95,7 @@ export const useWebSocketStore = defineStore('socket', {
         }
         console.log(`[WebSocket] 收到消息:${message.type}`)
         if (message.type === SocketTypes.HOME_ITEM_UPDATE) {
+          console.log(`[WebSocket] HOME_ITEM_UPDATE: nodeId=${message.data.id}, nodeType=${message.data.type}`)
           const bookmarkStore = useBookmarkStore()
           bookmarkStore.replaceContent(message.data)
           bookmarkStore.clearResolutionWatch(message.data.id)
