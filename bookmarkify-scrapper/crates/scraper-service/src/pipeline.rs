@@ -20,6 +20,24 @@ use sha2::{Digest, Sha256};
 /// 单张图片正文的默认上限，兜底用；实际以 [`AssetOptions::max_bytes`] 为准。
 const HARD_MAX_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 
+/// 非 2xx 时给出一句带状态码和 URL 的说明。
+///
+/// 次级资源失败只会变成一条 warning，用不上 [`scraper::HttpErrorDetail`] 那套完整现场，
+/// 但至少要说清是"连上了但被拒"而不是"没连上"——reqwest 的 `error_for_status()`
+/// 那句 `HTTP status client error ... for url (...)` 在一行 warning 里既长又不好读。
+fn status_error(response: &reqwest::Response) -> Result<(), String> {
+    let status = response.status();
+    if status.is_success() {
+        return Ok(());
+    }
+    Err(format!(
+        "HTTP {} {} ({})",
+        status.as_u16(),
+        status.canonical_reason().unwrap_or("Unknown"),
+        response.url()
+    ))
+}
+
 /// Manifest 里可以回填到 [`PageMeta`](crate::contract::PageMeta) 的字段。
 #[derive(Debug, Default)]
 pub struct ManifestMeta {
@@ -44,13 +62,21 @@ pub async fn fetch_manifest(
         .await
         .map_err(|e| format!("manifest host rejected: {e:?}"))?;
 
-    let response = client
-        .get(parsed.clone())
-        .send()
-        .await
-        .map_err(|e| format!("manifest fetch failed: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("manifest fetch failed: {e}"))?;
+    let response = scraper::apply_subresource_headers(
+        client.get(parsed.clone()),
+        &parsed,
+        base_url,
+        "manifest",
+        scraper::ACCEPT_MANIFEST,
+        None,
+        None,
+    )
+    .send()
+    .await
+    .map_err(|e| format!("manifest fetch failed: {e}"))?;
+    if let Err(status) = status_error(&response) {
+        return Err(format!("manifest fetch failed: {status}"));
+    }
 
     let bytes = scraper::read_body_capped(response, scraper::MAX_FAVICON_BYTES)
         .await
@@ -125,7 +151,8 @@ pub async fn fetch_manifest(
         }
     }
 
-    let _ = base_url; // manifest icons 以 manifest 自身为基准，页面 URL 仅供将来诊断用
+    // 注意 base_url 只用于请求头（Referer/Origin/Sec-Fetch-Site）：manifest 里的 icons
+    // 相对路径以 manifest 文件自身为基准解析，不是以页面 URL
     Ok((
         ManifestBlock {
             url: parsed.to_string(),
@@ -153,6 +180,7 @@ pub async fn process_assets(
     assets: Vec<Asset>,
     opts: &AssetOptions,
     client: &reqwest::Client,
+    page_url: &reqwest::Url,
     oss: Option<&OssClient>,
 ) -> (Vec<Asset>, Vec<String>) {
     if opts.download == AssetDownload::None || assets.is_empty() {
@@ -173,7 +201,7 @@ pub async fn process_assets(
             if idx >= opts.max_count {
                 return asset;
             }
-            match enrich_one(&asset, mode, cap, client, oss).await {
+            match enrich_one(&asset, mode, cap, client, page_url, oss).await {
                 Ok(enriched) => enriched,
                 Err(e) => Asset {
                     error: Some(e),
@@ -201,6 +229,7 @@ async fn enrich_one(
     mode: AssetDownload,
     cap: usize,
     client: &reqwest::Client,
+    page_url: &reqwest::Url,
     oss: Option<&OssClient>,
 ) -> Result<Asset, String> {
     let parsed = reqwest::Url::parse(&asset.resolved_url).map_err(|e| format!("bad url: {e}"))?;
@@ -209,16 +238,23 @@ async fn enrich_one(
         .await
         .map_err(|e| format!("host rejected: {e:?}"))?;
 
-    // 部分 CDN 对无 Referer 的图片请求返回 403，带上同源 Referer 提高成功率
-    let referer = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
-    let response = client
-        .get(parsed.clone())
-        .header(reqwest::header::REFERER, &referer)
-        .send()
-        .await
-        .map_err(|e| format!("fetch failed: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("fetch failed: {e}"))?;
+    // 图片走子资源头（dest=image / mode=no-cors），不是导航头——照抄导航头的
+    // `Sec-Fetch-Dest: document` 配一张 png，本身就是脚本的特征。Referer 由
+    // `scraper::referer_for` 按浏览器策略从**页面** URL 推出：防盗链白名单校验的是
+    // 引用页所在的域，此前这里填的是图片自己的域名，等于没填。
+    let response = scraper::apply_subresource_headers(
+        client.get(parsed.clone()),
+        &parsed,
+        page_url,
+        "image",
+        scraper::ACCEPT_IMAGE,
+        None,
+        None,
+    )
+    .send()
+    .await
+    .map_err(|e| format!("fetch failed: {e}"))?;
+    status_error(&response).map_err(|status| format!("fetch failed: {status}"))?;
 
     let header_mime = response
         .headers()
@@ -430,6 +466,11 @@ fn le_u24(b: &[u8], at: usize) -> Option<u32> {
 mod tests {
     use super::*;
 
+    /// 声明这些资产的页面。这两个用例都不真的发请求，页面 URL 只需存在。
+    fn page_url() -> reqwest::Url {
+        reqwest::Url::parse("https://example.com/page").unwrap()
+    }
+
     #[test]
     fn png_header_yields_dimensions() {
         let mut png = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
@@ -543,7 +584,7 @@ mod tests {
             download: AssetDownload::None,
             ..Default::default()
         };
-        let (out, warnings) = process_assets(assets, &opts, &client, None).await;
+        let (out, warnings) = process_assets(assets, &opts, &client, &page_url(), None).await;
         assert_eq!(out.len(), 1);
         assert!(out[0].error.is_none());
         assert!(out[0].content_hash.is_none());
@@ -575,7 +616,7 @@ mod tests {
             max_count: 1,
             ..Default::default()
         };
-        let (out, _) = process_assets(assets, &opts, &client, None).await;
+        let (out, _) = process_assets(assets, &opts, &client, &page_url(), None).await;
         assert_eq!(out.len(), 2);
         assert!(out[0].error.is_some(), "第 1 张应被处理并因非法 URL 报错");
         assert!(out[1].error.is_none(), "第 2 张超出 max_count，不该被处理");
