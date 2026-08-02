@@ -629,7 +629,9 @@ data class OssObjectVO(
         state = entity.state,
     ) {
         BeanUtil.copyProperties(entity, this)
-        previewUrl = OssUtils.signAsset(entity.objectKey, if (entity.isVector) null else 128)
+        previewUrl = OssUtils.signAsset(
+            entity.objectKey, 128, mime = entity.mime, isVector = entity.isVector
+        )
     }
 }
 

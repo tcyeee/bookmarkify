@@ -82,6 +82,45 @@ class OssUtils {
         const val IMMUTABLE_TTL_MILLIS: Long = 24 * 3600 * 1000
 
         /**
+         * 阿里云 OSS 图片处理(IMG)**能作为输入**的格式。
+         *
+         * 不在此列的字节带上 `x-oss-process=image/resize` 会直接 400
+         * （`This image format is not supported`，EC 0040-00000005）—— 注意不是回退成原图，
+         * 是整个请求失败、前端拿到一张碎图。所以这份名单是白名单而非黑名单：认不出的格式
+         * 宁可不缩放（多下几 KB），也好过把图渲染没了。
+         *
+         * 两个常见的落选者，都恰好是站点图标最爱用的格式：
+         * - **SVG** —— 矢量图本就与分辨率无关，[SiteAssetEntity.isVector] 一路带着这个信息
+         * - **ICO** —— `/favicon.ico` 的默认格式，`isVector` 为 false，历史上一直漏在守卫外面
+         */
+        private val IMG_PROCESSABLE_MIME = setOf(
+            "image/jpeg", "image/jpg", "image/pjpeg",
+            "image/png", "image/apng",
+            "image/bmp", "image/gif", "image/webp",
+            "image/tiff", "image/heic", "image/avif",
+        )
+
+        /** 无扩展名可依时的兜底：这些后缀同样进不了 OSS 图片处理 */
+        private val IMG_UNPROCESSABLE_EXT = setOf("svg", "ico", "cur")
+
+        /**
+         * 这份字节能不能交给 OSS 图片处理缩放。
+         *
+         * 判据优先级是 `isVector` → `mime` → 扩展名，逐级降低可信度：
+         * - `mime` 由 scrapper 按**文件魔数**嗅探得出（`pipeline.rs::sniff_mime`），比响应头和
+         *   URL 后缀都可靠，是首选依据
+         * - `mime` 为空只可能是改造前写入、从未记过这一列的存量行；此时退回看 key 的扩展名。
+         *   这层兜底在 key 改成内容寻址（无扩展名）后对新数据已不起作用，留着只为存量
+         */
+        fun canImageProcess(mime: String?, isVector: Boolean = false, objectName: String? = null): Boolean {
+            if (isVector) return false
+            val m = mime?.substringBefore(';')?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+            if (m != null) return m in IMG_PROCESSABLE_MIME
+            val ext = objectName?.substringAfterLast('/')?.substringAfterLast('.', "")?.lowercase()
+            return ext !in IMG_UNPROCESSABLE_EXT
+        }
+
+        /**
          * 解析配置生成访问域名（支持自定义域名）
          */
         fun initDomain(endpoint: String, domainConfig: String, bucketName: String) {
@@ -114,13 +153,25 @@ class OssUtils {
          * 非本服务 OSS 的外链（例如资产只做了 PROBE、库里存的是源站地址）原样返回 —— 那种
          * 地址本来就是公开可访问的，签名反而会破坏它。
          *
+         * **缩不缩放由这里统一决定，调用方不要自己判断。** 只要把已知的 [mime] / [isVector]
+         * 如实传进来即可 —— "哪些格式 OSS 能处理"是存储层的知识，散到各个展示层去重复判断，
+         * 结果就是每处各漏一种格式（ICO 就是这么漏了很久的）。
+         *
          * @param ref object key 或完整 URL
-         * @param size 目标边长；null 或 <=0 表示不缩放（矢量图必须走这条）
+         * @param size 期望的目标边长；null 或 <=0 表示不缩放。传了也未必生效 —— 见 [canImageProcess]
          * @param immutable 该对象的字节是否永不改变（内容寻址的对象即是）。为 true 时签发
          *   [IMMUTABLE_TTL_MILLIS] 的长效链接：对象不会变，短有效期换不来任何正确性，只是
          *   让浏览器和 CDN 更频繁地 cache miss，而每次回源都要付一次按次计费的 OSS 图片处理
+         * @param mime 该对象的实际 MIME（scrapper 按魔数嗅探，或用户上传时的 content-type）
+         * @param isVector 是否矢量图
          */
-        fun signAsset(ref: String?, size: Int? = null, immutable: Boolean = false): String? {
+        fun signAsset(
+            ref: String?,
+            size: Int? = null,
+            immutable: Boolean = false,
+            mime: String? = null,
+            isVector: Boolean = false,
+        ): String? {
             val raw = ref?.trim()?.takeIf { it.isNotBlank() } ?: return null
             val key = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) {
                 // 存量完整 URL：只有指向我们自己的桶才有 key 可言，外链原样返回
@@ -129,7 +180,7 @@ class OssUtils {
                 raw.removePrefix("/").substringBefore("?")
             }
             if (key.isBlank()) return raw
-            val dim = size?.takeIf { it > 0 }
+            val dim = size?.takeIf { it > 0 && canImageProcess(mime, isVector, key) }
             val ttl = if (immutable) IMMUTABLE_TTL_MILLIS else DEFAULT_TTL_MILLIS
             return runCatching { signWithResize(key, dim, dim, ttl) }
                 .onFailure { log.warn("[signAsset] 签名失败, 回退原值: ref={}, err={}", raw, it.message) }
@@ -225,13 +276,15 @@ class OssUtils {
                 val expiration = java.util.Date(alignedNow + window + expirationMillis)
                 val request = GeneratePresignedUrlRequest(bucket, objectName).apply {
                     this.expiration = expiration
-                    // 阿里云 OSS 图片处理(IMG)不支持 SVG 缩放: 带 image/resize 会返回
-                    // "This image format is not supported" (EC 0040-00000005)。SVG 跳过缩放, 原图直出,
-                    // 由前端用 CSS 控制展示尺寸 (DiceBear 头像即为 SVG)。
-                    val isSvg = objectName.substringAfterLast('.', "").equals("svg", ignoreCase = true)
+                    // 兜底守卫：OSS 图片处理不支持 SVG/ICO，带 image/resize 会返回
+                    // "This image format is not supported" (EC 0040-00000005)，且是整个请求失败
+                    // 而非回退原图。这层只能看扩展名（此处拿不到 mime），内容寻址的 key 没有扩展名，
+                    // 所以真正的判断在 signAsset 里按 mime 做 —— 这里只保护还在按扩展名命名的路径
+                    // (如 defaultImgBacById、resizeAndSignImg)。
+                    val processable = canImageProcess(mime = null, objectName = objectName)
                     val hasWidth = width?.let { it > 0 } == true
                     val hasHeight = height?.let { it > 0 } == true
-                    if (!isSvg && (hasWidth || hasHeight)) {
+                    if (processable && (hasWidth || hasHeight)) {
                         // 使用 m_fill 以填充方式裁剪，确保输出尺寸精确匹配期望的宽高
                         val style = StringBuilder("image/resize,m_fill")
                         width?.takeIf { it > 0 }?.let { style.append(",w_$it") }
