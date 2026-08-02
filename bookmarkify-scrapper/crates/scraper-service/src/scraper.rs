@@ -441,12 +441,69 @@ fn text_snippet(bytes: &[u8], max_chars: usize) -> Option<String> {
     })
 }
 
-/// 给一次 Layer 1 请求装上完整的浏览器请求头。
+/// 图片子资源的 `Accept`，取自 Chrome 136 发出的 `<img>` 请求。
+pub const ACCEPT_IMAGE: &str =
+    "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
+
+/// Web App Manifest 的 `Accept`。
+pub const ACCEPT_MANIFEST: &str = "application/manifest+json,application/json,*/*;q=0.8";
+
+/// 每个请求都该有的身份头：UA + 客户端提示。
 ///
-/// 只发 UA 而不发其余头，等于自曝是脚本。`Sec-Fetch-*` 这组头浏览器无法被 JS 覆盖，
-/// 因此是 WAF 判定"这是不是真实导航"的主要依据；`Sec-CH-UA` 只在安全上下文里发，
-/// 所以 http 目标要跟着省略，否则又成了另一种不一致。
-fn apply_browser_headers(
+/// `Sec-CH-UA` 只在安全上下文里发，所以 http 目标要跟着省略，否则又成了另一种不一致。
+fn apply_identity_headers(
+    req: reqwest::RequestBuilder,
+    url: &reqwest::Url,
+    user_agent: &str,
+) -> reqwest::RequestBuilder {
+    // Accept-Encoding 交给 reqwest 的 gzip/brotli/deflate 特性自动带上并解压，
+    // 手工设置反而会关掉自动解压，让我们拿到一堆压缩字节。
+    let req = req.header(reqwest::header::USER_AGENT, user_agent);
+    if url.scheme() == "https" {
+        req.header("sec-ch-ua", SEC_CH_UA)
+            .header("sec-ch-ua-mobile", "?0")
+            .header("sec-ch-ua-platform", SEC_CH_UA_PLATFORM)
+    } else {
+        req
+    }
+}
+
+/// `from` 发起、指向 `to` 的请求，`Sec-Fetch-Site` 该报什么。
+///
+/// 只区分 `same-origin` / `cross-site`：浏览器还有个 `same-site`（同注册域不同子域），
+/// 判定它需要一份公共后缀表，为一个诊断性的头引入 PSL 依赖不划算。
+fn sec_fetch_site(from: &reqwest::Url, to: &reqwest::Url) -> &'static str {
+    if from.origin() == to.origin() {
+        "same-origin"
+    } else {
+        "cross-site"
+    }
+}
+
+/// 按浏览器默认的 `strict-origin-when-cross-origin` 策略算出 `Referer`。
+///
+/// 同源给完整页面 URL，跨源只给源，https→http 降级则不发。
+///
+/// 关键是它必须指向**声明这个资源的页面**：防盗链白名单校验的正是这个头。填资源
+/// 自己的域名等于告诉 CDN"我是被你自己引用的"，那个值当然不在白名单里。
+pub fn referer_for(page: &reqwest::Url, resource: &reqwest::Url) -> Option<String> {
+    if page.scheme() == "https" && resource.scheme() != "https" {
+        return None;
+    }
+    if page.origin() == resource.origin() {
+        let mut full = page.clone();
+        full.set_fragment(None);
+        Some(full.to_string())
+    } else {
+        Some(format!("{}/", page.origin().ascii_serialization()))
+    }
+}
+
+/// 给一次顶层导航（Layer 1 取页面）装上完整的浏览器请求头。
+///
+/// 只发 UA 而不发其余头，等于自曝是脚本。`Sec-Fetch-*` 这组头 JS 覆盖不了，
+/// 因此是 WAF 判定"这是不是真实导航"的主要依据。
+fn apply_navigation_headers(
     req: reqwest::RequestBuilder,
     url: &reqwest::Url,
     user_agent: &str,
@@ -454,12 +511,9 @@ fn apply_browser_headers(
     sec_fetch_site: &str,
     referer: Option<&str>,
 ) -> reqwest::RequestBuilder {
-    use reqwest::header::{ACCEPT, ACCEPT_LANGUAGE, REFERER, USER_AGENT};
+    use reqwest::header::{ACCEPT, ACCEPT_LANGUAGE, REFERER};
 
-    // Accept-Encoding 交给 reqwest 的 gzip/brotli/deflate 特性自动带上并解压，
-    // 手工设置反而会关掉自动解压，让我们拿到一堆压缩字节。
-    let mut req = req
-        .header(USER_AGENT, user_agent)
+    let mut req = apply_identity_headers(req, url, user_agent)
         .header(ACCEPT, DEFAULT_ACCEPT)
         .header(ACCEPT_LANGUAGE, locale)
         .header("upgrade-insecure-requests", "1")
@@ -468,14 +522,41 @@ fn apply_browser_headers(
         .header("sec-fetch-site", sec_fetch_site)
         .header("sec-fetch-user", "?1");
 
-    if url.scheme() == "https" {
-        req = req
-            .header("sec-ch-ua", SEC_CH_UA)
-            .header("sec-ch-ua-mobile", "?0")
-            .header("sec-ch-ua-platform", SEC_CH_UA_PLATFORM);
-    }
     if let Some(referer) = referer {
         req = req.header(REFERER, referer);
+    }
+    req
+}
+
+/// 给一次子资源请求（图片、manifest）装上浏览器请求头。
+///
+/// 和导航**不是同一套**：`Sec-Fetch-Dest: document` 配一张图片是自相矛盾的，
+/// 恰恰是"照抄了导航头的脚本"的特征。`dest` 取 `"image"` 或 `"manifest"`，
+/// 对应的 `Sec-Fetch-Mode` 随之而定（图片走 no-cors，manifest 走 cors 并带 `Origin`）。
+pub fn apply_subresource_headers(
+    req: reqwest::RequestBuilder,
+    resource: &reqwest::Url,
+    page: &reqwest::Url,
+    dest: &str,
+    accept: &str,
+    user_agent: Option<&str>,
+    locale: Option<&str>,
+) -> reqwest::RequestBuilder {
+    use reqwest::header::{ACCEPT, ACCEPT_LANGUAGE, ORIGIN, REFERER};
+
+    let cors = dest == "manifest";
+    let mut req = apply_identity_headers(req, resource, user_agent.unwrap_or(DEFAULT_UA))
+        .header(ACCEPT, accept)
+        .header(ACCEPT_LANGUAGE, locale.unwrap_or(DEFAULT_ACCEPT_LANGUAGE))
+        .header("sec-fetch-dest", dest)
+        .header("sec-fetch-mode", if cors { "cors" } else { "no-cors" })
+        .header("sec-fetch-site", sec_fetch_site(page, resource));
+
+    if let Some(referer) = referer_for(page, resource) {
+        req = req.header(REFERER, referer);
+    }
+    if cors {
+        req = req.header(ORIGIN, page.origin().ascii_serialization());
     }
     req
 }
@@ -538,7 +619,7 @@ async fn warm_up_origin(
     root.set_fragment(None);
 
     validate_target_host(&root).await.ok()?;
-    let req = apply_browser_headers(
+    let req = apply_navigation_headers(
         client.get(root.clone()),
         &root,
         user_agent.unwrap_or(DEFAULT_UA),
@@ -584,7 +665,7 @@ async fn fetch_html_once(
                 _ => "cross-site",
             },
         };
-        let req = apply_browser_headers(
+        let req = apply_navigation_headers(
             client.get(current.clone()),
             &current,
             user_agent,
@@ -746,6 +827,36 @@ mod tests {
         let mut d = detail(412, "https://a.com/video/x");
         d.warmed_up = true;
         assert!(!d.worth_warming_up());
+    }
+
+    fn url(s: &str) -> reqwest::Url {
+        reqwest::Url::parse(s).unwrap()
+    }
+
+    #[test]
+    fn referer_is_the_full_page_url_when_same_origin() {
+        let r = referer_for(&url("https://a.com/post/1?x=2#frag"), &url("https://a.com/i.png"));
+        assert_eq!(r.as_deref(), Some("https://a.com/post/1?x=2"), "同源给完整 URL，去掉 fragment");
+    }
+
+    #[test]
+    fn referer_is_origin_only_when_cross_origin() {
+        // 防盗链白名单认的是**引用页**的域，所以这里必须是 a.com，不是 CDN 自己
+        let r = referer_for(&url("https://a.com/post/1"), &url("https://cdn.b.com/i.png"));
+        assert_eq!(r.as_deref(), Some("https://a.com/"));
+    }
+
+    #[test]
+    fn referer_is_dropped_on_https_to_http_downgrade() {
+        assert_eq!(referer_for(&url("https://a.com/p"), &url("http://a.com/i.png")), None);
+    }
+
+    #[test]
+    fn sec_fetch_site_distinguishes_origins() {
+        assert_eq!(sec_fetch_site(&url("https://a.com/p"), &url("https://a.com/i.png")), "same-origin");
+        assert_eq!(sec_fetch_site(&url("https://a.com/p"), &url("https://b.com/i.png")), "cross-site");
+        // 端口不同即不同源
+        assert_eq!(sec_fetch_site(&url("https://a.com/p"), &url("https://a.com:8443/i.png")), "cross-site");
     }
 
     #[test]

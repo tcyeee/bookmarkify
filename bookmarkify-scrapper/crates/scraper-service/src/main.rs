@@ -522,6 +522,8 @@ async fn scrape_handler(
         std::mem::take(&mut extracted.assets),
         &body.assets,
         &state.client,
+        // 跟完重定向的最终 URL 才是"声明这些图的页面"，Referer / Sec-Fetch-Site 都据它算
+        &fetched.final_url,
         state.oss.as_deref(),
     )
     .await;
@@ -957,7 +959,30 @@ mod tests {
                         .into_bytes()
                     };
                     let resp: Vec<u8> = match (path.as_str(), has_cookie) {
-                        ("/", _) => ok("<html><head><title>Home</title></head><body>home</body></html>"),
+                        ("/", _) => ok(
+                            r#"<html><head><title>Home</title>
+                            <link rel="icon" href="/icon.png"/>
+                            <link rel="manifest" href="/site.webmanifest"/>
+                            </head><body>home</body></html>"#,
+                        ),
+                        ("/site.webmanifest", _) => ok(r#"{"name":"Guarded","short_name":"G"}"#),
+                        ("/icon.png", _) => {
+                            // 16x8 PNG：只有文件头是真的，够 image_dimensions 读出尺寸
+                            let mut png: Vec<u8> =
+                                vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+                            png.extend_from_slice(&[0, 0, 0, 13]);
+                            png.extend_from_slice(b"IHDR");
+                            png.extend_from_slice(&16u32.to_be_bytes());
+                            png.extend_from_slice(&8u32.to_be_bytes());
+                            png.extend_from_slice(&[8, 6, 0, 0, 0]);
+                            let mut r = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                png.len()
+                            )
+                            .into_bytes();
+                            r.extend_from_slice(&png);
+                            r
+                        }
                         ("/guarded", true) => {
                             ok("<html><head><title>Guarded Page</title></head><body>ok</body></html>")
                         }
@@ -1024,6 +1049,55 @@ mod tests {
             assert!(raw.contains(header), "缺少请求头 {header}，实际:\n{raw}");
         }
         assert!(!raw.contains("accept: */*"), "不该再退回 reqwest 默认的 accept: */*");
+    }
+
+    /// 图片和 manifest 走的是**子资源**头，不是导航头，且 Referer 指向声明它的页面。
+    ///
+    /// 照抄导航头会给一张 png 配上 `Sec-Fetch-Dest: document`，本身就是脚本的特征；
+    /// 而 Referer 填成资源自己的域名（此前的做法）过不了任何防盗链白名单。
+    #[tokio::test]
+    async fn subresources_are_fetched_with_image_semantics_and_a_page_referer() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let (base, seen) = spawn_guarded_site().await;
+
+        let app = build_router(test_state(), 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({
+                "url": format!("{base}/"),
+                "render": { "mode": "HTTP" },
+                "assets": { "download": "PROBE" }
+            }),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        assert_eq!(status, StatusCode::OK, "body: {json}");
+
+        let requests = seen.lock().unwrap().clone();
+        let find = |prefix: &str| {
+            requests
+                .iter()
+                .find(|r| r.starts_with(prefix))
+                .unwrap_or_else(|| panic!("没有发出 {prefix} 请求，实际: {requests:?}"))
+                .to_ascii_lowercase()
+        };
+
+        let icon = find("GET /icon.png ");
+        assert!(icon.contains("sec-fetch-dest: image"), "{icon}");
+        assert!(icon.contains("sec-fetch-mode: no-cors"), "{icon}");
+        assert!(icon.contains("sec-fetch-site: same-origin"), "{icon}");
+        assert!(icon.contains("accept: image/avif"), "{icon}");
+        assert!(icon.contains("user-agent: mozilla/"), "子资源此前连 UA 都不发: {icon}");
+        // 同源 → 完整页面 URL；此前这里是图片自己的域名
+        assert!(icon.contains(&format!("referer: {base}/").to_ascii_lowercase()), "{icon}");
+
+        let manifest = find("GET /site.webmanifest ");
+        assert!(manifest.contains("sec-fetch-dest: manifest"), "{manifest}");
+        assert!(manifest.contains("sec-fetch-mode: cors"), "{manifest}");
+        assert!(manifest.contains("origin: "), "manifest 是 cors 请求，浏览器会带 Origin: {manifest}");
     }
 
     /// 被反爬拦下时先访问根路径拿 cookie 再重试——正是 B 站 `/video/BVxxx` 那个场景。
