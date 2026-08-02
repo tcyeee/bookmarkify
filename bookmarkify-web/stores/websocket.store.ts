@@ -15,6 +15,10 @@ export const useWebSocketStore = defineStore('socket', {
     currentToken: '' as string,
     // 是否为主动断开(主动断开后不会自动重连)
     manualClose: false,
+    // 是否因页面进入 bfcache 而暂停连接(与 manualClose 语义不同:恢复时应立即重连,不走退避)
+    pausedForBfcache: false,
+    // pagehide/pageshow 监听器是否已注册(避免 connect() 重复调用时重复注册)
+    listenersRegistered: false,
     // 预留的消息处理映射（按类型分发回调）
     actions: new Map() as Map<SocketTypes, Function>,
     // 心跳定时器句柄
@@ -39,6 +43,7 @@ export const useWebSocketStore = defineStore('socket', {
     connect(token: string) {
       // 仅在客户端环境运行
       if (import.meta.server) return
+      this.registerBfcacheListeners()
       // 已有连接且 token 未变化:无需重连
       if (this.socket && this.currentToken === token) return
       // token 变更或显式重连:先关闭旧连接,避免遗留过期 socket
@@ -164,6 +169,52 @@ export const useWebSocketStore = defineStore('socket', {
       this.currentToken = ''
       this.isConnected = false
       this.reconnectAttempts = 0
+    },
+
+    // 注册 pagehide/pageshow 监听,处理页面进入/恢复 bfcache 的场景(只注册一次)
+    registerBfcacheListeners() {
+      if (!import.meta.client || this.listenersRegistered) return
+      this.listenersRegistered = true
+
+      window.addEventListener('pagehide', (event) => {
+        if (event.persisted) this.pauseForBfcache()
+      })
+
+      window.addEventListener('pageshow', (event) => {
+        if (event.persisted) this.resumeFromBfcache()
+      })
+    },
+
+    // 页面即将进入 bfcache:主动关闭连接,避免浏览器强制断开时打印错误日志
+    pauseForBfcache() {
+      if (!this.socket) return
+      console.log('[WebSocket] 页面进入 bfcache,主动断开连接')
+      this.pausedForBfcache = true
+      // 先置空 onclose,避免触发 reconnect() 的退避重连
+      this.socket.onclose = null
+      this.stopHeartbeat()
+      if (this.reconnectTimeout) {
+        clearTimeout(this.reconnectTimeout)
+        this.reconnectTimeout = undefined
+      }
+      try { this.socket.close() } catch { /* noop */ }
+      this.socket = undefined
+      this.isConnected = false
+    },
+
+    // 页面从 bfcache 恢复:立即重连,不走指数退避,也不消耗 reconnectAttempts 预算
+    resumeFromBfcache() {
+      if (!this.pausedForBfcache) return
+      this.pausedForBfcache = false
+
+      const authStore = useAuthStore()
+      const token: string = authStore.account?.token ?? ''
+      if (!token) return // 页面处于后台期间用户已退出登录
+
+      console.log('[WebSocket] 页面从 bfcache 恢复,立即重连')
+      this.reconnectAttempts = 0
+      this.currentToken = ''
+      this.connect(token)
     },
   },
 })
