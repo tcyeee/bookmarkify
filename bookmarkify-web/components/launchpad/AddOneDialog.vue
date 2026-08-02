@@ -233,8 +233,11 @@ function selectBookmark(item: any) {
 function handleSuccess(res: UserLayoutNodeVO) {
   emit('success', res)
   if (res?.typeApp) {
+    // 后端同步返回了完整数据(无需重抓/命中跳过重抓窗口)，本次添加不会经过 WebSocket
+    console.log(`[AddOneDialog] 后端同步返回已就绪数据，直接展示: nodeId=${res.id}, isActivity=${res.typeApp.isActivity}`)
     bookmarkStore.addNode(res)
   } else {
+    console.log(`[AddOneDialog] 后端返回 LOADING 占位，等待 WebSocket 推送解析结果: nodeId=${res.id}`)
     bookmarkStore.addLoading(res)
     // 解析结果靠 WebSocket 推送，是尽力而为的；超时未收到就主动重新拉取桌面布局兜底，避免卡死在 loading
     bookmarkStore.watchForResolution(res.id)

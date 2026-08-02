@@ -100,6 +100,7 @@ export const useBookmarkStore = defineStore('homeItems', {
 
     // 插入加载占位项到根
     addLoading(node: UserLayoutNodeVO) {
+      console.log(`[bookmark] 插入 LOADING 占位节点: nodeId=${node.id}, name=${node.name ?? ''}, 等待 WebSocket 推送解析结果`)
       this.nodes[node.id] = { ...node, type: HomeItemType.BOOKMARK_LOADING, parentId: null, children: undefined }
       this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []), node.id]
     },
@@ -108,6 +109,7 @@ export const useBookmarkStore = defineStore('homeItems', {
     // 超时仍未解除 LOADING 就主动整体重新拉取桌面布局对账，避免节点永远转圈。
     // 调用方应在插入 LOADING 节点后（addLoading / addImportLoadingBatch）为每个节点调用一次。
     watchForResolution(nodeId: string, timeoutMs = 30000) {
+      console.log(`[bookmark] 开始兜底监听: nodeId=${nodeId}, timeoutMs=${timeoutMs}`)
       this.clearResolutionWatch(nodeId)
       this.pendingTimeouts[nodeId] = setTimeout(() => {
         delete this.pendingTimeouts[nodeId]
@@ -122,6 +124,7 @@ export const useBookmarkStore = defineStore('homeItems', {
     clearResolutionWatch(nodeId: string) {
       const handle = this.pendingTimeouts[nodeId]
       if (handle == null) return
+      console.log(`[bookmark] 清除节点 ${nodeId} 的兜底监听定时器`)
       clearTimeout(handle)
       delete this.pendingTimeouts[nodeId]
     },
@@ -154,9 +157,18 @@ export const useBookmarkStore = defineStore('homeItems', {
 
     // WebSocket 就地内容替换（LOADING→BOOKMARK）；仅改内容，保留归属，靠响应式重渲染
     replaceContent(node: UserLayoutNodeVO) {
-      if (node.type !== HomeItemType.BOOKMARK || node.typeApp == null) return
+      if (node.type !== HomeItemType.BOOKMARK || node.typeApp == null) {
+        console.warn(`[bookmark] 收到的 WS 节点无法应用，已忽略: nodeId=${node.id}, type=${node.type}, hasTypeApp=${node.typeApp != null}`)
+        return
+      }
       const cur = this.nodes[node.id]
-      if (!cur) return
+      if (!cur) {
+        console.warn(`[bookmark] 收到 WS 更新但本地不存在该节点，已忽略: nodeId=${node.id}`)
+        return
+      }
+      console.log(
+        `[bookmark] 应用 WS 内容替换: nodeId=${node.id}, title=${node.typeApp.title || node.typeApp.urlBase}, isActivity=${node.typeApp.isActivity}`,
+      )
       this.nodes[node.id] = { ...node, parentId: cur.parentId, children: undefined }
     },
 
