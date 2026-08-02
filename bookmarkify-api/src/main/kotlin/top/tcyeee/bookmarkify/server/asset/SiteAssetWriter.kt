@@ -106,10 +106,7 @@ class SiteAssetWriter(
      * 之外完成的上传，那笔账也就不该跟着回滚 —— 否则就正好漏掉"落库失败留下的孤儿对象"这一类，
      * 而那恰恰是账本最需要抓住的东西。
      *
-     * 寻址方式按 role 分流，对应 scrapper 侧 `asset_key` / `screenshot_key` 的两套算法：
-     * 普通资产是 `sha256(字节)`（可去重、对象不可变），**截图仍是 `sha256(页面URL)`** ——
-     * 截图每次抓都不一样，内容寻址等于无上界增长，而去重收益恰好是零，故刻意保留自我覆盖的
-     * URL 寻址。这一列决定了对账任务判定"这个对象能不能参与去重"，配错不会误删但会让去重失效。
+     * 寻址方式由 [addressingOf] 按 key 的实际形态判定，不再按 role 推断。
      */
     private fun registerObjects(assets: List<SiteAssetEntity>) {
         val specs = assets.mapNotNull { a ->
@@ -117,11 +114,7 @@ class SiteAssetWriter(
                 OssObjectSpec(
                     objectKey = key,
                     source = OssObjectSource.SCRAPPER,
-                    addressing = if (a.role == AssetRole.SCREENSHOT) {
-                        OssAddressing.SOURCE_URL
-                    } else {
-                        OssAddressing.CONTENT
-                    },
+                    addressing = addressingOf(key, a.role, a.contentHash),
                     contentHash = a.contentHash,
                     size = a.byteSize,
                     mime = a.mime,
@@ -138,6 +131,35 @@ class SiteAssetWriter(
         val idByKey = ossObjectService.registerAll(specs)
         assets.forEach { a ->
             a.storageUrl?.trim()?.takeIf { it.isNotEmpty() }?.let { key -> a.fileId = idByKey[key] }
+        }
+    }
+
+    /**
+     * 判定一个 object key 是怎么算出来的。
+     *
+     * **依据是 key 的实际形态，不是 role。** 原先按 role 推断（非截图一律 [OssAddressing.CONTENT]）
+     * 在 scrapper 升级前后混存的数据上会直接说谎：升级前写入的 key 是 `sha256(源URL).<ext>`，
+     * 与字节无关、重抓会被覆盖，却同样被标成 CONTENT。
+     *
+     * 这不只是标签错。[OssObjectEntity.immutable] 就是从这一列推出来的，
+     * [OssUtils.signAsset] 据此签 [OssUtils.IMMUTABLE_TTL_MILLIS]（24h）的长效链接 ——
+     * 于是一批随时可能被覆盖的对象以"字节永不改变"的名义拿到了长效 URL，
+     * 站点换图之后最长 24 小时都是旧图，且重抓也修不好。
+     *
+     * 判据来自 scrapper 的 `oss.rs::asset_key`：内容寻址的 key 末段就是 `content_hash` 的
+     * hex 本身、且不带扩展名。对不上就不敢当成不可变 —— 多签几次短链接的代价，
+     * 远小于把一张会变的图当成永不改变。
+     */
+    private fun addressingOf(key: String, role: AssetRole, contentHash: String?): OssAddressing {
+        // 截图刻意保留 URL 寻址：每次抓的字节都不同，内容寻址等于无上界增长，而去重收益恰好是零
+        if (role == AssetRole.SCREENSHOT) return OssAddressing.SOURCE_URL
+        // 没有哈希就无从判定形态（PROBE 未下载、或改造前写入的行），如实标成"形态不明"
+        val hex = contentHash?.substringAfterLast(':')?.trim()?.takeIf { it.isNotEmpty() }
+            ?: return OssAddressing.LEGACY
+        return if (key.substringAfterLast('/').equals(hex, ignoreCase = true)) {
+            OssAddressing.CONTENT
+        } else {
+            OssAddressing.SOURCE_URL
         }
     }
 
@@ -274,7 +296,13 @@ class SiteAssetWriter(
             ).mapNotNull { it.storageUrl }.toSet()
 
             val orphans = keys - stillReferenced
+            // 账本行要在删对象**之前**取：删完再查也查得到（账本不随桶变），但先取一次能保证
+            // 「删了桶里的字节」与「账本知道它没了」用的是同一批 id
+            val ledgerRows = ossObjectService.findByKeys(orphans)
             orphans.forEach { OssUtils.delete(it) }
+            // 不标的话，账本会一直声称这些对象 ACTIVE，直到次日凌晨的对账从桶那边发现它们没了。
+            // 中间这段时间里账本是错的，而账本存在的全部意义就是回答"桶里到底有什么"
+            ledgerRows.values.forEach { ossObjectService.markDeleted(it.id) }
             if (orphans.isNotEmpty()) log.info(
                 "[SiteAssetWriter] 已回收无引用的 OSS 对象: ownerId={}, deleted={}, keptShared={}",
                 ownerId, orphans.size, keys.size - orphans.size

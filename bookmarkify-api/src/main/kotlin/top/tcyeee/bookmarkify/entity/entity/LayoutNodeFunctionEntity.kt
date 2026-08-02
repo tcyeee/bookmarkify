@@ -4,7 +4,7 @@ import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
 import io.swagger.v3.oas.annotations.media.Schema
-import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Size
 import top.tcyeee.bookmarkify.entity.BookmarkFunctionVO
 import java.time.LocalDateTime
 
@@ -18,8 +18,8 @@ import java.time.LocalDateTime
 @TableName("layout_node_function")
 data class LayoutNodeFunctionEntity(
     @TableId val id: String = IdUtil.fastUUID(),
-    @field:Max(40) @field:Schema(description = "用户ID") val uid: String,
-    @field:Max(40) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
+    @field:Size(max = 40) @field:Schema(description = "用户ID") val uid: String,
+    @field:Size(max = 40) @field:Schema(description = "用户桌面排布ID") val layoutNodeId: String,
 
     @field:Schema(description = "功能类型") val type: FunctionType,
     @field:Schema(description = "创建时间") val createAt: LocalDateTime = LocalDateTime.now(),

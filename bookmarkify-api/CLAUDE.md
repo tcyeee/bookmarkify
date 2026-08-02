@@ -257,7 +257,6 @@ Read this before touching `pingSweep`, `LivenessPolicy`, or the `next_check_at` 
 
 - The `bin/` directory contains compiled class output — do not edit files there
 - `TestController.kt` (`/test/**`, `@SaIgnore`) is a live scratch endpoint for manually triggering parses — not covered by real tests, don't build on it
-- `HomeItem` / `HomeItemMapper` (and `HomeItemServiceImpl.kt`) are legacy — superseded by the `UserLayoutNode` system; avoid extending them in new work
 - The `server/` package (not `service/`) holds service interfaces — keep this naming when adding services
 - Admin login credentials default to `tcyeee@outlook.com` / `admin` in config
 - **The API runs as a single instance and cannot currently be scaled horizontally.** Two things assume it: `@Scheduled` tasks have no distributed lock (every instance would run every sweep — duplicate pings, duplicate parse dispatch), and `SessionManager` keeps WebSocket sessions in a process-local `ConcurrentHashMap` (a push only reaches users connected to *that* instance, so roughly half of all `HOME_ITEM_UPDATE` pushes would silently vanish behind a load balancer). Adding a second instance requires ShedLock (or equivalent) plus Redis pub/sub fan-out for WebSocket pushes — `ParseLock` already being in Redis is not sufficient on its own.
