@@ -1586,8 +1586,10 @@ class BookmarkServiceImpl(
                     .let { row ->
                         OssUtils.signAsset(
                             row?.objectKey ?: a.storageUrl,
-                            if (a.isVector) null else size,
+                            size,
                             row?.immutable == true,
+                            mime = row?.mime ?: a.mime,
+                            isVector = a.isVector,
                         )
                     } ?: a.resolvedUrl,
                 resolvedUrl = a.resolvedUrl,

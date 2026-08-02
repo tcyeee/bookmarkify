@@ -76,7 +76,7 @@ data class OssObjectEntity(
     /** 字节永不改变 —— 内容寻址的 key 由 sha256(字节) 得出，同一个 key 只可能是同一份内容 */
     val immutable: Boolean get() = addressing == OssAddressing.CONTENT
 
-    /** 前端可直接用的限时签名地址；矢量图不缩放（OSS 图片处理不支持 SVG） */
+    /** 前端可直接用的限时签名地址；能否缩放由 signAsset 按 mime 判定（SVG/ICO 走原图直出） */
     fun signedUrl(size: Int): String? =
-        OssUtils.signAsset(objectKey, if (isVector) null else size, immutable)
+        OssUtils.signAsset(objectKey, size, immutable, mime = mime, isVector = isVector)
 }

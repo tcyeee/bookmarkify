@@ -296,8 +296,11 @@ class SiteAssetResolver(
         // 内容寻址的对象字节永不改变，签长效链接换缓存命中率（回源一次要付一次 OSS 图片处理费）
         return OssUtils.signAsset(
             storage,
-            if (asset.isVector) null else renderSize(mode),
+            renderSize(mode),
             ledgerRow?.immutable == true,
+            // 账本记的是桶里那份字节的 MIME，比抓取时落在 site_asset 上的更贴近实际，优先用它
+            mime = ledgerRow?.mime ?: asset.mime,
+            isVector = asset.isVector,
         )
     }
 }
