@@ -186,7 +186,13 @@ function addOne() {
   bookmarksAddOne(data.input).then((res: UserLayoutNodeVO) => {
     $track('bookmark-add')
     handleSuccess(res)
-    data.notice = '添加成功!'
+    // typeApp 已就绪但标记为不可访问：说明命中了后端「近期已检测过」的跳过重抓窗口(10 分钟)，
+    // 本次添加根本没有真正发起抓取——不给出说明的话，用户会误以为书签信息「没经过正常解析流程」
+    const skippedRecrawl = res?.typeApp && res.typeApp.isActivity === false
+    if (skippedRecrawl) {
+      useToastStore().warning('该网址近期已检测为无法访问，本次跳过了重新抓取，请稍后重试')
+    }
+    data.notice = skippedRecrawl ? '已添加(该网址近期检测无法访问)' : '添加成功!'
     data.input = undefined
     data.urlIsTrue = false
     searchResults.value = []
