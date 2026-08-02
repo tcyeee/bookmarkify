@@ -55,6 +55,7 @@ import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkLivenessConfigService
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.ISiteService
+import top.tcyeee.bookmarkify.server.admin.AdminUserViewAssembler
 import top.tcyeee.bookmarkify.config.event.BookmarkEnrichEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseAndNoticeEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseAndResetUserItemEvent
@@ -85,6 +86,7 @@ class BookmarkServiceImpl(
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val layoutNodeFunctionMapper: LayoutNodeFunctionMapper,
     private val bookmarkCategoryService: IBookmarkCategoryService,
+    private val adminUserViewAssembler: AdminUserViewAssembler,
     private val pingLogMapper: BookmarkPingLogMapper,
     private val bookmarkLivenessConfigService: IBookmarkLivenessConfigService,
     private val parseLock: ParseLock,
@@ -844,7 +846,35 @@ class BookmarkServiceImpl(
                     .map { CategoryVO(it.id, it.slug, it.name, it.color) }
             }
         }.onFailure { log.warn("[adminListAll] 分类回填失败(忽略): ${it.message}") }
+        runCatching { fillOwners(page.records) }
+            .onFailure { log.warn("[adminListAll] 收录者回填失败(忽略): ${it.message}") }
         return page
+    }
+
+    /**
+     * 给后台列表回填「收录者」：最早把该书签加进来的那个用户，外加收录人数。
+     *
+     * 书签表没有属主列 —— 它是全站共享的规范化记录，归属只存在于 `bookmark_user_link`。所以
+     * 这里按 bookmarkId 批量捞关联行（一次 in 查询，不是逐行查），同一书签内按 createTime 取
+     * 最早的一条当收录者。软删的关联不算：用户把书签从桌面删掉之后，他就不该再作为收录者出现。
+     */
+    private fun fillOwners(records: List<BookmarkAdminVO>) {
+        if (records.isEmpty()) return
+        val links = bookmarkUserLinkService.ktQuery()
+            .`in`(BookmarkUserLink::bookmarkId, records.map { it.id })
+            .eq(BookmarkUserLink::deleted, false)
+            .list()
+        if (links.isEmpty()) return
+        val byBookmark = links.groupBy { it.bookmarkId }
+        // 收录者用户信息同样批量取：整页的 uid 去重后一次查完
+        val firstUidOf = byBookmark.mapValues { (_, rows) -> rows.minBy { it.createTime }.uid }
+        val users = adminUserViewAssembler.findByIds(firstUidOf.values.toSet())
+        records.forEach { vo ->
+            val rows = byBookmark[vo.id].orEmpty()
+            // 人数按 uid 去重：同一个人可以把同一个网址放到桌面上的多个位置，那仍然只是一个收录者
+            vo.ownerCount = rows.map { it.uid }.distinct().size
+            vo.owner = firstUidOf[vo.id]?.let(users::get)
+        }
     }
 
     override fun adminUpdateIcon(bookmarkId: String, params: BookmarkIconUpdateParams) {

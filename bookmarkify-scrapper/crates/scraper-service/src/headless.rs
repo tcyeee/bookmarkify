@@ -57,7 +57,9 @@ pub async fn capture_headless(
 
     let _guard = tokio::time::timeout_at(deadline, HEADLESS_LOCK.lock())
         .await
-        .map_err(|_| ScrapeError::Timeout)?;
+        .map_err(|_| {
+            ScrapeError::Timeout(format!("等待无头浏览器全局锁超过 {timeout_secs}s（另一个抓取仍占用 Chrome）"))
+        })?;
 
     // Chrome 崩溃后会遗留 SingletonLock 文件，阻止下次启动；持锁后安全清除。
     // 同时处理 macOS 上 /var → /private/var 的 symlink，用 remove_dir_all 彻底清除 profile 目录。
@@ -109,7 +111,9 @@ pub async fn capture_headless(
     // 使用 deadline 的剩余时间作为 Chrome 执行超时，避免超出总预算
     let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
     if remaining.is_zero() {
-        return Err(ScrapeError::Timeout);
+        return Err(ScrapeError::Timeout(format!(
+            "拿到无头浏览器锁时 {timeout_secs}s 预算已耗尽，没有时间留给页面加载"
+        )));
     }
 
     let pages = tokio::time::timeout(remaining, async move {
@@ -117,17 +121,21 @@ pub async fn capture_headless(
         website.get_pages().map(|p| p.to_vec())
     })
     .await
-    .map_err(|_| ScrapeError::Timeout)?;
+    .map_err(|_| {
+        ScrapeError::Timeout(format!(
+            "无头浏览器加载 {url} 超时（HEADLESS_TIMEOUT_SECS={timeout_secs}, HEADLESS_IDLE_WAIT_SECS={idle_wait_secs}）"
+        ))
+    })?;
 
     // 取第一个页面；未返回任何页面视为失败
     let page = match pages {
         Some(p) if !p.is_empty() => p[0].clone(),
-        _ => return Err(ScrapeError::HeadlessFailed("no page returned".to_string())),
+        _ => return Err(ScrapeError::HeadlessFailed(format!("无头浏览器抓 {url} 没有返回任何页面"))),
     };
 
     let html = page.get_html().to_string();
     if html.is_empty() {
-        return Err(ScrapeError::HeadlessFailed("empty page html".to_string()));
+        return Err(ScrapeError::HeadlessFailed(format!("无头浏览器抓 {url} 返回了空 HTML")));
     }
 
     Ok(HeadlessCapture { html, screenshot_bytes: page.screenshot_bytes.clone() })

@@ -1,3 +1,5 @@
+import type { UserAdminVO } from '#/api/user-manage';
+
 import { requestClient } from '#/api/request';
 
 export interface CategoryVO {
@@ -91,6 +93,16 @@ export interface BookmarkEntity {
   nsfw: boolean;
   /** 人工认证：信息已核对 */
   verifyFlag?: boolean;
+
+  /**
+   * 最早收录该书签的用户。
+   *
+   * 书签是全站共享的规范化记录，没有「属主」——归属只存在于用户与书签的关联表。这里给的是
+   * 最早把它加进来的那一个，配合 {@link ownerCount} 才能看出它究竟是一个人的私藏还是热门站点。
+   */
+  owner?: null | UserAdminVO;
+  /** 收录该书签的用户数(按用户去重)。后端恒有值，无人收录时为 0 */
+  ownerCount: number;
 
   /* 巡检调度状态：后台需要能回答「这条为什么还没被复查」「为什么一直没变」 */
   /** 上次成功抓到内容的时间 */

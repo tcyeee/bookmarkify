@@ -286,6 +286,12 @@ data class BookmarkAdminVO(
     @field:Schema(description = "命中的分类") var categories: List<CategoryVO> = emptyList(),
     @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)") var nsfw: Boolean = false,
 
+    /* 收录者。书签是全站共享的规范化记录，没有"属主"这一列——归属只存在于 bookmark_user_link。
+     * 这里给的是**最早把它加进来的那个用户**，也就是这条记录当初为什么会存在的答案；
+     * [ownerCount] 一并下发，否则后台只看到一个头像会误以为全站就这一个人收藏了它。 */
+    @field:Schema(description = "最早收录该书签的用户(全部被删则为 null)") var owner: UserAdminVO? = null,
+    @field:Schema(description = "收录该书签的用户数") var ownerCount: Int = 0,
+
     /* 巡检调度状态：后台需要能回答「这条为什么还没被复查」「为什么一直没变」这类问题 */
     @field:Schema(description = "上次成功抓到内容的时间") var lastParseAt: LocalDateTime? = null,
     @field:Schema(description = "上次活性探测时间(不论结论)") var lastCheckAt: LocalDateTime? = null,
@@ -388,6 +394,11 @@ data class UserAdminVO(
     @field:Schema(description = "用户昵称") var nickName: String,
     @field:Schema(description = "设备UID") var deviceId: String,
     @field:Schema(description = "邮箱") var email: String? = null,
+    // 头像存的是 oss_object 账本ID，私有桶里的裸 key 浏览器直接用不了，必须由服务端签好再下发。
+    // 构造函数里刻意不填：签名要查账本，批量列表得走一次 in 查询才不至于 N+1。
+    @field:Schema(description = "头像签名地址(私有桶,无头像为 null)") var avatarUrl: String? = null,
+    @field:Schema(description = "绑定的 Google 邮箱") var googleEmail: String? = null,
+    @field:Schema(description = "绑定的 GitHub 用户名") var githubLogin: String? = null,
     @field:Schema(description = "用户角色") var role: RoleEnum = RoleEnum.USER,
     @field:Schema(description = "是否被删除") var deleted: Boolean = false,
     @field:Schema(description = "是否禁用") var disabled: Boolean = false,
