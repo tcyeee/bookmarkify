@@ -6,6 +6,7 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import top.tcyeee.bookmarkify.entity.dto.scrape.ImageFormat
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.scrape.Screenshot
+import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
@@ -148,6 +149,72 @@ class SiteAssetIngestorTest {
         }
         assertTrue(assets.isNotEmpty())
     }
+
+    /**
+     * 同域多产品：`tools.example.com/tools/a` 与 `/tools/b` 各有各的图标。
+     *
+     * 站点现有图标与本页声明的字节毫无交集时，这一页的 FAVICON/LOGO 改判给 PAGE 层，
+     * 否则两个独立产品的磁贴会长得一模一样。
+     */
+    @Test
+    fun `a deep link with its own icon set keeps those icons on the page layer`() {
+        val siteIcons = listOf(existingSiteIcon("sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+        val assets = SiteAssetIngestor.project(
+            "site-1", "bm-1", "https://tools.example.com/tools/glb-preview", response, 421, mapper,
+            isRootPage = false,
+            existingSiteIcons = siteIcons,
+        ).assets
+
+        assets.filter { it.role == AssetRole.FAVICON || it.role == AssetRole.LOGO }.forEach {
+            assertEquals(AssetOwnerType.PAGE, it.ownerType, "${it.extractor} 应归这一个页面")
+            assertEquals("bm-1", it.ownerId)
+        }
+    }
+
+    /**
+     * 与站点共用图标的普通深链（绝大多数情况）必须保持原样归 SITE ——
+     * 否则每条深链都存一份自己的 favicon，分层省下的开销全还回去了。
+     */
+    @Test
+    fun `an ordinary deep link still contributes its icons to the site layer`() {
+        // 站点现有图标里包含本页也声明的那张（取自契约样例）
+        val shared = existingSiteIcon("sha256:6f1b9c0d4e2a7b5c8d3f1a0e9b7c6d5a4f3e2d1c0b9a8877665544332211aabb")
+        val assets = SiteAssetIngestor.project(
+            "site-1", "bm-1", "https://github.com/vbenjs/vue-vben-admin", response, 421, mapper,
+            isRootPage = false,
+            existingSiteIcons = listOf(shared),
+        ).assets
+
+        assets.filter { it.role == AssetRole.FAVICON || it.role == AssetRole.LOGO }.forEach {
+            assertEquals(AssetOwnerType.SITE, it.ownerType, "${it.extractor} 仍是站点级图标")
+            assertEquals("site-1", it.ownerId)
+        }
+    }
+
+    /** 首页就是站点本身，它的图标永远归 SITE，不参与"是不是另一个产品"的判定 */
+    @Test
+    fun `the root page never routes its icons to the page layer`() {
+        val assets = SiteAssetIngestor.project(
+            "site-1", "bm-1", "https://github.com/", response, 421, mapper,
+            isRootPage = true,
+            existingSiteIcons = listOf(existingSiteIcon("sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")),
+        ).assets
+
+        assets.filter { it.role == AssetRole.FAVICON || it.role == AssetRole.LOGO }.forEach {
+            assertEquals(AssetOwnerType.SITE, it.ownerType, "首页图标必须归站点")
+        }
+    }
+
+    /** 库里已有的一行站点图标 */
+    private fun existingSiteIcon(hash: String) = SiteAssetEntity(
+        ownerType = AssetOwnerType.SITE,
+        ownerId = "site-1",
+        role = AssetRole.FAVICON,
+        extractor = "LINK_ICON",
+        originUrl = "https://x/favicon.png",
+        resolvedUrl = "https://x/favicon.png",
+        contentHash = hash,
+    )
 
     /**
      * 借用 favicon 充当 LOGO 后归属仍是 SITE。

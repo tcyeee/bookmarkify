@@ -33,11 +33,22 @@ export type AssetQuality = 'DEGRADED' | 'TRUSTED';
 /** 展示模式：TILE=大图+短名，LIST=小图+全名 */
 export type DisplayMode = 'LIST' | 'TILE';
 
+/**
+ * 资产归属层级。
+ *
+ * 图标(favicon/logo)正常是 SITE —— 全站共享一套。只有当某个页面被判成「同域下的另一个
+ * 产品」（它声明的图标与站点现有图标字节毫无交集，如 `tools.x.com/tools/a` 与 `/tools/b`）
+ * 时，它的图标才会是 PAGE。社交图与截图天然是 PAGE。
+ */
+export type AssetOwnerType = 'PAGE' | 'SITE';
+
 /** 单张图片资产（site_asset，一行一图） */
 export interface SiteAsset {
   id: string;
   /** 用途(后端推导) */
   role: AssetRole;
+  /** 挂在站点层还是页面层 */
+  ownerType: AssetOwnerType;
   /** 出处(scrapper 报告的事实)，如 LINK_ICON / MANIFEST_ICON / OG_IMAGE */
   extractor: string;
   quality: AssetQuality;

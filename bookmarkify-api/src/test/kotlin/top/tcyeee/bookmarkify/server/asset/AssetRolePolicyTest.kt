@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server.asset
 
 import top.tcyeee.bookmarkify.entity.dto.scrape.AssetExtractor
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
+import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
@@ -362,6 +363,112 @@ class AssetRolePolicyTest {
         val broken = roled(AssetRole.SCREENSHOT, 1280).apply { errorMsg = "upload failed" }
         val chosen = AssetRolePolicy.resolveCover(listOf(broken, roled(AssetRole.SOCIAL, 1200)))
         assertEquals(AssetRole.SOCIAL, assertNotNull(chosen).role)
+    }
+
+    // ── 同域多产品：页面自带图标 ────────────────────────────────────────────
+
+    /** 站点图标，带哈希 */
+    private fun siteIcon(hash: String, role: AssetRole = AssetRole.FAVICON, size: Int = 64) =
+        asset(AssetExtractor.LINK_ICON, size = size, hash = hash, url = "https://x/site-$hash.png")
+            .apply { this.role = role; ownerType = AssetOwnerType.SITE; ownerId = "site-1" }
+
+    /** 本次从某个深链投影出来的图标（此刻还没定归属） */
+    private fun pageIcon(hash: String, role: AssetRole = AssetRole.FAVICON, size: Int = 64) =
+        asset(AssetExtractor.LINK_ICON, size = size, hash = hash, url = "https://x/page-$hash.png")
+            .apply { this.role = role }
+
+    /**
+     * `tools.example.com/tools/a` 与 `/tools/b` 是两个独立产品，各自声明了不同的图标 ——
+     * 字节毫无交集就是它们唯一可靠的信号（manifest `scope` 要靠站点正确声明，靠不住）。
+     */
+    @Test
+    fun `a page whose icons share no bytes with the site is treated as its own product`() {
+        assertTrue(
+            AssetRolePolicy.divergesFromSite(
+                siteIcons = listOf(siteIcon("aaa")),
+                pageIcons = listOf(pageIcon("bbb")),
+            )
+        )
+    }
+
+    /**
+     * 部分重叠是普通站点的常态（共用 favicon，深链另外多声明一张 apple-touch-icon）。
+     * 判据必须是**毫无交集** —— 按"有一张不同就算独立产品"去判，几乎每条深链都会误判，
+     * 那等于把站点层取消掉。
+     */
+    @Test
+    fun `sharing even one icon with the site means it is the same product`() {
+        assertFalse(
+            AssetRolePolicy.divergesFromSite(
+                siteIcons = listOf(siteIcon("aaa")),
+                pageIcons = listOf(pageIcon("aaa"), pageIcon("ccc")),
+            )
+        )
+    }
+
+    /**
+     * 两侧都必须有可比的哈希才敢下结论。`assets.download` 非 PROBE、或那张图取回失败时
+     * `contentHash` 为空 —— 此时无从比较，宁可退回"图标全站共享"这个常态。
+     */
+    @Test
+    fun `divergence is never claimed without hashes on both sides`() {
+        assertFalse(
+            AssetRolePolicy.divergesFromSite(
+                siteIcons = listOf(siteIcon("aaa")),
+                pageIcons = listOf(pageIcon(hash = "").apply { contentHash = null }),
+            ),
+            "页面侧没有哈希时不能判成独立产品",
+        )
+        assertFalse(
+            AssetRolePolicy.divergesFromSite(
+                siteIcons = emptyList(),
+                pageIcons = listOf(pageIcon("bbb")),
+            ),
+            "站点侧一张图都没有时不能判成独立产品——那是「首页还没抓过」，该走补齐",
+        )
+    }
+
+    /** 取不回来的那张没有参考价值，不能靠它凑出"毫无交集" */
+    @Test
+    fun `unrenderable icons do not participate in the divergence check`() {
+        assertFalse(
+            AssetRolePolicy.divergesFromSite(
+                siteIcons = listOf(siteIcon("aaa")),
+                pageIcons = listOf(
+                    pageIcon("aaa"),
+                    pageIcon("zzz").apply { errorMsg = "download failed" },
+                ),
+            ),
+            "唯一不同的那张下载失败了，剩下的仍与站点相同",
+        )
+    }
+
+    /**
+     * 页面自带图标存在时必须**压过**站点图标，而不是与之竞争。
+     *
+     * 站点图标往往又大又 TRUSTED，混在一起按尺寸排序会把页面自己那张挤掉 ——
+     * 整条链路就白做了。
+     */
+    @Test
+    fun `page-owned icons beat site-owned ones regardless of size`() {
+        val chosen = AssetRolePolicy.resolve(
+            listOf(
+                siteIcon("aaa", size = 512),
+                pageIcon("bbb", size = 64).apply { ownerType = AssetOwnerType.PAGE },
+            ),
+            DisplayMode.TILE,
+        )
+        assertEquals("bbb", assertNotNull(chosen).contentHash)
+    }
+
+    /** 绝大多数站点没有页面级图标，此时行为必须与改造前完全一致 */
+    @Test
+    fun `site icons are still used when the page has none of its own`() {
+        val chosen = AssetRolePolicy.resolve(
+            listOf(siteIcon("aaa", size = 512), siteIcon("ccc", size = 64)),
+            DisplayMode.TILE,
+        )
+        assertEquals("aaa", assertNotNull(chosen).contentHash, "同为站点图标时仍按尺寸选")
     }
 
     companion object {

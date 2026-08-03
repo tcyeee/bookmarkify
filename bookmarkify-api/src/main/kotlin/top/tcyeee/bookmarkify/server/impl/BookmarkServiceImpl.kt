@@ -2144,6 +2144,7 @@ class BookmarkServiceImpl(
             SiteAssetAdminVO(
                 id = a.id,
                 role = a.role,
+                ownerType = a.ownerType,
                 extractor = a.extractor,
                 quality = a.quality,
                 // 私有读桶里的对象直连会 403，后台预览换成签名地址。
