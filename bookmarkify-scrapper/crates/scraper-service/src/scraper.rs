@@ -595,6 +595,141 @@ pub fn apply_subresource_headers(
     req
 }
 
+/// 一次活性探测的**事实**。
+///
+/// 这里刻意没有 `alive` —— "什么状态码算死"是 Bookmarkify 的判断，不是网页的属性，
+/// 和 `extractor`(事实) / `role`(策略) 的分工完全一致。判死规则在 API 侧的
+/// `LivenessPolicy.outcomeOf`，改规则不需要动这个服务，也不需要重新探测。
+#[derive(Debug, Clone)]
+pub struct ProbeOutcome {
+    /// 是否拿到了目标站点的 HTTP 响应。`false` 表示传输层就没成功（DNS/连接/TLS/超时）
+    pub reachable: bool,
+    /// 最终一跳的状态码；[`Self::reachable`] 为 false 时无意义
+    pub status: Option<u16>,
+    /// 本次探测被**我方**的 SSRF 策略拒绝了。
+    ///
+    /// 必须与 `reachable = false` 区分开：那是"站点连不上"，这是"我们没去连"。
+    /// 把后者报成前者，等于用一个我方的安全决策去给用户的书签判死 —— `/scrape`
+    /// 侧用 `FORBIDDEN_TARGET` 与 `FETCH_FAILED` 两个错误码守住了这条界线。
+    pub blocked: bool,
+    /// 实际用到的方法：`"HEAD"`，或对 HEAD 不支持的服务器回退成的 `"GET"`
+    pub method: &'static str,
+    /// 跟随了几跳重定向
+    pub redirects: u8,
+}
+
+impl ProbeOutcome {
+    fn transport_failure(method: &'static str, redirects: u8) -> Self {
+        Self {
+            reachable: false,
+            status: None,
+            blocked: false,
+            method,
+            redirects,
+        }
+    }
+
+    fn forbidden(method: &'static str, redirects: u8) -> Self {
+        Self {
+            reachable: false,
+            status: None,
+            blocked: true,
+            method,
+            redirects,
+        }
+    }
+}
+
+/// 活性探测：发 HEAD、逐跳跟随重定向，报告最终状态码。
+///
+/// 与 [`fetch_html`] 的区别是它**不读正文**，因此便宜得多，可以按小时级的频率跑全表。
+///
+/// 三个和"能不能正确判死"直接相关的细节：
+///
+/// 1. **必须跟随重定向。** `http://x.com/a` → 301 → `https://x.com/a` → 404 是最常见的
+///    形态；只看首跳会把它报成 301，于是一个已经消失的页面被判成存活。共享客户端配的是
+///    `redirect::Policy::none()`（`fetch_html` 需要逐跳现场），所以这里同样手动跟随，
+///    并对每一跳重新做 SSRF 校验 —— 重定向目标是站点控制的输入。
+/// 2. **HEAD 被拒时回退 GET。** 一台对 HEAD 一律回 405 的服务器会把该站所有页面的状态码
+///    抹平成同一个值，而 405 与 404 的差别恰恰就是"这个页面还在不在"。回退之后才敢按
+///    状态码判死。
+/// 3. **只报事实。** 状态码原样上报，不在这里折叠成布尔 —— 见 [`ProbeOutcome`]。
+pub async fn probe(url: &reqwest::Url, client: &reqwest::Client) -> ProbeOutcome {
+    let mut current = url.clone();
+    let mut prev_origin: Option<reqwest::Url> = None;
+    let mut redirects: u8 = 0;
+    // 一旦回退到 GET 就保持 GET：既然这台服务器不认 HEAD，后续每一跳也一样不认
+    let mut method = "HEAD";
+
+    loop {
+        if validate_url_scheme(&current).is_err() {
+            return ProbeOutcome::forbidden(method, redirects);
+        }
+        if let Err(e) = validate_target_host(&current).await {
+            tracing::info!(url = %current, ?e, "probe rejected: forbidden target");
+            return ProbeOutcome::forbidden(method, redirects);
+        }
+
+        let sec_fetch_site = match &prev_origin {
+            None => "none",
+            Some(prev) if prev.origin() == current.origin() => "same-origin",
+            Some(_) => "cross-site",
+        };
+        let builder = if method == "HEAD" {
+            client.head(current.clone())
+        } else {
+            client.get(current.clone())
+        };
+        let req = apply_navigation_headers(
+            builder,
+            &current,
+            DEFAULT_UA,
+            DEFAULT_ACCEPT_LANGUAGE,
+            sec_fetch_site,
+            None,
+        );
+
+        let response = match req.send().await {
+            Ok(resp) => resp,
+            Err(e) => {
+                tracing::debug!(url = %current, "probe transport error: {e}");
+                return ProbeOutcome::transport_failure(method, redirects);
+            }
+        };
+        let status = response.status();
+
+        // 服务器不认 HEAD：同一个 URL 换 GET 重来。响应体不读，`response` 出作用域即丢弃，
+        // 不会真的把正文拉下来
+        if method == "HEAD" && matches!(status.as_u16(), 405 | 501) {
+            method = "GET";
+            continue;
+        }
+
+        if status.is_redirection() && (redirects as usize) < MAX_REDIRECTS {
+            let location = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|loc| current.join(loc).ok());
+            if let Some(next) = location {
+                prev_origin = Some(current);
+                current = next;
+                redirects += 1;
+                continue;
+            }
+            // 3xx 但没有可用的 Location：这是站点自己的事实，原样上报
+        }
+
+        return ProbeOutcome {
+            reachable: true,
+            status: Some(status.as_u16()),
+            blocked: false,
+            method,
+            redirects,
+        };
+    }
+}
+
 /// 通过普通 HTTP 请求（Layer 1）取回页面 HTML。
 ///
 /// **手动跟随重定向**而不用 reqwest 的自动跟随：契约要把整条重定向链报给调用方

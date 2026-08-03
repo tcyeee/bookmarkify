@@ -129,9 +129,8 @@ CREATE TABLE bookmark (
     url_fragment                 varchar(500) DEFAULT ''::character varying NOT NULL,
     CONSTRAINT bookmark_pkey PRIMARY KEY (id)
 );
-CREATE INDEX idx_bookmark_next_check ON public.bookmark USING btree (next_check_at) WHERE ((parse_status)::text <> 'PENDING'::text);
+CREATE INDEX idx_bookmark_due_check ON public.bookmark USING btree (parse_status, COALESCE(next_check_at, '1970-01-01 00:00:00'::timestamp without time zone));
 CREATE INDEX idx_bookmark_pending ON public.bookmark USING btree (COALESCE(update_time, create_time)) WHERE ((parse_status)::text = 'PENDING'::text);
-CREATE INDEX idx_bookmark_pending_stale ON public.bookmark USING btree (COALESCE(update_time, create_time)) WHERE ((parse_status)::text = 'PENDING'::text);
 CREATE INDEX idx_bookmark_site ON public.bookmark USING btree (site_id);
 CREATE UNIQUE INDEX uk_bookmark_canonical ON public.bookmark USING btree (site_id, url_path, url_query, url_fragment);
 
@@ -159,6 +158,26 @@ CREATE TABLE bookmark_ping_log (
 CREATE INDEX idx_ping_log_bookmark ON public.bookmark_ping_log USING btree (bookmark_id, create_time DESC);
 CREATE INDEX idx_ping_log_bookmark_id ON public.bookmark_ping_log USING btree (bookmark_id);
 CREATE INDEX idx_ping_log_create_time ON public.bookmark_ping_log USING btree (create_time);
+
+CREATE TABLE bookmark_sweep_log (
+    id                           varchar(64) NOT NULL,
+    task_label                   varchar(64) NOT NULL,
+    candidates                   integer DEFAULT 0 NOT NULL,
+    backlog                      bigint DEFAULT 0 NOT NULL,
+    probed                       integer DEFAULT 0 NOT NULL,
+    short_circuited              integer DEFAULT 0 NOT NULL,
+    alive_count                  integer DEFAULT 0 NOT NULL,
+    dead_count                   integer DEFAULT 0 NOT NULL,
+    unknown_count                integer DEFAULT 0 NOT NULL,
+    triggered_parse              integer DEFAULT 0 NOT NULL,
+    deferred_parse               integer DEFAULT 0 NOT NULL,
+    breaker_reason               varchar(500),
+    duration_ms                  bigint DEFAULT 0 NOT NULL,
+    create_time                  timestamp DEFAULT now() NOT NULL,
+    CONSTRAINT bookmark_sweep_log_pkey PRIMARY KEY (id)
+);
+CREATE INDEX idx_sweep_log_create_time ON public.bookmark_sweep_log USING btree (create_time DESC);
+CREATE INDEX idx_sweep_log_breaker ON public.bookmark_sweep_log USING btree (create_time DESC) WHERE (breaker_reason IS NOT NULL);
 
 CREATE TABLE bookmark_user_link (
     id                           varchar(40) NOT NULL,

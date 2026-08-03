@@ -297,16 +297,38 @@ struct PingRequest {
     url: String,
 }
 
-/// POST /ping 的响应体结构。
+/// POST /ping 的响应体结构 —— **只报事实，不下结论**。
+///
+/// 判死是 Bookmarkify 的策略（见 API 侧 `LivenessPolicy.outcomeOf`），和 `extractor`/`role`、
+/// `storageKey`/签名 URL 是同一条分工。此前这里返回的 `alive: bool` 把
+/// "状态码 < 500 算活着"这条策略埋进了本服务，带来两个后果：改判定规则要改跨服务契约；
+/// 而 404/410 这类"页面确实没了"——用户口中"书签打不开"的绝大多数——一律被报成存活。
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct PingResponse {
-    /// 网站是否存活（HTTP 响应状态码 < 500）
+    /// 是否拿到了目标站点的 HTTP 响应（传输层是否成功）
+    reachable: bool,
+    /// 最终一跳的 HTTP 状态码；`reachable = false` 时为 null
+    status: Option<u16>,
+    /// 被本服务的 SSRF 策略拒绝。**不是**关于站点的事实，API 侧据此判成"无结论"
+    blocked: bool,
+    /// 实际用到的方法："HEAD"，或对 HEAD 不支持的服务器回退成的 "GET"
+    method: &'static str,
+    /// 跟随了几跳重定向
+    redirects: u8,
+    /// 本次探测耗时
+    elapsed_ms: u64,
+    /// **已废弃**的兼容字段：老版本 API 只读这一个。
+    ///
+    /// 保留它是为了两个服务能各自独立发布 —— 两边的部署工作流是按目录分别触发的，
+    /// 必然存在"新 scrapper + 老 API"的窗口。新版 API 读上面的事实字段，读不到才回退到它。
+    /// 等线上 API 全部升级完成后可以删除。
     alive: bool,
 }
 
-/// POST /ping：通过代理向目标 URL 发送 HEAD 请求，返回网站是否存活。
+/// POST /ping：向目标 URL 发一次 HEAD（必要时回退 GET）、跟随重定向，报告探测到的事实。
 ///
-/// 存活判定：收到任意 HTTP 响应（包括 4xx）即视为存活；连接失败或超时视为不存活。
+/// 判定"这算不算失联"的是调用方，见 [`PingResponse`]。
 async fn ping_handler(State(state): State<AppState>, Json(body): Json<PingRequest>) -> Response {
     let url = match reqwest::Url::parse(&body.url) {
         Ok(u) => u,
@@ -338,26 +360,35 @@ async fn ping_handler(State(state): State<AppState>, Json(body): Json<PingReques
     let domain = url.host_str().unwrap_or(&body.url).to_string();
     tracing::info!(domain, "ping");
 
-    // Explicit SSRF pre-flight: the shared client's SsrfSafeResolver only runs for
-    // hostnames it actually has to resolve. Many HTTP stacks (including this one) skip
-    // DNS resolution entirely when the host is already an IP literal, so a bare
-    // "http://169.254.169.254/" would otherwise reach the target directly. scrape() and
-    // favicon_to_base64() already guard against this with the same call — ping_handler
-    // was missing it. A blocked target degrades to `alive: false` rather than a distinct
-    // error, keeping this endpoint's contract simple and not revealing to the caller
-    // that we recognized it as an internal address.
-    if let Err(e) = scraper::validate_target_host(&url).await {
-        tracing::info!(domain, ?e, "ping rejected: forbidden target");
-        return Json(PingResponse { alive: false }).into_response();
-    }
+    // SSRF 校验在 `scraper::probe` 内部逐跳进行（含首跳）：共享客户端的 SsrfSafeResolver
+    // 只在需要解析主机名时才生效，而 host 已经是 IP 字面量时整个 DNS 环节会被跳过，
+    // "http://169.254.169.254/" 就能直达目标。重定向目标同样是站点控制的输入，所以
+    // 每一跳都要重校验，而不是只挡首跳。
+    let started = std::time::Instant::now();
+    let outcome = scraper::probe(&url, &state.client).await;
+    let elapsed_ms = started.elapsed().as_millis() as u64;
 
-    let alive = match state.client.head(url.as_str()).send().await {
-        Ok(resp) => resp.status().as_u16() < 500,
-        Err(_) => false,
-    };
-
-    tracing::info!(domain, alive, "ping done");
-    Json(PingResponse { alive }).into_response()
+    tracing::info!(
+        domain,
+        reachable = outcome.reachable,
+        status = outcome.status,
+        blocked = outcome.blocked,
+        method = outcome.method,
+        redirects = outcome.redirects,
+        elapsed_ms,
+        "ping done"
+    );
+    Json(PingResponse {
+        reachable: outcome.reachable,
+        status: outcome.status,
+        blocked: outcome.blocked,
+        method: outcome.method,
+        redirects: outcome.redirects,
+        elapsed_ms,
+        // 与改造前逐字节一致的旧语义，只给还没升级的 API 用
+        alive: outcome.reachable && outcome.status.is_some_and(|s| s < 500),
+    })
+    .into_response()
 }
 
 /// 并发上限触发时的兜底响应：`load_shed` 把"超过 concurrency_limit"包装成一个
@@ -1855,6 +1886,11 @@ mod tests {
 
         assert_eq!(status, StatusCode::OK);
         assert_eq!(json["alive"], false);
+        // 关键的一条：被我方拦下必须报成 blocked，而不是"站点不可达"。API 侧据此
+        // 判成「无结论」而非「失联」—— 一个我方的安全决策不该给用户的书签判死
+        assert_eq!(json["blocked"], true);
+        assert_eq!(json["reachable"], false);
+        assert!(json["status"].is_null());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert_eq!(
@@ -1862,5 +1898,162 @@ mod tests {
             0,
             "loopback listener should never be contacted"
         );
+    }
+
+    /// 起一个专供活性探测用的测试站，覆盖三种真实形态：
+    /// - `/ok`      → 200
+    /// - `/gone`    → 404（用户口中"书签打不开"的绝大多数）
+    /// - `/moved`   → 301 → `/gone`（改造前只能看到 301，于是判成存活）
+    /// - `/nohead`  → HEAD 一律 405，GET 才 200（一整类服务器的行为）
+    ///
+    /// 返回 (监听地址, 收到的「方法 路径」列表)。
+    async fn spawn_probe_site() -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let seen: Arc<std::sync::Mutex<Vec<String>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen_bg = seen.clone();
+
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else {
+                    break;
+                };
+                let seen = seen_bg.clone();
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 2048];
+                    let Ok(n) = sock.read(&mut buf).await else {
+                        return;
+                    };
+                    let req = String::from_utf8_lossy(&buf[..n]);
+                    let mut parts = req.split_whitespace();
+                    let method = parts.next().unwrap_or("GET").to_string();
+                    let path = parts.next().unwrap_or("/").to_string();
+                    seen.lock().unwrap().push(format!("{method} {path}"));
+
+                    let resp: &[u8] = match (method.as_str(), path.as_str()) {
+                        ("HEAD", "/nohead") => {
+                            b"HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        }
+                        (_, "/nohead") | (_, "/ok") => {
+                            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        }
+                        (_, "/moved") => {
+                            b"HTTP/1.1 301 Moved Permanently\r\nLocation: /gone\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        }
+                        _ => b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    };
+                    let _ = sock.write_all(resp).await;
+                    let _ = sock.shutdown().await;
+                });
+            }
+        });
+
+        (base, seen)
+    }
+
+    async fn ping_json(base: &str, path: &str) -> serde_json::Value {
+        let app = build_router(test_state(), 32);
+        let req = json_request(
+            "POST",
+            "/ping",
+            serde_json::json!({"url": format!("{base}{path}")}),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::OK);
+        json
+    }
+
+    /// 状态码必须原样上报。判死是 API 侧的策略，本服务只报事实。
+    #[tokio::test]
+    async fn ping_reports_status_code_verbatim() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let (base, _) = spawn_probe_site().await;
+
+        let ok = ping_json(&base, "/ok").await;
+        assert_eq!(ok["reachable"], true);
+        assert_eq!(ok["status"], 200);
+        assert_eq!(ok["blocked"], false);
+
+        // 改造前这里只有一个 alive=true，"页面已经没了"这个事实彻底丢失
+        let gone = ping_json(&base, "/gone").await;
+        assert_eq!(gone["reachable"], true);
+        assert_eq!(gone["status"], 404);
+
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+    }
+
+    /// 必须跟随重定向：`/moved` → 301 → `/gone`。
+    /// 只看首跳会把一个已经消失的页面报成 301，进而被判成存活。
+    #[tokio::test]
+    async fn ping_follows_redirects_to_final_status() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let (base, _) = spawn_probe_site().await;
+
+        let json = ping_json(&base, "/moved").await;
+        assert_eq!(json["status"], 404, "应当报最终一跳的状态码而不是 301");
+        assert_eq!(json["redirects"], 1);
+
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+    }
+
+    /// HEAD 被拒时回退 GET：否则一台对 HEAD 一律回 405 的服务器会把该站所有页面的
+    /// 状态码抹平成同一个值，而 405 与 404 的差别恰恰就是"这个页面还在不在"。
+    #[tokio::test]
+    async fn ping_falls_back_to_get_when_head_is_rejected() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let (base, seen) = spawn_probe_site().await;
+
+        let json = ping_json(&base, "/nohead").await;
+        assert_eq!(json["status"], 200);
+        assert_eq!(json["method"], "GET");
+
+        let seen = seen.lock().unwrap().clone();
+        assert!(
+            seen.contains(&"HEAD /nohead".to_string()),
+            "应当先试 HEAD: {seen:?}"
+        );
+        assert!(
+            seen.contains(&"GET /nohead".to_string()),
+            "405 后应当回退 GET: {seen:?}"
+        );
+
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+    }
+
+    /// 连不上时是 `reachable = false`，且**不带** blocked —— 与"我方拒绝去连"必须分开：
+    /// 前者是站点的事实，后者是我方的安全决策，API 侧一个判失联、一个判无结论。
+    ///
+    /// 直接测 [`scraper::probe`] 而不走 `/ping`：本用例要制造的是"传输层失败"，而共享
+    /// 客户端会继承环境里的 `HTTP_PROXY`，有代理时连不上的目标会变成代理返回的 502 —— 那
+    /// 是一次成功的 HTTP 往返，命题就不成立了。这里自建一个 `no_proxy()` 客户端把它排除掉。
+    #[tokio::test]
+    async fn probe_transport_failure_is_not_blocked() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        // 绑完立刻丢掉 listener，端口上没有任何东西在听
+        let addr = {
+            let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            l.local_addr().unwrap()
+        };
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+
+        let url = reqwest::Url::parse(&format!("http://{addr}/")).unwrap();
+        let outcome = scraper::probe(&url, &client).await;
+        assert!(!outcome.reachable);
+        assert!(!outcome.blocked, "连不上不是「我方拒绝去连」");
+        assert!(outcome.status.is_none());
+
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
     }
 }

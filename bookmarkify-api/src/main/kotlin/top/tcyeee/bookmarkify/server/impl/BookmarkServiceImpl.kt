@@ -94,6 +94,7 @@ class BookmarkServiceImpl(
     private val bookmarkCategoryService: IBookmarkCategoryService,
     private val adminUserViewAssembler: AdminUserViewAssembler,
     private val pingLogMapper: BookmarkPingLogMapper,
+    private val sweepLogMapper: BookmarkSweepLogMapper,
     private val bookmarkLivenessConfigService: IBookmarkLivenessConfigService,
     private val parseLock: ParseLock,
     @Qualifier(AsyncConfig.BOOKMARK_PARSE_EXECUTOR) private val parseExecutor: ThreadPoolTaskExecutor,
@@ -533,6 +534,26 @@ class BookmarkServiceImpl(
         }
     }.onFailure { log.warn("[drainStuckLoading] 终结耗尽占位失败(忽略): ${it.message}") }.let { }
 
+    /**
+     * 本轮巡检对某条记录掌握的**证据强度**。
+     *
+     * 存在的理由：站点层短路（见 [pingSweepExclusively]）会给一批页面直接安上 DEAD，而那不是
+     * 本轮探测出来的，是上一轮站点结论的复用。这批"非证据"已经被排除在熔断样本之外，但
+     * 失败计数与归档判定这两处一直照单全收 —— 于是一次站点级误判能在 10 个退避周期内把
+     * 该域名下**所有**书签推进 ARCHIVED，而归档此前没有任何自动出口。
+     */
+    private data class ProbeEvidence(
+        /** 本轮是否真的对这个页面发起了探测 */
+        val directlyProbed: Boolean,
+        /** 所属域名的连续失败次数，来自根地址的真实探测 */
+        val siteConsecutiveFail: Int,
+    ) {
+        companion object {
+            /** 解析链路等"就是刚探过/刚抓过这一条"的场景 */
+            val DIRECT = ProbeEvidence(directlyProbed = true, siteConsecutiveFail = 0)
+        }
+    }
+
     @Async(AsyncConfig.BOOKMARK_SWEEP_EXECUTOR)
     override fun retryUnreachableBookmarks() {
         // 一轮只读一次配置：getConfig() 是一次 system_config 查询，没有缓存，
@@ -546,7 +567,7 @@ class BookmarkServiceImpl(
             configuredIntervalHours = config.abnormalCheckIntervalHours,
             batchSize = RETRY_UNREACHABLE_BATCH_SIZE,
             triggeredParseOf = { bookmark, outcome -> outcome == PingOutcome.ALIVE && !bookmark.verifyFlag },
-        ) { bookmark, outcome, triggeredParse ->
+        ) { bookmark, outcome, triggeredParse, evidence ->
             if (triggeredParse) {
                 // 调度状态交给重新解析那条链路去写（成功回到正常周期、失败继续退避），
                 // 这里抢着写只会被它覆盖，还会掩盖真实的失败次数
@@ -558,7 +579,7 @@ class BookmarkServiceImpl(
                     PingOutcome.UNKNOWN -> "探测无结论"
                 }
                 log.debug("[retryUnreachableBookmarks] $reason: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
-                persistProbeResult(bookmark, outcome, config)
+                persistProbeResult(bookmark, outcome, config, evidence = evidence)
             }
         }
     }
@@ -575,7 +596,7 @@ class BookmarkServiceImpl(
             configuredIntervalHours = config.activeCheckIntervalHours,
             batchSize = LIVENESS_CHECK_BATCH_SIZE,
             triggeredParseOf = { bookmark, outcome -> shouldRefreshContent(bookmark, outcome, config) },
-        ) { bookmark, outcome, triggeredParse ->
+        ) { bookmark, outcome, triggeredParse, evidence ->
             if (triggeredParse) {
                 // 同上：调度状态由重新解析那条链路负责写
                 log.debug("[livenessCheckStaleBookmarks] 内容已过期，触发重新抓取: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
@@ -587,7 +608,54 @@ class BookmarkServiceImpl(
                     PingOutcome.UNKNOWN -> "探测无结论，只做短退避"
                 }
                 log.debug("[livenessCheckStaleBookmarks] $reason: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
-                persistProbeResult(bookmark, outcome, config, markUnreachable = outcome == PingOutcome.DEAD)
+                persistProbeResult(
+                    bookmark, outcome, config,
+                    markUnreachable = outcome == PingOutcome.DEAD,
+                    evidence = evidence,
+                )
+            }
+        }
+    }
+
+    /**
+     * 复活探测：每天捞一批 [ParseStatusEnum.ARCHIVED] 的记录，ping 通就重新抓取。
+     *
+     * ## 为什么必须有这个任务
+     *
+     * 归档此前是一个**没有出口的终态**：两个常规巡检分别只认 SUCCESS 与 UNREACHABLE，
+     * `checkAll` 只认 PENDING，于是一条记录一旦归档，除非管理员手动点刷新，否则永远
+     * 不会再被碰一次。而通往归档的证据链上是有可能出错的 —— 域名临时改了 DNS、
+     * 机房出口被目标站点拉黑一段时间、我方连续几轮判断失误，都足以把一个健在的站点
+     * 连同它下面所有页面送进去。让一个自动流程能把记录推进不可逆终态，却不给同样自动的
+     * 出口，这个不对称本身就是设计缺陷。
+     *
+     * 频率取每天一次、批量取得很小：归档记录按定义是"两个多月都没通过"的，它们恢复
+     * 与否没有任何时效压力，这个任务的存在只是为了保证**存在一条回来的路**。
+     */
+    @Async(AsyncConfig.BOOKMARK_SWEEP_EXECUTOR)
+    override fun reviveArchivedBookmarks() {
+        val config = bookmarkLivenessConfigService.getConfig()
+        pingSweep(
+            taskLabel = "reviveArchivedBookmarks",
+            statusFilter = ParseStatusEnum.ARCHIVED,
+            configuredIntervalHours = (ARCHIVE_RECHECK_DAYS * 24).toInt(),
+            batchSize = REVIVE_ARCHIVED_BATCH_SIZE,
+            // 已手动认证的不重抓（与另两个巡检一致），但 ping 结果照样值得记录
+            triggeredParseOf = { bookmark, outcome -> outcome == PingOutcome.ALIVE && !bookmark.verifyFlag },
+        ) { bookmark, outcome, triggeredParse, _ ->
+            if (triggeredParse) {
+                // 抓取成功会走 markParseSucceeded 写回 SUCCESS，这条记录就此回到常规巡检的候选池
+                log.warn("[reviveArchivedBookmarks] 归档站点重新可达，触发重新抓取: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+            } else {
+                // 仍然不通：只把游标推到下一个复活探测周期。**不走 persistProbeResult** ——
+                // 那会继续累加 consecutiveFail 并按退避曲线算 next_check_at，而归档记录的
+                // 退避早已到顶，再累加只是让这个数字无意义地涨下去
+                runCatching {
+                    ktUpdate().eq(BookmarkEntity::id, bookmark.id)
+                        .set(BookmarkEntity::lastCheckAt, LocalDateTime.now())
+                        .set(BookmarkEntity::nextCheckAt, LocalDateTime.now().plusDays(ARCHIVE_RECHECK_DAYS))
+                        .update()
+                }.onFailure { log.warn("[reviveArchivedBookmarks] 游标推进失败: bookmarkId=${bookmark.id}, err=${it.message}") }
             }
         }
     }
@@ -635,17 +703,19 @@ class BookmarkServiceImpl(
         configuredIntervalHours: Int,
         batchSize: Int,
         triggeredParseOf: (bookmark: BookmarkEntity, outcome: PingOutcome) -> Boolean,
-        onResult: (bookmark: BookmarkEntity, outcome: PingOutcome, triggeredParse: Boolean) -> Unit,
+        onResult: (bookmark: BookmarkEntity, outcome: PingOutcome, triggeredParse: Boolean, evidence: ProbeEvidence) -> Unit,
     ) {
         val lockKey = ParseLock.sweep(taskLabel)
-        if (!parseLock.tryAcquire(lockKey, SWEEP_LOCK_TTL)) {
+        // 带凭据释放：一轮跑超 TTL 时，无条件 DEL 会把下一轮刚拿到的锁删掉，
+        // 于是"跑得比预期慢"直接升级成"两轮并发跑"。见 ParseLock.acquire
+        val token = parseLock.acquire(lockKey, SWEEP_LOCK_TTL) ?: run {
             log.warn("[$taskLabel] 上一轮巡检仍在进行(或另一实例正在跑)，本轮跳过")
             return
         }
         try {
             pingSweepExclusively(taskLabel, statusFilter, configuredIntervalHours, batchSize, triggeredParseOf, onResult)
         } finally {
-            parseLock.release(lockKey)
+            parseLock.release(lockKey, token)
         }
     }
 
@@ -655,14 +725,14 @@ class BookmarkServiceImpl(
         configuredIntervalHours: Int,
         batchSize: Int,
         triggeredParseOf: (bookmark: BookmarkEntity, outcome: PingOutcome) -> Boolean,
-        onResult: (bookmark: BookmarkEntity, outcome: PingOutcome, triggeredParse: Boolean) -> Unit,
+        onResult: (bookmark: BookmarkEntity, outcome: PingOutcome, triggeredParse: Boolean, evidence: ProbeEvidence) -> Unit,
     ) {
         val startedAt = System.currentTimeMillis()
         val now = LocalDateTime.now()
 
         val totalBacklog = ktQuery()
             .eq(BookmarkEntity::parseStatus, statusFilter)
-            .and { it.le(BookmarkEntity::nextCheckAt, now).or().isNull(BookmarkEntity::nextCheckAt) }
+            .apply(DUE_CLAUSE, now)
             .count()
         if (totalBacklog > batchSize) {
             log.warn(
@@ -673,10 +743,9 @@ class BookmarkServiceImpl(
 
         val candidates = ktQuery()
             .eq(BookmarkEntity::parseStatus, statusFilter)
-            .and { it.le(BookmarkEntity::nextCheckAt, now).or().isNull(BookmarkEntity::nextCheckAt) }
-            // 最该查的优先处理，配合 LIMIT 保证积压记录会被逐批消费，不会被新记录饿死。
-            // NULLS FIRST 是默认的升序行为在 PostgreSQL 里的反面，显式写出来：没有调度状态的记录最优先。
-            .last("ORDER BY next_check_at ASC NULLS FIRST LIMIT $batchSize")
+            .apply(DUE_CLAUSE, now)
+            // 最该查的优先处理，配合 LIMIT 保证积压记录会被逐批消费，不会被新记录饿死
+            .last("ORDER BY $DUE_CURSOR ASC LIMIT $batchSize")
             .list()
             // 非域名类型(本地/IP/其他)不抓取，也不应对其发起存活 ping
             .filter { WebsiteParser.classifyLinkType(it.urlHost) == BookmarkLinkType.DOMAIN }
@@ -718,11 +787,34 @@ class BookmarkServiceImpl(
         val breakerReason = LivenessPolicy.breakerReason(actuallyProbed.map { it.second })
 
         val probed = actuallyProbed + shortCircuited
+
+        // ── 向解析池投递的背压 ──
+        // 一轮最多 200 条候选，全都想重新抓取时就是 200 个事件一次性砸进解析池。那个池的队列
+        // (500) 是和用户交互式 addOne 共享的，且满了以后走 CallerRunsPolicy —— 调用线程正是
+        // 本方法所在的巡检线程，于是最长 60s 的抓取会在这里**同步**跑，200 条就是几小时，
+        // 远超巡检锁 30 分钟的 TTL，下一个整点的轮次会与本轮并发跑。
+        // 更隐蔽的一层：解析池最多 32 线程，一起打 scrapper 会顶穿它 32 的全局并发上限
+        // (AsyncConfig.PING_CONCURRENCY 的注释里记着这条跨服务约束)，被 load_shed 打回 503
+        // → E307 → parseByApi 直接原样返回、一个字段都不落库 → 这些行的 next_check_at 停在
+        // 过去，永久占据 `ORDER BY next_check_at` 的队头。三件事在这里闭环成一个自我强化的
+        // 坏循环，所以按队列余量截断，与 drainStuckLoading 守同一条规矩。
+        val parseBudget = if (breakerReason != null) 0 else {
+            (parseExecutor.threadPoolExecutor.queue.remainingCapacity() - SWEEP_PARSE_QUEUE_HEADROOM).coerceAtLeast(0)
+        }
+        var granted = 0
         // 熔断时依旧落 ping 日志：这批结果本身就是判断「我方哪里坏了」的证据，
         // 不落等于把唯一的现场也丢了。只是 triggeredParse 全为 false，且不改动任何书签。
-        val triggeredParseOfEach = probed.map { (bookmark, outcome) ->
+        val wantsParse = probed.map { (bookmark, outcome) ->
             breakerReason == null && triggeredParseOf(bookmark, outcome)
         }
+        val triggeredParseOfEach = wantsParse.map { want ->
+            (want && granted < parseBudget).also { if (it) granted++ }
+        }
+        val deferredCount = wantsParse.count { it } - granted
+        if (deferredCount > 0) log.warn(
+            "[$taskLabel] 解析队列余量不足，本轮推迟 $deferredCount 条重新抓取(可用额度=$parseBudget)，" +
+                "这些记录会在 ${TRIGGERED_PARSE_PROTECT_HOURS}h 后重新入选"
+        )
         // 只为**真正探测过**的页面落 ping 日志：这张表的语义是"一次探测一行"，
         // 把短路的也写进去会让失联率、探测耗时这些基于它的统计全部失真。
         pingLogMapper.insert(
@@ -736,15 +828,58 @@ class BookmarkServiceImpl(
             }
         )
 
+        // 一轮一行，无论正常完成还是熔断。见 BookmarkSweepLogEntity：
+        // 熔断的语义是"我方链路坏了，本轮全表结论不可信"，此前它唯一的出口是一行 log.error，
+        // 而日志会滚动、没人盯着。落成数据之后"最近一天熔断过几次"才是一句 SQL
+        fun recordRound() = runCatching {
+            sweepLogMapper.insert(
+                BookmarkSweepLogEntity(
+                    taskLabel = taskLabel,
+                    candidates = candidates.size,
+                    backlog = totalBacklog,
+                    probed = actuallyProbed.size,
+                    shortCircuited = shortCircuited.size,
+                    aliveCount = probed.count { it.second == PingOutcome.ALIVE },
+                    deadCount = probed.count { it.second == PingOutcome.DEAD },
+                    unknownCount = probed.count { it.second == PingOutcome.UNKNOWN },
+                    triggeredParse = granted,
+                    deferredParse = deferredCount,
+                    breakerReason = breakerReason?.take(500),
+                    durationMs = System.currentTimeMillis() - startedAt,
+                )
+            )
+        }.onFailure { log.warn("[$taskLabel] 巡检汇总落库失败(忽略): ${it.message}") }.let { }
+
         if (breakerReason != null) {
             log.error("[$taskLabel] 熔断，本轮不改动任何书签: $breakerReason")
+            recordRound()
             return
         }
 
+        // 哪些是站点层短路出来的（结论是复用的，不是本轮的新证据）。
+        // 用 id 而不是引用比较：同一条记录在两个列表里是同一个对象，但显式一点更稳
+        val shortCircuitedIds = shortCircuited.mapTo(HashSet()) { it.first.id }
+
         probed.forEachIndexed { index, (bookmark, outcome) ->
-            val triggeredParse = triggeredParseOfEach[index]
-            onResult(bookmark, outcome, triggeredParse)
-            if (triggeredParse) eventPublisher.publishEvent(BookmarkParseEvent(bookmark.id))
+            val evidence = ProbeEvidence(
+                directlyProbed = bookmark.id !in shortCircuitedIds,
+                siteConsecutiveFail = siteMap[bookmark.siteId]?.consecutiveFail ?: 0,
+            )
+            when {
+                triggeredParseOfEach[index] -> {
+                    // **投递前先把游标推开。** 见 protectSchedule：调用方刻意把调度状态交给解析
+                    // 链路去写，而那条链路有好几条不落库的出口
+                    protectSchedule(bookmark)
+                    onResult(bookmark, outcome, true, evidence)
+                    eventPublisher.publishEvent(BookmarkParseEvent(bookmark.id))
+                }
+                // 想抓但被背压推迟：探测结论不落库（它只是"该重抓了"的依据，不是一个终态），
+                // 只把游标推开一小段，等队列松快了下一轮再来。若走 onResult 的常规分支，
+                // 这条 ALIVE 会被写成"正常周期"，于是一次队列拥堵会把这批记录推迟整整一个
+                // 检测周期（默认 7 天），而它们本该是最急着被重抓的那批
+                wantsParse[index] -> protectSchedule(bookmark)
+                else -> onResult(bookmark, outcome, false, evidence)
+            }
         }
 
         updateSiteLiveness(taskLabel, actuallyProbed, siteMap, recovery)
@@ -758,8 +893,10 @@ class BookmarkServiceImpl(
                 "失联=${probed.count { it.second == PingOutcome.DEAD }}, " +
                 "无结论=${probed.count { it.second == PingOutcome.UNKNOWN }}, " +
                 "触发重新抓取=${triggeredParseOfEach.count { it }}, " +
+                "因队列拥堵推迟=$deferredCount, " +
                 "耗时=${System.currentTimeMillis() - startedAt}ms"
         )
+        recordRound()
     }
 
     // ────── 站点层活性 ──────
@@ -856,16 +993,24 @@ class BookmarkServiceImpl(
         // 默认自己去读：解析链路一次只处理一条书签，多一次查询无所谓。批量巡检必须显式传入
         // 本轮已经读好的那份，否则每条记录都要多一次 system_config 往返
         config: BookmarkLivenessConfigValue = bookmarkLivenessConfigService.getConfig(),
+        // 本轮结论是否来自对**这个页面**的实际探测。站点层短路出来的 DEAD 是上一轮结论的复用，
+        // 不是新证据 —— 它已经被排除在熔断样本之外（见 pingSweepExclusively），
+        // 失败计数这一侧却一直漏着，理由完全相同
+        directlyProbed: Boolean = true,
     ) {
         val now = LocalDateTime.now()
         lastCheckAt = now
         if (contentRefreshed) lastParseAt = now
-        consecutiveFail = when (outcome) {
-            PingOutcome.ALIVE -> 0
-            PingOutcome.DEAD -> consecutiveFail + 1
+        consecutiveFail = when {
+            outcome == PingOutcome.ALIVE -> 0
+            // 没探测就没有新证据。少了这一条，一个域名被误判死亡后，其下**所有**页面
+            // 会在 10 个退避周期里被逐条推进 ARCHIVED —— 而归档没有自动出口，
+            // 一次站点级误判就这样静默吃掉整个域名的书签
+            !directlyProbed -> consecutiveFail
+            outcome == PingOutcome.DEAD -> consecutiveFail + 1
             // 无结论是我方链路的问题，不能记在站点账上：否则一次抓取服务故障就把全表推到
             // 退避曲线末端，之后半个月都不再复查
-            PingOutcome.UNKNOWN -> consecutiveFail
+            else -> consecutiveFail
         }
         nextCheckAt = LivenessPolicy.nextCheckAt(
             now = now,
@@ -874,6 +1019,41 @@ class BookmarkServiceImpl(
             activeIntervalHours = config.activeCheckIntervalHours,
             abnormalIntervalHours = config.abnormalCheckIntervalHours,
         )
+    }
+
+    /**
+     * 把调度游标往前推一小段，**只动游标**，不碰状态、不碰失败计数。
+     *
+     * ## 这个方法存在的全部理由
+     *
+     * 巡检在决定"这条要重新抓取"时刻意不写调度列，把它交给解析链路（成功回到正常周期、
+     * 失败继续退避）——这个分工本身是对的，抢着写只会被覆盖，还会掩盖真实的失败次数。
+     * 但它有个前提：**解析链路一定会写**。而它有好几条出口不写：
+     *
+     * - `parseByApi` 判定 [isScrapperUnavailable]（E307）时原样 `return`，一个字段都不落库；
+     * - [parseBookmark] 拿不到解析锁时直接返回；
+     * - 监听器里的 `runCatching` 吞掉任意异常。
+     *
+     * 任一发生，这条记录的 `next_check_at` 就停在一个已经过去的时刻。而候选查询是
+     * `ORDER BY next_check_at ASC NULLS FIRST LIMIT n` —— 它会**永久占据队头**，把后面的
+     * 记录全部饿死。`retryUnreachableBookmarks` 的批量只有 50，凑够 50 条这样的记录，
+     * 这个任务就再也探不到第 51 条。这与 `drainStuckLoading` 用 `dispatch_attempts`
+     * 解决的是同一类事故，只是巡检这侧一直没有对应的机制。
+     *
+     * 取一个短间隔而不是完整周期：正常情况下解析链路马上就会用真实结论覆盖它，这个值
+     * 只在上面那几条异常出口上生效，那时我们希望它尽快被重试，而不是等一整个周期。
+     */
+    private fun protectSchedule(bookmark: BookmarkEntity) {
+        val now = LocalDateTime.now()
+        // 刻意不写 updateTime：这里没有改动记录的任何业务内容，只是挪了一下巡检游标
+        runCatching {
+            ktUpdate().eq(BookmarkEntity::id, bookmark.id)
+                .set(BookmarkEntity::lastCheckAt, now)
+                .set(BookmarkEntity::nextCheckAt, now.plusHours(TRIGGERED_PARSE_PROTECT_HOURS))
+                .update()
+        }.onFailure {
+            log.warn("[protectSchedule] 保护性游标写入失败: bookmarkId=${bookmark.id}, err=${it.message}")
+        }
     }
 
     /** 解析成功后推进调度：内容确实被刷新了。 */
@@ -963,13 +1143,29 @@ class BookmarkServiceImpl(
         outcome: PingOutcome,
         config: BookmarkLivenessConfigValue,
         markUnreachable: Boolean = false,
+        evidence: ProbeEvidence = ProbeEvidence.DIRECT,
     ) {
-        bookmark.advanceSchedule(outcome, config = config)
-        val archived = outcome == PingOutcome.DEAD && LivenessPolicy.shouldArchive(bookmark.consecutiveFail)
+        bookmark.advanceSchedule(outcome, config = config, directlyProbed = evidence.directlyProbed)
+        val archived = outcome == PingOutcome.DEAD && when {
+            evidence.directlyProbed -> LivenessPolicy.shouldArchive(bookmark.consecutiveFail)
+            // 站点层短路的页面本轮没被探测，它的 consecutiveFail 已经不再增长（见 advanceSchedule），
+            // 于是永远够不到归档阈值。归档改由**域名**的连续失败次数决定 —— 那来自根地址的
+            // 真实探测，是这条路径上唯一的新证据。少了这一支，一个域名下上千个页面会永远
+            // 停在候选池里，每轮吃掉 LIMIT 名额，把真正该复查的记录挤出去
+            else -> LivenessPolicy.shouldArchive(evidence.siteConsecutiveFail)
+        }
         val update = ktUpdate().eq(BookmarkEntity::id, bookmark.id)
             .set(BookmarkEntity::lastCheckAt, bookmark.lastCheckAt)
             .set(BookmarkEntity::nextCheckAt, bookmark.nextCheckAt)
             .set(BookmarkEntity::consecutiveFail, bookmark.consecutiveFail)
+        if (archived) {
+            // 归档不是终点，只是退出常规巡检。游标推到复活探测的周期上，
+            // 由 reviveArchivedBookmarks 每天捞一次 —— 见那个方法的说明
+            update.set(
+                BookmarkEntity::nextCheckAt,
+                LocalDateTime.now().plusDays(ARCHIVE_RECHECK_DAYS)
+            )
+        }
         if (markUnreachable || archived) {
             if (archived) {
                 // 用 warn 而不是 info：MyBatis-Plus 的 ServiceImpl 自带一个 org.apache.ibatis Log
@@ -1637,14 +1833,14 @@ class BookmarkServiceImpl(
      */
     private fun parseBookmark(bookmark: BookmarkEntity, cacheMode: CacheMode = CacheMode.DEFAULT): BookmarkEntity {
         val lockKey = ParseLock.bookmark(bookmark.id)
-        if (!parseLock.tryAcquire(lockKey, PARSE_LOCK_TTL)) {
+        val token = parseLock.acquire(lockKey, PARSE_LOCK_TTL) ?: run {
             log.debug("[parseBookmark] 该书签已有解析在途，跳过本次: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
             return baseMapper.selectById(bookmark.id) ?: bookmark
         }
         return try {
             parseBookmarkExclusively(bookmark, cacheMode)
         } finally {
-            parseLock.release(lockKey)
+            parseLock.release(lockKey, token)
         }
     }
 
@@ -2103,8 +2299,29 @@ class BookmarkServiceImpl(
         // PENDING 正常几分钟内就会被异步解析消费掉；超过这个时长还没变化，基本可判定是解析事件丢失/进程重启丢弃，
         // 而不是网站本身的活性问题——所以用远短于活性检测的分钟级窗口，而不是活性检测的小时/天级窗口。
         private const val CHECKALL_PENDING_STALE_MINUTES = 30L
+        /**
+         * 巡检候选的调度游标表达式。
+         *
+         * `next_check_at IS NULL` 一律视为「到期」（宁可多查一次，也不能让一条没有调度状态的
+         * 记录永久失踪），但把它写成 `next_check_at <= ? OR next_check_at IS NULL` 有两个代价：
+         * 那个 OR 不可 sarg，而 `ORDER BY next_check_at ASC NULLS FIRST` 又与 btree 升序默认的
+         * NULLS LAST 相反 —— 两件事合起来意味着每一轮的 count 与 select 都要把该状态下的全部
+         * 记录排一遍。折成 COALESCE 之后谓词与排序用的是同一个表达式，正好配一条表达式索引
+         * (`idx_bookmark_due_check`)，也和 `checkAll` 里 `COALESCE(update_time, create_time)`
+         * 的既有写法一致。
+         *
+         * 纪元时间充当「从未调度过」的哨兵：它永远小于任何 now，语义上就是最优先。
+         */
+        private const val DUE_CURSOR = "COALESCE(next_check_at, TIMESTAMP '1970-01-01')"
+        private const val DUE_CLAUSE = "$DUE_CURSOR <= {0}"
         private const val RETRY_UNREACHABLE_BATCH_SIZE = 50
         private const val LIVENESS_CHECK_BATCH_SIZE = 200
+        // 复活探测的批量。取得小是刻意的：这批记录按定义已经两个多月探不通，恢复与否
+        // 没有任何时效压力，这个任务存在只是为了保证「有一条回来的路」，不是为了跑得快
+        private const val REVIVE_ARCHIVED_BATCH_SIZE = 50
+        // 归档记录多久复活探测一次。与退避曲线的顶端(abnormal × 16 ≈ 16 天)同量级，
+        // 略长一点，表示它已经不属于常规巡检的节奏了
+        private const val ARCHIVE_RECHECK_DAYS = 30L
         private const val MAX_IMPORT_BOOKMARK_COUNT = 2000
         // addOne 判重时最多回捞多少条「同域名的导入占位」做规范化比对（见 assertNotPendingImport）。
         // 同一用户在同一域名下同时挂着几百条待抓占位已经极端，够用且不会让判重本身变成慢查询。
@@ -2116,6 +2333,14 @@ class BookmarkServiceImpl(
         // 补投递时给解析队列留出的余量，供交互式 addOne 抢占——批量导入把队列填满的话，
         // 用户手动添加的那一条就会被 CallerRunsPolicy 甩回 HTTP 请求线程上同步抓取。
         private const val DRAIN_QUEUE_HEADROOM = 50
+        // 巡检向解析池投递时留出的余量。比 DRAIN_QUEUE_HEADROOM 更保守：补投递面向的是
+        // 用户桌面上正在转圈的格子（有人在等），而巡检的重新抓取是纯后台内容刷新（没人在等），
+        // 两者抢同一个队列时，该让路的显然是后者。
+        private const val SWEEP_PARSE_QUEUE_HEADROOM = 150
+        // 巡检投递重新抓取前写入的保护性游标间隔，见 protectSchedule。
+        // 取 1h（与调度周期同量级）而不是更短：解析链路正常会立刻用真实结论覆盖它，
+        // 这个值只在那几条不落库的异常出口上生效，太短会让一个持续故障变成每分钟重试。
+        private const val TRIGGERED_PARSE_PROTECT_HOURS = 1L
         // 单轮补投递上限：即使队列很空也不一次性捞几千条，避免一次导入独占整个队列
         private const val DRAIN_MAX_BATCH_SIZE = 200
         // 一条占位最多补投递几次。超过即由 terminateExhaustedLoading 就地终结成无源书签。

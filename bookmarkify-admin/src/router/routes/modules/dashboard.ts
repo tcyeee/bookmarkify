@@ -98,6 +98,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        name: 'ScrapperSweep',
+        path: '/scrapper/sweep',
+        component: () => import('#/views/scrapper/sweep/index.vue'),
+        meta: {
+          icon: 'carbon:activity',
+          title: 'Scrapper 巡检健康',
+        },
+      },
+      {
         name: 'ScrapperCheck',
         path: '/scrapper/check',
         component: () => import('#/views/scrapper/check/index.vue'),

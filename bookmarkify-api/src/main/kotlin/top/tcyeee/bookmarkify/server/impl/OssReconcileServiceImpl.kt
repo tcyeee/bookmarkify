@@ -75,7 +75,9 @@ class OssReconcileServiceImpl(
         val report = OssReconcileReport(scannedPrefixes = prefixes)
 
         val lockKey = ParseLock.sweep(SWEEP_LABEL)
-        if (!parseLock.tryAcquire(lockKey, SWEEP_LOCK_TTL)) {
+        // 带凭据释放：全桶 ListObjects 的耗时随对象数增长，超过 TTL 时无条件 DEL
+        // 会删掉下一轮刚拿到的锁，把"跑得慢"升级成"两轮并发扫同一个桶"。见 ParseLock.acquire
+        val token = parseLock.acquire(lockKey, SWEEP_LOCK_TTL) ?: run {
             log.warn("[OssReconcile] 上一轮对账仍在进行(或另一实例正在跑)，本轮跳过")
             report.errorMsg = "另一轮对账正在进行中"
             report.durationMs = System.currentTimeMillis() - startedAt
@@ -166,7 +168,7 @@ class OssReconcileServiceImpl(
             log.warn("[OssReconcile] 对账失败: err={}", it.message, it)
         }
         } finally {
-            parseLock.release(lockKey)
+            parseLock.release(lockKey, token)
         }
 
         report.durationMs = System.currentTimeMillis() - startedAt

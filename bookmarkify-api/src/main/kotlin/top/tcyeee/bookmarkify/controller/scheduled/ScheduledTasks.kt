@@ -44,6 +44,14 @@ class ScheduledTasks(
     @Scheduled(cron = "0 0 * * * ?")
     fun livenessCheckStaleBookmarks() = bookmarkService.livenessCheckStaleBookmarks()
 
+    /**
+     * 放在凌晨 2 点：与两个整点/半点的小时级巡检彻底错开，且这批记录按定义已经两个多月
+     * 探不通，什么时候复活探测都不影响任何人。
+     */
+    @Description("每天凌晨 2 点复活探测已归档的书签：ping 通则重新抓取，让归档不再是没有出口的终态")
+    @Scheduled(cron = "0 0 2 * * ?")
+    fun reviveArchivedBookmarks() = bookmarkService.reviveArchivedBookmarks()
+
     @Description("每天凌晨 3 点清理过期的活性探测日志，避免这张只增不减的表无限膨胀")
     @Scheduled(cron = "0 0 3 * * ?")
     fun purgeExpiredPingLogs() = bookmarkPingLogService.purgeExpired()
