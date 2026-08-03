@@ -20,14 +20,14 @@ class BookmarkParseEventListener(private val bookmarkService: IBookmarkService) 
     @Async(AsyncConfig.BOOKMARK_PARSE_EXECUTOR)
     @EventListener
     fun onParse(event: BookmarkParseEvent) = runCatching {
-        bookmarkService.parseAndSave(event.bookmarkId)
-    }.onFailure { log.error("[Async] BookmarkParseEvent 处理失败: bookmarkId={}", event.bookmarkId, it) }.let { }
+        bookmarkService.parseAndSave(event.pageId)
+    }.onFailure { log.error("[Async] BookmarkParseEvent 处理失败: pageId={}", event.pageId, it) }.let { }
 
     @Async(AsyncConfig.BOOKMARK_PARSE_EXECUTOR)
     @EventListener
     fun onParseAndNotice(event: BookmarkParseAndNoticeEvent) = runCatching {
-        bookmarkService.parseAndNotice(event.uid, event.bookmarkId, event.userLinkId, event.nodeLayoutId)
-    }.onFailure { log.error("[Async] BookmarkParseAndNoticeEvent 处理失败: bookmarkId={}", event.bookmarkId, it) }.let { }
+        bookmarkService.parseAndNotice(event.uid, event.pageId, event.userLinkId, event.nodeLayoutId)
+    }.onFailure { log.error("[Async] BookmarkParseAndNoticeEvent 处理失败: pageId={}", event.pageId, it) }.let { }
 
     @Async(AsyncConfig.BOOKMARK_PARSE_EXECUTOR)
     @EventListener
@@ -39,8 +39,8 @@ class BookmarkParseEventListener(private val bookmarkService: IBookmarkService) 
     @Async(AsyncConfig.BOOKMARK_ENRICH_EXECUTOR)
     @EventListener
     fun onEnrich(event: BookmarkEnrichEvent) = runCatching {
-        bookmarkService.enrich(event.bookmarkId)
-    }.onFailure { log.error("[Async] BookmarkEnrichEvent 处理失败: bookmarkId={}", event.bookmarkId, it) }.let { }
+        bookmarkService.enrich(event.pageId)
+    }.onFailure { log.error("[Async] BookmarkEnrichEvent 处理失败: pageId={}", event.pageId, it) }.let { }
 
     /**
      * 跑在**单线程**的 [AsyncConfig.BOOKMARK_SCREENSHOT_EXECUTOR] 上：见 [BookmarkScreenshotEvent]。
@@ -51,6 +51,6 @@ class BookmarkParseEventListener(private val bookmarkService: IBookmarkService) 
     @Async(AsyncConfig.BOOKMARK_SCREENSHOT_EXECUTOR)
     @EventListener
     fun onScreenshot(event: BookmarkScreenshotEvent) = runCatching {
-        bookmarkService.captureScreenshot(event.bookmarkId)
-    }.onFailure { log.warn("[Async] 截图补抓失败(不影响书签): bookmarkId={}, err={}", event.bookmarkId, it.message) }.let { }
+        bookmarkService.captureScreenshot(event.pageId)
+    }.onFailure { log.warn("[Async] 截图补抓失败(不影响书签): pageId={}, err={}", event.pageId, it.message) }.let { }
 }

@@ -20,7 +20,7 @@ BookmarkServiceImpl.addOne
    ├─ 规范化 URL → canonical 四元组
    ├─ getOrCreateByUrl  ── 全站共享的 bookmark 记录
    ├─ 判重（已收藏 / 已在导入队列 → E126）
-   ├─ 事务写入 user_layout_node + bookmark_user_link
+   ├─ 事务写入 user_layout_node + bookmark
    └─ needParse ? 返回 LOADING 占位 : 返回完整数据
    │
    │ ② 事务提交后发布 BookmarkParseAndNoticeEvent
@@ -94,14 +94,14 @@ bookmarkParseExecutor（8~32 线程，队列 500）
 | 2 | `getOrCreateByUrl(wrapper)` | 按 **(siteId, urlPath, urlQuery, urlFragment)** 四元组取或建 canonical 记录 |
 | 3 | `assertNotAlreadyLinked(uid, bookmark)` | 已收藏 → E126；顺带查导入队列（见下） |
 | 4 | 判定 `needParse` | `checkFlag() \|\| needRecheckOnAdd()` |
-| 5 | 事务写 `user_layout_node` + `bookmark_user_link` | 两条必须原子 |
+| 5 | 事务写 `user_layout_node` + `bookmark` | 两条必须原子 |
 | 6 | 返回 VO，并在事务提交后发事件 | |
 
 **为什么第 2 步刻意留在事务之外**：它靠"捕获唯一键冲突后回查"来收敛并发插入，而 PostgreSQL 里事务内一旦触发约束冲突，整个事务进入 aborted 状态，回查那条 SELECT 也会一并失败。代价是极端情况下多出一条无人引用的 canonical 记录，下次添加同一网址会复用它。
 
 **为什么第 5 步必须是一个事务**：分开写时第二条失败，用户桌面上会留下一个没有任何书签数据的孤儿节点——`layout()` 按 `layoutNodeId` 找不到对应的 `BookmarkShow`，前端只能渲染出一个点不开也删不掉的空格子。
 
-**判重为什么查两次**（`assertNotAlreadyLinked` / `assertNotPendingImport`）：主检查按 canonical `bookmarkId` 比对（同一页面的 `github.com/x`、`https://github.com/x/` 写法各异但记录是同一条）；而批量导入写下的关联行 `bookmark_id` 是字符串常量 `'LOADING'`，永远匹配不上主检查，导入正在跑时手动添加同一网址就会多出一个磁贴。第二道检查先用 host 子串在 SQL 侧收窄，再把回捞的行规范化后比四元组。`linkOne` 走完全相同的两道检查。
+**判重为什么查两次**（`assertNotAlreadyLinked` / `assertNotPendingImport`）：主检查按 canonical `bookmarkId` 比对（同一页面的 `github.com/x`、`https://github.com/x/` 写法各异但记录是同一条）；而批量导入写下的关联行 `page_id` 是字符串常量 `'LOADING'`，永远匹配不上主检查，导入正在跑时手动添加同一网址就会多出一个磁贴。第二道检查先用 host 子串在 SQL 侧收窄，再把回捞的行规范化后比四元组。`linkOne` 走完全相同的两道检查。
 
 ### `needParse` 的判定
 
@@ -185,8 +185,8 @@ Layer 1 的客户端必须同时有 `redirect::Policy::none()`（手动逐跳跟
 `parseByApi` 拿到 `ScrapeResponse` 后：
 
 1. `vo.applyTo(bookmark)` 写主表；`appName` 优先取 manifest 的 `short_name`，拿不到才退回 DeepSeek 推断（最长 10s，**必须在事务外**）
-2. `restoreLockedFields(manual)` 还原被人工锁定的字段（`bookmark.locked_fields`）——抓取路径可以读锁，绝不能写锁
-3. **一个短事务**里同时提交主表与 `SiteAssetWriter.persist`（`scrape_snapshot` + `site_page_meta` + `site_asset`）。分成两个事务时，中间失败会留下 `parse_status=SUCCESS` 却一条资产都没有的书签，而三个对账任务都按 `parse_status` 过滤，没有任何一个会回来补它
+2. `restoreLockedFields(manual)` 还原被人工锁定的字段（`page.locked_fields`）——抓取路径可以读锁，绝不能写锁
+3. **一个短事务**里同时提交主表与 `SiteAssetWriter.persist`（`scrape_snapshot` + `page_meta` + `site_asset`）。分成两个事务时，中间失败会留下 `parse_status=SUCCESS` 却一条资产都没有的书签，而三个对账任务都按 `parse_status` 过滤，没有任何一个会回来补它
 4. `siteService.applyCrawledMeta` 回写站点级品牌名（首页可覆盖，深链只在站点侧还没值时回填）
 
 回到 `parseAndNotice`：
@@ -243,7 +243,7 @@ resolved.parseStatus == PENDING ?   → 直接 return，节点保持 LOADING（�
 
 ### 补投递的重试预算（`dispatch_attempts`）
 
-`drainStuckLoading` 每次补投递给 `bookmark_user_link.dispatch_attempts` 加一，超过 5 次就由 `terminateExhaustedLoading` 就地终结。
+`drainStuckLoading` 每次补投递给 `bookmark.dispatch_attempts` 加一，超过 5 次就由 `terminateExhaustedLoading` 就地终结。
 
 **为什么需要上限**：`findStuckLoading` 是 `ORDER BY created_at ASC LIMIT n`，而补投递锁只让在途的那些被跳过、并不改变它们仍然排在最前面这一事实。于是一批「永远收不了口」的记录会稳定占满那 n 个名额，排在后面的行一轮都轮不到——一次导入的后半截可能永远抓不完，而日志里看不出任何异常。
 
@@ -253,7 +253,7 @@ resolved.parseStatus == PENDING ?   → 直接 return，节点保持 LOADING（�
 
 `drainStuckLoading` 每轮输出「此刻有多少条在转圈、最久的转了多久、其中多少是导入积压」（`stuckLoadingStats`）。超过 30 分钟陈旧阈值还在转的会打 `warn`。
 
-这是整条链路唯一真正的成败指标，而在此之前它没有任何一处被观测：`scrapper_call_log` 记的是单次调用、`bookmark_ping_log` 记的是巡检，都回答不了「用户现在还在等的有几条」。上面那张兜底矩阵因此只是"设计上应该成立"，线上无从验证。
+这是整条链路唯一真正的成败指标，而在此之前它没有任何一处被观测：`scrapper_call_log` 记的是单次调用、`page_ping_log` 记的是巡检，都回答不了「用户现在还在等的有几条」。上面那张兜底矩阵因此只是"设计上应该成立"，线上无从验证。
 
 ### 前端侧兜底的三件事（它们是一组，不是可选加固）
 
@@ -273,14 +273,14 @@ resolved.parseStatus == PENDING ?   → 直接 return，节点保持 LOADING（�
 
 | | 单条添加 | 批量导入 |
 |---|---|---|
-| 关联行的 `bookmark_id` | 真实 canonical id | 字符串常量 `'LOADING'` |
+| 关联行的 `page_id` | 真实 canonical id | 字符串常量 `'LOADING'` |
 | 是否发解析事件 | 发 | **完全不发** |
 | 消费通道 | 事件 + `drainStuckLoading` 兜底 | 只有 `drainStuckLoading` |
 | 陈旧阈值 | 要等 30 分钟才判定"事件丢了" | 无需等待，写下就等着被捞 |
 
 **导入不发事件是刻意的**：几千条逐个投递会把解析池连同队列一起打满，最终回退到调用线程——也就是 HTTP 请求线程——同步跑完整段抓取。`drainStuckLoading` 改为按线程池**当前空闲队列容量**投递，并留出余量给交互式的 addOne。
 
-导入路径的收口走 `parseAndResetUserItem`：抓完后把 `bookmark_id` 从 `'LOADING'` 重绑到真实 canonical id，再翻转节点。网址本身就解析不出来的（`javascript:` 小书签、`about:` 页面，导入时不做过滤）必须就地终结成一条无源书签，否则 `drainStuckLoading` 会无限重投同一条。
+导入路径的收口走 `parseAndResetUserItem`：抓完后把 `page_id` 从 `'LOADING'` 重绑到真实 canonical id，再翻转节点。网址本身就解析不出来的（`javascript:` 小书签、`about:` 页面，导入时不做过滤）必须就地终结成一条无源书签，否则 `drainStuckLoading` 会无限重投同一条。
 
 ---
 
@@ -293,11 +293,11 @@ resolved.parseStatus == PENDING ?   → 直接 return，节点保持 LOADING（�
 5. **WebSocket 推送不可靠，客户端必须能自愈。** 服务端没有离线队列也不重试；§7 那三件事缺一不可。
 6. **新增一种推送就新增一个消息类型**，不要复用 `HOME_ITEM_UPDATE`——三种布局消息的 payload 形状不同，客户端正是靠类型区分的。
 7. **判重永远落在 canonical 四元组上**，不是 URL 字符串；前端的本地判重只是省一次往返，规则必须弱于后端。
-8. **判重的权威是唯一索引 `uk_bul_uid_bookmark`，不是 `assertNotAlreadyLinked`。** 那道检查是 check-then-act，两个并发请求可以同时通过；此前真正挡住重复磁贴的其实是 `addOne` 上那个 1 秒的 `@Throttle`——而限流是 UX 设施，参数会因为"加书签太慢"被调宽，`ThrottleAspect` 在 Redis 故障时更是**明确降级放行**。正确性不能挂在限流器上。新增写 `bookmark_user_link` 的入口时，记得走 `insertNodeAndLink`（它把 `DuplicateKeyException` 翻成 E126）。
+8. **判重的权威是唯一索引 `uk_bookmark_uid_page`，不是 `assertNotAlreadyLinked`。** 那道检查是 check-then-act，两个并发请求可以同时通过；此前真正挡住重复磁贴的其实是 `addOne` 上那个 1 秒的 `@Throttle`——而限流是 UX 设施，参数会因为"加书签太慢"被调宽，`ThrottleAspect` 在 Redis 故障时更是**明确降级放行**。正确性不能挂在限流器上。新增写 `bookmark` 的入口时，记得走 `insertNodeAndLink`（它把 `DuplicateKeyException` 翻成 E126）。
 9. **改 `parse_status` 只能通过 `markParseSucceeded()` / `markParseUnreachable()`。** 那四个字段之间有约束（SUCCESS 必然 `isActivity=true` 且 `parseErrMsg` 为空），而漏掉调度列那一句不会报任何错——那条记录的 `next_check_at` 就停在旧值上，要么被每轮巡检重复选中，要么再也不被选中。这五行曾被逐字复制十遍。
-10. **`bookmark_id = 'LOADING'` 表示"等着被绑定"，NULL 表示"确定没有 canonical 记录"。** 无源书签终结时必须把标记清成 NULL（`clearUnboundMarker`），否则 `assertNotPendingImport` 会永远把它当成还在导入队列里，用户之后添加同一个网址会撞上一个假的 E126。
+10. **`page_id = 'LOADING'` 表示"等着被绑定"，NULL 表示"确定没有 canonical 记录"。** 无源书签终结时必须把标记清成 NULL（`clearUnboundMarker`），否则 `assertNotPendingImport` 会永远把它当成还在导入队列里，用户之后添加同一个网址会撞上一个假的 E126。
 11. **本服务当前只能单实例运行。** `SessionManager` 的会话在进程内存里，`@Scheduled` 没有分布式锁。`SingleInstanceGuard` 会在检测到第二个实例时每分钟打一条 error——它只报警不阻止启动，看到那条日志就是真的出问题了。要横向扩容必须先接入 ShedLock **加上** WebSocket 推送的 Redis pub/sub 扇出，两者缺一不可。
-12. **显示偏好是全站级的，用户级差异只能存在于 `bookmark_user_link`。** `bookmark` 是全站共享的可变记录：A 用户添加触发的重抓会改变 B 用户桌面上那条书签的标题和图标。`locked_fields` / `verifyFlag` 是**管理员级**的锁，解决不了"两个用户对同一页面有不同期望"。`site_display_pref` 按 `(bookmark, display_mode)` 而非 `(user, bookmark, mode)` 建键是同一个决定的延伸——真要做用户级图标覆盖时，这里需要一次迁移。
+12. **显示偏好是全站级的，用户级差异只能存在于 `bookmark`。** `page` 是全站共享的可变记录：A 用户添加触发的重抓会改变 B 用户桌面上那条书签的标题和图标。`locked_fields` / `verifyFlag` 是**管理员级**的锁，解决不了"两个用户对同一页面有不同期望"。`site_display_pref` 按 `(bookmark, display_mode)` 而非 `(user, bookmark, mode)` 建键是同一个决定的延伸——真要做用户级图标覆盖时，这里需要一次迁移。
 
 ---
 

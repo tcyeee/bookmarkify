@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.Param
 import top.tcyeee.bookmarkify.entity.entity.ScrapeSnapshotEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
-import top.tcyeee.bookmarkify.entity.entity.SitePageMetaEntity
+import top.tcyeee.bookmarkify.entity.entity.PageMetaEntity
 
 /** 网站图片资产（一行一图） */
 @Mapper
@@ -15,7 +15,7 @@ interface SiteAssetMapper : BaseMapper<SiteAssetEntity>
 
 /** 页面文字元数据 */
 @Mapper
-interface SitePageMetaMapper : BaseMapper<SitePageMetaEntity>
+interface PageMetaMapper : BaseMapper<PageMetaEntity>
 
 /** 展示偏好（书签 × 展示模式），只由人工写入 */
 @Mapper
@@ -40,7 +40,7 @@ interface ScrapeSnapshotMapper : BaseMapper<ScrapeSnapshotEntity> {
         """
         DELETE FROM scrape_snapshot s USING (
             SELECT id, row_number() OVER (
-                       PARTITION BY bookmark_id ORDER BY fetched_at DESC, id DESC
+                       PARTITION BY page_id ORDER BY fetched_at DESC, id DESC
                    ) AS rn
             FROM scrape_snapshot
         ) ranked

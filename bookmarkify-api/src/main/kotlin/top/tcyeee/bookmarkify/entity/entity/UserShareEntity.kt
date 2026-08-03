@@ -42,6 +42,6 @@ data class UserShareEntity(
 data class UserShareBookmarkEntity(
     @TableId val id: String = IdUtil.fastUUID(),
     @field:Size(max = 64) @field:Schema(description = "所属分享ID") var shareId: String,
-    @field:Size(max = 64) @field:Schema(description = "关联的用户书签ID(bookmark_user_link.id)") var bookmarkUserLinkId: String,
+    @field:Size(max = 64) @field:Schema(description = "关联的用户书签ID(bookmark_user_link.id)") var bookmarkId: String,
     @field:Schema(description = "排序") var sort: Int = 0,
 )

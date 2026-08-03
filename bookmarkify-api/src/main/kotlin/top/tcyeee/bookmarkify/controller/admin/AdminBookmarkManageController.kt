@@ -37,48 +37,48 @@ class AdminBookmarkManageController(
         bookmarkService.adminListAll(params)
 
     // 修改单个书签基础信息（标题/简介），非空字段才会覆盖
-    @PostMapping("/{bookmarkId}/update")
+    @PostMapping("/{pageId}/update")
     fun updateBookmark(
-        @PathVariable bookmarkId: String, @RequestBody params: BookmarkBasicInfoUpdateParams
-    ): BookmarkAdminVO = bookmarkService.adminUpdateBasicInfo(bookmarkId, params)
+        @PathVariable pageId: String, @RequestBody params: BookmarkBasicInfoUpdateParams
+    ): BookmarkAdminVO = bookmarkService.adminUpdateBasicInfo(pageId, params)
 
     // 修改单个书签的图标设置（图片内边距 iconPadding、图标背景色 iconBgColor）
-    @PostMapping("/{bookmarkId}/icon")
+    @PostMapping("/{pageId}/icon")
     fun updateBookmarkIcon(
-        @PathVariable bookmarkId: String, @RequestBody params: BookmarkIconUpdateParams
-    ) = bookmarkService.adminUpdateIcon(bookmarkId, params)
+        @PathVariable pageId: String, @RequestBody params: BookmarkIconUpdateParams
+    ) = bookmarkService.adminUpdateIcon(pageId, params)
 
     // 重新获取：重新解析网站标题与图标（不落库），返回预览数据供前端对比选择
-    @PostMapping("/{bookmarkId}/refetch")
-    fun refetchBookmark(@PathVariable bookmarkId: String): BookmarkRefetchVO =
-        bookmarkService.adminRefetch(bookmarkId)
+    @PostMapping("/{pageId}/refetch")
+    fun refetchBookmark(@PathVariable pageId: String): BookmarkRefetchVO =
+        bookmarkService.adminRefetch(pageId)
 
     // 应用重新获取的结果：按选择采用新标题/新图标并持久化
-    @PostMapping("/{bookmarkId}/refetch/apply")
+    @PostMapping("/{pageId}/refetch/apply")
     fun applyRefetchBookmark(
-        @PathVariable bookmarkId: String, @RequestBody params: BookmarkRefetchApplyParams
-    ): BookmarkAdminVO = bookmarkService.adminApplyRefetch(bookmarkId, params)
+        @PathVariable pageId: String, @RequestBody params: BookmarkRefetchApplyParams
+    ): BookmarkAdminVO = bookmarkService.adminApplyRefetch(pageId, params)
 
     // 手动覆盖式设置某书签的分类
-    @PostMapping("/{bookmarkId}/categories")
+    @PostMapping("/{pageId}/categories")
     fun updateCategories(
-        @PathVariable bookmarkId: String, @RequestBody params: BookmarkCategoriesParams
-    ): List<CategoryVO> = bookmarkService.adminUpdateCategories(bookmarkId, params.categoryIds)
+        @PathVariable pageId: String, @RequestBody params: BookmarkCategoriesParams
+    ): List<CategoryVO> = bookmarkService.adminUpdateCategories(pageId, params.categoryIds)
 
     // 对某书签重新执行 DeepSeek 自动归类
-    @PostMapping("/{bookmarkId}/categorize")
-    fun recategorize(@PathVariable bookmarkId: String): List<CategoryVO> =
-        bookmarkService.adminRecategorize(bookmarkId)
+    @PostMapping("/{pageId}/categorize")
+    fun recategorize(@PathVariable pageId: String): List<CategoryVO> =
+        bookmarkService.adminRecategorize(pageId)
 
     // AI 推荐相似网站（仅展示，不入库；返回项带 exists 标记本地是否已收录）
-    @PostMapping("/{bookmarkId}/similar")
-    fun similar(@PathVariable bookmarkId: String): List<SimilarSite> =
-        bookmarkService.adminSimilarSites(bookmarkId)
+    @PostMapping("/{pageId}/similar")
+    fun similar(@PathVariable pageId: String): List<SimilarSite> =
+        bookmarkService.adminSimilarSites(pageId)
 
     // 「一键收录」：异步收录传入的相似网站域名，立即返回；逐站进度经 WebSocket(SIMILAR_INGEST_UPDATE) 推送
-    @PostMapping("/{bookmarkId}/similar/ingest")
+    @PostMapping("/{pageId}/similar/ingest")
     fun ingestSimilar(
-        @PathVariable bookmarkId: String, @RequestBody params: SimilarIngestParams
+        @PathVariable pageId: String, @RequestBody params: SimilarIngestParams
     ): Map<String, Any> {
         val adminUid = StpKit.ADMIN.loginIdAsString
         val domains = params.domains.distinct()
@@ -87,31 +87,31 @@ class AdminBookmarkManageController(
     }
 
     // DeepSeek 生成书签简称建议（不落库，供前端填入编辑框）
-    @PostMapping("/{bookmarkId}/appname/generate")
-    fun generateAppName(@PathVariable bookmarkId: String): AppNameSuggestVO =
-        AppNameSuggestVO(bookmarkService.adminGenerateAppName(bookmarkId))
+    @PostMapping("/{pageId}/appname/generate")
+    fun generateAppName(@PathVariable pageId: String): AppNameSuggestVO =
+        AppNameSuggestVO(bookmarkService.adminGenerateAppName(pageId))
 
     // 删除单个书签信息 (使用POST替换DELETE)
-    @PostMapping("/{bookmarkId}/delete")
-    fun deleteBookmark(@PathVariable bookmarkId: Long): ResponseEntity<Void> {
+    @PostMapping("/{pageId}/delete")
+    fun deleteBookmark(@PathVariable pageId: Long): ResponseEntity<Void> {
         // 实现删除单个书签信息的逻辑
         return ResponseEntity.ok().build()
     }
 
     // 对某个书签进行活性检测：直接调用 scrapper 重新抓取一次，回传其给出的全部字段，并同步落库 isActivity/parseStatus
-    @PostMapping("/{bookmarkId}/liveness")
-    fun checkBookmarkLiveness(@PathVariable bookmarkId: String): BookmarkLivenessVO =
-        bookmarkService.adminCheckLiveness(bookmarkId)
+    @PostMapping("/{pageId}/liveness")
+    fun checkBookmarkLiveness(@PathVariable pageId: String): BookmarkLivenessVO =
+        bookmarkService.adminCheckLiveness(pageId)
 
     // 图片资产重新抓取：只重抓图片，不覆盖标题/简介、不解锁人工锁；本次没抓到则保留原图
-    @PostMapping("/{bookmarkId}/assets/refetch")
-    fun refetchAssets(@PathVariable bookmarkId: String): BookmarkAssetRefetchVO =
-        bookmarkService.adminRefetchAssets(bookmarkId)
+    @PostMapping("/{pageId}/assets/refetch")
+    fun refetchAssets(@PathVariable pageId: String): BookmarkAssetRefetchVO =
+        bookmarkService.adminRefetchAssets(pageId)
 
     // 「一键更新」：重新抓取网站信息并直接覆盖持久化标题/简介/图标/高清 LOGO，同步落库 isActivity/parseStatus
-    @PostMapping("/{bookmarkId}/refresh")
-    fun refreshBookmark(@PathVariable bookmarkId: String): BookmarkAdminVO =
-        bookmarkService.adminRefresh(bookmarkId)
+    @PostMapping("/{pageId}/refresh")
+    fun refreshBookmark(@PathVariable pageId: String): BookmarkAdminVO =
+        bookmarkService.adminRefresh(pageId)
 
     /* 书签集管理 */
 

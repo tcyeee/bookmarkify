@@ -5,7 +5,7 @@ import top.tcyeee.bookmarkify.entity.dto.scrape.Asset
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.entity.ScrapeSnapshotEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
-import top.tcyeee.bookmarkify.entity.entity.SitePageMetaEntity
+import top.tcyeee.bookmarkify.entity.entity.PageMetaEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
@@ -22,14 +22,14 @@ object SiteAssetIngestor {
     /** 一次抓取投影出来的全部行。 */
     data class Projection(
         val snapshot: ScrapeSnapshotEntity,
-        val pageMeta: SitePageMetaEntity?,
+        val pageMeta: PageMetaEntity?,
         val assets: List<SiteAssetEntity>,
     )
 
     /**
      * 成功抓取的投影。
      *
-     * @param bookmarkId 目标书签
+     * @param pageId 目标书签
      * @param url 请求的 URL（非 finalUrl —— 快照要记的是"我们请求了什么"）
      * @param response scrapper 响应
      * @param durationMs 端到端耗时
@@ -37,14 +37,14 @@ object SiteAssetIngestor {
      */
     fun project(
         siteId: String,
-        bookmarkId: String,
+        pageId: String,
         url: String,
         response: ScrapeResponse,
         durationMs: Int,
         mapper: ObjectMapper,
     ): Projection {
         val snapshot = ScrapeSnapshotEntity(
-            bookmarkId = bookmarkId,
+            pageId = pageId,
             url = url,
             ok = true,
             request = response.request?.let { mapper.writeValueAsString(it) },
@@ -54,8 +54,8 @@ object SiteAssetIngestor {
 
         val meta = response.meta
         val pageMeta = meta?.let {
-            SitePageMetaEntity(
-                bookmarkId = bookmarkId,
+            PageMetaEntity(
+                pageId = pageId,
                 title = it.title,
                 description = it.description,
                 siteName = it.siteName,
@@ -77,10 +77,10 @@ object SiteAssetIngestor {
         // 归属必须在 assignRoles 之后算：那一步的第三遍会把借来的 favicon 改判成 LOGO，
         // 归属得按最终的 role 来定。
         val declared = AssetRolePolicy.assignRoles(
-            response.assets.mapNotNull { toEntity(bookmarkId, it) }
+            response.assets.mapNotNull { toEntity(pageId, it) }
         ).onEach { it.assignOwner(siteId) }
 
-        val assets = declared + listOfNotNull(screenshotAsset(bookmarkId, url, response))
+        val assets = declared + listOfNotNull(screenshotAsset(pageId, url, response))
 
         return Projection(snapshot, pageMeta, assets)
     }
@@ -88,26 +88,26 @@ object SiteAssetIngestor {
     /**
      * 按最终 role 决定挂在 site 还是 bookmark 上。
      *
-     * `bookmarkId` 保持原值不动 —— 它降级成了纯溯源信息（"这张图当初是从哪个页面抓到的"），
+     * `pageId` 保持原值不动 —— 它降级成了纯溯源信息（"这张图当初是从哪个页面抓到的"），
      * 归属看 `ownerType` / `ownerId`。
      */
     private fun SiteAssetEntity.assignOwner(siteId: String) {
         ownerType = AssetRolePolicy.ownerTypeOf(role)
         ownerId = when (ownerType) {
             AssetOwnerType.SITE -> siteId
-            AssetOwnerType.PAGE -> bookmarkId.orEmpty()
+            AssetOwnerType.PAGE -> pageId.orEmpty()
         }
     }
 
     /** 抓取失败时只留快照，便于事后排查为什么失败。 */
     fun projectFailure(
-        bookmarkId: String,
+        pageId: String,
         url: String,
         errorMsg: String?,
         durationMs: Int,
     ): Projection = Projection(
         snapshot = ScrapeSnapshotEntity(
-            bookmarkId = bookmarkId,
+            pageId = pageId,
             url = url,
             ok = false,
             errorMsg = errorMsg?.take(1000),
@@ -124,10 +124,10 @@ object SiteAssetIngestor {
      * 声明了这张图但取不到"，对排查比直接丢弃有用。role/quality 稍后由
      * [AssetRolePolicy.assignRoles] 统一判定。
      */
-    private fun toEntity(bookmarkId: String, a: Asset): SiteAssetEntity? {
+    private fun toEntity(pageId: String, a: Asset): SiteAssetEntity? {
         if (a.resolvedUrl.isBlank()) return null
         return SiteAssetEntity(
-            bookmarkId = bookmarkId,
+            pageId = pageId,
             extractor = a.extractor.name,
             originUrl = a.originUrl.take(1000),
             resolvedUrl = a.resolvedUrl.take(1000),
@@ -159,7 +159,7 @@ object SiteAssetIngestor {
      * @return 没有截图、或截图只内联未落存储时返回 null
      */
     fun screenshotAsset(
-        bookmarkId: String,
+        pageId: String,
         pageUrl: String,
         response: ScrapeResponse,
     ): SiteAssetEntity? {
@@ -170,10 +170,10 @@ object SiteAssetIngestor {
         // 截图针对的是跟完重定向后的最终页面
         val source = response.fetch.finalUrl.takeIf { it.isNotBlank() } ?: pageUrl
         return SiteAssetEntity(
-            bookmarkId = bookmarkId,
+            pageId = pageId,
             // 截图就是这一个页面的内容，天然属于 PAGE 层
             ownerType = AssetOwnerType.PAGE,
-            ownerId = bookmarkId,
+            ownerId = pageId,
             role = AssetRole.SCREENSHOT,
             extractor = "HEADLESS_CAPTURE",
             quality = AssetQuality.TRUSTED,

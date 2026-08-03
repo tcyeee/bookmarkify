@@ -15,9 +15,9 @@ data class BookmarkDir(
     var bookmarkList: List<BookmarkShow>? = null,   // 详细书签信息,用于展示
 ) {
 
-    constructor(name: String, bookmarkIds: List<String>) : this(
+    constructor(name: String, pageIds: List<String>) : this(
         name = name,
-        bookmarkUserLinkIds = bookmarkIds
+        bookmarkUserLinkIds = pageIds
     )
 
     constructor(database: Map<String, BookmarkShow>, json: String?) : this(

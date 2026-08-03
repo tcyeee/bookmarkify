@@ -3,27 +3,27 @@ package top.tcyeee.bookmarkify.entity.dto
 /**
  * 一条「用户桌面上还在转圈」的书签，由对账任务补投递解析事件。
  *
- * [bookmarkId] 为字面量 `"LOADING"` 表示这是批量导入写下的占位、还没绑定到 canonical 书签，
+ * [pageId] 为字面量 `"LOADING"` 表示这是批量导入写下的占位、还没绑定到 canonical 书签，
  * 需要走「按网址解析并重新绑定」那条路；否则说明 canonical 书签已确定，只是解析没跑完。
  */
 data class StuckLoadingItem(
     val userLinkId: String,
     val uid: String,
-    val bookmarkId: String?,
+    val pageId: String?,
     val urlFull: String,
     val layoutNodeId: String,
 ) {
     /** 导入占位符：尚未绑定 canonical 书签。 */
-    val unbound: Boolean get() = bookmarkId.isNullOrBlank() || bookmarkId == UNBOUND_BOOKMARK_ID
+    val unbound: Boolean get() = pageId.isNullOrBlank() || pageId == UNBOUND_BOOKMARK_ID
 
     companion object {
-        /** 批量导入时写进 bookmark_user_link.bookmark_id 的占位值，见 BookmarkUserLink 的导入构造函数。 */
+        /** 批量导入时写进 bookmark_user_link.page_id 的占位值，见 BookmarkEntity 的导入构造函数。 */
         const val UNBOUND_BOOKMARK_ID = "LOADING"
     }
 }
 
 /**
- * 「此刻有多少用户桌面在转圈」的快照，由 `BookmarkUserLinkMapper.stuckLoadingStats` 产出。
+ * 「此刻有多少用户桌面在转圈」的快照，由 `BookmarkMapper.stuckLoadingStats` 产出。
  *
  * 这是添加书签这条链路唯一真正的 SLI —— 整套「同步段 + 占位 + WebSocket 推送 + 四个对账任务」
  * 的设计，成败就体现在这两个数字上。此前它们没有任何一处被观测：`scrapper_call_log` 记的是

@@ -8,7 +8,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
+import top.tcyeee.bookmarkify.entity.entity.PageEntity
 
 /**
  * @author tcyeee
@@ -26,7 +26,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkImportPreviewVO
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 
-interface IBookmarkService : IService<BookmarkEntity> {
+interface IBookmarkService : IService<PageEntity> {
     /** 每 5 分钟对账一次 PENDING 书签：只负责「异步解析事件丢失/未完成」的兜底重投，不做活性判断 */
     fun checkAll()
 
@@ -47,7 +47,7 @@ interface IBookmarkService : IService<BookmarkEntity> {
      * 由 BookmarkEnrichEvent 在**独立线程池**上触发，不占用解析池——这两件事用户看不到，
      * 不该让它们的耗时体现在「加书签要转多久圈」上。
      */
-    fun enrich(bookmarkId: String)
+    fun enrich(pageId: String)
 
     /**
      * 抓取成功后补一张页面截图，作为详情面板的封面。
@@ -56,7 +56,7 @@ interface IBookmarkService : IService<BookmarkEntity> {
      * 无头浏览器，而 scrapper 侧的 Chrome 由一把全局互斥锁串行化，这边多开只会一起堵在
      * 对端那把锁上。抓不到就没有封面，前端按可选处理。
      */
-    fun captureScreenshot(bookmarkId: String)
+    fun captureScreenshot(pageId: String)
 
     /**
      * 书签详情弹窗顶部那张封面的签名地址（截图优先，退 og:image）。
@@ -94,7 +94,7 @@ interface IBookmarkService : IService<BookmarkEntity> {
     fun search(name: String): List<BookmarkSearchVO>
 
     /** 关联一个已验证通过的书签 */
-    fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO
+    fun linkOne(pageId: String, uid: String): UserLayoutNodeVO
 
     /** 查看我的全部书签 */
     fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): IPage<BookmarkShow>
@@ -109,26 +109,26 @@ interface IBookmarkService : IService<BookmarkEntity> {
     fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO>
 
     /** 管理员修改书签图标设置（图片内边距 iconPadding、图标背景色 iconBgColor） */
-    fun adminUpdateIcon(bookmarkId: String, params: BookmarkIconUpdateParams)
+    fun adminUpdateIcon(pageId: String, params: BookmarkIconUpdateParams)
 
     /** 管理员「重新获取」：重新解析网站标题与图标但不落库，暂存抓取结果供后续应用，返回预览数据 */
-    fun adminRefetch(bookmarkId: String): BookmarkRefetchVO
+    fun adminRefetch(pageId: String): BookmarkRefetchVO
 
     /** 管理员「书签检测」：直接调用 scrapper 重新抓取一次，回传其给出的全部字段，并同步落库 isActivity/parseStatus */
-    fun adminCheckLiveness(bookmarkId: String): BookmarkLivenessVO
+    fun adminCheckLiveness(pageId: String): BookmarkLivenessVO
 
     /** 管理员应用「重新获取」的结果：按选择采用新标题/新图标并持久化（采用新图标会重抓高清 LOGO 到 OSS） */
-    fun adminApplyRefetch(bookmarkId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO
+    fun adminApplyRefetch(pageId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO
 
     /** 管理员「一键更新」：重新抓取网站信息并直接覆盖持久化标题/简介/图标/高清 LOGO，同步落库 isActivity/parseStatus */
-    fun adminRefresh(bookmarkId: String): BookmarkAdminVO
+    fun adminRefresh(pageId: String): BookmarkAdminVO
 
     /**
      * 管理员「图片资产 · 重新抓取」：只重抓图片，不覆盖标题/简介、不解锁人工锁、不改动书签活性。
      *
      * 本次没抓到图时保留库中现有图片（由 SiteAssetWriter 保证），所以"抓不到"不会把已有图片清空。
      */
-    fun adminRefetchAssets(bookmarkId: String): BookmarkAssetRefetchVO
+    fun adminRefetchAssets(pageId: String): BookmarkAssetRefetchVO
 
     /**
      * 「网站管理」页任意 URL 活性检测在抓取成功后的落库同步：仅当该 URL 已对应某条 canonical 书签(按
@@ -138,24 +138,24 @@ interface IBookmarkService : IService<BookmarkEntity> {
     fun adminSyncFromExternalScrape(url: String, vo: ScrapeResponse): Boolean
 
     /** 管理员手动编辑书签基础信息（标题/简介），非空字段才会覆盖 */
-    fun adminUpdateBasicInfo(bookmarkId: String, params: BookmarkBasicInfoUpdateParams): BookmarkAdminVO
+    fun adminUpdateBasicInfo(pageId: String, params: BookmarkBasicInfoUpdateParams): BookmarkAdminVO
 
     /** 管理员手动设置某书签的分类（覆盖式），返回更新后的分类列表 */
-    fun adminUpdateCategories(bookmarkId: String, categoryIds: List<String>): List<CategoryVO>
+    fun adminUpdateCategories(pageId: String, categoryIds: List<String>): List<CategoryVO>
 
     /** 管理员对某书签重新跑一次 DeepSeek 自动归类，返回更新后的分类列表 */
-    fun adminRecategorize(bookmarkId: String): List<CategoryVO>
+    fun adminRecategorize(pageId: String): List<CategoryVO>
 
     /** 管理员：AI 推荐与该书签相似的网站（仅展示，回填 exists 标记本地是否已收录） */
-    fun adminSimilarSites(bookmarkId: String): List<SimilarSite>
+    fun adminSimilarSites(pageId: String): List<SimilarSite>
 
     /** 管理员「一键收录」：异步顺序收录相似网站域名，逐站通过 WebSocket 回推进度（抓取失败=幻觉，删除并跳过） */
     fun adminIngestSimilar(adminUid: String, domains: List<String>)
 
-    fun adminGenerateAppName(bookmarkId: String): String?
+    fun adminGenerateAppName(pageId: String): String?
 
     /** 解析书签,然后保存到数据库,同时通过 WebSocket 通知用户（异步事件入口） */
-    fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String)
+    fun parseAndNotice(uid: String, pageId: String, userLinkId: String, nodeId: String)
 
     /**
      * 通过网址解析为书签,同时重新绑定到添加这个网址的用户（异步事件入口）
@@ -169,16 +169,16 @@ interface IBookmarkService : IService<BookmarkEntity> {
     fun parseAndResetUserItem(uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String)
 
     /** 根据书签ID解析书签并保存：依据配置决定使用远程 scrapper 还是内置解析器（异步事件入口） */
-    fun parseAndSave(bookmarkId: String)
+    fun parseAndSave(pageId: String)
 
     /** 通过 scrapper 远程解析书签元信息并持久化；若书签已通过验证则直接返回已有记录 */
-    fun parseBookmarkByApi(bookmark: BookmarkEntity): BookmarkEntity
+    fun parseBookmarkByApi(bookmark: PageEntity): PageEntity
 
     /**
      * 批量按 host 域名查询书签列表（忽略路径，一个 host 现在可能对应多条不同路径的 canonical 记录）。
      * 用于「该域名下是否已收录过任意页面」这类域名级别的存在性判断（如相似站点推荐去重）。
      */
-    fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity>
+    fun findListByHost(defaultBookmarkify: List<String>): List<PageEntity>
 
     /**
      * 按 host 查该域名的**首页**记录，不存在时返回 null。
@@ -187,13 +187,13 @@ interface IBookmarkService : IService<BookmarkEntity> {
      * 这两件事对收录判断的结论完全不同。旧实现是 `eq(urlHost).one()`，在同一 host 有多条路径时
      * 会直接抛异常。
      */
-    fun findRootPageByHost(host: String): BookmarkEntity?
+    fun findRootPageByHost(host: String): PageEntity?
 
     /**
      * 按网址获取或创建 canonical 页面记录（顺带保证 `site` 行存在），不触发抓取。
-     * 需要抓取的调用方自己判断 [BookmarkEntity.parseStatus] 后发事件。
+     * 需要抓取的调用方自己判断 [PageEntity.parseStatus] 后发事件。
      */
-    fun getOrCreateCanonical(url: String): BookmarkEntity
+    fun getOrCreateCanonical(url: String): PageEntity
 
     /**
      * 管理员「一键分类」批量检查全部 canonical 书签是否 NSFW(涉黄/涉赌等违规内容)，命中的直接回写 nsfw=true。
@@ -203,5 +203,5 @@ interface IBookmarkService : IService<BookmarkEntity> {
     fun checkNsfwForAll(): Pair<Int, Int>
 
     /** 批量按完整 URL（host+path）精确匹配书签列表，用于为新用户初始化默认书签 */
-    fun findListByUrl(urls: List<String>): List<BookmarkEntity>
+    fun findListByUrl(urls: List<String>): List<PageEntity>
 }

@@ -13,7 +13,7 @@ import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
-import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
+import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
 import top.tcyeee.bookmarkify.server.ILayoutNodeFunctionService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
@@ -31,7 +31,7 @@ import top.tcyeee.bookmarkify.utils.SocketUtils
 @Service
 class UserLayoutNodeServiceImpl(
     private val preferenceService: IUserPreferenceService,
-    private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
+    private val bookmarkUserLinkMapper: BookmarkMapper,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val layoutNodeFunctionService: ILayoutNodeFunctionService,
     private val siteAssetResolver: SiteAssetResolver,
@@ -50,8 +50,8 @@ class UserLayoutNodeServiceImpl(
      */
     private fun bookmarkShowMap(uid: String): Map<String, BookmarkShow> {
         val shows = bookmarkUserLinkMapper.allBookmarkByUid(uid)
-        val logoMap = siteAssetResolver.resolveBatch(shows.mapNotNull { it.bookmarkId }, DisplayMode.LIST)
-        return shows.onEach { it.initDisplay(logoMap[it.bookmarkId], DisplayMode.LIST) }.associateBy { it.layoutNodeId!! }
+        val logoMap = siteAssetResolver.resolveBatch(shows.mapNotNull { it.pageId }, DisplayMode.LIST)
+        return shows.onEach { it.initDisplay(logoMap[it.pageId], DisplayMode.LIST) }.associateBy { it.layoutNodeId!! }
     }
 
     @Transactional

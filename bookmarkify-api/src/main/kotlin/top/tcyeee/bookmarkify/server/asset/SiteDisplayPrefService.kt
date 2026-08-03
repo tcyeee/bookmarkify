@@ -23,7 +23,7 @@ class SiteDisplayPrefService(private val mapper: SiteDisplayPrefMapper) {
     /**
      * upsert 某个站点在某模式下的显示设置。
      *
-     * @param bookmarkId 仅作溯源留档（"最初是在哪个页面上调的"），不参与键
+     * @param pageId 仅作溯源留档（"最初是在哪个页面上调的"），不参与键
      */
     fun save(
         siteId: String,
@@ -32,7 +32,7 @@ class SiteDisplayPrefService(private val mapper: SiteDisplayPrefMapper) {
         iconBgColor: String?,
         pinnedAssetId: String?,
         updatedBy: String? = null,
-        bookmarkId: String? = null,
+        pageId: String? = null,
     ) {
         val existing = find(siteId, mode)
         val entity = (existing ?: SiteDisplayPrefEntity(siteId = siteId, displayMode = mode)).apply {
@@ -41,7 +41,7 @@ class SiteDisplayPrefService(private val mapper: SiteDisplayPrefMapper) {
             this.pinnedAssetId = pinnedAssetId
             this.updatedBy = updatedBy
             this.updateTime = LocalDateTime.now()
-            bookmarkId?.let { this.bookmarkId = it }
+            pageId?.let { this.pageId = it }
         }
         if (existing == null) mapper.insert(entity) else {
             mapper.update(

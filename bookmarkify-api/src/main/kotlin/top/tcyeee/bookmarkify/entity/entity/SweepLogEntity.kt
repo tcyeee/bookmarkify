@@ -20,8 +20,8 @@ import java.time.LocalDateTime
  *
  * 这与 `stuckLoadingStats` 之于添加链路是同一个位置：一条真正的 SLI。
  */
-@TableName("bookmark_sweep_log")
-data class BookmarkSweepLogEntity(
+@TableName("sweep_log")
+data class SweepLogEntity(
     @TableId val id: String = IdUtil.fastUUID(),
     /** 哪个巡检任务（retryUnreachableBookmarks / livenessCheckStaleBookmarks / reviveArchivedBookmarks） */
     val taskLabel: String,

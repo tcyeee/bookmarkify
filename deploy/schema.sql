@@ -10,11 +10,17 @@
 -- 维护方式：**结构变更后刷新这一份**，不要往里追加 ALTER。它应该始终可以在一个空库上
 -- 直接执行出一套完整的表结构。
 --
--- 生成时间：2026-08-03，由 pg_dump 18.4 --schema-only 直接导出自生产库（PostgreSQL 17.4）。
+-- 生成时间：2026-08-03。基线由 pg_dump 18.4 --schema-only 导出自生产库（PostgreSQL 17.4），
+-- 其上**文本套用**了 2026-08-03_rename_three_layers.sql 的三层正名（site / page / bookmark）。
+--
+-- ⚠️ 之所以是文本套用而不是重新导出：那次重命名要停机执行，写这份文件时线上还在跑旧表名。
+-- **迁移真正执行完之后，请重新 pg_dump 覆盖本文件**，以确认两边逐字一致：
+--   pg_dump --schema-only --no-owner --no-privileges --no-comments --schema=public
+-- 表名与索引名已与迁移在生产库上的回滚试运行结果逐条比对通过，但那不能替代一次真实导出。
 -- 表数量：26
 --
 -- 上一版是在没有 pg_dump 的机器上按 pg_catalog 手工重建的，已被证实与生产库不符：
--- 缺了 idx_user_info_avatar_file / uk_category_slug / uk_bookmark_category /
+-- 缺了 idx_user_info_avatar_file / uk_category_slug / uk_page_category /
 -- idx_background_image_file 四条索引，又多写了一条生产库根本不存在的
 -- idx_ping_log_bookmark_id，而且表数量标注成了 25。**手工重建的快照会漂移，别再那么做。**
 --
@@ -157,7 +163,7 @@ CREATE TABLE public.background_image (
 -- Name: bookmark; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.bookmark (
+CREATE TABLE public.page (
     id character varying(40) NOT NULL,
     url_host character varying(200) NOT NULL,
     url_scheme character varying(10) NOT NULL,
@@ -189,9 +195,9 @@ CREATE TABLE public.bookmark (
 -- Name: bookmark_category; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.bookmark_category (
+CREATE TABLE public.page_category (
     id character varying(64) NOT NULL,
-    bookmark_id character varying(64) NOT NULL,
+    page_id character varying(64) NOT NULL,
     category_id character varying(64) NOT NULL,
     source character varying(32) DEFAULT 'DEEPSEEK'::character varying NOT NULL,
     create_time timestamp without time zone DEFAULT now() NOT NULL,
@@ -203,9 +209,9 @@ CREATE TABLE public.bookmark_category (
 -- Name: bookmark_ping_log; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.bookmark_ping_log (
+CREATE TABLE public.page_ping_log (
     id character varying(40) NOT NULL,
-    bookmark_id character varying(40) NOT NULL,
+    page_id character varying(40) NOT NULL,
     url_host character varying(200) NOT NULL,
     alive boolean,
     triggered_parse boolean DEFAULT false NOT NULL,
@@ -218,7 +224,7 @@ CREATE TABLE public.bookmark_ping_log (
 -- Name: bookmark_sweep_log; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.bookmark_sweep_log (
+CREATE TABLE public.sweep_log (
     id character varying(64) NOT NULL,
     task_label character varying(64) NOT NULL,
     candidates integer DEFAULT 0 NOT NULL,
@@ -240,10 +246,10 @@ CREATE TABLE public.bookmark_sweep_log (
 -- Name: bookmark_user_link; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.bookmark_user_link (
+CREATE TABLE public.bookmark (
     id character varying(40) NOT NULL,
     uid character varying(40) NOT NULL,
-    bookmark_id character varying(40),
+    page_id character varying(40),
     layout_node_id character varying(40) NOT NULL,
     title character varying(200),
     description character varying(1000),
@@ -316,7 +322,7 @@ CREATE TABLE public.oss_object (
 
 CREATE TABLE public.scrape_snapshot (
     id character varying(64) NOT NULL,
-    bookmark_id character varying(64) NOT NULL,
+    page_id character varying(64) NOT NULL,
     url character varying(1000) NOT NULL,
     ok boolean NOT NULL,
     request jsonb,
@@ -375,7 +381,7 @@ CREATE TABLE public.site (
 
 CREATE TABLE public.site_asset (
     id character varying(64) NOT NULL,
-    bookmark_id character varying(64),
+    page_id character varying(64),
     role character varying(20) NOT NULL,
     extractor character varying(40) NOT NULL,
     quality character varying(20) DEFAULT 'DEGRADED'::character varying NOT NULL,
@@ -402,7 +408,7 @@ CREATE TABLE public.site_asset (
 --
 
 CREATE TABLE public.site_display_pref (
-    bookmark_id character varying(64),
+    page_id character varying(64),
     display_mode character varying(20) NOT NULL,
     icon_padding integer DEFAULT 25 NOT NULL,
     icon_bg_color character varying(32),
@@ -418,8 +424,8 @@ CREATE TABLE public.site_display_pref (
 -- Name: site_page_meta; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.site_page_meta (
-    bookmark_id character varying(64) NOT NULL,
+CREATE TABLE public.page_meta (
+    page_id character varying(64) NOT NULL,
     title character varying(500),
     description character varying(2000),
     site_name character varying(200),
@@ -531,7 +537,7 @@ CREATE TABLE public.user_share (
 CREATE TABLE public.user_share_bookmark (
     id character varying(64) NOT NULL,
     share_id character varying(64) NOT NULL,
-    bookmark_user_link_id character varying(64) NOT NULL,
+    bookmark_id character varying(64) NOT NULL,
     sort integer DEFAULT 0 NOT NULL
 );
 
@@ -585,43 +591,43 @@ ALTER TABLE ONLY public.background_image
 
 
 --
--- Name: bookmark_category bookmark_category_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: bookmark_category page_category_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.bookmark_category
-    ADD CONSTRAINT bookmark_category_pkey PRIMARY KEY (id);
-
-
---
--- Name: bookmark_ping_log bookmark_ping_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.bookmark_ping_log
-    ADD CONSTRAINT bookmark_ping_log_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.page_category
+    ADD CONSTRAINT page_category_pkey PRIMARY KEY (id);
 
 
 --
--- Name: bookmark bookmark_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: bookmark_ping_log page_ping_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.page_ping_log
+    ADD CONSTRAINT page_ping_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: bookmark page_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.page
+    ADD CONSTRAINT page_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: bookmark_sweep_log sweep_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sweep_log
+    ADD CONSTRAINT sweep_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: bookmark_user_link bookmark_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.bookmark
     ADD CONSTRAINT bookmark_pkey PRIMARY KEY (id);
-
-
---
--- Name: bookmark_sweep_log bookmark_sweep_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.bookmark_sweep_log
-    ADD CONSTRAINT bookmark_sweep_log_pkey PRIMARY KEY (id);
-
-
---
--- Name: bookmark_user_link bookmark_user_link_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.bookmark_user_link
-    ADD CONSTRAINT bookmark_user_link_pkey PRIMARY KEY (id);
 
 
 --
@@ -681,11 +687,11 @@ ALTER TABLE ONLY public.site_display_pref
 
 
 --
--- Name: site_page_meta site_page_meta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: site_page_meta page_meta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.site_page_meta
-    ADD CONSTRAINT site_page_meta_pkey PRIMARY KEY (bookmark_id);
+ALTER TABLE ONLY public.page_meta
+    ADD CONSTRAINT page_meta_pkey PRIMARY KEY (page_id);
 
 
 --
@@ -713,11 +719,11 @@ ALTER TABLE ONLY public.system_config
 
 
 --
--- Name: bookmark_category uk_bookmark_category; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: bookmark_category uk_page_category; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.bookmark_category
-    ADD CONSTRAINT uk_bookmark_category UNIQUE (bookmark_id, category_id);
+ALTER TABLE ONLY public.page_category
+    ADD CONSTRAINT uk_page_category UNIQUE (page_id, category_id);
 
 
 --
@@ -826,52 +832,52 @@ CREATE INDEX idx_background_image_uid ON public.background_image USING btree (ui
 
 
 --
--- Name: idx_bookmark_category_bookmark; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_page_category_page; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_bookmark_category_bookmark ON public.bookmark_category USING btree (bookmark_id);
-
-
---
--- Name: idx_bookmark_due_check; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_bookmark_due_check ON public.bookmark USING btree (parse_status, COALESCE(next_check_at, '1970-01-01 00:00:00'::timestamp without time zone));
+CREATE INDEX idx_page_category_page ON public.page_category USING btree (page_id);
 
 
 --
--- Name: idx_bookmark_pending; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_page_due_check; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_bookmark_pending ON public.bookmark USING btree (COALESCE(update_time, create_time)) WHERE ((parse_status)::text = 'PENDING'::text);
-
-
---
--- Name: idx_bookmark_site; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_bookmark_site ON public.bookmark USING btree (site_id);
+CREATE INDEX idx_page_due_check ON public.page USING btree (parse_status, COALESCE(next_check_at, '1970-01-01 00:00:00'::timestamp without time zone));
 
 
 --
--- Name: idx_bul_bookmark; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_page_pending; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_bul_bookmark ON public.bookmark_user_link USING btree (bookmark_id) WHERE (deleted = false);
-
-
---
--- Name: idx_bul_layout_node; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_bul_layout_node ON public.bookmark_user_link USING btree (layout_node_id);
+CREATE INDEX idx_page_pending ON public.page USING btree (COALESCE(update_time, create_time)) WHERE ((parse_status)::text = 'PENDING'::text);
 
 
 --
--- Name: idx_bul_uid_live; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_page_site; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_bul_uid_live ON public.bookmark_user_link USING btree (uid, bookmark_id) WHERE (deleted = false);
+CREATE INDEX idx_page_site ON public.page USING btree (site_id);
+
+
+--
+-- Name: idx_bookmark_page; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_bookmark_page ON public.bookmark USING btree (page_id) WHERE (deleted = false);
+
+
+--
+-- Name: idx_bookmark_layout_node; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_bookmark_layout_node ON public.bookmark USING btree (layout_node_id);
+
+
+--
+-- Name: idx_bookmark_uid_live; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_bookmark_uid_live ON public.bookmark USING btree (uid, page_id) WHERE (deleted = false);
 
 
 --
@@ -903,24 +909,24 @@ CREATE INDEX idx_oss_object_state ON public.oss_object USING btree (state, last_
 
 
 --
--- Name: idx_ping_log_bookmark; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_ping_log_page; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_ping_log_bookmark ON public.bookmark_ping_log USING btree (bookmark_id, create_time DESC);
+CREATE INDEX idx_ping_log_page ON public.page_ping_log USING btree (page_id, create_time DESC);
 
 
 --
 -- Name: idx_ping_log_create_time; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_ping_log_create_time ON public.bookmark_ping_log USING btree (create_time);
+CREATE INDEX idx_ping_log_create_time ON public.page_ping_log USING btree (create_time);
 
 
 --
--- Name: idx_scrape_snapshot_bookmark; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_scrape_snapshot_page; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_scrape_snapshot_bookmark ON public.scrape_snapshot USING btree (bookmark_id, fetched_at DESC);
+CREATE INDEX idx_scrape_snapshot_page ON public.scrape_snapshot USING btree (page_id, fetched_at DESC);
 
 
 --
@@ -983,14 +989,14 @@ CREATE INDEX idx_site_next_check ON public.site USING btree (next_check_at);
 -- Name: idx_sweep_log_breaker; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_sweep_log_breaker ON public.bookmark_sweep_log USING btree (create_time DESC) WHERE (breaker_reason IS NOT NULL);
+CREATE INDEX idx_sweep_log_breaker ON public.sweep_log USING btree (create_time DESC) WHERE (breaker_reason IS NOT NULL);
 
 
 --
 -- Name: idx_sweep_log_create_time; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_sweep_log_create_time ON public.bookmark_sweep_log USING btree (create_time DESC);
+CREATE INDEX idx_sweep_log_create_time ON public.sweep_log USING btree (create_time DESC);
 
 
 --
@@ -1050,17 +1056,17 @@ CREATE UNIQUE INDEX uk_background_config_uid ON public.background_config USING b
 
 
 --
--- Name: uk_bookmark_canonical; Type: INDEX; Schema: public; Owner: -
+-- Name: uk_page_canonical; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX uk_bookmark_canonical ON public.bookmark USING btree (site_id, url_path, url_query, url_fragment);
+CREATE UNIQUE INDEX uk_page_canonical ON public.page USING btree (site_id, url_path, url_query, url_fragment);
 
 
 --
--- Name: uk_bul_uid_bookmark; Type: INDEX; Schema: public; Owner: -
+-- Name: uk_bookmark_uid_page; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX uk_bul_uid_bookmark ON public.bookmark_user_link USING btree (uid, bookmark_id) WHERE ((deleted = false) AND (bookmark_id IS NOT NULL) AND ((bookmark_id)::text <> 'LOADING'::text));
+CREATE UNIQUE INDEX uk_bookmark_uid_page ON public.bookmark USING btree (uid, page_id) WHERE ((deleted = false) AND (page_id IS NOT NULL) AND ((page_id)::text <> 'LOADING'::text));
 
 
 --

@@ -13,7 +13,7 @@ package top.tcyeee.bookmarkify.entity.enums
  *
  * 自动抓取链路只能读锁、不能改锁。
  */
-enum class BookmarkLockedField {
+enum class PageLockedField {
     TITLE,
     DESCRIPTION,
     APP_NAME,

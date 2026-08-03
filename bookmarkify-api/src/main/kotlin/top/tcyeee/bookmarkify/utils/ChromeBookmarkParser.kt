@@ -11,7 +11,7 @@ import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
-import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
+import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import java.nio.charset.StandardCharsets
@@ -28,9 +28,9 @@ data class ChromeBookmarkRawData(
     val iconBase64: String?,
     val paths: String,
 ) {
-    fun pair(uid: String, parentNodeId: String?): Pair<UserLayoutNodeEntity, BookmarkUserLink> =
+    fun pair(uid: String, parentNodeId: String?): Pair<UserLayoutNodeEntity, BookmarkEntity> =
         UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING, parentId = parentNodeId)
-            .let { Pair(it, BookmarkUserLink(uid, it.id, this)) }
+            .let { Pair(it, BookmarkEntity(uid, it.id, this)) }
 }
 
 data class ChromeBookmarkStructure(

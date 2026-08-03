@@ -3,7 +3,7 @@ package top.tcyeee.bookmarkify.server.asset
 import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.log
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
+import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.OssObjectEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
@@ -11,7 +11,7 @@ import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
-import top.tcyeee.bookmarkify.mapper.BookmarkMapper
+import top.tcyeee.bookmarkify.mapper.PageMapper
 import top.tcyeee.bookmarkify.mapper.SiteAssetMapper
 import top.tcyeee.bookmarkify.mapper.SiteDisplayPrefMapper
 import top.tcyeee.bookmarkify.server.IOssObjectService
@@ -23,7 +23,7 @@ import top.tcyeee.bookmarkify.utils.OssUtils
  * 职责边界：[AssetRolePolicy] 是纯规则（可离线测试），本类负责取数据、签地址、
  * 套用人工偏好。前台每次列表渲染都会走这里，因此提供批量接口避免 N+1。
  *
- * **对外接口一律只收 bookmarkId，站点那一层由本类自己去查。** 图标现在挂在 site 上、
+ * **对外接口一律只收 pageId，站点那一层由本类自己去查。** 图标现在挂在 site 上、
  * 社交图和截图挂在 bookmark 上（见 [AssetOwnerType]），但"这个书签该显示什么图"的调用方
  * 没有理由知道这件事 —— 分层的意义恰恰是把它收在一个地方。代价是每批多一次
  * `bookmark → site_id` 的查询，与批量大小无关。
@@ -32,7 +32,7 @@ import top.tcyeee.bookmarkify.utils.OssUtils
 class SiteAssetResolver(
     private val siteAssetMapper: SiteAssetMapper,
     private val siteDisplayPrefMapper: SiteDisplayPrefMapper,
-    private val bookmarkMapper: BookmarkMapper,
+    private val bookmarkMapper: PageMapper,
     private val ossObjectService: IOssObjectService,
 ) {
 
@@ -65,8 +65,8 @@ class SiteAssetResolver(
     }
 
     /** 单个书签的解析结果。列表场景请用 [resolveBatch]，避免 N+1。 */
-    fun resolveOne(bookmarkId: String, mode: DisplayMode): ResolvedLogo =
-        resolveBatch(listOf(bookmarkId), mode)[bookmarkId] ?: ResolvedLogo.EMPTY
+    fun resolveOne(pageId: String, mode: DisplayMode): ResolvedLogo =
+        resolveBatch(listOf(pageId), mode)[pageId] ?: ResolvedLogo.EMPTY
 
     /**
      * 批量解析**页面封面**（详情面板顶部那张宽图），与 [resolveBatch] 是两件事：
@@ -77,8 +77,8 @@ class SiteAssetResolver(
      *
      * @return 只含**有封面**的书签；没有的键直接缺席，让调用方 `?:` 成 null 而不是空串
      */
-    fun resolveCoverBatch(bookmarkIds: List<String>): Map<String, String> {
-        val ids = bookmarkIds.filter { it.isNotBlank() }.distinct()
+    fun resolveCoverBatch(pageIds: List<String>): Map<String, String> {
+        val ids = pageIds.filter { it.isNotBlank() }.distinct()
         if (ids.isEmpty()) return emptyMap()
 
         val pageAssets = siteAssetMapper.selectList(
@@ -118,14 +118,14 @@ class SiteAssetResolver(
     }
 
     /** 单个书签的封面。列表场景请用 [resolveCoverBatch]，避免 N+1。 */
-    fun resolveCoverOne(bookmarkId: String): String? =
-        resolveCoverBatch(listOf(bookmarkId))[bookmarkId]
+    fun resolveCoverOne(pageId: String): String? =
+        resolveCoverBatch(listOf(pageId))[pageId]
 
     /**
      * 批量解析。四次查询搞定（书签→站点、站点资产、页面资产、偏好），其余在内存里完成。
      */
-    fun resolveBatch(bookmarkIds: List<String>, mode: DisplayMode): Map<String, ResolvedLogo> {
-        val ids = bookmarkIds.filter { it.isNotBlank() }.distinct()
+    fun resolveBatch(pageIds: List<String>, mode: DisplayMode): Map<String, ResolvedLogo> {
+        val ids = pageIds.filter { it.isNotBlank() }.distinct()
         if (ids.isEmpty()) return emptyMap()
 
         val siteIdOf = siteIdOf(ids)
@@ -152,8 +152,8 @@ class SiteAssetResolver(
     }
 
     /** 后台用：某书签可用的全部资产（站点图标 + 该页自己的图），供人工挑选与排查。 */
-    fun assetsOf(bookmarkId: String): List<SiteAssetEntity> =
-        assetsOfBatch(listOf(bookmarkId))[bookmarkId].orEmpty()
+    fun assetsOf(pageId: String): List<SiteAssetEntity> =
+        assetsOfBatch(listOf(pageId))[pageId].orEmpty()
 
     /**
      * 后台列表用：一次查出多个书签可用的全部资产。
@@ -161,15 +161,15 @@ class SiteAssetResolver(
      * 后台列表要按 role 分列展示 favicon/logo/社交图，逐行调 [assetsOf] 就是 N+1；
      * 这里批量取回后在内存分组。
      */
-    fun assetsOfBatch(bookmarkIds: List<String>): Map<String, List<SiteAssetEntity>> {
-        val ids = bookmarkIds.filter { it.isNotBlank() }.distinct()
+    fun assetsOfBatch(pageIds: List<String>): Map<String, List<SiteAssetEntity>> {
+        val ids = pageIds.filter { it.isNotBlank() }.distinct()
         if (ids.isEmpty()) return emptyMap()
         return assetsByBookmark(ids, siteIdOf(ids))
     }
 
     /** 后台列表用：一次查出多个书签在全部模式下的人工偏好（实际按站点存）。 */
-    fun prefsOfBatch(bookmarkIds: List<String>): Map<String, List<SiteDisplayPrefEntity>> {
-        val ids = bookmarkIds.filter { it.isNotBlank() }.distinct()
+    fun prefsOfBatch(pageIds: List<String>): Map<String, List<SiteDisplayPrefEntity>> {
+        val ids = pageIds.filter { it.isNotBlank() }.distinct()
         if (ids.isEmpty()) return emptyMap()
         val siteIdOf = siteIdOf(ids)
         val bySite = prefsBySite(siteIdOf.values)
@@ -178,8 +178,8 @@ class SiteAssetResolver(
     }
 
     /** 后台用：读取某书签所属站点在某模式下的人工偏好，没有则返回默认值。 */
-    fun prefOf(bookmarkId: String, mode: DisplayMode): SiteDisplayPrefEntity {
-        val siteId = siteIdOf(listOf(bookmarkId))[bookmarkId]
+    fun prefOf(pageId: String, mode: DisplayMode): SiteDisplayPrefEntity {
+        val siteId = siteIdOf(listOf(pageId))[pageId]
         return siteId
             ?.let { prefsBySite(listOf(it), mode)[it]?.firstOrNull() }
             ?: SiteDisplayPrefEntity(siteId = siteId.orEmpty(), displayMode = mode)
@@ -188,18 +188,18 @@ class SiteAssetResolver(
     // ────── 取数 ──────
 
     /**
-     * bookmarkId → siteId。一条 in 查询，只取需要的两列。
+     * pageId → siteId。一条 in 查询，只取需要的两列。
      *
-     * 用 `selectMaps` 而不是把两列映射回 [BookmarkEntity]：实体是 Kotlin data class，
+     * 用 `selectMaps` 而不是把两列映射回 [PageEntity]：实体是 Kotlin data class，
      * `id`/`urlHost`/`urlScheme` 没有默认值 ⇒ 没有无参构造，MyBatis 只能退化成
      * 「按结果列去找同签名的构造函数」，两列 String 匹配不上任何一个，运行时直接抛
      * `No constructor found ... matching [String, String]`。**投影查询一律走
      * selectMaps/selectObjs，别拿实体接残缺的列。**
      */
-    private fun siteIdOf(bookmarkIds: List<String>): Map<String, String> = bookmarkMapper.selectMaps(
-        KtQueryWrapper(BookmarkEntity::class.java)
-            .select(BookmarkEntity::id, BookmarkEntity::siteId)
-            .`in`(BookmarkEntity::id, bookmarkIds)
+    private fun siteIdOf(pageIds: List<String>): Map<String, String> = bookmarkMapper.selectMaps(
+        KtQueryWrapper(PageEntity::class.java)
+            .select(PageEntity::id, PageEntity::siteId)
+            .`in`(PageEntity::id, pageIds)
     ).mapNotNull { row ->
         val id = row.column("id")
         val siteId = row.column("site_id")
@@ -222,7 +222,7 @@ class SiteAssetResolver(
      * 一屏 20 个 YouTube 视频此前要读 20 份一模一样的 favicon 行。
      */
     private fun assetsByBookmark(
-        bookmarkIds: List<String>,
+        pageIds: List<String>,
         siteIdOf: Map<String, String>,
     ): Map<String, List<SiteAssetEntity>> {
         val siteIds = siteIdOf.values.distinct()
@@ -238,12 +238,12 @@ class SiteAssetResolver(
         val pageAssets = siteAssetMapper.selectList(
             KtQueryWrapper(SiteAssetEntity::class.java)
                 .eq(SiteAssetEntity::ownerType, AssetOwnerType.PAGE)
-                .`in`(SiteAssetEntity::ownerId, bookmarkIds)
+                .`in`(SiteAssetEntity::ownerId, pageIds)
                 .orderByAsc(SiteAssetEntity::role)
                 .orderByDesc(SiteAssetEntity::isPrimary)
         ).groupBy { it.ownerId }
 
-        return bookmarkIds.associateWith { id ->
+        return pageIds.associateWith { id ->
             siteAssets[siteIdOf[id]].orEmpty() + pageAssets[id].orEmpty()
         }
     }

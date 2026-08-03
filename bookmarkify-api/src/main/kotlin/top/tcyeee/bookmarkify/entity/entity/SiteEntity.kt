@@ -21,7 +21,7 @@ import java.time.LocalDateTime
  * 换个页面根本不会变。分层之后这些全部是每域名一次。
  *
  * 归属判断只用一个问题：**换一个用户 / 换同域下另一个页面，这个值会变吗？** 都不变的进这里，
- * 只随页面变的留在 [BookmarkEntity]，随用户变的留在 [BookmarkUserLink]。
+ * 只随页面变的留在 [PageEntity]，随用户变的留在 [BookmarkEntity]。
  */
 @TableName("site")
 data class SiteEntity(
@@ -41,7 +41,7 @@ data class SiteEntity(
     @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)，由 DeepSeek 判断") var nsfw: Boolean = false,
     @JsonIgnore @field:Size(max = 50) @field:Schema(description = "NSFW 判定理由") var nsfwReason: String? = null,
 
-    /* 域名级活性与巡检调度。与 BookmarkEntity.pageAlive 刻意分开：域名活着而具体页面 404
+    /* 域名级活性与巡检调度。与 PageEntity.pageAlive 刻意分开：域名活着而具体页面 404
      * 是常态（视频被删、仓库归档），反过来域名死了就没必要逐页去探测。 */
     @JsonIgnore @field:Schema(description = "域名是否可达") var isAlive: Boolean = true,
     @JsonIgnore @field:Schema(description = "上次域名探测时间(不论结论)") var lastCheckAt: LocalDateTime? = null,

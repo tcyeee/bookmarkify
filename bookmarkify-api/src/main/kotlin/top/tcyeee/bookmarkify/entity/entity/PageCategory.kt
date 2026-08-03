@@ -8,18 +8,18 @@ import io.swagger.v3.oas.annotations.media.Schema
 import java.time.LocalDateTime
 
 /** canonical 书签 ↔ 分类 关联 */
-@TableName("bookmark_category")
-data class BookmarkCategory(
+@TableName("page_category")
+data class PageCategory(
     @TableId var id: String = IdUtil.fastUUID(),
-    @field:Schema(description = "canonical 书签ID") var bookmarkId: String,
+    @field:Schema(description = "canonical 书签ID") var pageId: String,
     @field:Schema(description = "分类ID(category.id)") var categoryId: String,
     @field:Schema(description = "来源") var source: CategorySource = CategorySource.DEEPSEEK,
 
     @JsonIgnore @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "是否删除") var deleted: Boolean = false,
 ) {
-    constructor(bookmarkId: String, categoryId: String) : this(
-        id = IdUtil.fastUUID(), bookmarkId = bookmarkId, categoryId = categoryId,
+    constructor(pageId: String, categoryId: String) : this(
+        id = IdUtil.fastUUID(), pageId = pageId, categoryId = categoryId,
     )
 }
 

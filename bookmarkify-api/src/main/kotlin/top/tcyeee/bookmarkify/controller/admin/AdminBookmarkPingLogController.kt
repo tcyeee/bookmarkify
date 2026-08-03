@@ -12,7 +12,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkPingLogSearchParams
 import top.tcyeee.bookmarkify.entity.BookmarkPingLogVO
 import top.tcyeee.bookmarkify.entity.BookmarkSweepLogSearchParams
 import top.tcyeee.bookmarkify.entity.SweepHealthVO
-import top.tcyeee.bookmarkify.entity.entity.BookmarkSweepLogEntity
+import top.tcyeee.bookmarkify.entity.entity.SweepLogEntity
 import top.tcyeee.bookmarkify.server.IBookmarkPingLogService
 
 @RestController
@@ -31,7 +31,7 @@ class AdminBookmarkPingLogController(
      * 这边回答"巡检系统本身怎么样"。传 `onlyBreaker=true` 直接筛出被熔断中止的轮次。
      */
     @PostMapping("/sweeps")
-    fun getSweeps(@RequestBody params: BookmarkSweepLogSearchParams): IPage<BookmarkSweepLogEntity> =
+    fun getSweeps(@RequestBody params: BookmarkSweepLogSearchParams): IPage<SweepLogEntity> =
         bookmarkPingLogService.adminListSweeps(params)
 
     /**

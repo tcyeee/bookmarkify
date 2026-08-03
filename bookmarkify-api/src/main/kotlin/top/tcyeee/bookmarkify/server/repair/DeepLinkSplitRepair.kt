@@ -5,10 +5,10 @@ import com.baomidou.mybatisplus.extension.kotlin.KtUpdateWrapper
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
+import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
-import top.tcyeee.bookmarkify.entity.entity.BookmarkUserLink
+import top.tcyeee.bookmarkify.mapper.PageMapper
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
-import top.tcyeee.bookmarkify.mapper.BookmarkUserLinkMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 
@@ -26,7 +26,7 @@ import top.tcyeee.bookmarkify.utils.WebsiteParser
  *
  * 被丢掉的 query 在 `bookmark` 里已经不存在了。唯一还留着完整地址的地方是
  * `bookmark_user_link.url_full`（那一列一直存的是用户给的原始网址）。所以修复必须走
- * 「读 url_full → 重新规范化 → get-or-create → 重绑 bookmark_id」这条代码路径。
+ * 「读 url_full → 重新规范化 → get-or-create → 重绑 page_id」这条代码路径。
  *
  * ## 幂等
  *
@@ -46,15 +46,15 @@ import top.tcyeee.bookmarkify.utils.WebsiteParser
 @Service
 class DeepLinkSplitRepair(
     private val bookmarkService: IBookmarkService,
-    private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
-    private val bookmarkMapper: BookmarkMapper,
+    private val bookmarkUserLinkMapper: BookmarkMapper,
+    private val bookmarkMapper: PageMapper,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /**
      * @param scanned 扫过的用户链接数
-     * @param repointed 实际改了 bookmark_id 的条数（即真正被拆开的深链）
+     * @param repointed 实际改了 page_id 的条数（即真正被拆开的深链）
      * @param awaitingCrawl 重绑到的目标记录中**尚未抓取过**的条数 —— 也就是还要等
      *   `checkAll()` 抓多少个页面。刻意不报"新建了多少条"：`getOrCreateCanonical` 不区分
      *   自己建的和早就存在的，硬报一个数只会是猜的；而"还有多少待抓"才是运维真正要看的。
@@ -85,16 +85,16 @@ class DeepLinkSplitRepair(
         var awaitingCrawl = 0
         var unparsable = 0
         var failed = 0
-        // 按 id 游标翻页而不是 OFFSET：这个任务会**改动**正在遍历的表（重绑 bookmark_id），
+        // 按 id 游标翻页而不是 OFFSET：这个任务会**改动**正在遍历的表（重绑 page_id），
         // OFFSET 分页在数据变动时会漏行/重复行，游标不会。
         var cursor: String? = null
 
         while (true) {
             val batch = bookmarkUserLinkMapper.selectList(
-                KtQueryWrapper(BookmarkUserLink::class.java)
-                    .eq(BookmarkUserLink::deleted, false)
-                    .apply { cursor?.let { gt(BookmarkUserLink::id, it) } }
-                    .orderByAsc(BookmarkUserLink::id)
+                KtQueryWrapper(BookmarkEntity::class.java)
+                    .eq(BookmarkEntity::deleted, false)
+                    .apply { cursor?.let { gt(BookmarkEntity::id, it) } }
+                    .orderByAsc(BookmarkEntity::id)
                     .last("LIMIT $batchSize")
             )
             if (batch.isEmpty()) break
@@ -102,9 +102,9 @@ class DeepLinkSplitRepair(
 
             batch.forEach { link ->
                 scanned++
-                // 导入时还没绑定源书签的（bookmark_id = 'LOADING'）交给 drainStuckLoading 处理，
+                // 导入时还没绑定源书签的（page_id = 'LOADING'）交给 drainStuckLoading 处理，
                 // 那条链路本来就会为它们建 canonical 记录，这里插手只会两边抢
-                if (link.bookmarkId == null || link.bookmarkId == LOADING) return@forEach
+                if (link.pageId == null || link.pageId == LOADING) return@forEach
 
                 val wrapper = runCatching { WebsiteParser.urlWrapper(link.urlFull) }.getOrNull()
                 if (wrapper == null) {
@@ -115,7 +115,7 @@ class DeepLinkSplitRepair(
                 runCatching {
                     // 先看一眼规范化后的 key 是否已经指向当前记录，避免为绝大多数「本来就对」的
                     // 链接白建一次 site 的 get-or-create
-                    val current = bookmarkMapper.selectById(link.bookmarkId)
+                    val current = bookmarkMapper.selectById(link.pageId)
                     if (current != null && current.matches(wrapper)) return@runCatching
 
                     if (dryRun) {
@@ -124,19 +124,19 @@ class DeepLinkSplitRepair(
                     }
 
                     val target = bookmarkService.getOrCreateCanonical(link.urlFull)
-                    if (target.id == link.bookmarkId) return@runCatching
+                    if (target.id == link.pageId) return@runCatching
                     if (target.updateTime == null) awaitingCrawl++
 
                     bookmarkUserLinkMapper.update(
                         null,
-                        KtUpdateWrapper(BookmarkUserLink::class.java)
-                            .eq(BookmarkUserLink::id, link.id)
-                            .set(BookmarkUserLink::bookmarkId, target.id)
+                        KtUpdateWrapper(BookmarkEntity::class.java)
+                            .eq(BookmarkEntity::id, link.id)
+                            .set(BookmarkEntity::pageId, target.id)
                     )
                     repointed++
                     logger.debug(
                         "[DeepLinkSplitRepair] 已重绑: userLinkId={}, {} -> {}, url={}",
-                        link.id, link.bookmarkId, target.id, link.urlFull
+                        link.id, link.pageId, target.id, link.urlFull
                     )
                 }.onFailure {
                     failed++
@@ -161,7 +161,7 @@ class DeepLinkSplitRepair(
      * 比的是四元组本身而不是拿 `getOrCreateCanonical` 的结果去对 —— 后者会为每一条链接都跑一次
      * site 的 get-or-create，而绝大多数链接本来就是对的，那是白花的两次查询。
      */
-    private fun BookmarkEntity.matches(w: BookmarkUrlWrapper): Boolean =
+    private fun PageEntity.matches(w: BookmarkUrlWrapper): Boolean =
         urlHost == w.urlHost &&
             urlPath == (w.urlPath ?: "/") &&
             urlQuery == w.urlQuery &&
@@ -171,13 +171,13 @@ class DeepLinkSplitRepair(
     private fun countOrphanedBookmarks(): Int = runCatching {
         // 单列投影走 selectObjs：实体没有无参构造，只选一列时 MyBatis 会去找单参构造函数并抛异常
         val referenced = bookmarkUserLinkMapper.selectObjs<Any?>(
-            KtQueryWrapper(BookmarkUserLink::class.java)
-                .select(BookmarkUserLink::bookmarkId)
-                .eq(BookmarkUserLink::deleted, false)
+            KtQueryWrapper(BookmarkEntity::class.java)
+                .select(BookmarkEntity::pageId)
+                .eq(BookmarkEntity::deleted, false)
         ).mapNotNull { it?.toString() }.toSet()
 
         bookmarkMapper.selectObjs<Any?>(
-            KtQueryWrapper(BookmarkEntity::class.java).select(BookmarkEntity::id)
+            KtQueryWrapper(PageEntity::class.java).select(PageEntity::id)
         ).mapNotNull { it?.toString() }.count { it !in referenced }
     }.getOrElse {
         logger.warn("[DeepLinkSplitRepair] 孤儿记录统计失败(忽略): ${it.message}")
@@ -185,7 +185,7 @@ class DeepLinkSplitRepair(
     }
 
     companion object {
-        /** 批量导入时的占位值，见 BookmarkUserLink 的第三个构造函数 */
+        /** 批量导入时的占位值，见 BookmarkEntity 的第三个构造函数 */
         private const val LOADING = "LOADING"
     }
 }

@@ -2,7 +2,7 @@ package top.tcyeee.bookmarkify.mapper
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper
 import org.apache.ibatis.annotations.Mapper
-import top.tcyeee.bookmarkify.entity.entity.BookmarkCategory
+import top.tcyeee.bookmarkify.entity.entity.PageCategory
 
 @Mapper
-interface BookmarkCategoryMapper : BaseMapper<BookmarkCategory>
+interface PageCategoryMapper : BaseMapper<PageCategory>

@@ -10,12 +10,12 @@ package top.tcyeee.bookmarkify.config.event
  */
 
 /** 解析书签并保存（不通知用户）。对应原 BOOKMARK_PARSE，用于启动初始化与定时对账。 */
-data class BookmarkParseEvent(val bookmarkId: String)
+data class BookmarkParseEvent(val pageId: String)
 
 /** 解析已存在的书签，完成后通过 WebSocket 推送给用户。对应原 PARSE_NOTICE_EXISTING（单个添加）。 */
 data class BookmarkParseAndNoticeEvent(
     val uid: String,
-    val bookmarkId: String,
+    val pageId: String,
     val userLinkId: String,
     val nodeLayoutId: String,
 )
@@ -35,7 +35,7 @@ data class BookmarkParseAndResetUserItemEvent(
  * 外部往返。挂在解析线程上就等于让每条书签多占用解析池 20s，而解析池的吞吐直接决定
  * 「加一个书签要转多久圈」。跑在自己的线程池上，慢一点也不影响任何人。
  */
-data class BookmarkEnrichEvent(val bookmarkId: String)
+data class BookmarkEnrichEvent(val pageId: String)
 
 /**
  * 抓取成功后补一张页面截图，作为书签详情面板的封面。
@@ -47,4 +47,4 @@ data class BookmarkEnrichEvent(val bookmarkId: String)
  *
  * 用户先拿到书签，封面晚几秒出现；抓不到就没有封面，前端本就按可选处理。
  */
-data class BookmarkScreenshotEvent(val bookmarkId: String)
+data class BookmarkScreenshotEvent(val pageId: String)
