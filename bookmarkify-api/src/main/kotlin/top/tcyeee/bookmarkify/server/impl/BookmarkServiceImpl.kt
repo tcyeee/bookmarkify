@@ -749,7 +749,30 @@ class BookmarkServiceImpl(
             .list()
             // 非域名类型(本地/IP/其他)不抓取，也不应对其发起存活 ping
             .filter { WebsiteParser.classifyLinkType(it.urlHost) == BookmarkLinkType.DOMAIN }
-        if (candidates.isEmpty()) return
+        if (candidates.isEmpty()) {
+            // **空轮次同样要留一行。** 「没有到期候选」是一个正常且有意义的事实，而它与
+            // 「巡检压根没在跑」在数据上必须可区分 —— 后者正是 SweepHealthVO.lastRoundAt
+            // 与后台那条常驻告警要发现的东西。这里直接 return 不落库的话，一个健康但空闲的
+            // 系统（书签少、检测间隔又长时几乎总是空闲）会让 lastRoundAt 永远停在过去，
+            // 于是告警条常亮"巡检已 N 小时没跑过" —— 一个总在响的警报等于没有警报。
+            recordSweepRound(
+                BookmarkSweepLogEntity(
+                    taskLabel = taskLabel,
+                    candidates = 0,
+                    backlog = totalBacklog,
+                    probed = 0,
+                    shortCircuited = 0,
+                    aliveCount = 0,
+                    deadCount = 0,
+                    unknownCount = 0,
+                    triggeredParse = 0,
+                    deferredParse = 0,
+                    durationMs = System.currentTimeMillis() - startedAt,
+                ),
+                taskLabel,
+            )
+            return
+        }
 
         log.debug("[$taskLabel] 本次待检查书签数: ${candidates.size}")
 
@@ -828,27 +851,24 @@ class BookmarkServiceImpl(
             }
         )
 
-        // 一轮一行，无论正常完成还是熔断。见 BookmarkSweepLogEntity：
-        // 熔断的语义是"我方链路坏了，本轮全表结论不可信"，此前它唯一的出口是一行 log.error，
-        // 而日志会滚动、没人盯着。落成数据之后"最近一天熔断过几次"才是一句 SQL
-        fun recordRound() = runCatching {
-            sweepLogMapper.insert(
-                BookmarkSweepLogEntity(
-                    taskLabel = taskLabel,
-                    candidates = candidates.size,
-                    backlog = totalBacklog,
-                    probed = actuallyProbed.size,
-                    shortCircuited = shortCircuited.size,
-                    aliveCount = probed.count { it.second == PingOutcome.ALIVE },
-                    deadCount = probed.count { it.second == PingOutcome.DEAD },
-                    unknownCount = probed.count { it.second == PingOutcome.UNKNOWN },
-                    triggeredParse = granted,
-                    deferredParse = deferredCount,
-                    breakerReason = breakerReason?.take(500),
-                    durationMs = System.currentTimeMillis() - startedAt,
-                )
-            )
-        }.onFailure { log.warn("[$taskLabel] 巡检汇总落库失败(忽略): ${it.message}") }.let { }
+        // 一轮一行，无论正常完成、熔断，还是上面那种没有候选的空轮次。见 BookmarkSweepLogEntity
+        fun recordRound() = recordSweepRound(
+            BookmarkSweepLogEntity(
+                taskLabel = taskLabel,
+                candidates = candidates.size,
+                backlog = totalBacklog,
+                probed = actuallyProbed.size,
+                shortCircuited = shortCircuited.size,
+                aliveCount = probed.count { it.second == PingOutcome.ALIVE },
+                deadCount = probed.count { it.second == PingOutcome.DEAD },
+                unknownCount = probed.count { it.second == PingOutcome.UNKNOWN },
+                triggeredParse = granted,
+                deferredParse = deferredCount,
+                breakerReason = breakerReason?.take(500),
+                durationMs = System.currentTimeMillis() - startedAt,
+            ),
+            taskLabel,
+        )
 
         if (breakerReason != null) {
             log.error("[$taskLabel] 熔断，本轮不改动任何书签: $breakerReason")
@@ -898,6 +918,18 @@ class BookmarkServiceImpl(
         )
         recordRound()
     }
+
+    /**
+     * 落一行巡检轮次汇总。
+     *
+     * 熔断的语义是"我方链路坏了，本轮全表结论不可信"，它此前唯一的出口是一行 `log.error`，
+     * 而日志会滚动、没人盯着。落成数据之后"最近一天熔断过几次"才是一句 SQL。
+     *
+     * 失败只记 warn：这是观测数据，写不进去不该反过来影响刚刚落库的巡检结果。
+     */
+    private fun recordSweepRound(round: BookmarkSweepLogEntity, taskLabel: String) = runCatching {
+        sweepLogMapper.insert(round)
+    }.onFailure { log.warn("[$taskLabel] 巡检汇总落库失败(忽略): ${it.message}") }.let { }
 
     // ────── 站点层活性 ──────
 
