@@ -7,26 +7,22 @@
 -- 不该跟着一起消失：没有它，新环境起不来、本地无法复现、索引与约束无人 review、
 -- 出问题时也没有回滚基线。
 --
--- 维护方式：**结构变更后刷新这一份**，不要往里追加 ALTER。它应该始终可以在一个空库上
--- 直接执行出一套完整的表结构。
+-- 维护方式：**结构变更后重新导出这一份**，不要往里追加 ALTER，也不要手工改名。
+-- 它应该始终可以在一个空库上直接执行出一套完整的表结构。
 --
--- 生成时间：2026-08-03。基线由 pg_dump 18.4 --schema-only 导出自生产库（PostgreSQL 17.4），
--- 其上**文本套用**了 2026-08-03_rename_three_layers.sql 的三层正名（site / page / bookmark）。
---
--- ⚠️ 之所以是文本套用而不是重新导出：那次重命名要停机执行，写这份文件时线上还在跑旧表名。
--- **迁移真正执行完之后，请重新 pg_dump 覆盖本文件**，以确认两边逐字一致：
 --   pg_dump --schema-only --no-owner --no-privileges --no-comments --schema=public
--- 表名与索引名已与迁移在生产库上的回滚试运行结果逐条比对通过，但那不能替代一次真实导出。
--- 表数量：26
 --
--- 上一版是在没有 pg_dump 的机器上按 pg_catalog 手工重建的，已被证实与生产库不符：
--- 缺了 idx_user_info_avatar_file / uk_category_slug / uk_page_category /
--- idx_background_image_file 四条索引，又多写了一条生产库根本不存在的
--- idx_ping_log_bookmark_id，而且表数量标注成了 25。**手工重建的快照会漂移，别再那么做。**
+-- 生成时间：2026-08-03，由 pg_dump 18.4 从生产库（PostgreSQL 17.4）直接导出，
+-- 时点是三层正名（site / page / bookmark）迁移执行完成之后。
+--
+-- 两次教训，都写在这里免得重犯：
+-- ① 曾经在没装 pg_dump 的机器上按 pg_catalog 手工重建过一份，结果漏了 4 条索引、
+--    多写 1 条不存在的、表数量还标错。**手工重建的快照一定会漂移。**
+-- ② 曾经在旧基线上"文本套用"改名来代替重新导出，于是漏掉了这中间另一个迁移
+--    删掉的 page.nsfw / nsfw_reason 两列 —— 文本变换只能反映它知道的那次变更。
 --
 -- 与 pg_dump 原始输出的差异：去掉了 \restrict/\unrestrict（psql 18 专有指令，
--- 旧版客户端执行会报错），CREATE SCHEMA public 加了 IF NOT EXISTS（空库通常已自带
--- public schema）。不含数据、权限、注释。
+-- 旧版客户端执行会报错），CREATE SCHEMA public 加了 IF NOT EXISTS。不含数据、权限、注释。
 --
 
 
@@ -163,89 +159,6 @@ CREATE TABLE public.background_image (
 -- Name: bookmark; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.page (
-    id character varying(40) NOT NULL,
-    url_host character varying(200) NOT NULL,
-    url_scheme character varying(10) NOT NULL,
-    app_name character varying(100),
-    title character varying(200),
-    description character varying(1000),
-    parse_status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
-    is_activity boolean DEFAULT false NOT NULL,
-    verify_flag boolean DEFAULT false NOT NULL,
-    parse_err_msg text,
-    create_time timestamp without time zone DEFAULT now() NOT NULL,
-    update_time timestamp without time zone,
-    url_path character varying(500) DEFAULT '/'::character varying NOT NULL,
-    nsfw boolean DEFAULT false NOT NULL,
-    anti_crawler_blocked boolean DEFAULT false NOT NULL,
-    nsfw_reason character varying(500),
-    last_parse_at timestamp without time zone,
-    last_check_at timestamp without time zone,
-    next_check_at timestamp without time zone,
-    consecutive_fail smallint DEFAULT 0 NOT NULL,
-    locked_fields character varying(200),
-    site_id character varying(40) NOT NULL,
-    url_query character varying(1000) DEFAULT ''::character varying NOT NULL,
-    url_fragment character varying(500) DEFAULT ''::character varying NOT NULL
-);
-
-
---
--- Name: bookmark_category; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.page_category (
-    id character varying(64) NOT NULL,
-    page_id character varying(64) NOT NULL,
-    category_id character varying(64) NOT NULL,
-    source character varying(32) DEFAULT 'DEEPSEEK'::character varying NOT NULL,
-    create_time timestamp without time zone DEFAULT now() NOT NULL,
-    deleted boolean DEFAULT false NOT NULL
-);
-
-
---
--- Name: bookmark_ping_log; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.page_ping_log (
-    id character varying(40) NOT NULL,
-    page_id character varying(40) NOT NULL,
-    url_host character varying(200) NOT NULL,
-    alive boolean,
-    triggered_parse boolean DEFAULT false NOT NULL,
-    create_time timestamp without time zone DEFAULT now() NOT NULL,
-    outcome character varying(16) NOT NULL
-);
-
-
---
--- Name: bookmark_sweep_log; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.sweep_log (
-    id character varying(64) NOT NULL,
-    task_label character varying(64) NOT NULL,
-    candidates integer DEFAULT 0 NOT NULL,
-    backlog bigint DEFAULT 0 NOT NULL,
-    probed integer DEFAULT 0 NOT NULL,
-    short_circuited integer DEFAULT 0 NOT NULL,
-    alive_count integer DEFAULT 0 NOT NULL,
-    dead_count integer DEFAULT 0 NOT NULL,
-    unknown_count integer DEFAULT 0 NOT NULL,
-    triggered_parse integer DEFAULT 0 NOT NULL,
-    deferred_parse integer DEFAULT 0 NOT NULL,
-    breaker_reason character varying(500),
-    duration_ms bigint DEFAULT 0 NOT NULL,
-    create_time timestamp without time zone DEFAULT now() NOT NULL
-);
-
-
---
--- Name: bookmark_user_link; Type: TABLE; Schema: public; Owner: -
---
-
 CREATE TABLE public.bookmark (
     id character varying(40) NOT NULL,
     uid character varying(40) NOT NULL,
@@ -313,6 +226,87 @@ CREATE TABLE public.oss_object (
     last_seen_at timestamp without time zone,
     last_ref_at timestamp without time zone,
     state character varying(16) DEFAULT 'ACTIVE'::character varying NOT NULL
+);
+
+
+--
+-- Name: page; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.page (
+    id character varying(40) NOT NULL,
+    url_host character varying(200) NOT NULL,
+    url_scheme character varying(10) NOT NULL,
+    app_name character varying(100),
+    title character varying(200),
+    description character varying(1000),
+    parse_status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    is_activity boolean DEFAULT false NOT NULL,
+    verify_flag boolean DEFAULT false NOT NULL,
+    parse_err_msg text,
+    create_time timestamp without time zone DEFAULT now() NOT NULL,
+    update_time timestamp without time zone,
+    url_path character varying(500) DEFAULT '/'::character varying NOT NULL,
+    anti_crawler_blocked boolean DEFAULT false NOT NULL,
+    last_parse_at timestamp without time zone,
+    last_check_at timestamp without time zone,
+    next_check_at timestamp without time zone,
+    consecutive_fail smallint DEFAULT 0 NOT NULL,
+    locked_fields character varying(200),
+    site_id character varying(40) NOT NULL,
+    url_query character varying(1000) DEFAULT ''::character varying NOT NULL,
+    url_fragment character varying(500) DEFAULT ''::character varying NOT NULL
+);
+
+
+--
+-- Name: page_category; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.page_category (
+    id character varying(64) NOT NULL,
+    page_id character varying(64) NOT NULL,
+    category_id character varying(64) NOT NULL,
+    source character varying(32) DEFAULT 'DEEPSEEK'::character varying NOT NULL,
+    create_time timestamp without time zone DEFAULT now() NOT NULL,
+    deleted boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: page_meta; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.page_meta (
+    page_id character varying(64) NOT NULL,
+    title character varying(500),
+    description character varying(2000),
+    site_name character varying(200),
+    site_short_name character varying(100),
+    canonical_url character varying(1000),
+    lang character varying(20),
+    theme_color character varying(32),
+    meta_sources jsonb,
+    fetch_layer character varying(20),
+    http_status integer,
+    anti_crawler boolean DEFAULT false NOT NULL,
+    fetched_at timestamp without time zone DEFAULT now() NOT NULL,
+    update_time timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: page_ping_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.page_ping_log (
+    id character varying(40) NOT NULL,
+    page_id character varying(40) NOT NULL,
+    url_host character varying(200) NOT NULL,
+    alive boolean,
+    triggered_parse boolean DEFAULT false NOT NULL,
+    create_time timestamp without time zone DEFAULT now() NOT NULL,
+    outcome character varying(16) NOT NULL
 );
 
 
@@ -421,24 +415,24 @@ CREATE TABLE public.site_display_pref (
 
 
 --
--- Name: site_page_meta; Type: TABLE; Schema: public; Owner: -
+-- Name: sweep_log; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.page_meta (
-    page_id character varying(64) NOT NULL,
-    title character varying(500),
-    description character varying(2000),
-    site_name character varying(200),
-    site_short_name character varying(100),
-    canonical_url character varying(1000),
-    lang character varying(20),
-    theme_color character varying(32),
-    meta_sources jsonb,
-    fetch_layer character varying(20),
-    http_status integer,
-    anti_crawler boolean DEFAULT false NOT NULL,
-    fetched_at timestamp without time zone DEFAULT now() NOT NULL,
-    update_time timestamp without time zone DEFAULT now() NOT NULL
+CREATE TABLE public.sweep_log (
+    id character varying(64) NOT NULL,
+    task_label character varying(64) NOT NULL,
+    candidates integer DEFAULT 0 NOT NULL,
+    backlog bigint DEFAULT 0 NOT NULL,
+    probed integer DEFAULT 0 NOT NULL,
+    short_circuited integer DEFAULT 0 NOT NULL,
+    alive_count integer DEFAULT 0 NOT NULL,
+    dead_count integer DEFAULT 0 NOT NULL,
+    unknown_count integer DEFAULT 0 NOT NULL,
+    triggered_parse integer DEFAULT 0 NOT NULL,
+    deferred_parse integer DEFAULT 0 NOT NULL,
+    breaker_reason character varying(500),
+    duration_ms bigint DEFAULT 0 NOT NULL,
+    create_time timestamp without time zone DEFAULT now() NOT NULL
 );
 
 
@@ -591,39 +585,7 @@ ALTER TABLE ONLY public.background_image
 
 
 --
--- Name: bookmark_category page_category_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.page_category
-    ADD CONSTRAINT page_category_pkey PRIMARY KEY (id);
-
-
---
--- Name: bookmark_ping_log page_ping_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.page_ping_log
-    ADD CONSTRAINT page_ping_log_pkey PRIMARY KEY (id);
-
-
---
--- Name: bookmark page_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.page
-    ADD CONSTRAINT page_pkey PRIMARY KEY (id);
-
-
---
--- Name: bookmark_sweep_log sweep_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.sweep_log
-    ADD CONSTRAINT sweep_log_pkey PRIMARY KEY (id);
-
-
---
--- Name: bookmark_user_link bookmark_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: bookmark bookmark_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.bookmark
@@ -652,6 +614,38 @@ ALTER TABLE ONLY public.layout_node_function
 
 ALTER TABLE ONLY public.oss_object
     ADD CONSTRAINT oss_object_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: page_category page_category_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.page_category
+    ADD CONSTRAINT page_category_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: page_meta page_meta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.page_meta
+    ADD CONSTRAINT page_meta_pkey PRIMARY KEY (page_id);
+
+
+--
+-- Name: page_ping_log page_ping_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.page_ping_log
+    ADD CONSTRAINT page_ping_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: page page_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.page
+    ADD CONSTRAINT page_pkey PRIMARY KEY (id);
 
 
 --
@@ -687,19 +681,19 @@ ALTER TABLE ONLY public.site_display_pref
 
 
 --
--- Name: site_page_meta page_meta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.page_meta
-    ADD CONSTRAINT page_meta_pkey PRIMARY KEY (page_id);
-
-
---
 -- Name: site site_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.site
     ADD CONSTRAINT site_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sweep_log sweep_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sweep_log
+    ADD CONSTRAINT sweep_log_pkey PRIMARY KEY (id);
 
 
 --
@@ -719,19 +713,19 @@ ALTER TABLE ONLY public.system_config
 
 
 --
--- Name: bookmark_category uk_page_category; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.page_category
-    ADD CONSTRAINT uk_page_category UNIQUE (page_id, category_id);
-
-
---
 -- Name: category uk_category_slug; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.category
     ADD CONSTRAINT uk_category_slug UNIQUE (slug);
+
+
+--
+-- Name: page_category uk_page_category; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.page_category
+    ADD CONSTRAINT uk_page_category UNIQUE (page_id, category_id);
 
 
 --
@@ -832,31 +826,10 @@ CREATE INDEX idx_background_image_uid ON public.background_image USING btree (ui
 
 
 --
--- Name: idx_page_category_page; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_bookmark_layout_node; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_page_category_page ON public.page_category USING btree (page_id);
-
-
---
--- Name: idx_page_due_check; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_page_due_check ON public.page USING btree (parse_status, COALESCE(next_check_at, '1970-01-01 00:00:00'::timestamp without time zone));
-
-
---
--- Name: idx_page_pending; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_page_pending ON public.page USING btree (COALESCE(update_time, create_time)) WHERE ((parse_status)::text = 'PENDING'::text);
-
-
---
--- Name: idx_page_site; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_page_site ON public.page USING btree (site_id);
+CREATE INDEX idx_bookmark_layout_node ON public.bookmark USING btree (layout_node_id);
 
 
 --
@@ -864,13 +837,6 @@ CREATE INDEX idx_page_site ON public.page USING btree (site_id);
 --
 
 CREATE INDEX idx_bookmark_page ON public.bookmark USING btree (page_id) WHERE (deleted = false);
-
-
---
--- Name: idx_bookmark_layout_node; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_bookmark_layout_node ON public.bookmark USING btree (layout_node_id);
 
 
 --
@@ -909,10 +875,31 @@ CREATE INDEX idx_oss_object_state ON public.oss_object USING btree (state, last_
 
 
 --
--- Name: idx_ping_log_page; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_page_category_page; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_ping_log_page ON public.page_ping_log USING btree (page_id, create_time DESC);
+CREATE INDEX idx_page_category_page ON public.page_category USING btree (page_id);
+
+
+--
+-- Name: idx_page_due_check; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_page_due_check ON public.page USING btree (parse_status, COALESCE(next_check_at, '1970-01-01 00:00:00'::timestamp without time zone));
+
+
+--
+-- Name: idx_page_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_page_pending ON public.page USING btree (COALESCE(update_time, create_time)) WHERE ((parse_status)::text = 'PENDING'::text);
+
+
+--
+-- Name: idx_page_site; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_page_site ON public.page USING btree (site_id);
 
 
 --
@@ -920,6 +907,13 @@ CREATE INDEX idx_ping_log_page ON public.page_ping_log USING btree (page_id, cre
 --
 
 CREATE INDEX idx_ping_log_create_time ON public.page_ping_log USING btree (create_time);
+
+
+--
+-- Name: idx_ping_log_page; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ping_log_page ON public.page_ping_log USING btree (page_id, create_time DESC);
 
 
 --
@@ -1056,17 +1050,17 @@ CREATE UNIQUE INDEX uk_background_config_uid ON public.background_config USING b
 
 
 --
--- Name: uk_page_canonical; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX uk_page_canonical ON public.page USING btree (site_id, url_path, url_query, url_fragment);
-
-
---
 -- Name: uk_bookmark_uid_page; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX uk_bookmark_uid_page ON public.bookmark USING btree (uid, page_id) WHERE ((deleted = false) AND (page_id IS NOT NULL) AND ((page_id)::text <> 'LOADING'::text));
+
+
+--
+-- Name: uk_page_canonical; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uk_page_canonical ON public.page USING btree (site_id, url_path, url_query, url_fragment);
 
 
 --
