@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
+import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkImportPreviewVO
@@ -98,6 +99,17 @@ class BookmarksController(
     @Operation(summary = "删除用户的自定义书签以及桌面元素")
     fun delete(@RequestBody params: List<String>) = layoutNodeService.deleteByIds(params, BaseUtils.uid())
 
+    // 只读、且只在用户点开某一条书签时才请求：封面是几百字节的签名 URL，随桌面列表给
+    // 每一条都下发一份是纯浪费（见 IBookmarkService.coverOf）
+    @PostMapping("/cover")
+    @Operation(summary = "书签封面(截图优先,退 og:image);没有则 data 为 null")
+    fun cover(@RequestParam linkId: String): ResultWrapper {
+        // 显式包 ResultWrapper：GlobalExceptionHandler.beforeBodyWrite 对裸 String 返回值不做包装，
+        // 直接透传会破坏前端统一的 Result<T>{code,msg,data,ok} 解析（同 UserController.avatarUrl）
+        val url = bookmarkService.coverOf(linkId, BaseUtils.uid()) ?: return ResultWrapper.ok()
+        return ResultWrapper.ok(url)
+    }
+
     @Throttle
     @PostMapping("/update")
     @Operation(summary = "修改")
@@ -117,7 +129,10 @@ class BookmarksController(
     @Operation(summary = "通过URL添加书签")
     fun addOne(@RequestParam url: String): UserLayoutNodeVO = bookmarkService.addOne(url, BaseUtils.uid())
 
-    @GetMapping("/linkOne")
+    // 与上面的 addOne 同理：这里也会写 user_layout_node + bookmark_user_link 两张表，
+    // 同样不该用 GET 承载（会被浏览器预取/代理缓存/爬虫意外重放）。addOne 当初改了，这条被漏掉。
+    @Throttle
+    @PostMapping("/linkOne")
     @Operation(summary = "关联书签")
     fun linkOne(@RequestParam bookmarkId: String) = bookmarkService.linkOne(bookmarkId, BaseUtils.uid())
 

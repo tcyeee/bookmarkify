@@ -80,7 +80,7 @@ object SiteAssetIngestor {
             response.assets.mapNotNull { toEntity(bookmarkId, it) }
         ).onEach { it.assignOwner(siteId) }
 
-        val assets = declared + screenshotAsset(bookmarkId, url, response)
+        val assets = declared + listOfNotNull(screenshotAsset(bookmarkId, url, response))
 
         return Projection(snapshot, pageMeta, assets)
     }
@@ -151,36 +151,40 @@ object SiteAssetIngestor {
      * [originUrl]/[resolvedUrl] 记的是**被截图的那个页面**，不是截图文件本身 —— 截图没有
      * "源地址"可言。此前这两列填的是 object key，既不是 URL（后台详情页的"源地址"列会显示
      * 一个裸 key），也让"这张图哪来的"这个信息彻底丢失。
+     *
+     * 截图补抓（`BookmarkScreenshotEvent`）只需要这一行，所以它是 public 的：那条链路走
+     * [SiteAssetWriter.upsertScreenshot]，不能借道 [project]——整条投影会连带重写 PAGE 层
+     * 的社交图。
+     *
+     * @return 没有截图、或截图只内联未落存储时返回 null
      */
-    private fun screenshotAsset(
+    fun screenshotAsset(
         bookmarkId: String,
         pageUrl: String,
         response: ScrapeResponse,
-    ): List<SiteAssetEntity> {
-        val shot = response.screenshot ?: return emptyList()
+    ): SiteAssetEntity? {
+        val shot = response.screenshot ?: return null
         // 只内联(dataUrl)未落存储的截图不入库：库里存 base64 会把 site_asset 撑爆，
         // 且它无法参与签名/缩放那套展示策略
-        val storageKey = shot.storageKey ?: return emptyList()
+        val storageKey = shot.storageKey ?: return null
         // 截图针对的是跟完重定向后的最终页面
         val source = response.fetch.finalUrl.takeIf { it.isNotBlank() } ?: pageUrl
-        return listOf(
-            SiteAssetEntity(
-                bookmarkId = bookmarkId,
-                // 截图就是这一个页面的内容，天然属于 PAGE 层
-                ownerType = AssetOwnerType.PAGE,
-                ownerId = bookmarkId,
-                role = AssetRole.SCREENSHOT,
-                extractor = "HEADLESS_CAPTURE",
-                quality = AssetQuality.TRUSTED,
-                originUrl = source.take(1000),
-                resolvedUrl = source.take(1000),
-                storageUrl = storageKey.take(1000),
-                width = shot.width.takeIf { it > 0 },
-                height = shot.height.takeIf { it > 0 },
-                byteSize = shot.byteSize,
-                mime = "image/${shot.format.name.lowercase()}",
-                isPrimary = true,
-            )
+        return SiteAssetEntity(
+            bookmarkId = bookmarkId,
+            // 截图就是这一个页面的内容，天然属于 PAGE 层
+            ownerType = AssetOwnerType.PAGE,
+            ownerId = bookmarkId,
+            role = AssetRole.SCREENSHOT,
+            extractor = "HEADLESS_CAPTURE",
+            quality = AssetQuality.TRUSTED,
+            originUrl = source.take(1000),
+            resolvedUrl = source.take(1000),
+            storageUrl = storageKey.take(1000),
+            width = shot.width.takeIf { it > 0 },
+            height = shot.height.takeIf { it > 0 },
+            byteSize = shot.byteSize,
+            mime = "image/${shot.format.name.lowercase()}",
+            isPrimary = true,
         )
     }
 }

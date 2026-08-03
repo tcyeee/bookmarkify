@@ -114,7 +114,12 @@ class SiteAssetIngestorTest {
     @Test
     fun `every asset gets a role and a quality`() {
         val assets = project().assets
-        assertEquals(6, assets.size, "样例里 6 条声明应全部落库")
+        // 截图不是"声明"，它由 screenshotAsset 另行追加，所以这条断言只数声明出来的那些
+        assertEquals(
+            6,
+            assets.count { it.role != AssetRole.SCREENSHOT },
+            "样例里 6 条声明应全部落库",
+        )
         assertTrue(assets.all { it.bookmarkId == "bm-1" })
         assertTrue(assets.all { it.resolvedUrl.isNotBlank() })
         // 每个 role 至多一个 primary
@@ -175,24 +180,16 @@ class SiteAssetIngestorTest {
      * 截图那条 SCREENSHOT 行的地址语义：`storageUrl` 是 object key，而 origin/resolved 记的是
      * **被截图的页面**。这两列以前填的也是 object key，既不是 URL，也把"这张图哪来的"弄丢了。
      *
-     * 契约样例里没有 screenshot（默认不开启截图），所以这里单独造一个响应。
+     * 用的是契约样例里那份 screenshot —— 走真实线路形态（camelCase + SCREAMING_SNAKE 的
+     * format），而不是在 Kotlin 里手搓一个对象。后者验不出跨语言的字段名分歧。
      */
     @Test
     fun `screenshot row points at the captured page, not at its own object key`() {
-        val withShot = response.copy(
-            screenshot = Screenshot(
-                storageKey = "scrapper/screenshots/abc123.webp",
-                width = 1280,
-                height = 720,
-                format = ImageFormat.WEBP,
-                byteSize = 40_960,
-            )
-        )
         val shot = SiteAssetIngestor
-            .project("site-1", "bm-3", "https://github.com/vbenjs/vue-vben-admin", withShot, 900, mapper)
+            .project("site-1", "bm-3", "https://github.com/vbenjs/vue-vben-admin", response, 900, mapper)
             .assets.single { it.role == AssetRole.SCREENSHOT }
 
-        assertEquals("scrapper/screenshots/abc123.webp", shot.storageUrl)
+        assertEquals(response.screenshot?.storageKey, shot.storageUrl)
         // finalUrl 是跟完重定向后的页面，截图针对的就是它
         assertEquals("https://github.com/vbenjs/vue-vben-admin", shot.resolvedUrl)
         assertEquals("https://github.com/vbenjs/vue-vben-admin", shot.originUrl)

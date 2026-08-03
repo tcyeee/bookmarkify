@@ -43,6 +43,9 @@ object AssetRolePolicy {
         AssetExtractor.OG_IMAGE to (AssetRole.SOCIAL to AssetQuality.TRUSTED),
         AssetExtractor.TWITTER_IMAGE to (AssetRole.SOCIAL to AssetQuality.TRUSTED),
         AssetExtractor.JSON_LD_IMAGE to (AssetRole.SOCIAL to AssetQuality.DEGRADED),
+        // 站点公开 API 给出的封面。出处是站点自己的接口，比页面里的 og:image 只强不弱
+        // （og:image 也是同一份数据渲染出来的），故同为 TRUSTED
+        AssetExtractor.SITE_API_COVER to (AssetRole.SOCIAL to AssetQuality.TRUSTED),
     )
 
     /**
@@ -180,6 +183,37 @@ object AssetRolePolicy {
         }
         return null
     }
+
+    /**
+     * 挑一张**页面封面**（详情面板顶部那张宽图），与 [resolve] 是两件事。
+     *
+     * [resolve] 选的是**图标**：方形、几十到几百像素、代表"这个站"。封面选的是**页面长什么样**：
+     * 宽幅、代表"这一页"。把 SCREENSHOT 塞进 [resolve] 的 roleOrder 是错的 —— 那会让一张 1280×720
+     * 的截图在 TILE 模式下因为"尺寸最大"而胜出，变成书签的图标。
+     *
+     * 优先级 `SCREENSHOT → SOCIAL`：截图是这一页此刻真实的样子；og:image 是站点**希望**分享时
+     * 被看到的样子，往往是通用的品牌banner，同一站点下所有页面共用一张。前者信息量更大，
+     * 但也更容易缺失（反爬站点抓不到），所以后者是天然的兜底。
+     *
+     * 两者都归 [AssetOwnerType.PAGE]（见 [ownerTypeOf]），所以传进来的应当是该书签的 PAGE 层资产。
+     *
+     * @return 选中的资产；没有可用封面时返回 null，调用方**不应**渲染任何占位
+     */
+    fun resolveCover(assets: List<SiteAssetEntity>): SiteAssetEntity? {
+        val usable = assets.filter { it.renderable() }
+        if (usable.isEmpty()) return null
+        return COVER_ROLE_ORDER.firstNotNullOfOrNull { role ->
+            usable.filter { it.role == role }
+                // 同 role 内取最大的一张：封面要铺满一条宽幅，小图放大很难看
+                .maxWithOrNull(
+                    compareBy<SiteAssetEntity> { if (it.quality == AssetQuality.TRUSTED) 1 else 0 }
+                        .thenBy { it.effectiveSize() }
+                )
+        }
+    }
+
+    /** 封面的取图顺序，见 [resolveCover]。 */
+    private val COVER_ROLE_ORDER = listOf(AssetRole.SCREENSHOT, AssetRole.SOCIAL)
 
     /**
      * 小图场景下与理想尺寸(64px)的距离：不足 64 的惩罚更重（放大会糊），

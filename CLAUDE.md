@@ -96,7 +96,7 @@ Concretely, the scrapper's response contains `extractor` — *which tag/field th
 
 | Concept | Owner | Example values |
 |---|---|---|
-| `extractor` (fact — where it came from) | scrapper | `LINK_ICON`, `APPLE_TOUCH_ICON`, `MANIFEST_ICON`, `JSON_LD_ORG_LOGO`, `OG_IMAGE` |
+| `extractor` (fact — where it came from) | scrapper | `LINK_ICON`, `APPLE_TOUCH_ICON`, `MANIFEST_ICON`, `JSON_LD_ORG_LOGO`, `OG_IMAGE`, `SITE_API_COVER` |
 | `role` (policy — what we use it for) | API | `FAVICON`, `LOGO`, `SOCIAL`, `SCREENSHOT` |
 | `quality` (policy — how much we trust it) | API | `TRUSTED`, `DEGRADED` |
 | `storageKey` (fact — where the bytes landed) | scrapper | `scrapper/asset/<sha256-of-bytes>` |
@@ -171,6 +171,7 @@ bookmarkify-scrapper/crates/scraper-service/src/
 ├── scraper.rs     # Layer 1 HTTP fetch + SSRF primitives (manual redirect following)
 ├── headless.rs    # Layer 2 headless Chrome — returns rendered HTML, does not parse
 ├── extract.rs     # pure HTML → metadata/asset declarations (offline-testable)
+├── siteapi.rs     # 站点官方 API 适配器 —— 全服务唯一的 host 特判，反爬救援用
 └── pipeline.rs    # network enrichment: manifest fetch + image probe/download/upload
 
 bookmarkify-api/.../server/asset/
@@ -185,9 +186,14 @@ bookmarkify-api/.../server/asset/
 
 - **`assets.download` defaults to `PROBE`,** which *does* fetch the image body — `contentHash` and real pixel dimensions can't be computed otherwise. It just discards the bytes afterwards instead of storing them.
 - **Admin "retry" must send `cache.mode = BYPASS`.** Otherwise it may hit the scrapper's cache and not actually retry.
+- **⚠️ 无头截图目前仍然只能截出裸 HTML，这个 bug 尚未修复。** 截出来的图没有 CSS、没有图片、没有 Web 字体（Times 衬线体、默认项目符号、蓝色下划线链接）。**它没有任何症状** —— HTTP 200、字节数正常、`storageKey` 正常，每项技术指标都对，只有图本身没法看，所以长期无人察觉。曾以为原因是 spider 的 `RequestInterceptConfiguration::new(true)` 默认把 `block_visuals`（Image/Media/Font）与 `block_stylesheets` 置真，**实测已证伪**：这两个开关取任何值、乃至把 `enabled` 整个关掉，stripe.com 的截图都是**逐字节相同**的 107264 字节。样式压根没参与渲染，原因另在（候选：截图时机早于样式应用；或 spider `scrape()` 路径不加载子资源）。定位前不要对外宣称截图可用。复现见 `headless.rs::screenshot_still_renders_unstyled`。
+- **截图相关的两个真实陷阱（与上面那个 bug 无关，都已处理）：** ① `intercept_config` 在截图时放开样式与图片拦截 —— 即便它治不好上面那个 bug，为截图而拦掉 CSS 在语义上就是错的；② `ScreenshotParams` 的 `omit_background` 传 `None` **不是**"用默认值"，spider 会去读 `SCREENSHOT_OMIT_BACKGROUND`，而它缺省时兜底为 `true`（背景被抠成透明），必须显式传 `Some(false)`。
+- **截图不进主解析链路。** 它强制走无头浏览器，而 scrapper 侧的 Chrome 由一把全局互斥锁串行化，放进主链路等于让每条新增书签排队等浏览器。改由解析成功后发 `BookmarkScreenshotEvent`，在 `BOOKMARK_SCREENSHOT_EXECUTOR`（**单线程**，与对端的实际并发度对齐）上补抓，写入走 `SiteAssetWriter.upsertScreenshot` 而非 `persist` —— 后者会整体替换 PAGE 层资产，把主抓取刚写好的 SOCIAL 图一并删掉。
+- **`AssetRolePolicy.resolve` 选图标，`resolveCover` 选封面，两者不能混。** 前者的 `roleOrder` 只排 LOGO/FAVICON，后者只排 SCREENSHOT/SOCIAL。把 SCREENSHOT 加进前者，一张 1280×720 的截图会因为"尺寸最大"在 TILE 模式下胜出，变成书签的图标。两个方向都有回归测试盯着。封面签名走 `OssUtils.signCover`（只限宽，`m_lfit`）——用图标那套等宽高的 `m_fill` 会把宽幅截图裁成正方形。
 - **The Layer 1 client must have both `redirect::Policy::none()` and `cookie_store(true)`.** The first is required for the manual per-hop redirect following that produces `fetch.redirectChain`; the second is required *because* of the first — plenty of sites hand out their anti-bot cookie on the 301 hop (bilibili's `buvid3`), and without a jar it is dropped before the next request. `scraper::fetch_html` also sends a full browser header set (`Accept`, `Accept-Language`, `Sec-Fetch-*`, `Sec-CH-UA`) and, when a sub-path is blocked with 403/406/412, warms up the origin root once to collect cookies and retries. Send only a UA and WAFs classify the request as a bot.
 - **Navigations and subresources get *different* header sets.** `apply_navigation_headers` is for the page fetch; images and manifests go through `scraper::apply_subresource_headers` (`Sec-Fetch-Dest: image`/`manifest`, `no-cors`/`cors`, image/manifest `Accept`). Reusing the navigation headers would put `Sec-Fetch-Dest: document` on a PNG, which is itself a bot tell. The `Referer` on a subresource must be derived from the **page** URL via `scraper::referer_for` (browser-default `strict-origin-when-cross-origin`) — hotlink protection whitelists the referring site's domain, so pointing it at the asset's own host is the same as not sending it.
 - **反爬状态码（403/406/412）在 AUTO 模式下会回退无头浏览器。** 根路径 cookie 预热救不回来时，Layer 1 已经把"伪装成浏览器"这条路走尽了，换成真浏览器才是换了个物种（B 站的 `/video/BVxxx` 就是这个场景）。关键约束：**无头导航若同样是非 2xx，必须拒收那份 HTML** —— 拦截页有标题有正文，收下就会变成一条标题叫"出错啦"的书签，比直接报错糟得多。这时报的是 Layer 1 的原始错误（现场更完整），并在 `detail` 里写明"已回退无头浏览器重试"。
+- **反爬救援阶梯的第一级是站点官方 API（`siteapi.rs`），不是 Chrome。** 生产机实测：B 站根路径 200、内容页 412、而 `api.bilibili.com/x/web-interface/view` 200 —— 拒的是**机房出口 IP**，不是请求长相，所以根路径 cookie 预热、`finger/spi` 正牌指纹、乃至无头浏览器全都无效。API 只花几 KB 就拿到同一份标题/封面。这是全服务**唯一按站点特判**的地方，边界是：只报事实、只在常规抓取已失败后触发、出处如实记为 `SITE_API`/`SITE_API_COVER` 而绝不冒充 `OG`。新增站点适配器时若要加 `extractor` 取值，记得 `AssetRolePolicy.TABLE` 也要给它一条映射，否则那张图会被丢掉。
 - **无头回退带一个按 host 的熔断（`ScrapeCache::headless_futile`，900s）。** 生产容器 `mem_limit: 1g`，Chrome 是里面最大的一坨；回退失败一次就把整个 host 记下来，同站后续 URL 直接跳过。没有它，一次全量重抓下几百条 B 站链接会各启一次 Chrome —— 反爬拒的是这台机器，不是那条路径，第一次就该得出结论。
 - **A non-2xx response is `ScrapeError::HttpStatus`, not `FetchFailed`** — "connected but rejected" and "never connected" need opposite debugging. Both still surface as the `FETCH_FAILED` wire code (the API's `classifyScrapperError` keys off it to mean "target site is unreachable"; a new code would be misread as *our* service failing). The diagnosis rides in `detail` (status, redirect chain, `Server`, the site's own error text, a what-to-check hint) and in `ErrorResponse.fetch`.
 - **The local Jsoup path (`parseLocally`) no longer produces images.** Only the scrapper path writes `site_asset`. Two parsers each writing their own icon model is exactly what this refactor removed.

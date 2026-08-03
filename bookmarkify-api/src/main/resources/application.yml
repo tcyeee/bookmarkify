@@ -77,9 +77,15 @@ bookmarkify:
     reclaim-orphan-assets: ${BOOKMARKIFY_SCRAPPER_RECLAIM_ORPHAN_ASSETS:true}
     asset-max-bytes: 8388608  # 单张图片上限 8MB（契约默认 2MB 是给"只探测"场景定的，会挡掉大尺寸 og:image）
     asset-max-count: 40       # 单页最多处理 40 张图（图标齐全的站点很容易超过契约默认的 20）
-    # 页面截图。开启会强制每条书签都走无头浏览器，抓取耗时从百毫秒涨到秒级，
-    # 而目前没有任何展示位在用截图，故默认关闭
+    # 主解析链路是否等截图。保持关闭：截图强制走无头浏览器，而 scrapper 侧的 Chrome 由一把
+    # 全局互斥锁串行化，放进主链路等于让每条新增书签排队等浏览器。截图走下面的异步补抓。
     screenshot: ${BOOKMARKIFY_SCRAPPER_SCREENSHOT:false}
+    # 解析成功后异步补一张页面截图，作为详情面板封面（BookmarkScreenshotEvent，单线程池）。
+    # 关掉即完全不产生截图负载。
+    screenshot-async: ${BOOKMARKIFY_SCRAPPER_SCREENSHOT_ASYNC:true}
+    # 截图格式与质量。WEBP 同等观感下体积约为 PNG 的三分之一，封面是纯展示用途，有损可接受
+    screenshot-format: ${BOOKMARKIFY_SCRAPPER_SCREENSHOT_FORMAT:WEBP}
+    screenshot-quality: ${BOOKMARKIFY_SCRAPPER_SCREENSHOT_QUALITY:80}
   goatcounter:
     # 自托管 GoatCounter 站点地址（dev/prod 同走公网域名，prod 经 nginx 回环命中 site3）
     base-url: ${BOOKMARKIFY_GOATCOUNTER_BASE_URL:https://bookmarkify.stats.viii.me}

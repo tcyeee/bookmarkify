@@ -77,6 +77,39 @@ class AsyncConfig {
     }
 
     /**
+     * 页面截图补抓线程池。
+     *
+     * **单线程，且这是硬约束**：截图强制走无头浏览器，而 scrapper 侧的 Chrome 由一把全局
+     * 互斥锁串行化（`headless.rs` 的 `HEADLESS_LOCK`，生产容器 1GB 内存开不起第二个）。
+     * 这边多开线程并不会更快——它们只会一起堵在对端那把锁上，把各自的 60s HTTP 读超时
+     * 白白耗光，最后表现为一批"截图超时"而不是排队。并发度必须与对端的实际并发度对齐。
+     *
+     * 队列满时**直接丢弃**，不用 CallerRuns：这里的调用线程是解析线程，把一个要跑好几秒
+     * 的无头抓取还给它，正是拆出这个池要避免的事。少一张封面没有任何后果。
+     */
+    @Bean(BOOKMARK_SCREENSHOT_EXECUTOR)
+    fun bookmarkScreenshotExecutor(): ThreadPoolTaskExecutor = ThreadPoolTaskExecutor().apply {
+        corePoolSize = 1
+        maxPoolSize = 1
+        // 队列必须**小**。这里排的不是本地任务，而是对端那把全局 Chrome 锁的排队号：单线程
+        // ×每张十几到几十秒，队列开到 10000 就意味着一次 2000 条的导入能让截图独占对端浏览器
+        // 十几个小时，期间用户当场触发的反爬无头回退全部卡在锁上超时——那条路是有人在等结果的，
+        // 而封面没有人等。压到 200 后最坏也就一两个小时，多出来的部分直接丢弃：
+        // 内容定期重抓会重新投递，封面是"迟早会有"，不是"必须现在有"。
+        queueCapacity = 200
+        setThreadNamePrefix("bm-shot-")
+        setRejectedExecutionHandler { _, executor ->
+            log.warn(
+                "[bookmarkScreenshotExecutor] 截图队列已满，本次截图丢弃（不影响书签可用）: " +
+                    "queueSize=${executor.queue.size}"
+            )
+        }
+        // 封面丢了不影响书签可用，停机时不必等它跑完
+        setWaitForTasksToCompleteOnShutdown(false)
+        initialize()
+    }
+
+    /**
      * 活性巡检线程池（`livenessCheckStaleBookmarks` / `retryUnreachableBookmarks` 的驱动线程）。
      *
      * 巡检此前跑在解析池上，与用户的 addOne 抢同一批线程和同一个队列：一轮 200 条串行 ping
@@ -134,6 +167,7 @@ class AsyncConfig {
     companion object {
         const val BOOKMARK_PARSE_EXECUTOR = "bookmarkParseExecutor"
         const val BOOKMARK_ENRICH_EXECUTOR = "bookmarkEnrichExecutor"
+        const val BOOKMARK_SCREENSHOT_EXECUTOR = "bookmarkScreenshotExecutor"
         const val BOOKMARK_SWEEP_EXECUTOR = "bookmarkSweepExecutor"
         const val BOOKMARK_PING_EXECUTOR = "bookmarkPingExecutor"
 

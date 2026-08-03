@@ -15,11 +15,18 @@ export const bookmarksSearch = (name: string) => http.post<Array<any>>(`/bookmar
 // addOne 会创建 bookmark/user_layout_node/bookmark_user_link 三张表的写入，改用 POST 承载（与 bookmarksSearch 一致的写法：
 // query string 传参 + POST 方法），避免 GET 请求被浏览器预取/代理缓存/爬虫意外重放触发非预期写操作
 export const bookmarksAddOne = (url: string) => http.post<t.UserLayoutNodeVO>(`/bookmark/addOne?url=${encodeURIComponent(url)}`)
-export const bookmarksLinkOne = (bookmarkId: string) => http.get<t.UserLayoutNodeVO>('/bookmark/linkOne', { bookmarkId })
+// 与 addOne 同理：linkOne 也会写 user_layout_node + bookmark_user_link 两张表，改用 POST 承载
+export const bookmarksLinkOne = (bookmarkId: string) =>
+  http.post<t.UserLayoutNodeVO>(`/bookmark/linkOne?bookmarkId=${encodeURIComponent(bookmarkId)}`)
 export const bookmarksSort = (params: Record<string, number>) => http.post<boolean>('/bookmark/sort', params)
 export const bookmarksDel = (params: Array<string>) => http.post<boolean>('/bookmark/delete', params)
 export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post<t.BookmarkShow>('/bookmark/update', params)
 export const bookmarksPin = (linkId: string, pinned: boolean) => http.post<boolean>('/bookmark/pin', { linkId, pinned })
+// 书签封面（页面截图优先，退 og:image）。按需单取而不是随桌面列表下发：桌面可能有几百条
+// 书签，而封面只在点开某一条时才看得到，给每条都带一个几百字节的签名 URL 是纯浪费。
+// 没有封面时返回 null，此时不该渲染任何占位。
+export const bookmarksCover = (linkId: string) =>
+  http.post<string | null>(`/bookmark/cover?linkId=${encodeURIComponent(linkId)}`)
 // 仅做打开次数记录，fire-and-forget 调用，不阻塞书签的实际打开
 export const bookmarksRecordOpen = (linkId: string) => http.post<boolean>('/bookmark/open', { linkId })
 export const bookmarksUploadPreview = (file: File) =>

@@ -33,7 +33,7 @@
         <a
           v-for="item in data.bookmarks"
           :key="item.bookmarkUserLinkId"
-          :href="item.urlFull"
+          :href="externalHref(item.urlFull)"
           target="_blank"
           rel="noopener noreferrer"
           class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
@@ -51,6 +51,7 @@
 
 <script lang="ts" setup>
 import { shareView, bookmarksRecordOpen } from '@api'
+import { externalHref } from '@utils'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
 definePageMeta({ layout: 'explore' })

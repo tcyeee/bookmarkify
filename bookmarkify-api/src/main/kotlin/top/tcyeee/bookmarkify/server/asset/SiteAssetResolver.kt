@@ -69,6 +69,59 @@ class SiteAssetResolver(
         resolveBatch(listOf(bookmarkId), mode)[bookmarkId] ?: ResolvedLogo.EMPTY
 
     /**
+     * 批量解析**页面封面**（详情面板顶部那张宽图），与 [resolveBatch] 是两件事：
+     * 那个选图标，这个选"页面长什么样"。选取规则见 [AssetRolePolicy.resolveCover]。
+     *
+     * 只查 PAGE 层：封面的两个来源（SCREENSHOT / SOCIAL）都归属页面，不需要 site 那一跳，
+     * 也不需要 `site_display_pref`（它是站点级的，装不下按页面变化的封面）。
+     *
+     * @return 只含**有封面**的书签；没有的键直接缺席，让调用方 `?:` 成 null 而不是空串
+     */
+    fun resolveCoverBatch(bookmarkIds: List<String>): Map<String, String> {
+        val ids = bookmarkIds.filter { it.isNotBlank() }.distinct()
+        if (ids.isEmpty()) return emptyMap()
+
+        val pageAssets = siteAssetMapper.selectList(
+            KtQueryWrapper(SiteAssetEntity::class.java)
+                .eq(SiteAssetEntity::ownerType, AssetOwnerType.PAGE)
+                .`in`(SiteAssetEntity::ownerId, ids)
+        ).groupBy { it.ownerId }
+
+        // 与 presentUrl 同一条规矩：file_id 才是解耦后的正式来源，storage_url 只是兜底。
+        // 必须批量取，否则详情列表就是 N+1
+        val objectByFileId = objectsOf(pageAssets.values.flatten())
+
+        return ids.mapNotNull { id ->
+            val chosen = AssetRolePolicy.resolveCover(pageAssets[id].orEmpty()) ?: return@mapNotNull null
+            val url = coverUrl(chosen, objectByFileId) ?: return@mapNotNull null
+            id to url
+        }.toMap()
+    }
+
+    /**
+     * 封面地址。取值优先级与 [presentUrl] 完全一致（file_id → storage_url → 源站直连），
+     * 独立成一段只因缩放策略不同：封面按宽度等比缩，不像图标那样裁成正方形。
+     *
+     * 三级兜底缺一不可。[SiteAssetEntity.renderable] 明确接纳"没落 OSS 但有源站地址"的资产，
+     * 于是 [AssetRolePolicy.resolveCover] 会正常选中它们；这里若只认 `storage_url`，选中的资产
+     * 就会被签成 null —— 表现为 upload-assets 关闭时"退 og:image"这条兜底永远不生效，
+     * 以及两张 SOCIAL 里挑中了更大的那张未上传的，结果一张封面都没有。
+     */
+    private fun coverUrl(asset: SiteAssetEntity, objectByFileId: Map<String, OssObjectEntity>): String? {
+        val ledgerRow = asset.fileId?.let { objectByFileId[it] }
+        val ref = ledgerRow?.objectKey
+            ?: asset.storageUrl?.takeIf { it.isNotBlank() }
+            ?: asset.resolvedUrl.takeIf { it.isNotBlank() }
+        // 截图 key 按页面 URL 寻址、会被后续补抓覆盖，所以**不能**当不可变对象签长效链接。
+        // 源站直连地址会被 signAsset 原样返回（外链签名反而会破坏它），无需在此分流
+        return OssUtils.signCover(ref, mime = ledgerRow?.mime ?: asset.mime)
+    }
+
+    /** 单个书签的封面。列表场景请用 [resolveCoverBatch]，避免 N+1。 */
+    fun resolveCoverOne(bookmarkId: String): String? =
+        resolveCoverBatch(listOf(bookmarkId))[bookmarkId]
+
+    /**
      * 批量解析。四次查询搞定（书签→站点、站点资产、页面资产、偏好），其余在内存里完成。
      */
     fun resolveBatch(bookmarkIds: List<String>, mode: DisplayMode): Map<String, ResolvedLogo> {

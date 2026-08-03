@@ -172,6 +172,56 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.nodes[node.id] = { ...node, parentId: cur.parentId, children: undefined }
     },
 
+    // WebSocket 文件夹结构同步（HOME_DIR_UPDATE）：用服务端下发的子节点列表整体替换该文件夹的
+    // 内容与顺序。此前后端把文件夹更新塞在 HOME_ITEM_UPDATE 里，被 replaceContent 当作非法形状
+    // 直接丢弃，导致多标签页/多设备之间的结构变动从来没有真正同步过。
+    replaceFolder(node: UserLayoutNodeVO) {
+      if (node.type !== HomeItemType.BOOKMARK_DIR) {
+        console.warn(`[bookmark] 收到的 WS 文件夹节点类型不符，已忽略: nodeId=${node.id}, type=${node.type}`)
+        return
+      }
+      const children = node.children ?? []
+      // 覆盖前先记下本地这份子列表，用来算出「谁被移出去了」（见下方兜底）
+      const prevChildIds = this.order[node.id] ?? []
+      const cur = this.nodes[node.id]
+      this.nodes[node.id] = { ...node, parentId: cur?.parentId ?? node.parentId ?? null, children: undefined }
+      for (const child of children) {
+        if (!child?.id) continue
+        this.nodes[child.id] = { ...child, parentId: node.id, children: undefined }
+      }
+      const childIds = children.map((c) => c.id).filter(Boolean)
+      this.order[node.id] = childIds
+      // 子节点可能是刚从根目录（或别的文件夹）移进来的，得把它们从原来的列表里摘掉，
+      // 否则同一个 id 会同时挂在两个 order 列表下，文件夹标题旁的计数就会多算一份
+      const moved = new Set(childIds)
+      for (const key of Object.keys(this.order)) {
+        if (key === node.id) continue
+        this.order[key] = (this.order[key] ?? []).filter((id) => !moved.has(id))
+      }
+      // 反向的那一半：本地记着、服务端这份列表里却没有的子节点，说明它被移出了这个文件夹。
+      // 上面的整体替换已经把它从这里抹掉，而它并不在任何别的 order 列表里——节点还躺在 nodes 里，
+      // 却没有任何一处会渲染它，在用户眼里就是凭空消失。先收到根目录兜底；若它其实是移进了
+      // 另一个文件夹，紧随其后的那条 HOME_DIR_UPDATE 会再把它从根上摘走。
+      const departed = prevChildIds.filter((id) => !moved.has(id) && this.nodes[id])
+      if (departed.length) {
+        const rootIds = this.order[ROOT_KEY] ?? []
+        const orphans = departed.filter((id) => !rootIds.includes(id))
+        if (orphans.length) {
+          console.log(`[bookmark] 文件夹同步后有子节点无归属，暂收到根目录: folderId=${node.id}, ids=${orphans.join(',')}`)
+          this.order[ROOT_KEY] = [...rootIds, ...orphans]
+          for (const id of orphans) {
+            const orphan = this.nodes[id]
+            if (orphan) this.nodes[id] = { ...orphan, parentId: null }
+          }
+        }
+      }
+      // 文件夹自身若还没出现在任何列表里（本地没做过乐观更新，比如另一个标签页发起的操作），挂到根末尾
+      if (!this.parentKeyOf(node.id)) {
+        this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []), node.id]
+      }
+      console.log(`[bookmark] 应用 WS 文件夹同步: folderId=${node.id}, name=${node.name ?? ''}, children=${childIds.length}`)
+    },
+
     // 置顶/取消置顶：本地就地替换 typeApp 对象引用以触发响应式更新
     setPinnedLocal(nodeId: string, pinned: boolean) {
       const node = this.nodes[nodeId]

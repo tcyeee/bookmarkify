@@ -30,7 +30,12 @@ export enum HomeItemType {
 }
 
 export enum SocketTypes {
+  /* 单个书签节点的内容更新（抓取完成、LOADING 收口）；payload 必为 type=BOOKMARK 且 typeApp 非空 */
   HOME_ITEM_UPDATE = 'HOME_ITEM_UPDATE',
+  /* 单个文件夹节点及其直接子节点，用于移动/建夹后的结构同步 */
+  HOME_DIR_UPDATE = 'HOME_DIR_UPDATE',
+  /* 整棵桌面布局树，用于文件夹被解散/删除这类结构大变动 */
+  HOME_LAYOUT_REFRESH = 'HOME_LAYOUT_REFRESH',
   SHARE_STATUS_CHANGED = 'SHARE_STATUS_CHANGED',
 }
 

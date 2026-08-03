@@ -2,6 +2,7 @@
 import type {
   AssetDownload,
   CacheMode,
+  ImageFormat,
   RenderMode,
   ScrapeAsset,
   ScrapePreviews,
@@ -133,6 +134,8 @@ const form = reactive({
   maxCount: 20,
   screenshotEnabled: false,
   screenshotFullPage: false,
+  screenshotFormat: "WEBP" as ImageFormat,
+  screenshotQuality: 80,
   cacheMode: "BYPASS" as CacheMode,
   robotsRespect: true,
 });
@@ -174,6 +177,9 @@ const builtRequest = computed<ScrapeRequest>(() => {
     screenshot: {
       enabled: form.screenshotEnabled,
       fullPage: form.screenshotFullPage,
+      format: form.screenshotFormat,
+      // PNG 无损，quality 对它不适用；不发比发一个被忽略的值更诚实
+      ...(form.screenshotFormat === "PNG" ? {} : { quality: form.screenshotQuality }),
     },
     cache: { mode: form.cacheMode },
     robots: { respect: form.robotsRespect },
@@ -257,6 +263,8 @@ function resetForm() {
   form.maxCount = 20;
   form.screenshotEnabled = false;
   form.screenshotFullPage = false;
+  form.screenshotFormat = "WEBP";
+  form.screenshotQuality = 80;
   form.cacheMode = "BYPASS";
   form.robotsRespect = true;
 }
@@ -434,9 +442,13 @@ const PARAM_TIP: Record<string, string> = {
   locale:
     "<b>render.locale</b>：请求携带的 Accept-Language。多语言站点靠它决定返回哪种语言的标题与描述。留空 = 不发送。",
   screenshotEnabled:
-    "<b>screenshot.enabled</b>：截图只有无头浏览器能出，开启会隐含强制走 Layer 2，即使抓取模式选了 AUTO/HTTP。",
+    "<b>screenshot.enabled</b>：截图只有无头浏览器能出，开启会把 AUTO 提升为 HEADLESS。<br>注意<b>显式选 HTTP 时不会提升</b>，那条组合永远出不了图，服务端会在 diagnostics.warnings 里说明。<br><b style='color:#e6a23c'>已知问题</b>：截图目前仍然只能截出<b>裸 HTML</b>（无 CSS / 图片 / 字体）。放开资源拦截并未解决 —— 实测拦截全开/全关/完全禁用三种配置下截出的图逐字节相同，原因仍未定位。请暂不要把截图当作可用功能。",
   screenshotFullPage:
     "<b>screenshot.fullPage</b>：关 = 只截视口内的首屏；开 = 滚动整页拼接。长页面会显著变慢，且产出体积很大。",
+  screenshotFormat:
+    "<b>screenshot.format</b>：截图编码格式，由 Chrome 原生输出，不做二次转码。<br><b>WEBP</b>：默认，同等观感下体积约为 PNG 的三分之一<br><b>JPEG</b>：兼容性最好<br><b>PNG</b>：无损，体积最大，<b>quality 对它无效</b>",
+  screenshotQuality:
+    "<b>screenshot.quality</b>：有损格式（WEBP / JPEG）的质量 1–100，默认 80。选 PNG 时该参数不发送——PNG 是无损的，带上只会让参数自相矛盾。",
   viewportEnabled:
     "<b>render.viewport</b>：自定义视口宽 × 高 @ 设备像素比，仅无头路径生效。影响响应式布局走哪个断点，以及首屏截图的构图。留空 = 用服务端默认。",
   robotsRespect:
@@ -548,6 +560,9 @@ const EXTRACT_TIP: Record<string, string> = {
 
             <ElCollapseItem title="已知未实现 / 易踩的坑" name="gotchas">
               <ul class="ml-4 list-disc space-y-1 text-xs text-gray-600">
+                <li><strong>截图仍只能截出裸 HTML（未修复）</strong>：无 CSS / 图片 / 字体。而字节数、状态码、storageKey 全都正常，光看指标发现不了 —— 这也是它长期没被察觉的原因。曾以为是资源拦截所致，实测证伪（拦截全开/全关/禁用三种配置下截出的图逐字节相同），真正原因仍未定位</li>
+                <li><code>render.mode</code> 显式选 <code>HTTP</code> 时开截图<strong>不会</strong>提升为无头，永远出不了图；此时 <code>diagnostics.warnings</code> 会说明</li>
+                <li>被反爬拦下并走了<strong>站点 API 救援</strong>时同样没有截图：页面压根没渲染过，<code>fetch.layerUsed</code> 会是 <code>SITE_API</code></li>
                 <li><code>fetch.tls</code> 恒为空：reqwest 当前不透出证书细节，刻意留空而非编造</li>
                 <li><code>diagnostics.robots</code> 恒为空：robots.txt 判定尚未实现，<code>robots.respect</code> 参数目前不生效</li>
                 <li>无头模式拿不到重定向链：Chrome 内部跳转不经过我们，<code>redirectChain</code> 会是空数组</li>
@@ -676,6 +691,20 @@ const EXTRACT_TIP: Record<string, string> = {
                 <ElTooltip :content="PARAM_TIP.screenshotFullPage" raw-content placement="top" popper-class="scrape-tip">
                   <span class="cursor-help text-gray-600 underline decoration-dotted underline-offset-4">整页截图</span>
                 </ElTooltip>
+              </label>
+              <label v-if="form.screenshotEnabled" class="flex items-center gap-2">
+                <ElTooltip :content="PARAM_TIP.screenshotFormat" raw-content placement="top" popper-class="scrape-tip">
+                  <span class="cursor-help text-gray-600 underline decoration-dotted underline-offset-4">格式</span>
+                </ElTooltip>
+                <ElSelect v-model="form.screenshotFormat" size="small" class="w-24">
+                  <ElOption v-for="k in ['WEBP', 'JPEG', 'PNG']" :key="k" :label="k" :value="k" />
+                </ElSelect>
+              </label>
+              <label v-if="form.screenshotEnabled && form.screenshotFormat !== 'PNG'" class="flex items-center gap-2">
+                <ElTooltip :content="PARAM_TIP.screenshotQuality" raw-content placement="top" popper-class="scrape-tip">
+                  <span class="cursor-help text-gray-600 underline decoration-dotted underline-offset-4">质量</span>
+                </ElTooltip>
+                <ElInputNumber v-model="form.screenshotQuality" size="small" :min="1" :max="100" controls-position="right" class="w-24" />
               </label>
               <label class="flex items-center gap-2">
                 <ElSwitch v-model="form.viewportEnabled" size="small" />

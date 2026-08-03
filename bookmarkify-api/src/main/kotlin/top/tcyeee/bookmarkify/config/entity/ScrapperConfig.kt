@@ -1,6 +1,8 @@
 package top.tcyeee.bookmarkify.config.entity
 
+import jakarta.annotation.PostConstruct
 import org.springframework.boot.context.properties.ConfigurationProperties
+import top.tcyeee.bookmarkify.entity.dto.scrape.ImageFormat
 
 /**
  * 自部署的 bookmarkify-scrapper 连接配置（接替原 iframely）。
@@ -62,12 +64,52 @@ data class ScrapperConfig(
     var assetMaxCount: Int = 40,
 
     /**
-     * 是否顺带抓页面截图。
+     * 主解析链路是否顺带抓页面截图。
      *
-     * 默认关闭且这是**有意的**：开启会强制每条书签都走无头浏览器，抓取耗时从百毫秒级涨到秒级。
-     * 截图目前没有任何展示位在用，为它付这个代价不划算。需要时打开即可，落库链路
-     * （[SiteAssetIngestor][top.tcyeee.bookmarkify.server.asset.SiteAssetIngestor] 的
-     * SCREENSHOT 分支）是通的。
+     * **保持关闭**。截图强制走无头浏览器，而 scrapper 侧的 Chrome 由一把全局互斥锁串行化
+     * （`headless.rs` 的 `HEADLESS_LOCK`，生产容器内存只有 1GB，开不起第二个）。把它并进
+     * 主链路，等于让每一条新增书签都去排队等浏览器，"加一个书签要转多久圈"会直接崩掉。
+     *
+     * 截图走的是另一条路：解析成功后发
+     * [BookmarkScreenshotEvent][top.tcyeee.bookmarkify.config.event.BookmarkScreenshotEvent]，
+     * 在单线程的截图池上慢慢补（见 `AsyncConfig.BOOKMARK_SCREENSHOT_EXECUTOR`）。用户拿到
+     * 书签不受影响，封面晚几秒出现。
+     *
+     * 这个开关留着是给"想让截图同步出结果"的特殊场景用的，正常部署不要开。
      */
     var screenshot: Boolean = false,
-)
+
+    /**
+     * 是否启用截图补抓任务（[BookmarkScreenshotEvent][top.tcyeee.bookmarkify.config.event.BookmarkScreenshotEvent]）。
+     *
+     * 与 [screenshot] 分开是因为两者控制的不是一件事：那个是"主链路要不要等截图"，
+     * 这个是"要不要截图"。关掉它就完全不产生截图负载。
+     */
+    var screenshotAsync: Boolean = true,
+
+    /**
+     * 截图输出格式。默认 WEBP —— 同等观感下体积约为 PNG 的三分之一，而截图是纯展示用途，
+     * 有损完全可以接受。OSS 图片处理支持 webp 缩放（见 `OssUtils.IMG_PROCESSABLE_MIME`）。
+     */
+    var screenshotFormat: ImageFormat = ImageFormat.WEBP,
+
+    /** 有损格式的质量 1–100。封面会被缩到 640px 宽，再高的质量看不出来。 */
+    var screenshotQuality: Int = 80,
+) {
+    /**
+     * 启动即校验 [screenshotFormat]，配错就不许起来。
+     *
+     * [ImageFormat.UNKNOWN] 只存在于**响应**侧（`@JsonEnumDefaultValue`，用来兼容 scrapper
+     * 将来新增的格式），请求侧没有这个取值 —— Rust 的 `ImageFormat` 只有 WEBP/PNG/JPEG。
+     * 而 `screenshot` 字段是随**每一次** `/scrape` 发出去的，所以配成 UNKNOWN 之后坏掉的
+     * 不是截图，是全部抓取：清一色 422，且报错指向"请求体字段对不上"，与截图毫无关联，
+     * 排查起来极难联想到这个配置项。启动时炸掉是这里唯一负责任的做法。
+     */
+    @PostConstruct
+    fun validate() {
+        require(screenshotFormat != ImageFormat.UNKNOWN) {
+            "bookmarkify.scrapper.screenshot-format 只能是 WEBP / PNG / JPEG，不能是 UNKNOWN —— " +
+                "该取值仅用于解析 scrapper 响应里的未知格式，发给 scrapper 会让每一次抓取都返回 422"
+        }
+    }
+}

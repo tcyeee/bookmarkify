@@ -93,7 +93,7 @@ class UserLayoutNodeServiceImpl(
         val dirVO = dirNode.vo(sortMap[dirNode.id], null, null)
         dirVO.children.addAll(childVOs)
 
-        SocketUtils.homeItemUpdate(uid, dirVO)
+        SocketUtils.homeDirUpdate(uid, dirVO)
         return dirVO
     }
 
@@ -143,7 +143,8 @@ class UserLayoutNodeServiceImpl(
                 remaining.isEmpty() -> {
                     // 文件夹已为空：直接删除，避免遗留空文件夹
                     removeById(oldParentId)
-                    return layout(uid).also { SocketUtils.homeItemUpdate(uid, it) }
+                    // 文件夹整个消失了，单点更新表达不了这个变化，推整棵树让前端重置
+                    return layout(uid).also { SocketUtils.homeLayoutRefresh(uid, it) }
                 }
                 remaining.size == 1 -> {
                     // 文件夹仅剩一个节点：将其移到根目录，继承文件夹的 sort，然后删除文件夹
@@ -158,7 +159,8 @@ class UserLayoutNodeServiceImpl(
                         preferenceService.sort(uid, mapOf(lastChild.id to folderSort))
                     }
                     removeById(oldParentId)
-                    return layout(uid).also { SocketUtils.homeItemUpdate(uid, it) }
+                    // 同上：文件夹被解散、子节点升到根，整树刷新
+                    return layout(uid).also { SocketUtils.homeLayoutRefresh(uid, it) }
                 }
             }
         }
@@ -176,15 +178,19 @@ class UserLayoutNodeServiceImpl(
             return dir.vo(sortMap[dir.id], null, null).also { it.children.addAll(children) }
         }
 
-        // 旧文件夹剩余 ≥ 2 个节点时，推送其更新
-        if (oldParentId != null && oldParentId != params.dirNodeId) {
-            SocketUtils.homeItemUpdate(uid, buildDirVO(oldParentId))
+        // 旧文件夹剩余 ≥ 2 个节点时推送其更新。**仅限"移入另一个文件夹"**：
+        // 移到根目录那条路要整树刷新（见下），单推一条 dirUpdate 反而有害。
+        if (oldParentId != null && params.dirNodeId != null && oldParentId != params.dirNodeId) {
+            SocketUtils.homeDirUpdate(uid, buildDirVO(oldParentId))
         }
 
         // 三种情形：移入文件夹 / 仅从一个文件夹移到根目录 / 根→根（无结构变化）
         return when {
-            params.dirNodeId != null -> buildDirVO(params.dirNodeId).also { SocketUtils.homeItemUpdate(uid, it) }
-            oldParentId != null -> buildDirVO(oldParentId)
+            params.dirNodeId != null -> buildDirVO(params.dirNodeId).also { SocketUtils.homeDirUpdate(uid, it) }
+            // 移出到根目录：变化发生在**两处**（旧文件夹少一个、根多一个），而 HOME_DIR_UPDATE
+            // 只表达得了前者。只推它，其他端会把这个 id 从文件夹的顺序表里摘掉却不知道它去了哪，
+            // 于是那条书签在别的标签页/设备上直接消失，要刷新才回来。整树刷新是唯一说得清的表达。
+            oldParentId != null -> buildDirVO(oldParentId).also { SocketUtils.homeLayoutRefresh(uid, layout(uid)) }
             else -> layout(uid)
         }
     }

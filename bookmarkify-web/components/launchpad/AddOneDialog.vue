@@ -35,9 +35,9 @@
           <button
             type="button"
             class="px-3 py-1.5 rounded-lg bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600 active:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="!data.urlIsTrue"
+            :disabled="!data.urlIsTrue || submitting"
             @click="addOne">
-            添加
+            {{ submitting ? '添加中...' : '添加' }}
           </button>
         </label>
 
@@ -104,6 +104,7 @@
 import { bookmarksAddOne, bookmarksLinkOne, bookmarksSearch } from '@api'
 import type { UserLayoutNodeVO } from '@typing'
 import { useBookmarkStore } from '@stores/bookmark.store'
+import { isBookmarkableUrl } from '@utils'
 import { useDebounceFn } from '@vueuse/core'
 
 const sysStore = useSysStore()
@@ -117,6 +118,15 @@ const searchResults = ref<any[]>([])
 const isSearching = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
 
+// 当前用户已持有的 canonical bookmarkId 集合
+const ownedBookmarkIds = computed(() => {
+  const ids = new Set<string>()
+  for (const node of Object.values(bookmarkStore.nodes)) {
+    if (node.typeApp?.bookmarkId) ids.add(node.typeApp.bookmarkId)
+  }
+  return ids
+})
+
 const handleSearch = useDebounceFn(async (val: string) => {
   if (!val) {
     searchResults.value = []
@@ -126,7 +136,9 @@ const handleSearch = useDebounceFn(async (val: string) => {
   isSearching.value = true
   try {
     const res = await bookmarksSearch(val)
-    searchResults.value = res || []
+    // 剔除自己已经收藏过的：后端现在会拒绝重复关联，不过滤的话这些条目点下去只能得到一个错误提示。
+    // pages/index.vue 的搜索结果一直是这么过滤的，这里之前漏了。
+    searchResults.value = (res || []).filter((item: any) => !ownedBookmarkIds.value.has(item.id))
   } catch (e) {
     console.error(e)
   } finally {
@@ -176,31 +188,45 @@ const data = reactive<{
 
 const showEmptyState = computed(() => data.input && !isSearching.value && searchResults.value.length === 0 && data.urlIsTrue)
 
+const submitting = ref(false)
+
 function addOne() {
-  if (!data.input) return
-  if (!isUrl(data.input)) {
+  if (!data.input || submitting.value) return
+  if (!isBookmarkableUrl(data.input)) {
     data.notice = '你输入的网址看起来有点怪...'
     return
   }
 
-  bookmarksAddOne(data.input).then((res: UserLayoutNodeVO) => {
-    $track('bookmark-add')
-    handleSuccess(res)
-    // typeApp 已就绪但标记为不可访问：说明命中了后端「近期已检测过」的跳过重抓窗口(10 分钟)，
-    // 本次添加根本没有真正发起抓取——不给出说明的话，用户会误以为书签信息「没经过正常解析流程」
-    const skippedRecrawl = res?.typeApp && res.typeApp.isActivity === false
-    if (skippedRecrawl) {
-      useToastStore().warning('该网址近期已检测为无法访问，本次跳过了重新抓取，请稍后重试')
-    }
-    data.notice = skippedRecrawl ? '已添加(该网址近期检测无法访问)' : '添加成功!'
-    data.input = undefined
-    data.urlIsTrue = false
-    searchResults.value = []
-    setTimeout(() => {
+  submitting.value = true
+  bookmarksAddOne(data.input)
+    .then((res: UserLayoutNodeVO) => {
+      $track('bookmark-add')
+      handleSuccess(res)
+      // typeApp 已就绪但标记为不可访问：说明命中了后端「近期已检测过」的跳过重抓窗口(10 分钟)，
+      // 本次添加根本没有真正发起抓取——不给出说明的话，用户会误以为书签信息「没经过正常解析流程」
+      const skippedRecrawl = res?.typeApp && res.typeApp.isActivity === false
+      if (skippedRecrawl) {
+        useToastStore().warning('该网址近期已检测为无法访问，本次跳过了重新抓取，请稍后重试')
+      }
+      data.notice = skippedRecrawl ? '已添加(该网址近期检测无法访问)' : '添加成功!'
+      data.input = undefined
+      data.urlIsTrue = false
+      searchResults.value = []
+      setTimeout(() => {
+        data.notice = undefined
+        sysStore.addBookmarkDialogVisible = false
+      }, 500)
+    })
+    // 必须接住：http.ts 的所有失败路径都是 Promise.reject，没有 catch 时每次添加失败都会在
+    // 控制台留下一条 unhandled rejection，且对话框状态原地冻结——输入框内容和提示都停在提交前的
+    // 样子，用户看不出这次到底走没走。错误 toast 由 http.ts 统一弹，这里只负责恢复可交互状态。
+    .catch((error) => {
+      console.error('[AddOneDialog] 添加书签失败', error)
       data.notice = undefined
-      sysStore.addBookmarkDialogVisible = false
-    }, 500)
-  })
+    })
+    .finally(() => {
+      submitting.value = false
+    })
 }
 
 function checkInput() {
@@ -209,24 +235,35 @@ function checkInput() {
     isSearching.value = false
     return
   }
-  data.urlIsTrue = isUrl(data.input)
+  data.urlIsTrue = isBookmarkableUrl(data.input)
   if (data.urlIsTrue) data.notice = undefined
   handleSearch(data.input)
 }
 
 function selectBookmark(item: any) {
-  bookmarksLinkOne(item.id).then((res: UserLayoutNodeVO) => {
-    $track('bookmark-link')
-    handleSuccess(res)
-    data.notice = '关联成功!'
-    data.input = undefined
-    searchResults.value = []
-    data.urlIsTrue = false
-    setTimeout(() => {
+  if (submitting.value) return
+  submitting.value = true
+  bookmarksLinkOne(item.id)
+    .then((res: UserLayoutNodeVO) => {
+      $track('bookmark-link')
+      handleSuccess(res)
+      data.notice = '关联成功!'
+      data.input = undefined
+      searchResults.value = []
+      data.urlIsTrue = false
+      setTimeout(() => {
+        data.notice = undefined
+        sysStore.addBookmarkDialogVisible = false
+      }, 500)
+    })
+    // 同 addOne：接住失败，避免 unhandled rejection 并恢复可交互状态
+    .catch((error) => {
+      console.error('[AddOneDialog] 关联书签失败', error)
       data.notice = undefined
-      sysStore.addBookmarkDialogVisible = false
-    }, 500)
-  })
+    })
+    .finally(() => {
+      submitting.value = false
+    })
 }
 
 // 统一处理成功回调：通知外部并更新本地 store，用于立即显示占位或新书签
@@ -244,18 +281,6 @@ function handleSuccess(res: UserLayoutNodeVO) {
   }
 }
 
-function isUrl(url: string): boolean {
-  const pattern = RegExp(
-    '^(https?:\\/\\/)?' +
-      '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' +
-      '((\\d{1,3}\\.){3}\\d{1,3}))' +
-      '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' +
-      '(\\?[;&a-z\\d%_.~+=-]*)?' +
-      '(\\#[-a-z\\d_]*)?$',
-    'i',
-  )
-  return pattern.test(url)
-}
 </script>
 
 <style scoped>

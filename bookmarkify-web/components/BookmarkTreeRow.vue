@@ -15,7 +15,7 @@
 
     <a
       v-else-if="node.type === HomeItemType.BOOKMARK && node.typeApp"
-      :href="node.typeApp.urlFull"
+      :href="externalHref(node.typeApp.urlFull)"
       target="_blank"
       rel="noopener noreferrer"
       draggable="false"
@@ -51,6 +51,7 @@ import ContextMenu from '@imengyu/vue3-context-menu'
 import { Icon } from '@iconify/vue'
 import { bookmarksDel, bookmarksPin, bookmarksRecordOpen } from '@api'
 import { HomeItemType, type UserLayoutNodeVO } from '@typing'
+import { externalHref } from '@utils'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
 defineOptions({ name: 'BookmarkTreeRow' })

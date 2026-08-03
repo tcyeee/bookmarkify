@@ -58,6 +58,34 @@ class ScrapeContractTest {
         assertEquals(MetaExtractor.HTML_ATTR, meta.sources["lang"]?.extractor)
     }
 
+    /**
+     * 截图是独立于 `assets[]` 的一路产物：不是页面声明的图，没有 extractor，也不走
+     * `assets.download`。
+     *
+     * 这条用例存在的理由：顶层曾经根本没有 `screenshot` 对象，于是 `Screenshot` 的字段名
+     * 在三处契约（Rust / Kotlin / TS）里各写各的也不会有任何测试变红 —— 而这正是截图链路
+     * 长期没人发现坏掉的原因之一。
+     */
+    @Test
+    fun `screenshot is a separate product with its own wire shape`() {
+        val raw = mapper.readTree(fixture.readText())
+        val node = assertNotNull(raw.get("screenshot"), "样例应含顶层 screenshot")
+        assertNull(node.get("extractor"), "截图不是页面声明的图，不该有 extractor")
+        assertTrue(node.has("storageKey"), "字段名必须是 camelCase 的 storageKey")
+
+        val shot = assertNotNull(response.screenshot)
+        assertEquals(ImageFormat.WEBP, shot.format)
+        assertEquals(1280, shot.width)
+        assertEquals(720, shot.height)
+        assertTrue(
+            shot.storageKey?.startsWith("http") == false,
+            "storageKey 是裸 object key —— 桶私有读，签名与缩放都是 API 侧的策略",
+        )
+        assertNull(shot.dataUrl, "落了存储就不该再内联一份 base64")
+        // 截图不混进 assets[]
+        assertEquals(6, response.assets.size)
+    }
+
     /** 两种展示模式各自需要的文案，manifest 早就分好了 name / short_name */
     @Test
     fun `site name and short name are separate fields`() {

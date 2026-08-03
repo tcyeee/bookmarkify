@@ -11,8 +11,11 @@
 //!
 //! 线上格式为 camelCase（对齐调用方 Jackson 默认策略），枚举为 SCREAMING_SNAKE_CASE。
 //! 所有响应字段中 `Option::None` 与空集合均省略，保持载荷紧凑。
-
-#![allow(dead_code)]
+//!
+//! 本模块**不加** `#![allow(dead_code)]`。曾经加过，代价是
+//! `screenshot.full_page` / `screenshot.quality` 两个字段接了参数却从来没被读取，
+//! 编译器本来会报 "field is never read"，被这条 allow 一并压掉了 —— 于是调试页上的
+//! 开关点了没反应，而没有任何信号提示。契约里出现读不到的字段，本身就是要修的 bug。
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -476,6 +479,11 @@ pub enum RenderLayer {
     Http,
     /// Layer 2：无头浏览器。
     Headless,
+    /// 页面本身没抓到（被反爬拦下），元数据来自站点自己的公开 API。
+    ///
+    /// 单列一层而不是谎报 `HTTP`：此时 `httpStatus` 记的是页面那次被拒的状态码，
+    /// 而 `meta` 里的内容根本不是从那份响应里解析出来的。见 `siteapi.rs`。
+    SiteApi,
 }
 
 /// TLS 证书信息。调用方可据此判定"不支持 SSL / 证书过期"。
@@ -579,6 +587,8 @@ pub enum MetaExtractor {
     HtmlAttr,
     /// `<link rel="canonical">` 等 link 标签
     LinkTag,
+    /// 站点自己的公开 API（见 `siteapi.rs`）。`rawKey` 记具体字段，如 `bilibili:view.title`。
+    SiteApi,
 }
 
 /// 一张图片资源的完整声明。
@@ -688,6 +698,8 @@ pub enum AssetExtractor {
     OgImage,
     /// `<meta name="twitter:image">`
     TwitterImage,
+    /// 站点公开 API 给出的封面图（见 `siteapi.rs`），语义等同 `OG_IMAGE`。
+    SiteApiCover,
 }
 
 /// Web App Manifest。
@@ -946,11 +958,30 @@ mod tests {
             Some("180x180")
         );
 
+        // 截图独立于 assets[]：它不是页面声明的图，没有 extractor，也不走 assets.download。
+        // 这几行是它唯一的跨语言字段名校验 —— 顶层曾经没有这个对象，于是 Kotlin 侧改了
+        // 字段名也不会有任何测试变红。
+        let shot = resp.screenshot.as_ref().expect("样例应含 screenshot");
+        assert_eq!(shot.format, ImageFormat::Webp);
+        assert_eq!((shot.width, shot.height), (1280, 720));
+        assert!(
+            shot.storage_key
+                .as_deref()
+                .is_some_and(|k| !k.starts_with("http")),
+            "storageKey 必须是裸 object key，不含域名"
+        );
+        assert!(shot.data_url.is_none(), "落了存储就不该再内联一份 base64");
+
         // 再序列化后仍能读回，确保 skip_serializing_if 没有吃掉必填字段
         let again: ScrapeResponse =
             serde_json::from_str(&serde_json::to_string(&resp).unwrap()).unwrap();
         assert_eq!(again.assets.len(), resp.assets.len());
         assert_eq!(again.fetch.final_url, resp.fetch.final_url);
+        assert_eq!(
+            again.screenshot.as_ref().map(|s| s.format),
+            Some(ImageFormat::Webp),
+            "format 的 SCREAMING_SNAKE 线路形态必须往返稳定"
+        );
     }
 
     /// `declared.type` 在线上是 `type`，不是 `type_`。

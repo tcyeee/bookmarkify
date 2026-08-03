@@ -41,4 +41,16 @@ class BookmarkParseEventListener(private val bookmarkService: IBookmarkService) 
     fun onEnrich(event: BookmarkEnrichEvent) = runCatching {
         bookmarkService.enrich(event.bookmarkId)
     }.onFailure { log.error("[Async] BookmarkEnrichEvent 处理失败: bookmarkId={}", event.bookmarkId, it) }.let { }
+
+    /**
+     * 跑在**单线程**的 [AsyncConfig.BOOKMARK_SCREENSHOT_EXECUTOR] 上：见 [BookmarkScreenshotEvent]。
+     *
+     * 失败只记 warn 不记 error —— 截图拿不到是常态（反爬站点、无头熔断、Chrome OOM），
+     * 而它对书签可用性没有任何影响。用 error 会让日志里堆满不需要处理的噪音。
+     */
+    @Async(AsyncConfig.BOOKMARK_SCREENSHOT_EXECUTOR)
+    @EventListener
+    fun onScreenshot(event: BookmarkScreenshotEvent) = runCatching {
+        bookmarkService.captureScreenshot(event.bookmarkId)
+    }.onFailure { log.warn("[Async] 截图补抓失败(不影响书签): bookmarkId={}, err={}", event.bookmarkId, it.message) }.let { }
 }

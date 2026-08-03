@@ -1,10 +1,13 @@
 use once_cell::sync::Lazy;
-use spider::configuration::{ScreenShotConfig, ScreenshotParams};
+use spider::configuration::{
+    CaptureScreenshotFormat, CaptureScreenshotParams, ScreenShotConfig, ScreenshotParams,
+};
 use spider::features::chrome_common::{RequestInterceptConfiguration, WaitForIdleNetwork};
 use spider::website::Website;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
+use crate::contract::{ImageFormat, ScreenshotOptions, Viewport};
 use crate::scraper::{validate_target_host, validate_url_scheme, ScrapeError};
 
 /// 无头抓取的产物。元数据解析统一交给 [`crate::extract`]，与 Layer 1 走同一条路径 ——
@@ -23,6 +26,27 @@ pub struct HeadlessCapture {
     pub status: u16,
 }
 
+/// 资源拦截配置：截图时不拦 CSS / 图片 / 字体，其余情况按默认拦。
+///
+/// `RequestInterceptConfiguration::new(true)` 并不只是"拦广告"：它的构造函数同时把
+/// `block_visuals`（Image/Media/Font）和 `block_stylesheets`（CSS）置真。对 Layer 2 的
+/// **主要用途**——拿到 JS 渲染后的 HTML 去解析元数据——这完全正确，省下的内存在 1GB
+/// 容器里是刚需；而截图要的是"这个页面长什么样"，拦掉样式与图片在语义上就是错的。
+///
+/// **注意：放开它并不能让截图变好看。** 实测（stripe.com，1280×720）无论这两个开关取
+/// 什么值、乃至把 `enabled` 整个关掉，截出来的都是同一张逐字节相同的裸 HTML —— 所以
+/// 「截图没有样式」另有原因，仍未定位，见 `screenshot_still_renders_unstyled` 的说明。
+/// 这里保留正确的语义，但它不是那个 bug 的解药。
+fn intercept_config(want_screenshot: bool) -> RequestInterceptConfiguration {
+    let mut c = RequestInterceptConfiguration::new(true);
+    if want_screenshot {
+        c.block_visuals = false;
+        c.block_stylesheets = false;
+        // block_analytics 保持开启：埋点与观感无关，拦掉只有好处
+    }
+    c
+}
+
 /// 全局互斥锁，保证同一时刻只有一个无头 Chrome 操作在运行。
 ///
 /// Chrome 实例的内存和 CPU 开销较大，并发启动多个实例容易导致资源耗尽或崩溃。
@@ -39,7 +63,8 @@ static HEADLESS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 /// - `idle_wait_secs`：网络空闲等待时间（秒），用于等待 JS 渲染完成，对应 `HEADLESS_IDLE_WAIT_SECS`
 ///
 /// - `viewport`：视口宽高与像素比；`None` 时用 Chrome 默认视口
-/// - `want_screenshot`：为 false 时跳过截图，省下一次编码与传输
+/// - `screenshot`：`None` 时跳过截图，省下一次全页渲染与编码；`Some` 时同时放开
+///   资源拦截（见函数体内 `intercept` 的注释）
 ///
 /// # 返回
 /// 成功时返回 `Ok(HeadlessCapture)`（渲染后的 HTML + 导航状态码 + 可选截图）。注意
@@ -52,8 +77,8 @@ pub async fn capture_headless(
     url: &str,
     timeout_secs: u64,
     idle_wait_secs: u64,
-    viewport: Option<(u32, u32)>,
-    want_screenshot: bool,
+    viewport: Option<Viewport>,
+    screenshot: Option<ScreenshotOptions>,
 ) -> Result<HeadlessCapture, ScrapeError> {
     let parsed = reqwest::Url::parse(url).map_err(|_| ScrapeError::InvalidUrl)?;
     validate_url_scheme(&parsed)?;
@@ -66,7 +91,9 @@ pub async fn capture_headless(
     let _guard = tokio::time::timeout_at(deadline, HEADLESS_LOCK.lock())
         .await
         .map_err(|_| {
-            ScrapeError::Timeout(format!("等待无头浏览器全局锁超过 {timeout_secs}s（另一个抓取仍占用 Chrome）"))
+            ScrapeError::Timeout(format!(
+                "等待无头浏览器全局锁超过 {timeout_secs}s（另一个抓取仍占用 Chrome）"
+            ))
         })?;
 
     // Chrome 崩溃后会遗留 SingletonLock 文件，阻止下次启动；持锁后安全清除。
@@ -81,15 +108,34 @@ pub async fn capture_headless(
     }
 
     // 配置截图：在内存中返回字节，不写入磁盘。不要截图时整个配置传 None，
-    // 让 Chrome 省掉一次全页渲染与 PNG 编码。
-    let screenshot_config = want_screenshot.then(|| {
+    // 让 Chrome 省掉一次全页渲染与编码。
+    let screenshot_config = screenshot.as_ref().map(|opts| {
+        let cdp_params = CaptureScreenshotParams {
+            format: Some(match opts.format {
+                ImageFormat::Png => CaptureScreenshotFormat::Png,
+                ImageFormat::Jpeg => CaptureScreenshotFormat::Jpeg,
+                ImageFormat::Webp => CaptureScreenshotFormat::Webp,
+            }),
+            // PNG 是无损的，给它带 quality 只会让 CDP 参数自相矛盾；只有损格式才设
+            quality: match opts.format {
+                ImageFormat::Png => None,
+                _ => Some(opts.quality as i64),
+            },
+            ..Default::default()
+        };
         ScreenShotConfig::new(
-            ScreenshotParams::new(Default::default(), Some(true), None),
+            // omit_background 必须显式传 Some(false)：spider 在它为 None 时会去读
+            // SCREENSHOT_OMIT_BACKGROUND 环境变量，而变量缺省时兜底值是 **true**
+            // （见 spider chrome_common.rs 的 From<ScreenshotParams>）。那意味着页面
+            // 背景被抠成透明 —— 对"这个页面长什么样"这件事是纯粹的破坏。
+            ScreenshotParams::new(cdp_params, Some(opts.full_page), Some(false)),
             true,  // return bytes in page.screenshot_bytes
             false, // do not save to disk
             None,
         )
     });
+
+    let intercept = intercept_config(screenshot.is_some());
 
     // 复用 PROXY_URL 环境变量：非空时让无头 Chrome 也走代理。
     // spider 据此为 Chrome 拼出 --proxy-server 启动参数（见 spider features/chrome.rs），
@@ -108,12 +154,21 @@ pub async fn capture_headless(
         .with_limit(2)
         .with_proxies(proxies) // 经 PROXY_URL 让 Chrome 走代理（--proxy-server）
         .with_stealth(true) // 启用隐身模式，降低被检测为爬虫的概率
-        .with_chrome_intercept(RequestInterceptConfiguration::new(true)) // 拦截广告/追踪请求（依赖 spider 的 chrome_intercept feature）
-        .with_wait_for_idle_network(Some(WaitForIdleNetwork::new(Some(Duration::from_secs(idle_wait_secs))))) // 等待网络空闲（JS 渲染完成）
+        .with_chrome_intercept(intercept) // 依赖 spider 的 chrome_intercept feature
+        .with_wait_for_idle_network(Some(WaitForIdleNetwork::new(Some(Duration::from_secs(
+            idle_wait_secs,
+        ))))) // 等待网络空闲（JS 渲染完成）
         .with_screenshot(screenshot_config);
 
-    if let Some((w, h)) = viewport {
-        website.with_viewport(Some(spider::configuration::Viewport::new(w, h)));
+    if let Some(vp) = viewport {
+        // Viewport::new(w, h) 会把 device_scale_factor 置 None，dpr 就此丢失；
+        // 直接构造结构体才能把它带上（dpr=2 即 2x 截图）
+        website.with_viewport(Some(spider::configuration::Viewport {
+            width: vp.width,
+            height: vp.height,
+            device_scale_factor: Some(vp.dpr as f64),
+            ..Default::default()
+        }));
     }
 
     // 使用 deadline 的剩余时间作为 Chrome 执行超时，避免超出总预算
@@ -138,12 +193,18 @@ pub async fn capture_headless(
     // 取第一个页面；未返回任何页面视为失败
     let page = match pages {
         Some(p) if !p.is_empty() => p[0].clone(),
-        _ => return Err(ScrapeError::HeadlessFailed(format!("无头浏览器抓 {url} 没有返回任何页面"))),
+        _ => {
+            return Err(ScrapeError::HeadlessFailed(format!(
+                "无头浏览器抓 {url} 没有返回任何页面"
+            )))
+        }
     };
 
     let html = page.get_html().to_string();
     if html.is_empty() {
-        return Err(ScrapeError::HeadlessFailed(format!("无头浏览器抓 {url} 返回了空 HTML")));
+        return Err(ScrapeError::HeadlessFailed(format!(
+            "无头浏览器抓 {url} 返回了空 HTML"
+        )));
     }
 
     Ok(HeadlessCapture {
@@ -157,15 +218,32 @@ pub async fn capture_headless(
 mod tests {
     use super::*;
 
+    /// 只截视口的 PNG 请求，供各集成用例复用
+    fn shot(full_page: bool) -> ScreenshotOptions {
+        ScreenshotOptions {
+            enabled: true,
+            full_page,
+            format: ImageFormat::Png,
+            quality: 80,
+        }
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[ignore]
     async fn headless_huaban_returns_rendered_html() {
-        let result = capture_headless("https://huaban.com/", 60, 10, None, false).await;
-        assert!(result.is_ok(), "capture_headless failed: {:?}", result.err());
+        let result = capture_headless("https://huaban.com/", 60, 10, None, None).await;
+        assert!(
+            result.is_ok(),
+            "capture_headless failed: {:?}",
+            result.err()
+        );
         let r = result.unwrap();
         assert!(!r.html.is_empty(), "html should not be empty");
         // 元数据由 extract 层解析，这里只验证拿到了渲染后的文档
-        assert!(r.html.contains("<title"), "rendered html should contain a title tag");
+        assert!(
+            r.html.contains("<title"),
+            "rendered html should contain a title tag"
+        );
         assert_eq!(r.status, 200, "导航状态码应如实透出，而不是恒定 200");
         assert!(r.screenshot_bytes.is_none(), "未要求截图时不该产出截图");
     }
@@ -173,9 +251,104 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[ignore]
     async fn headless_huaban_returns_screenshot_bytes() {
-        let result = capture_headless("https://huaban.com/", 60, 10, None, true).await;
-        assert!(result.is_ok(), "capture_headless failed: {:?}", result.err());
-        let bytes = result.unwrap().screenshot_bytes.expect("screenshot_bytes should not be None");
-        assert!(bytes.len() > 10_240, "screenshot should be > 10KB, got {} bytes", bytes.len());
+        let result = capture_headless("https://huaban.com/", 60, 10, None, Some(shot(true))).await;
+        assert!(
+            result.is_ok(),
+            "capture_headless failed: {:?}",
+            result.err()
+        );
+        let bytes = result
+            .unwrap()
+            .screenshot_bytes
+            .expect("screenshot_bytes should not be None");
+        assert!(
+            bytes.len() > 10_240,
+            "screenshot should be > 10KB, got {} bytes",
+            bytes.len()
+        );
+    }
+
+    /// 截图时必须放开样式与图片的拦截。
+    ///
+    /// 离线断言，不需要 Chrome —— 它守的是这段配置本身的语义，而不是"截图好不好看"
+    /// （后者见 [`screenshot_still_renders_unstyled`]，那是另一个尚未定位的问题）。
+    #[test]
+    fn screenshot_requests_do_not_block_styles_or_images() {
+        let with_shot = intercept_config(true);
+        assert!(!with_shot.block_visuals, "截图不该拦 Image/Media/Font");
+        assert!(!with_shot.block_stylesheets, "截图不该拦 CSS");
+        assert!(with_shot.block_analytics, "埋点与观感无关，仍应拦掉");
+
+        let plain = intercept_config(false);
+        assert!(plain.block_visuals, "不截图时应保持默认拦截，省内存");
+        assert!(plain.block_stylesheets);
+    }
+
+    /// **已知未修复的 bug，故意留一条说明在这里。**
+    ///
+    /// 无头截图出来的是一张**没有 CSS、没有图片、没有 Web 字体的裸 HTML**（宋体/Times、
+    /// 默认项目符号、蓝色下划线链接）。原以为是 `RequestInterceptConfiguration` 默认拦掉
+    /// 了 CSS/图片，实测证伪：
+    ///
+    /// | 配置 | stripe.com 1280×720 截图字节数 |
+    /// |---|---|
+    /// | `block_visuals=true, block_stylesheets=true`（原状） | 107264 |
+    /// | 两者置 false（现状） | 107264 |
+    /// | `RequestInterceptConfiguration::new(false)`，完全不拦 | 107264 |
+    ///
+    /// **逐字节相同**，说明渲染结果与拦截配置无关，样式压根没参与过这次渲染。真正的原因
+    /// 还没定位，候选方向：截图时机早于样式应用；或 spider 的 `scrape()` 路径本身就不做
+    /// 子资源加载。定位前不要写"截图已修复"。
+    ///
+    /// 这条用例本身**不做断言** —— 与其留一个通过了却什么都没保证的测试（老那条
+    /// `> 10KB` 的断言正是如此：裸 HTML 也有 100KB，照过不误），不如把现场记在这里。
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[ignore]
+    async fn screenshot_still_renders_unstyled() {
+        let vp = Some(Viewport {
+            width: 1280,
+            height: 720,
+            dpr: 1.0,
+        });
+        let bytes = capture_headless("https://stripe.com/", 60, 10, vp, Some(shot(false)))
+            .await
+            .expect("capture failed")
+            .screenshot_bytes
+            .expect("screenshot_bytes should not be None");
+        // 把图落到磁盘供人眼确认，这是目前唯一可靠的判据
+        let out = std::env::temp_dir().join("bookmarkify-screenshot-probe.png");
+        std::fs::write(&out, &bytes).expect("write probe");
+        eprintln!(
+            "screenshot probe: {} bytes → {}",
+            bytes.len(),
+            out.display()
+        );
+    }
+
+    /// fullPage 不该再是硬编码的 true —— 整页截图必然比单屏高，字节数也该更大。
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[ignore]
+    async fn full_page_flag_actually_changes_the_capture() {
+        let vp = Some(Viewport {
+            width: 1280,
+            height: 720,
+            dpr: 1.0,
+        });
+        let viewport_only = capture_headless("https://stripe.com/", 60, 10, vp, Some(shot(false)))
+            .await
+            .expect("capture failed")
+            .screenshot_bytes
+            .expect("no bytes");
+        let full = capture_headless("https://stripe.com/", 60, 10, vp, Some(shot(true)))
+            .await
+            .expect("capture failed")
+            .screenshot_bytes
+            .expect("no bytes");
+        assert!(
+            full.len() > viewport_only.len(),
+            "整页截图({} bytes)应大于单屏截图({} bytes)，fullPage 可能又被忽略了",
+            full.len(),
+            viewport_only.len()
+        );
     }
 }

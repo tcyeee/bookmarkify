@@ -214,15 +214,26 @@ data class BookmarkUserLink(
     constructor(uid: String, nodeId: String, raw: ChromeBookmarkRawData) : this(
         uid = uid,
         bookmarkId = "LOADING",
-        title = raw.title,
-        urlFull = raw.url,
+        // 浏览器导出的标题就是页面 <title>，长过 200 字符的并不罕见，而 title 列是 varchar(200)。
+        // 截断而不是拒绝：标题只是展示数据，丢几个字远好过整批导入被一条长标题带着回滚。
+        title = raw.title.take(MAX_TITLE_LENGTH),
+        // 同 addOne：存补全协议后的地址，不是原样字符串。导出文件里出现无协议网址虽少见，
+        // 但一旦出现，这一列就不是个可跳转的地址了。解析不出来的（javascript: 小书签等）保留原样，
+        // 它们本来就要走 parseAndResetUserItem 的「无源书签」收口路径。
+        urlFull = normalizeImportedUrl(raw.url),
         layoutNodeId = nodeId,
         linkType = classifyRawLinkType(raw.url),
     )
 
     companion object {
+        /** 对应 `bookmark_user_link.title varchar(200)`（见 deploy/schema.sql）。 */
+        const val MAX_TITLE_LENGTH = 200
+
         private fun classifyRawLinkType(rawUrl: String): BookmarkLinkType =
             runCatching { WebsiteParser.classifyLinkType(WebsiteParser.urlWrapper(rawUrl).urlHost) }
                 .getOrDefault(BookmarkLinkType.OTHER)
+
+        private fun normalizeImportedUrl(rawUrl: String): String =
+            runCatching { WebsiteParser.urlWrapper(rawUrl).urlRaw }.getOrDefault(rawUrl)
     }
 }
