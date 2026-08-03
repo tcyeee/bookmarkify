@@ -1936,7 +1936,11 @@ mod tests {
                         ("HEAD", "/nohead") => {
                             b"HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
                         }
-                        (_, "/nohead") | (_, "/ok") => {
+                        // 复刻线上实测到的 xiaohongshu.com 行为：HEAD 回 404，GET 回 200
+                        ("HEAD", "/head404") => {
+                            b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        }
+                        (_, "/nohead") | (_, "/ok") | (_, "/head404") => {
                             b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
                         }
                         (_, "/moved") => {
@@ -2022,6 +2026,48 @@ mod tests {
             seen.contains(&"GET /nohead".to_string()),
             "405 后应当回退 GET: {seen:?}"
         );
+
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+    }
+
+    /// **404 必须用 GET 复核后才算数。**
+    ///
+    /// 线上回归：`xiaohongshu.com` 对 HEAD 回 404、对 GET 回 200（跳两次到 `/explore`）。
+    /// 而 404 是唯一会让书签被判死的结论 —— 只信 HEAD 的话，一个健康书签会被静默判死，
+    /// 且没有任何症状：HTTP 通、耗时正常、日志干净，只有结论是错的。
+    #[tokio::test]
+    async fn ping_reverifies_head_404_with_get() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let (base, seen) = spawn_probe_site().await;
+
+        let json = ping_json(&base, "/head404").await;
+        assert_eq!(json["status"], 200, "HEAD 的 404 必须被 GET 的 200 推翻");
+        assert_eq!(json["method"], "GET");
+
+        let seen = seen.lock().unwrap().clone();
+        assert!(
+            seen.contains(&"HEAD /head404".to_string()),
+            "应当先试 HEAD: {seen:?}"
+        );
+        assert!(
+            seen.contains(&"GET /head404".to_string()),
+            "404 后应当用 GET 复核: {seen:?}"
+        );
+
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+    }
+
+    /// 真 404（HEAD 与 GET 都是 404）仍然要如实报 404 —— 复核不能把判死能力整个废掉。
+    #[tokio::test]
+    async fn ping_still_reports_a_genuine_404() {
+        let _env = env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let (base, _) = spawn_probe_site().await;
+
+        let json = ping_json(&base, "/gone").await;
+        assert_eq!(json["status"], 404);
+        assert_eq!(json["method"], "GET", "复核过一次，所以最终方法是 GET");
 
         std::env::remove_var("SSRF_ALLOW_PRIVATE");
     }

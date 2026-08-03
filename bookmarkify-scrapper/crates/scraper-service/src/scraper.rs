@@ -698,9 +698,19 @@ pub async fn probe(url: &reqwest::Url, client: &reqwest::Client) -> ProbeOutcome
         };
         let status = response.status();
 
-        // 服务器不认 HEAD：同一个 URL 换 GET 重来。响应体不读，`response` 出作用域即丢弃，
-        // 不会真的把正文拉下来
-        if method == "HEAD" && matches!(status.as_u16(), 405 | 501) {
+        // 同一个 URL 换 GET 重来。响应体不读，`response` 出作用域即丢弃，不会真的把正文拉下来。
+        //
+        // 两类状态码要回退，理由不同：
+        //
+        // - **405/501**：服务器明说不认这个方法。不回退的话，该站所有页面的状态码会被抹平成
+        //   同一个值，而"这个页面还在不在"的判断全靠状态码。
+        // - **404/410**：这是**唯一会导致书签被判死**的一类结论，所以它必须由真实用户会用的
+        //   方法来确认。线上实测：`xiaohongshu.com` 对 HEAD 回 404，对 GET 却是 200（跳两次
+        //   到 `/explore`）—— 页面活得好好的，404 纯粹是 HEAD 在那条重定向链上没被正确处理。
+        //   只信 HEAD 的话，一个健康的书签会被静默判死，而且没有任何症状可循。
+        //   HEAD 只是省流量的优化，不该有权单独下达那个不可逆的结论。
+        if method == "HEAD" && matches!(status.as_u16(), 404 | 405 | 410 | 501) {
+            tracing::debug!(url = %current, status = status.as_u16(), "HEAD 结论存疑，改用 GET 复核");
             method = "GET";
             continue;
         }
