@@ -36,3 +36,15 @@ data class BookmarkParseAndResetUserItemEvent(
  * 「加一个书签要转多久圈」。跑在自己的线程池上，慢一点也不影响任何人。
  */
 data class BookmarkEnrichEvent(val bookmarkId: String)
+
+/**
+ * 抓取成功后补一张页面截图，作为书签详情面板的封面。
+ *
+ * 单独成事件、且跑在**单线程**的截图池上，理由和 [BookmarkEnrichEvent] 同源但更硬：
+ * 截图强制走无头浏览器，而 scrapper 侧的 Chrome 由一把全局互斥锁串行化（生产容器
+ * 内存 1GB，开不起第二个）。它既不能进解析主链路——那会让每条新增书签排队等浏览器，
+ * 也不该多开线程去抢——多出来的线程只会堵在对端的锁上，白白耗掉 HTTP 读超时。
+ *
+ * 用户先拿到书签，封面晚几秒出现；抓不到就没有封面，前端本就按可选处理。
+ */
+data class BookmarkScreenshotEvent(val bookmarkId: String)

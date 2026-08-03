@@ -2,6 +2,7 @@ use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
 
+use crate::contract::ImageFormat;
 use crate::scraper::ScrapeError;
 
 /// Default key prefix for scrapper-produced objects, overridable via `OSS_KEY_PREFIX`.
@@ -78,9 +79,17 @@ impl OssClient {
     /// re-crawled a hundred times occupies exactly one object. Content addressing would mint
     /// a new object every single crawl — a screenshot differs on every capture — giving
     /// unbounded growth in exchange for a deduplication benefit that is precisely zero.
-    pub fn screenshot_key(&self, page_url: &str) -> String {
+    /// 扩展名跟随实际输出格式：桶里对象的 Content-Type 由上传方设定，但排查时靠肉眼看
+    /// key，一个 `.png` 结尾的 WebP 只会误导人。生产固定用一种格式，所以"同页面自我覆盖"
+    /// 的性质不受影响。
+    pub fn screenshot_key(&self, page_url: &str, format: ImageFormat) -> String {
         let hash = hex::encode(Sha256::digest(page_url.as_bytes()));
-        format!("{}/screenshots/{hash}.png", self.key_prefix)
+        let ext = match format {
+            ImageFormat::Png => "png",
+            ImageFormat::Jpeg => "jpg",
+            ImageFormat::Webp => "webp",
+        };
+        format!("{}/screenshots/{hash}.{ext}", self.key_prefix)
     }
 
     /// Content-addressed asset key: `<prefix>/<folder>/<sha256-of-bytes>`.
@@ -230,9 +239,19 @@ mod tests {
         let url = "https://example.com/page";
         let hash = hex::encode(Sha256::digest(url.as_bytes()));
         assert_eq!(
-            client_with_prefix("scrapper").screenshot_key(url),
+            client_with_prefix("scrapper").screenshot_key(url, ImageFormat::Png),
             format!("scrapper/screenshots/{hash}.png")
         );
+    }
+
+    /// 扩展名必须跟着实际格式走 —— 一个 `.png` 结尾的 WebP 在排查时纯属误导。
+    #[test]
+    fn screenshot_key_extension_follows_the_format() {
+        let c = client_with_prefix("scrapper");
+        let url = "https://example.com/page";
+        assert!(c.screenshot_key(url, ImageFormat::Webp).ends_with(".webp"));
+        assert!(c.screenshot_key(url, ImageFormat::Jpeg).ends_with(".jpg"));
+        assert!(c.screenshot_key(url, ImageFormat::Png).ends_with(".png"));
     }
 
     #[test]
@@ -271,8 +290,8 @@ mod tests {
     #[test]
     fn screenshot_key_stays_url_addressed_and_self_overwriting() {
         let c = client_with_prefix("scrapper");
-        let first = c.screenshot_key("https://example.com/page");
-        let second = c.screenshot_key("https://example.com/page");
+        let first = c.screenshot_key("https://example.com/page", ImageFormat::Webp);
+        let second = c.screenshot_key("https://example.com/page", ImageFormat::Webp);
         assert_eq!(
             first, second,
             "同一页面的截图必须落同一个 key（自我覆盖，存储量有上界）"
@@ -285,7 +304,7 @@ mod tests {
     fn key_prefix_is_configurable_and_applies_to_all_keys() {
         let c = client_with_prefix("tenant-a/crawler");
         assert!(c
-            .screenshot_key("https://example.com")
+            .screenshot_key("https://example.com", ImageFormat::Webp)
             .starts_with("tenant-a/crawler/screenshots/"));
         assert!(c
             .asset_key("sha256:deadbeef", "asset")

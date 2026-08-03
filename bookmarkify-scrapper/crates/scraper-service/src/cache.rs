@@ -1,7 +1,7 @@
+use crate::contract::ScrapeResponse;
+use moka::future::Cache;
 use std::sync::Arc;
 use std::time::Duration;
-use moka::future::Cache;
-use crate::contract::ScrapeResponse;
 
 /// 基于 URL 的抓取结果内存缓存，支持自动过期和容量限制。
 ///
@@ -58,17 +58,20 @@ impl ScrapeCache {
     ///
     /// # 参数
     /// - `url`：目标 URL 字符串（原始形式，无需预先规范化）
+    /// - `want_screenshot`：本次请求是否要截图，参与键的构成（见 [`Self::normalize`]）
     ///
     /// # 返回
     /// 命中时返回 `Some(Arc<ScrapeResponse>)`，未命中或 URL 非法时返回 `None`。
-    pub async fn get(&self, url: &str) -> Option<Arc<ScrapeResponse>> {
-        let key = Self::normalize(url)?;
+    pub async fn get(&self, url: &str, want_screenshot: bool) -> Option<Arc<ScrapeResponse>> {
+        let key = Self::normalize(url).map(|k| Self::with_shot(k, want_screenshot))?;
         self.inner.get(&key).await
     }
 
     /// 查询 URL 是否在负缓存中（即近期是否发生过失败）。
     pub async fn get_error(&self, url: &str) -> bool {
-        let Some(key) = Self::normalize(url) else { return false };
+        let Some(key) = Self::normalize(url) else {
+            return false;
+        };
         self.errors.get(&key).await.is_some()
     }
 
@@ -83,7 +86,9 @@ impl ScrapeCache {
     ///
     /// 为真时调用方应当**跳过无头回退**：结论已经有了，再启一次 Chrome 只是白烧内存。
     pub async fn is_headless_futile(&self, url: &str) -> bool {
-        let Some(host) = Self::host_key(url) else { return false };
+        let Some(host) = Self::host_key(url) else {
+            return false;
+        };
         self.headless_futile.get(&host).await.is_some()
     }
 
@@ -109,10 +114,29 @@ impl ScrapeCache {
     ///
     /// # 参数
     /// - `url`：目标 URL 字符串
+    /// - `want_screenshot`：产出这份结果的请求是否要了截图
     /// - `result`：要缓存的抓取结果（通过 `Arc` 共享所有权）
-    pub async fn set(&self, url: &str, result: Arc<ScrapeResponse>) {
+    pub async fn set(&self, url: &str, want_screenshot: bool, result: Arc<ScrapeResponse>) {
         if let Some(key) = Self::normalize(url) {
-            self.inner.insert(key, result).await;
+            self.inner
+                .insert(Self::with_shot(key, want_screenshot), result)
+                .await;
+        }
+    }
+
+    /// 把「要不要截图」并进缓存键。
+    ///
+    /// 键原先只有 URL，而截图是**产物形态的差异**，不是同一份东西的不同视图：一个没要
+    /// 截图的请求会命中带截图的缓存（凭空多出一张图，还白占内存 —— 未配 OSS 时那是几 MB
+    /// 的 base64），反过来则是要了截图却拿到没有截图的结果，看上去就是"截图功能又坏了"。
+    ///
+    /// 只区分这一个维度：其余选项（download / extract 各开关）影响的是同一份产物的详略，
+    /// 命中旧结果最多是信息少一点；截图是有和无的区别。
+    fn with_shot(key: String, want_screenshot: bool) -> String {
+        if want_screenshot {
+            format!("{key}\u{1}shot")
+        } else {
+            key
         }
     }
 
@@ -174,10 +198,16 @@ mod tests {
             charset: None,
             byte_size: None,
             tls: None,
-            timing_ms: Timing { total: 1, ..Default::default() },
+            timing_ms: Timing {
+                total: 1,
+                ..Default::default()
+            },
         };
         let mut resp = ScrapeResponse::new(request, fetch);
-        resp.meta = Some(PageMeta { title: Some(title.to_string()), ..Default::default() });
+        resp.meta = Some(PageMeta {
+            title: Some(title.to_string()),
+            ..Default::default()
+        });
         Arc::new(resp)
     }
 
@@ -210,8 +240,8 @@ mod tests {
         let cache = ScrapeCache::new(3600);
         let url = "https://example.com/";
         let r = make_result("Hello");
-        cache.set(url, Arc::clone(&r)).await;
-        let got = cache.get(url).await;
+        cache.set(url, false, Arc::clone(&r)).await;
+        let got = cache.get(url, false).await;
         assert!(got.is_some());
         assert_eq!(
             got.unwrap().meta.as_ref().and_then(|m| m.title.clone()),
@@ -223,23 +253,69 @@ mod tests {
     #[tokio::test]
     async fn headless_futile_is_keyed_by_host_not_url() {
         let cache = ScrapeCache::new(3600);
-        assert!(!cache.is_headless_futile("https://www.bilibili.com/video/BV1").await);
-
-        cache.mark_headless_futile("https://www.bilibili.com/video/BV1").await;
         assert!(
-            cache.is_headless_futile("https://www.bilibili.com/video/BV2").await,
+            !cache
+                .is_headless_futile("https://www.bilibili.com/video/BV1")
+                .await
+        );
+
+        cache
+            .mark_headless_futile("https://www.bilibili.com/video/BV1")
+            .await;
+        assert!(
+            cache
+                .is_headless_futile("https://www.bilibili.com/video/BV2")
+                .await,
             "同站另一条 URL 必须命中熔断，否则全量重抓会为每条 URL 各启一次 Chrome"
         );
         // 别的站点不受影响
         assert!(!cache.is_headless_futile("https://example.com/x").await);
         // scheme 也是键的一部分：http 与 https 的风控规则常常不同
-        assert!(!cache.is_headless_futile("http://www.bilibili.com/video/BV1").await);
+        assert!(
+            !cache
+                .is_headless_futile("http://www.bilibili.com/video/BV1")
+                .await
+        );
+    }
+
+    /// 要不要截图是**产物形态**的差异，不能共用一个键。
+    ///
+    /// 这两个方向都出过错的样子：不要截图的请求命中带截图的缓存（凭空多一张图，未配 OSS
+    /// 时还是几 MB 的 base64）；要截图的请求命中没截图的缓存，看上去就是"截图又坏了"。
+    #[tokio::test]
+    async fn screenshot_requests_do_not_share_a_key_with_plain_ones() {
+        let cache = ScrapeCache::new(3600);
+        let url = "https://example.com/page";
+        cache.set(url, false, make_result("No Shot")).await;
+
+        assert!(
+            cache.get(url, true).await.is_none(),
+            "要截图的请求不该命中「没截图」那份缓存"
+        );
+        assert!(
+            cache.get(url, false).await.is_some(),
+            "同形态的请求仍应命中"
+        );
+
+        cache.set(url, true, make_result("With Shot")).await;
+        assert_eq!(
+            cache
+                .get(url, false)
+                .await
+                .unwrap()
+                .meta
+                .as_ref()
+                .unwrap()
+                .title,
+            Some("No Shot".to_string()),
+            "写入截图版不该污染无截图版"
+        );
     }
 
     #[tokio::test]
     async fn cache_miss_returns_none() {
         let cache = ScrapeCache::new(3600);
-        let got = cache.get("https://example.com/never-set").await;
+        let got = cache.get("https://example.com/never-set", false).await;
         assert!(got.is_none());
     }
 
@@ -247,9 +323,11 @@ mod tests {
     async fn cache_normalizes_key_on_set_and_get() {
         let cache = ScrapeCache::new(3600);
         let r = make_result("Frag Test");
-        cache.set("https://example.com/page#hash", Arc::clone(&r)).await;
+        cache
+            .set("https://example.com/page#hash", false, Arc::clone(&r))
+            .await;
         // same URL without fragment should hit
-        let got = cache.get("https://example.com/page").await;
+        let got = cache.get("https://example.com/page", false).await;
         assert!(got.is_some(), "should hit cache ignoring fragment");
     }
 
@@ -257,8 +335,13 @@ mod tests {
     async fn cache_normalizes_query_param_order_on_set_and_get() {
         let cache = ScrapeCache::new(3600);
         let r = make_result("Sorted");
-        cache.set("https://example.com/?z=3&a=1", Arc::clone(&r)).await;
-        let got = cache.get("https://example.com/?a=1&z=3").await;
-        assert!(got.is_some(), "should hit cache regardless of query param order");
+        cache
+            .set("https://example.com/?z=3&a=1", false, Arc::clone(&r))
+            .await;
+        let got = cache.get("https://example.com/?a=1&z=3", false).await;
+        assert!(
+            got.is_some(),
+            "should hit cache regardless of query param order"
+        );
     }
 }

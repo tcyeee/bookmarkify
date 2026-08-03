@@ -279,6 +279,14 @@ enum class RenderLayer {
     /** Layer 2：无头浏览器 */
     HEADLESS,
 
+    /**
+     * 页面本身没抓到（被反爬拦下），元数据来自站点自己的公开 API。
+     *
+     * 此时 [FetchInfo.httpStatus] 记的是页面那次被拒的状态码（412/403），不是 200 ——
+     * 页面确实没打开。数据出处看字段级的 [PageMeta.sources]。
+     */
+    SITE_API,
+
     @JsonEnumDefaultValue
     UNKNOWN,
 }
@@ -366,6 +374,9 @@ enum class MetaExtractor {
 
     /** link[rel=canonical] 等 link 标签 */
     LINK_TAG,
+
+    /** 站点自己的公开 API。rawKey 记具体字段，如 `bilibili:view.title` */
+    SITE_API,
 
     @JsonEnumDefaultValue
     UNKNOWN,
@@ -471,6 +482,9 @@ enum class AssetExtractor {
 
     /** meta[name=twitter:image] */
     TWITTER_IMAGE,
+
+    /** 站点公开 API 给出的封面图，语义等同 [OG_IMAGE] */
+    SITE_API_COVER,
 
     @JsonEnumDefaultValue
     UNKNOWN,

@@ -166,7 +166,7 @@
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-medium truncate text-slate-700 dark:text-slate-200">{{ item.title || item.urlBase }}</p>
                 <a
-                  :href="item.urlFull"
+                  :href="externalHref(item.urlFull)"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="block text-xs text-slate-400 dark:text-slate-500 truncate hover:text-sky-500 hover:underline"
@@ -269,6 +269,7 @@
 import { bookmarksList, bookmarksDel, bookmarksCreateDir, bookmarksRenameDir, bookmarksRecordOpen } from '@api'
 import { HomeItemType, ROOT_KEY } from '@typing'
 import type * as t from '@typing'
+import { externalHref } from '@utils'
 import { useDebounceFn } from '@vueuse/core'
 
 type FilterMode = 'all' | 'duplicate' | 'invalid'

@@ -160,6 +160,15 @@
     "site": "@github"
   },
 
+  "_comment_screenshot": "截图是独立于 assets[] 的一路产物：它不是页面声明的图，而是我们自己渲染出来的，所以没有 extractor，也不走 assets.download。这里放一份是为了让三套测试真正校验到它的线路形态（camelCase 字段名 + SCREAMING_SNAKE 的 format）—— 以前顶层没有这个对象，Screenshot 的跨语言字段名从来没被验过。storageKey 是裸 object key，桶私有读，能不能看得由消费端签名。",
+  "screenshot": {
+    "storageKey": "scrapper/screenshots/9f2c4e7a1b8d3f5602a1c9e4b7d081f3a5c6e2b4d7091f3a5c6e2b4d7091f3a5.webp",
+    "width": 1280,
+    "height": 720,
+    "format": "WEBP",
+    "byteSize": 143507
+  },
+
   "diagnostics": {
     "warnings": ["asset probe failed for /favicon.ico: 404"],
     "antiCrawler": { "detected": false },

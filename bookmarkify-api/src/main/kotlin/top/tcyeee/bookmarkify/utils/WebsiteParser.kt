@@ -62,6 +62,7 @@ object WebsiteParser {
         // 丢掉，两者收敛成同一条记录，抓取目标还退化成了 https://www.youtube.com/watch（不是任何
         // 一个视频）。详见根目录 SITE_LAYERING_DESIGN.md §1。
         val canonical = UrlCanonicalizer.canonicalize(url.path, url.query, url.ref)
+        assertWithinColumnLimits(urlStr, canonical.path, canonical.query, canonical.fragment)
 
         return BookmarkUrlWrapper(
             urlScheme = url.protocol,
@@ -79,6 +80,32 @@ object WebsiteParser {
                 it.urlScheme, it.urlHost, it.urlPath, it.urlQuery, it.urlFragment,
             )
         }
+    }
+
+    /**
+     * URL 各分段的长度上限，逐条对应 `deploy/schema.sql` 里的 varchar 宽度。
+     *
+     * 实体上的 `@field:Size` 是 Bean Validation 注解，MyBatis-Plus 写库时**不会执行**它，所以
+     * 在这之前没有任何一层真正拦过长度：超限的网址一路走到 INSERT 才被 PostgreSQL 拒绝，
+     * 用户拿到的是一个 500。放在这里是因为 addOne / 导入 / 补投递三条入口全都经过 urlWrapper。
+     */
+    private const val MAX_URL_FULL_LENGTH = 1000
+    private const val MAX_URL_PATH_LENGTH = 500
+    private const val MAX_URL_QUERY_LENGTH = 1000
+    private const val MAX_URL_FRAGMENT_LENGTH = 500
+
+    private fun assertWithinColumnLimits(urlStr: String, path: String, query: String, fragment: String) {
+        // 文案会原样作为提示弹给用户（GlobalExceptionHandler 取的是 customMessage 而不是
+        // errorType.msg），所以这里说人话：说清超的是哪一段、超了多少，别抛内部字段名和错误码
+        val offender = when {
+            urlStr.length > MAX_URL_FULL_LENGTH -> "整体 ${urlStr.length} 字符，上限 $MAX_URL_FULL_LENGTH"
+            path.length > MAX_URL_PATH_LENGTH -> "路径 ${path.length} 字符，上限 $MAX_URL_PATH_LENGTH"
+            query.length > MAX_URL_QUERY_LENGTH -> "参数 ${query.length} 字符，上限 $MAX_URL_QUERY_LENGTH"
+            fragment.length > MAX_URL_FRAGMENT_LENGTH -> "锚点 ${fragment.length} 字符，上限 $MAX_URL_FRAGMENT_LENGTH"
+            else -> return
+        }
+        log.debug("[urlWrapper] 网址分段超出字段上限: {}", offender)
+        throw CommonException(ErrorType.E127, "${ErrorType.E127.msg}（$offender）")
     }
 
     /**

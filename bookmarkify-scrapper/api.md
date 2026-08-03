@@ -71,7 +71,7 @@ Content-Type: application/json
     "maxCount": 20                              // 超出部分仍出现在 assets[] 但不发请求
   },
 
-  "screenshot": { "enabled": false, "fullPage": false, "format": "WEBP", "quality": 80 },
+  "screenshot": { "enabled": false, "fullPage": false, "format": "WEBP", "quality": 80 },  // format: WEBP|JPEG|PNG，由 Chrome 原生输出不做转码；quality 仅对有损格式生效
   "cache":  { "mode": "DEFAULT", "maxAgeS": 86400 },   // DEFAULT | BYPASS | ONLY_IF_CACHED
   "robots": { "respect": true }
 }
@@ -86,6 +86,16 @@ Content-Type: application/json
 | `HEADLESS` | 直接走 Layer 2 |
 
 `screenshot.enabled = true` 时隐含要走 Layer 2（截图只有无头浏览器能出），`AUTO` 会被提升为 `HEADLESS`。
+**显式指定 `HTTP` 不会被提升** —— 那条组合永远出不了图，服务端会在 `diagnostics.warnings` 里
+说明，而不是静默省略 `screenshot` 字段。被反爬拦下并走了站点 API 救援时同样没有截图（页面压根
+没渲染过，`fetch.layerUsed` 为 `SITE_API`），也会有对应 warning。
+
+开启截图还会**放开无头浏览器的资源拦截**：不截图时 CSS / 图片 / 字体是被拦掉的（Layer 2 的
+主要用途是拿渲染后的 HTML，拦掉能省下可观的内存和时间），只有截图才需要它们。
+
+> **⚠️ 已知问题：截图目前仍然只能截出裸 HTML**（无 CSS / 图片 / 字体）。放开上述拦截并没有
+> 解决它 —— 实测同一页面在拦截全开、全关、以及完全禁用拦截三种配置下截出的图**逐字节相同**，
+> 说明样式压根没参与渲染，原因仍未定位。在此之前请不要把截图当作可用功能。
 
 #### `assets.download`
 
@@ -166,7 +176,7 @@ LOGO 用"以及跨 `extractor` 去重所需的全部依据。
   "feeds":      [ /* extract.feeds = true 时才有 */ ],
   "alternates": [ /* extract.alternates = true 时才有 */ ],
   "text":       "…",                                  // extract.text = true 时才有
-  "screenshot": { "storageKey": "…", "width": 1280, "height": 720, "format": "PNG" },
+  "screenshot": { "storageKey": "…", "width": 1280, "height": 720, "format": "WEBP", "byteSize": 143507 },
 
   "diagnostics": {
     "warnings": ["manifest: fetch failed: 404"],      // 非致命问题

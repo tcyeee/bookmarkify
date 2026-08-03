@@ -24,6 +24,7 @@ import top.tcyeee.bookmarkify.entity.dto.scrape.AssetDownload
 import top.tcyeee.bookmarkify.entity.dto.scrape.AssetOptions
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheOptions
+import top.tcyeee.bookmarkify.entity.dto.scrape.ExtractOptions
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScreenshotOptions
@@ -88,17 +89,35 @@ class ApiServiceImpl(
      * 于是 `storageKey` 恒为空、`site_asset.storage_url` 恒为 NULL，前台只能回退到源站
      * 直连地址。图片落我方 OSS 是产品要求，不是可选优化。
      */
-    override fun scrapeRequest(url: String, cacheMode: CacheMode): ScrapeRequest = ScrapeRequest(
-        url = url,
-        assets = AssetOptions(
-            download = if (scrapperConfig.uploadAssets) AssetDownload.UPLOAD else AssetDownload.PROBE,
-            maxBytes = scrapperConfig.assetMaxBytes,
-            maxCount = scrapperConfig.assetMaxCount,
-        ),
-        // 开启会强制走无头浏览器，默认关；见 ScrapperConfig.screenshot
-        screenshot = ScreenshotOptions(enabled = scrapperConfig.screenshot),
-        cache = CacheOptions(mode = cacheMode),
-    )
+    override fun scrapeRequest(
+        url: String,
+        cacheMode: CacheMode,
+        screenshot: Boolean?,
+        extractAssets: Boolean,
+    ): ScrapeRequest {
+        val wantShot = screenshot ?: scrapperConfig.screenshot
+        return ScrapeRequest(
+            url = url,
+            // 由调用方显式决定，**不能**从 wantShot 反推：截图开关有一个来自配置的兜底
+            // (`ScrapperConfig.screenshot`)，一旦有人把它打开，主解析链路就会跟着停掉图片提取，
+            // 于是全站新书签一张图标都抓不到，而日志里什么都看不出来。
+            // 真正"不需要图"的只有截图补抓那一条路，它自己传 extractAssets = false。
+            extract = ExtractOptions(assets = extractAssets),
+            assets = AssetOptions(
+                download = if (scrapperConfig.uploadAssets) AssetDownload.UPLOAD else AssetDownload.PROBE,
+                maxBytes = scrapperConfig.assetMaxBytes,
+                maxCount = scrapperConfig.assetMaxCount,
+            ),
+            // 开启会强制走无头浏览器，默认关；见 ScrapperConfig.screenshot
+            screenshot = ScreenshotOptions(
+                enabled = wantShot,
+                fullPage = false,
+                format = scrapperConfig.screenshotFormat,
+                quality = scrapperConfig.screenshotQuality,
+            ),
+            cache = CacheOptions(mode = cacheMode),
+        )
+    }
 
     override fun queryWebsiteInfo(domain: String): ScrapeResponse =
         scrape(domain, scrapeRequest(buildUrl(domain)))

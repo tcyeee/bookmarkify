@@ -52,7 +52,19 @@ Every visitor gets a session via `POST /auth/track` — no login required. Guest
 Bookmarks are a `UserLayoutNodeVO[]` tree in `bookmark.store.ts`. Node types (see `typing/enum.ts` `HomeItemType`): `BOOKMARK`, `BOOKMARK_DIR`, `FUNCTION`, `BOOKMARK_LOADING` (placeholder while the backend parses the URL). `components/launch/LaunchItem.vue` dispatches each node to the right cell component under `components/launchpad/cell/`.
 
 ### WebSocket-driven live updates
-After the user adds a URL, the backend parses the page asynchronously (Spring `ApplicationEvent` + `@Async`, in-process — not a message queue) and pushes a `HOME_ITEM_UPDATE` message. `stores/websocket.store.ts` connects to `{wsBase}/ws?token={token}`, pings every 5s, and reconnects with exponential backoff (1s → 30s, max 5 attempts). On `HOME_ITEM_UPDATE`, the bookmark store **must replace nodes with new object references** to trigger Vue reactivity — see `updateOneBookmarkCell()` for the pattern. Direct nested mutation will not re-render.
+After the user adds a URL, the backend parses the page asynchronously (Spring `ApplicationEvent` + `@Async`, in-process — not a message queue) and pushes the result back. `stores/websocket.store.ts` connects to `{wsBase}/ws?token={token}`, pings every 5s, and reconnects with exponential backoff (1s → 30s, max 5 attempts).
+
+Three layout message types, each with a **different payload shape** — they are separate types precisely so the client can tell them apart:
+
+| Type | Payload | Store action |
+|---|---|---|
+| `HOME_ITEM_UPDATE` | one node, always `type=BOOKMARK` with non-null `typeApp` | `replaceContent()` |
+| `HOME_DIR_UPDATE` | one `BOOKMARK_DIR` node plus its direct `children` | `replaceFolder()` |
+| `HOME_LAYOUT_REFRESH` | the whole tree root (same shape as `/bookmark/query`) | `setLayout()` |
+
+All three previously shared the single name `HOME_ITEM_UPDATE`, and `replaceContent()` dropped anything that wasn't the first shape — so folder moves never synced across tabs. If you add a fourth push, give it its own type rather than overloading one.
+
+Whatever the type, the store **must replace nodes with new object references** to trigger Vue reactivity — see `replaceContent()` for the pattern. Direct nested mutation will not re-render.
 
 ### HTTP client
 All API calls go through the static `http` class in `server/apis/http.ts`. Endpoint functions live in `server/apis/index.ts` and return `Promise<t.SomeType>`.
@@ -69,8 +81,8 @@ All API calls go through the static `http` class in `server/apis/http.ts`. Endpo
 ### OAuth login (Google + GitHub)
 The site is a static SPA with no server, so both flows run entirely client-side. **Google** (`composables/useGoogleOAuth.ts`): classic OAuth2 implicit flow (`response_type=id_token`) — full-page redirect to Google, credential returns via URL hash to `pages/auth/google/callback.vue`, `state`/`nonce` round-tripped through `sessionStorage` (not usable for a popup since implicit-flow redirects can't reliably `postMessage` cross-origin before unload). **GitHub** (`composables/useGithubOAuth.ts`): authorization-code flow via a popup window — `pages/auth/github/callback.vue` `postMessage`s the code back to the opener (checked against `location.origin` and a `state` value), and the caller exchanges it through the backend. Callback pages are the only consumers of these composables.
 
-### Bookmark import progress notification
-Bulk-adding bookmarks creates a batch of `BOOKMARK_LOADING` placeholder nodes; `stores/importProgress.store.ts` (`persist: false`) tracks the batch (`pendingIds`, `total`/`resolved`) independent of the bookmark tree itself. `stores/websocket.store.ts` calls `markResolved(nodeId)` on each `HOME_ITEM_UPDATE`, and `components/common/ImportProgressNotice.vue` (mounted globally, like the toast host) renders a persistent top-right progress notification while `active` is true, auto-dismissing 4s after the batch completes. `components/setting/BookmarkManage.vue` is the primary place that starts a batch via `startBatch()`.
+### Bulk import
+`components/setting/BookmarkManage.vue` uploads a browser bookmark file: `bookmarksUploadPreview()` first (server returns per-item `isDuplicate`, matched on the **canonical** URL quadruple, not on the raw string), the user unchecks what to skip, then `bookmarksUpload(file, skipUrls)` returns the created nodes — folders plus `BOOKMARK_LOADING` placeholders. Those go into the tree via `bookmarkStore.addImportLoadingBatch()`, and each loading node registers a 60s `watchForResolution()` fallback. The backend deliberately does **not** publish parse events for an import (it would flood the parse pool); its `drainStuckLoading()` sweep picks the placeholder rows up in batches, so results trickle back over WebSocket. There is no aggregate progress UI — an earlier `importProgress.store.ts` + `ImportProgressNotice.vue` pair was removed in `fc66cb23`.
 
 ### Layouts
 - `launch.vue` — main app (background + launchpad)

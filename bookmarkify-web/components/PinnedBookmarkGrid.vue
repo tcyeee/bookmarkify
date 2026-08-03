@@ -3,7 +3,7 @@
     <a
       v-for="node in nodes"
       :key="node.id"
-      :href="node.typeApp!.urlFull"
+      :href="externalHref(node.typeApp!.urlFull)"
       target="_blank"
       rel="noopener noreferrer"
       class="w-16 flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
@@ -29,6 +29,7 @@ import ContextMenu from '@imengyu/vue3-context-menu'
 import { Icon } from '@iconify/vue'
 import { bookmarksDel, bookmarksPin, bookmarksRecordOpen } from '@api'
 import type { UserLayoutNodeVO } from '@typing'
+import { externalHref } from '@utils'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
 defineOptions({ name: 'PinnedBookmarkGrid' })

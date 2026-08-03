@@ -164,6 +164,48 @@ class SiteAssetWriter(
     }
 
     /**
+     * 只写入那一行 SCREENSHOT 资产，其余一概不碰。
+     *
+     * 截图是**另一趟抓取**的产物（见 `BookmarkScreenshotEvent`），不能复用 [persist]：
+     * 那条路会走 `replaceAssets(PAGE, …)` 整体替换，而 SOCIAL（og:image）同样归属 PAGE，
+     * 于是补一张封面的副作用是把主抓取刚写好的社交图全删了。这里按 (归属, role) 精确定位，
+     * 删旧的那一行、插新的那一行。
+     *
+     * 截图 key 按页面 URL 寻址、自我覆盖（见 `oss.rs::screenshot_key`），所以同一页面反复
+     * 补抓不会在桶里堆积；但格式变更会换扩展名，旧 key 因此仍要走一次孤儿回收。
+     *
+     * @return 是否真的写进去了
+     */
+    @Transactional(rollbackFor = [Exception::class])
+    fun upsertScreenshot(bookmarkId: String, url: String, response: ScrapeResponse): Boolean {
+        if (bookmarkId.isBlank()) return false
+        val shot = SiteAssetIngestor.screenshotAsset(bookmarkId, url, response)
+            ?: return false
+
+        registerObjects(listOf(shot))
+
+        val existing = assetsOf(AssetOwnerType.PAGE, bookmarkId)
+            .filter { it.role == AssetRole.SCREENSHOT }
+
+        // 截图 key 是**页面 URL** 的哈希（见 `oss.rs::screenshot_key`），同一页面每次补抓都是同一个
+        // key、桶里的字节却被覆盖了。只比 key 等于"第一次之后永远跳过"，行上的 width/height/
+        // byte_size/mime 会一直停在第一次的值，而它们描述的对象早就换过内容了。
+        // 按整行比：key 没变但尺寸/体积/格式变了，照样要把那行重写成实际的样子。
+        if (isIdenticalToExisting(existing, listOf(shot))) {
+            log.debug("[SiteAssetWriter] 截图与库中一致，跳过: bookmarkId={}", bookmarkId)
+            return false
+        }
+
+        val previousKeys = existing.mapNotNull { it.storageUrl?.trim()?.takeIf(String::isNotEmpty) }.toSet()
+        existing.forEach { siteAssetMapper.deleteById(it.id) }
+        siteAssetMapper.insert(shot)
+
+        scheduleOrphanCleanup(bookmarkId, previousKeys - setOfNotNull(shot.storageUrl))
+        log.debug("[SiteAssetWriter] 截图落库: bookmarkId={}, key={}", bookmarkId, shot.storageUrl)
+        return true
+    }
+
+    /**
      * 整体替换某个归属下的资产：先删旧的再写新的。
      *
      * 增量合并没有意义 —— 页面改版后旧图标可能已经 404，留着只会让选取策略挑到死链。

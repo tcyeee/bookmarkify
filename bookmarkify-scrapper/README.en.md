@@ -16,8 +16,8 @@ A web metadata scraping service for bookmarks, supporting both static pages and 
   4. HTML fallback (`<title>` tag, `<meta name="description">`)
 
 - **URL-normalized caching**: Built on `moka` — strips fragments, sorts query params, configurable TTL, plus a 60s negative cache for recently-failed URLs
-- **Screenshot support**: Captures a full-page PNG screenshot in headless mode; uploaded to OSS when configured, otherwise returned as base64
-- **OSS upload**: Optional Alibaba Cloud OSS integration — screenshots and cover images are uploaded and replaced with persistent URLs, all under the `bookmarkify/scrapper/{og,logo,screenshots}/` prefix
+- **Screenshot support**: Captures a viewport or full-page screenshot in headless mode (`WEBP`/`JPEG`/`PNG`, emitted natively by Chrome — no transcoding); uploaded to OSS when configured, otherwise returned as an inline `data:` URL. Requesting one also disables the CSS/image/font blocking that headless scrapes otherwise use, since a screenshot without them is a bare unstyled document
+- **OSS upload**: Optional Alibaba Cloud OSS integration. Images are **content-addressed** (`scrapper/asset/<sha256-of-bytes>`, so identical images dedupe); screenshots are **URL-addressed** (`scrapper/screenshots/<sha256-of-url>.<ext>`, self-overwriting). What comes back is an **object key, not a URL** — the bucket is private-read, and domain/signing/resizing are the caller's deployment policy
 - **Proxy support**: `PROXY_URL` configures an HTTP proxy, applied to Layer 1, Layer 2, and OSS uploads alike
 - **SSRF protection**: Blocks targets resolving to private/loopback/link-local addresses by default, checking both IP literals and DNS results; the configured proxy host is exempted. Disable with `SSRF_ALLOW_PRIVATE=1` (trusted internal testing only)
 - **Auth + rate limiting**: Setting `SCRAPER_AUTH_TOKEN` requires `Authorization: Bearer <token>` on `/scrape` and `/ping`; `MAX_CONCURRENT_REQUESTS` caps in-flight requests, failing fast with `503` instead of queueing
@@ -121,7 +121,7 @@ Prometheus text-format metrics (request counts, status codes, latency histograms
 | `logo` | string\|null | JSON-LD `logo` → `apple-touch-icon` → largest sized icon; OSS URL if configured |
 | `source` | string | `"og"` / `"twitter_card"` / `"json_ld"` / `"html"` / `"headless"` |
 | `cached` | boolean | Present and `true` only on cache hits |
-| `screenshot` | string | OSS URL or base64 PNG; only present for headless scrapes |
+| `screenshot` | object | `{storageKey?, dataUrl?, width, height, format, byteSize?}`; only present when `screenshot.enabled` and the page actually rendered |
 
 Errors are `{"error": "<type>", "detail": "<optional>"}`:
 

@@ -272,4 +272,70 @@ class AssetRolePolicyTest {
     fun `no assets at all means monogram`() {
         assertTrue(AssetRolePolicy.shouldFallbackToMonogram(null))
     }
+
+    // ── 页面封面（详情弹窗顶部那张宽图） ────────────────────────────────────
+
+    /** 手工造一条已定 role 的资产：封面选取发生在 assignRoles 之后，不需要再过一遍映射表 */
+    private fun roled(role: AssetRole, size: Int, quality: AssetQuality = AssetQuality.TRUSTED) =
+        asset(AssetExtractor.OG_IMAGE, size = size, url = "https://x/${role.name.lowercase()}.png")
+            .apply { this.role = role; this.quality = quality }
+
+    /**
+     * 截图是"这一页此刻真实的样子"，og:image 往往是全站共用的品牌 banner。
+     * 前者信息量更大，所以排在前面。
+     */
+    @Test
+    fun `cover prefers the screenshot over the social image`() {
+        val chosen = AssetRolePolicy.resolveCover(
+            listOf(roled(AssetRole.SOCIAL, 1200), roled(AssetRole.SCREENSHOT, 1280))
+        )
+        assertEquals(AssetRole.SCREENSHOT, assertNotNull(chosen).role)
+    }
+
+    /** 抓不到截图（反爬站点、无头熔断）是常态，og:image 是天然兜底 */
+    @Test
+    fun `cover falls back to the social image when there is no screenshot`() {
+        val chosen = AssetRolePolicy.resolveCover(listOf(roled(AssetRole.SOCIAL, 1200)))
+        assertEquals(AssetRole.SOCIAL, assertNotNull(chosen).role)
+    }
+
+    /**
+     * 封面**不能**从图标里凑合。
+     *
+     * 这条是防回归的：一旦有人图省事把 SCREENSHOT 加进 [AssetRolePolicy.resolve] 的
+     * roleOrder，或者把 FAVICON/LOGO 加进封面顺序，两个选取就会互相串味 —— 一张 1280×720
+     * 的截图会因为"尺寸最大"在 TILE 模式下胜出，变成书签的图标。
+     */
+    @Test
+    fun `cover never borrows an icon`() {
+        assertNull(
+            AssetRolePolicy.resolveCover(
+                listOf(roled(AssetRole.LOGO, 512), roled(AssetRole.FAVICON, 64))
+            ),
+            "图标不是封面：宁可不渲染，也不要把一张方形 LOGO 拉成宽幅",
+        )
+    }
+
+    /** 反过来同样要守住：截图不该参与图标选取 */
+    @Test
+    fun `icon resolution ignores screenshots entirely`() {
+        val chosen = AssetRolePolicy.resolve(
+            listOf(roled(AssetRole.SCREENSHOT, 1280), roled(AssetRole.FAVICON, 64)),
+            DisplayMode.TILE,
+        )
+        assertEquals(AssetRole.FAVICON, assertNotNull(chosen).role, "TILE 也不该挑中截图")
+    }
+
+    @Test
+    fun `no page assets means no cover`() {
+        assertNull(AssetRolePolicy.resolveCover(emptyList()))
+    }
+
+    /** 下载失败的那条不可渲染，不能因为它排在前面就选中 */
+    @Test
+    fun `cover skips unrenderable assets`() {
+        val broken = roled(AssetRole.SCREENSHOT, 1280).apply { errorMsg = "upload failed" }
+        val chosen = AssetRolePolicy.resolveCover(listOf(broken, roled(AssetRole.SOCIAL, 1200)))
+        assertEquals(AssetRole.SOCIAL, assertNotNull(chosen).role)
+    }
 }

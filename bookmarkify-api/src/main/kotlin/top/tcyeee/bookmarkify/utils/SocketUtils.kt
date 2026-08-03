@@ -14,10 +14,21 @@ import top.tcyeee.bookmarkify.entity.entity.RoleEnum
 object SocketUtils {
 
     /**
-     * 向前端通知当前桌面元素发生变动（USER realm）
+     * 向前端推送**单个书签节点**的内容更新（USER realm）。
+     *
+     * 只接受 `type=BOOKMARK` 且 `typeApp` 非空的节点；文件夹用 [homeDirUpdate]，整树用
+     * [homeLayoutRefresh]。三者形状不同，前端要按不同方式套用，混在一个类型里前端无从分辨。
      */
     fun homeItemUpdate(uid: String, nodeVO: UserLayoutNodeVO) =
         SessionManager.send(SocketMsgType.HOME_ITEM_UPDATE, RoleEnum.USER.name, uid, nodeVO)
+
+    /** 向前端推送**单个文件夹**及其直接子节点，用于移动/建夹后的结构同步（USER realm）。 */
+    fun homeDirUpdate(uid: String, dirVO: UserLayoutNodeVO) =
+        SessionManager.send(SocketMsgType.HOME_DIR_UPDATE, RoleEnum.USER.name, uid, dirVO)
+
+    /** 向前端推送**整棵桌面布局树**，用于结构变动过大时的整体重置（USER realm）。 */
+    fun homeLayoutRefresh(uid: String, rootVO: UserLayoutNodeVO) =
+        SessionManager.send(SocketMsgType.HOME_LAYOUT_REFRESH, RoleEnum.USER.name, uid, rootVO)
 
     /**
      * 向发起「一键收录」的管理员推送某站点的收录进度（ADMIN realm）

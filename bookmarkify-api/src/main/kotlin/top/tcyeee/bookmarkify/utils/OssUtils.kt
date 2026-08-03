@@ -82,6 +82,14 @@ class OssUtils {
         const val IMMUTABLE_TTL_MILLIS: Long = 24 * 3600 * 1000
 
         /**
+         * 页面封面的渲染宽度（CSS 像素）。
+         *
+         * 详情面板本身只有几百 px 宽，640 已覆盖 2x 屏。截图原图是 1280 宽，缩一半正好，
+         * 也避免把一张一百多 KB 的图整份塞给前端。见 [signCover]。
+         */
+        const val COVER_WIDTH: Int = 640
+
+        /**
          * 阿里云 OSS 图片处理(IMG)**能作为输入**的格式。
          *
          * 不在此列的字节带上 `x-oss-process=image/resize` 会直接 400
@@ -171,6 +179,7 @@ class OssUtils {
             immutable: Boolean = false,
             mime: String? = null,
             isVector: Boolean = false,
+            height: Int? = size,
         ): String? {
             val raw = ref?.trim()?.takeIf { it.isNotBlank() } ?: return null
             val key = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) {
@@ -180,12 +189,24 @@ class OssUtils {
                 raw.removePrefix("/").substringBefore("?")
             }
             if (key.isBlank()) return raw
-            val dim = size?.takeIf { it > 0 && canImageProcess(mime, isVector, key) }
+            val processable = canImageProcess(mime, isVector, key)
+            val w = size?.takeIf { it > 0 && processable }
+            val h = height?.takeIf { it > 0 && processable }
             val ttl = if (immutable) IMMUTABLE_TTL_MILLIS else DEFAULT_TTL_MILLIS
-            return runCatching { signWithResize(key, dim, dim, ttl) }
+            return runCatching { signWithResize(key, w, h, ttl) }
                 .onFailure { log.warn("[signAsset] 签名失败, 回退原值: ref={}, err={}", raw, it.message) }
                 .getOrDefault(raw)
         }
+
+        /**
+         * 页面封面的签名地址：**只限宽，不限高**。
+         *
+         * 图标是方的，[signAsset] 默认把 `size` 同时当宽高用（`m_fill` 会裁成正方形）。封面
+         * 不能这么处理 —— 一张 1280×720 的截图被裁成 640×640，等于把两侧砍掉一半，正好毁掉
+         * "这个页面长什么样"这个唯一的用途。这里只给 `w_`，让高度按原始比例缩放。
+         */
+        fun signCover(ref: String?, width: Int = COVER_WIDTH, mime: String? = null): String? =
+            signAsset(ref, size = width, mime = mime, height = null)
 
 
         /**
@@ -285,8 +306,12 @@ class OssUtils {
                     val hasWidth = width?.let { it > 0 } == true
                     val hasHeight = height?.let { it > 0 } == true
                     if (processable && (hasWidth || hasHeight)) {
-                        // 使用 m_fill 以填充方式裁剪，确保输出尺寸精确匹配期望的宽高
-                        val style = StringBuilder("image/resize,m_fill")
+                        // 宽高都给了 = 调用方要的是精确尺寸（图标是方的），用 m_fill 填充裁剪；
+                        // 只给一边 = 要的是"限到这个宽/高，比例不动"，用 m_lfit。页面封面走的
+                        // 是后者 —— 拿 m_fill 把 1280×720 裁成 640×640 会砍掉两侧一半画面，
+                        // 正好毁掉"这个页面长什么样"这个唯一用途。
+                        val mode = if (hasWidth && hasHeight) "m_fill" else "m_lfit"
+                        val style = StringBuilder("image/resize,").append(mode)
                         width?.takeIf { it > 0 }?.let { style.append(",w_$it") }
                         height?.takeIf { it > 0 }?.let { style.append(",h_$it") }
                         this.process = style.toString()

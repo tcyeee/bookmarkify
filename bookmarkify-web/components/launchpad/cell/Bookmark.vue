@@ -30,6 +30,7 @@ import { computed, toRefs } from 'vue'
 import { BookmarkOpenMode, type BookmarkShow } from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
 import { bookmarksDel, bookmarksRecordOpen } from '@api'
+import { externalHref } from '@utils'
 import BookmarkLogo from './BookmarkLogo.vue'
 
 const props = defineProps<{ value?: BookmarkShow | null; tempTitle?: string; toggleDrag?: boolean; nodeId?: string }>()
@@ -50,7 +51,7 @@ const bookmarkOpenMode = computed<BookmarkOpenMode>(
 function onClick() {
   if (toggleDrag?.value || !props.value) return
   const target = bookmarkOpenMode.value === BookmarkOpenMode.NEW_TAB ? '_blank' : '_self'
-  window.open(props.value.urlFull, target)
+  window.open(externalHref(props.value.urlFull), target)
   bookmarksRecordOpen(props.value.bookmarkUserLinkId).catch(() => {})
 }
 

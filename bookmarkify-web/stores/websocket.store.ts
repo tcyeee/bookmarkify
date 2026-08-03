@@ -104,6 +104,12 @@ export const useWebSocketStore = defineStore('socket', {
           const bookmarkStore = useBookmarkStore()
           bookmarkStore.replaceContent(message.data)
           bookmarkStore.clearResolutionWatch(message.data.id)
+        } else if (message.type === SocketTypes.HOME_DIR_UPDATE) {
+          console.log(`[WebSocket] HOME_DIR_UPDATE: folderId=${message.data.id}, children=${message.data.children?.length ?? 0}`)
+          useBookmarkStore().replaceFolder(message.data)
+        } else if (message.type === SocketTypes.HOME_LAYOUT_REFRESH) {
+          console.log('[WebSocket] HOME_LAYOUT_REFRESH: 整树重置')
+          useBookmarkStore().setLayout(message.data)
         } else if (message.type === SocketTypes.SHARE_STATUS_CHANGED) {
           this.lastShareStatusChange = message.data
           useToastStore().warning(`您分享的内容未通过审核，已下架。原因：${message.data.rejectReason ?? '未知'}`)

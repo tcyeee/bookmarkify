@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server.impl
 
 import cn.hutool.core.date.LocalDateTimeUtil
 import com.baomidou.mybatisplus.core.metadata.IPage
+import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.beans.factory.annotation.Qualifier
@@ -36,6 +37,7 @@ import top.tcyeee.bookmarkify.server.asset.SiteDisplayPrefService
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
+import top.tcyeee.bookmarkify.config.entity.ScrapperConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.*
@@ -44,6 +46,7 @@ import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.dto.SimilarIngestUpdate
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.*
+import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLockedField
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
@@ -60,6 +63,7 @@ import top.tcyeee.bookmarkify.config.event.BookmarkEnrichEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseAndNoticeEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseAndResetUserItemEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkParseEvent
+import top.tcyeee.bookmarkify.config.event.BookmarkScreenshotEvent
 import top.tcyeee.bookmarkify.server.IBookmarkCategoryService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.utils.*
@@ -76,6 +80,7 @@ import java.util.concurrent.CompletableFuture
 class BookmarkServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
     private val projectConfig: ProjectConfig,
+    private val scrapperConfig: ScrapperConfig,
     private val eventPublisher: ApplicationEventPublisher,
     private val apiService: IApiService,
     private val layoutNodeMapper: UserLayoutNodeMapper,
@@ -142,10 +147,38 @@ class BookmarkServiceImpl(
     }
 
     override fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO {
-        val nodeEntity = UserLayoutNodeEntity(uid = uid).also { layoutNodeMapper.insert(it) }
-        val userLink = this.findById(bookmarkId).let { BookmarkUserLink(it, nodeEntity.id, uid) }
-            .also { bookmarkUserLinkMapper.insert(it) }
+        // 与 addOne 同一套前置检查：这两个方法对用户是同一件事（把一个页面放到我的桌面上），
+        // 差别只在 canonical 记录是现查的还是现建的，重复判定自然也该一致。
+        assertNotAlreadyLinked(uid, bookmarkId)
+
+        val nodeEntity = UserLayoutNodeEntity(uid = uid)
+        val userLink = BookmarkUserLink(this.findById(bookmarkId), nodeEntity.id, uid)
+        // 两条写入必须原子提交，理由与 addOne 第 4 步完全相同：分开写时第二条失败会在用户桌面上
+        // 留下一个没有任何书签数据的孤儿节点——layout() 按 layoutNodeId 找不到对应的 BookmarkShow，
+        // 前端只能渲染出一个点不开也删不掉的空格子。addOne 当初补了事务，这里被漏掉了。
+        txTemplate.execute {
+            layoutNodeMapper.insert(nodeEntity)
+            bookmarkUserLinkMapper.insert(userLink)
+        }
         return showForDesktop(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
+    }
+
+    /**
+     * 该用户已经收藏过这个 canonical 页面时直接拒绝，避免桌面上出现两个一模一样的磁贴。
+     *
+     * `deleted = false` 不能省：本项目没有配置 MyBatis-Plus 的逻辑删除，`deleted` 全靠各查询手写
+     * 过滤。漏掉这个条件，用户删掉一条书签之后就再也加不回来了。
+     */
+    private fun assertNotAlreadyLinked(uid: String, bookmarkId: String) {
+        val exists = bookmarkUserLinkService.ktQuery()
+            .eq(BookmarkUserLink::uid, uid)
+            .eq(BookmarkUserLink::bookmarkId, bookmarkId)
+            .eq(BookmarkUserLink::deleted, false)
+            .exists()
+        if (exists) {
+            log.debug("[assertNotAlreadyLinked] 用户已收藏该页面，拒绝重复添加: uid=$uid, bookmarkId=$bookmarkId")
+            throw CommonException(ErrorType.E126)
+        }
     }
 
     override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): IPage<BookmarkShow> {
@@ -192,7 +225,7 @@ class BookmarkServiceImpl(
     }
 
     override fun previewImport(file: MultipartFile, uid: String): BookmarkImportPreviewVO {
-        val existingUrls: Set<String> = bookmarkUserLinkService.urlsByUid(uid)
+        val existingKeys: Set<String> = bookmarkUserLinkService.urlsByUid(uid).mapNotNullTo(HashSet()) { canonicalKeyOf(it) }
         val structures = ChromeBookmarkParser.trim(file)
         assertImportSizeWithinLimit(structures)
         val items = structures.flatMap { structure ->
@@ -201,7 +234,10 @@ class BookmarkServiceImpl(
                     title = raw.title,
                     url = raw.url,
                     folder = structure.folderName.takeIf { it != "ROOT" },
-                    isDuplicate = raw.url in existingUrls,
+                    // 按 canonical 四元组比对，不是比字符串：同一个页面在两次导出里可能写作
+                    // github.com/x、https://github.com/x、https://github.com/x/?utm_source=y，
+                    // 逐字节相等才算重复的话，这个检测基本等于没有。
+                    isDuplicate = canonicalKeyOf(raw.url)?.let { it in existingKeys } ?: false,
                 )
             }
         }
@@ -210,6 +246,20 @@ class BookmarkServiceImpl(
             duplicateCount = items.count { it.isDuplicate },
             items = items,
         )
+    }
+
+    /**
+     * 把任意写法的网址归一成 canonical 去重键 `host|path|query|fragment`，与 `uk_bookmark_canonical`
+     * 唯一索引的口径一致 —— 判定「是不是同一个页面」全系统只该有这一个标准。
+     *
+     * 解析不出来（`javascript:` 小书签、超长网址等）返回 null：这类网址进不了 canonical 体系，
+     * 也就无从谈重复，一律按「不重复」放行，由后续导入流程收口成无源书签。
+     */
+    private fun canonicalKeyOf(rawUrl: String?): String? {
+        if (rawUrl.isNullOrBlank()) return null
+        return runCatching {
+            WebsiteParser.urlWrapper(rawUrl).let { "${it.urlHost}|${it.urlPath ?: "/"}|${it.urlQuery}|${it.urlFragment}" }
+        }.getOrNull()
     }
 
     /**
@@ -227,7 +277,15 @@ class BookmarkServiceImpl(
         data class FolderSlice(val folderNode: UserLayoutNodeEntity?, val items: List<Pair<ChromeBookmarkRawData, UserLayoutNodeEntity>>)
 
         val slices: List<FolderSlice> = structures.mapNotNull { s ->
-            val kept = s.bookmarks.filter { it.url !in skipUrls }
+            // 超过 url_full 列宽的网址整条丢弃：它没法落库，留着只会让整批导入在 INSERT 处
+            // 一起回滚（这几条写入是一个事务），用户看到的是"导入失败"而不是"跳过了 3 条"。
+            val kept = s.bookmarks
+                .filter { it.url !in skipUrls }
+                .filter { raw ->
+                    (raw.url.length <= MAX_STORABLE_URL_LENGTH).also {
+                        if (!it) log.warn("[importBookmarkFile] 网址超出字段上限，已跳过该条: uid=$uid, length=${raw.url.length}, title=${raw.title.take(50)}")
+                    }
+                }
             when (kept.size) {
                 0    -> null
                 1    -> {
@@ -776,6 +834,12 @@ class BookmarkServiceImpl(
         val bookmark = getOrCreateByUrl(bookmarkUrl)
         log.debug("[addOne] Step2 书签记录就绪: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}, parseStatus=${bookmark.parseStatus}")
 
+        // 2.5 该用户是否已经收藏过这个页面。判定落在 canonical bookmarkId 上而不是 URL 字符串上：
+        //     同一个页面用户可能写作 github.com/x、https://github.com/x、https://github.com/x/，
+        //     字符串各不相同，canonical 记录却是同一条。此前完全没有这道检查，同一个网址点两次
+        //     就在桌面上留下两个一模一样的磁贴（导入路径反倒有重复检测，两条入口行为不一致）。
+        assertNotAlreadyLinked(uid, bookmark.id)
+
         // 3. 判断书签是否需要重新解析（首次添加 / 上次解析距今超过有效期 / 已有记录处于失效状态）。
         //    先判断再插入：需要解析的节点以 BOOKMARK_LOADING 落库等待推送，不需要的直接落 BOOKMARK，
         //    省掉原先「先插 LOADING 再 update 成 BOOKMARK」那次多余的写。
@@ -784,8 +848,11 @@ class BookmarkServiceImpl(
             uid = uid,
             type = if (needParse) NodeTypeEnum.BOOKMARK_LOADING else NodeTypeEnum.BOOKMARK,
         )
-        // 用户与书签的关联记录（bookmark_user_link），保存该用户自定义的完整 URL、标题、描述等个性化数据
-        val userLink = BookmarkUserLink(url, uid, nodeEntity.id, bookmark)
+        // 用户与书签的关联记录（bookmark_user_link），保存该用户自定义的完整 URL、标题、描述等个性化数据。
+        // 存 urlRaw 而不是入参 url：两者的差别只有「协议头补全」这一步，参数一个不少。用户手输
+        // 时省略协议是常态（github.com/tcyeee），存原样的话这一列就不是个可跳转的地址，前端把它
+        // 放进 href 会被当成站内相对路径，点开变成 https://bookmarkify.cc/github.com/tcyeee。
+        val userLink = BookmarkUserLink(bookmarkUrl.urlRaw, uid, nodeEntity.id, bookmark)
 
         // 4. 布局节点与用户关联必须原子写入：分开写时，第二条失败会在用户桌面上留下一个
         //    没有任何书签数据的孤儿节点——layout() 按 layoutNodeId 找不到对应的 BookmarkShow，
@@ -1218,6 +1285,66 @@ class BookmarkServiceImpl(
         checkNsfw(bookmark)
     }
 
+    override fun coverOf(linkId: String, uid: String): String? {
+        if (linkId.isBlank() || uid.isBlank()) return null
+        // uid 一并进 where：拿别人的 linkId 来问，查不到就是 null，而不是别人的封面。
+        // deleted 也必须显式带上：本项目没有配 MyBatis-Plus 的逻辑删除，不写这一条，
+        // 已删除的书签照样能查出封面来
+        val link = bookmarkUserLinkMapper.selectOne(
+            KtQueryWrapper(BookmarkUserLink::class.java)
+                .eq(BookmarkUserLink::id, linkId)
+                .eq(BookmarkUserLink::uid, uid)
+                .eq(BookmarkUserLink::deleted, false)
+        ) ?: return null
+        val bookmarkId = link.bookmarkId?.takeIf { it.isNotBlank() } ?: return null
+        return siteAssetResolver.resolveCoverOne(bookmarkId)
+    }
+
+    override fun captureScreenshot(bookmarkId: String) {
+        val bookmark = baseMapper.selectById(bookmarkId) ?: run {
+            log.debug("[captureScreenshot] 书签已不存在，跳过: bookmarkId=$bookmarkId")
+            return
+        }
+        // 用户手动认证过的书签不再被自动抓取覆盖，截图同样不该去动它
+        if (bookmark.verifyFlag) return
+        val url = bookmark.rawUrl.takeIf { it.isNotBlank() } ?: return
+
+        // 已经有封面截图就不再截：内容定期重抓（默认 30 天一轮）会让每条成功的书签重新投递一次
+        // 截图事件，而截图是全系统最贵的一次调用——强制无头浏览器，对端 Chrome 全局串行、
+        // 生产容器只有 1GB。不拦这一道，稳态下截图池会长期占着对端那把锁，把用户当场触发的
+        // 反爬无头回退饿死在锁上（那条路是有人在等结果的）。页面改版换封面的收益远抵不过这个代价。
+        if (siteAssetResolver.assetsOf(bookmarkId).any { it.role == AssetRole.SCREENSHOT }) {
+            log.debug("[captureScreenshot] 已有截图，跳过: bookmarkId=$bookmarkId")
+            return
+        }
+
+        // BYPASS 是必需的：scrapper 的缓存键含"要不要截图"，但正常抓取那份结果可能仍在
+        // 有效期内，DEFAULT 会命中它并原样返回一个没有截图的响应。
+        // extractAssets = false：页面声明的那些图主抓取已经落过库，再探测一轮只是白跑几十次 HTTP。
+        val response = runCatching {
+            apiService.scrape(
+                url,
+                apiService.scrapeRequest(url, CacheMode.BYPASS, screenshot = true, extractAssets = false),
+            )
+        }.getOrElse {
+            log.debug("[captureScreenshot] 抓取失败(不影响书签): bookmarkId=$bookmarkId, err=${it.message}")
+            return
+        }
+
+        if (response.screenshot?.storageKey == null) {
+            // 常态而非异常：反爬站点、无头熔断、站点 API 救援都会走到这里
+            log.debug(
+                "[captureScreenshot] 本次没有截图: bookmarkId=$bookmarkId, " +
+                    "layer=${response.fetch.layerUsed}, warnings=${response.diagnostics?.warnings}"
+            )
+            return
+        }
+
+        runCatching { siteAssetWriter.upsertScreenshot(bookmarkId, url, response) }
+            .onSuccess { if (it) log.debug("[captureScreenshot] 封面已更新: bookmarkId=$bookmarkId") }
+            .onFailure { log.warn("[captureScreenshot] 截图落库失败: bookmarkId=$bookmarkId, err=${it.message}") }
+    }
+
     /** 解析书签，然后保存到数据库，同时通知到用户 */
     override fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
         log.debug("[parseAndNotice-4] 开始书签解析: uid=$uid, bookmarkId=$bookmarkId, userLinkId=$userLinkId, nodeId=$nodeId")
@@ -1426,6 +1553,11 @@ class BookmarkServiceImpl(
         // 拆到独立线程池上异步补，主链路抓完就能推送给用户。
         if (parsed.parseStatus == ParseStatusEnum.SUCCESS) {
             eventPublisher.publishEvent(BookmarkEnrichEvent(parsed.id))
+            // 截图同样拆出去，但理由更硬：它强制走无头浏览器，而对端的 Chrome 是全局
+            // 串行的。留在这里等于让每条书签排队等浏览器。见 BookmarkScreenshotEvent。
+            if (scrapperConfig.screenshotAsync && !scrapperConfig.screenshot) {
+                eventPublisher.publishEvent(BookmarkScreenshotEvent(parsed.id))
+            }
         }
         return parsed
     }
@@ -1826,6 +1958,10 @@ class BookmarkServiceImpl(
         private const val RETRY_UNREACHABLE_BATCH_SIZE = 50
         private const val LIVENESS_CHECK_BATCH_SIZE = 200
         private const val MAX_IMPORT_BOOKMARK_COUNT = 2000
+        // 对应 `bookmark_user_link.url_full varchar(1000)`（见 deploy/schema.sql）。
+        // 与 WebsiteParser 里的入口校验同源，只是导入路径不经过那里：它刻意保留 javascript:
+        // 这类解析不出来的网址，所以只能在这里单独按列宽兜一道。
+        private const val MAX_STORABLE_URL_LENGTH = 1000
         // 补投递时给解析队列留出的余量，供交互式 addOne 抢占——批量导入把队列填满的话，
         // 用户手动添加的那一条就会被 CallerRunsPolicy 甩回 HTTP 请求线程上同步抓取。
         private const val DRAIN_QUEUE_HEADROOM = 50

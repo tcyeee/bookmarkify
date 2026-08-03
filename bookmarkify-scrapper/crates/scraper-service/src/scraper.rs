@@ -147,7 +147,8 @@ impl reqwest::dns::Resolve for SsrfSafeResolver {
                     return Err(Box::new(std::io::Error::new(
                         std::io::ErrorKind::PermissionDenied,
                         format!("SSRF blocked: {ip} is a forbidden address"),
-                    )) as Box<dyn std::error::Error + Send + Sync>);
+                    ))
+                        as Box<dyn std::error::Error + Send + Sync>);
                 }
                 let addr = std::net::SocketAddr::new(ip, 0);
                 return Ok(Box::new(std::iter::once(addr)) as reqwest::dns::Addrs);
@@ -162,7 +163,8 @@ impl reqwest::dns::Resolve for SsrfSafeResolver {
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::NotFound,
                     format!("DNS returned no addresses for {host}"),
-                )) as Box<dyn std::error::Error + Send + Sync>);
+                ))
+                    as Box<dyn std::error::Error + Send + Sync>);
             }
 
             if !is_trusted_proxy {
@@ -170,8 +172,12 @@ impl reqwest::dns::Resolve for SsrfSafeResolver {
                     if is_forbidden_ip(&addr.ip()) {
                         return Err(Box::new(std::io::Error::new(
                             std::io::ErrorKind::PermissionDenied,
-                            format!("SSRF blocked: {host} resolves to forbidden address {}", addr.ip()),
-                        )) as Box<dyn std::error::Error + Send + Sync>);
+                            format!(
+                                "SSRF blocked: {host} resolves to forbidden address {}",
+                                addr.ip()
+                            ),
+                        ))
+                            as Box<dyn std::error::Error + Send + Sync>);
                     }
                 }
             }
@@ -191,7 +197,9 @@ pub async fn validate_target_host(url: &reqwest::Url) -> Result<(), ScrapeError>
 
     if let Ok(ip) = host.parse::<std::net::IpAddr>() {
         return if is_forbidden_ip(&ip) {
-            Err(ScrapeError::ForbiddenTarget(format!("blocked ip literal: {ip}")))
+            Err(ScrapeError::ForbiddenTarget(format!(
+                "blocked ip literal: {ip}"
+            )))
         } else {
             Ok(())
         };
@@ -213,7 +221,9 @@ pub async fn validate_target_host(url: &reqwest::Url) -> Result<(), ScrapeError>
         }
     }
     if !had_any {
-        return Err(ScrapeError::FetchFailed(format!("DNS 解析 {host} 没有返回任何地址")));
+        return Err(ScrapeError::FetchFailed(format!(
+            "DNS 解析 {host} 没有返回任何地址"
+        )));
     }
     Ok(())
 }
@@ -307,7 +317,11 @@ impl HttpErrorDetail {
     ) -> Self {
         let status = response.status().as_u16();
         let header = |name: reqwest::header::HeaderName| {
-            response.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_string)
+            response
+                .headers()
+                .get(name)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string)
         };
         let content_type = header(reqwest::header::CONTENT_TYPE);
         let server = header(reqwest::header::SERVER);
@@ -357,7 +371,10 @@ impl HttpErrorDetail {
 
         let mut parts: Vec<String> = Vec::new();
         if self.final_url != self.requested_url {
-            parts.push(format!("请求 {} 最终落在 {}", self.requested_url, self.final_url));
+            parts.push(format!(
+                "请求 {} 最终落在 {}",
+                self.requested_url, self.final_url
+            ));
         } else {
             parts.push(format!("请求 {}", self.requested_url));
         }
@@ -460,8 +477,7 @@ fn text_snippet(bytes: &[u8], max_chars: usize) -> Option<String> {
 }
 
 /// 图片子资源的 `Accept`，取自 Chrome 136 发出的 `<img>` 请求。
-pub const ACCEPT_IMAGE: &str =
-    "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
+pub const ACCEPT_IMAGE: &str = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
 
 /// Web App Manifest 的 `Accept`。
 pub const ACCEPT_MANIFEST: &str = "application/manifest+json,application/json,*/*;q=0.8";
@@ -721,14 +737,9 @@ async fn fetch_html_once(
         }
 
         if !status.is_success() {
-            let detail = HttpErrorDetail::capture(
-                url,
-                &current,
-                &redirects,
-                response,
-                referer.is_some(),
-            )
-            .await;
+            let detail =
+                HttpErrorDetail::capture(url, &current, &redirects, response, referer.is_some())
+                    .await;
             return Err(ScrapeError::HttpStatus(Box::new(detail)));
         }
 
@@ -794,7 +805,10 @@ mod tests {
             <script>var a = "not text at all";</script></head>
             <body><h1>访问被拒绝</h1><p>请求 ID: abc123</p></body></html>"#;
         let s = text_snippet(html.as_bytes(), 300).unwrap();
-        assert_eq!(s, "访问被拒绝 请求 ID: abc123", "脚本/样式正文不该混进诊断片段");
+        assert_eq!(
+            s, "访问被拒绝 请求 ID: abc123",
+            "脚本/样式正文不该混进诊断片段"
+        );
     }
 
     #[test]
@@ -817,7 +831,10 @@ mod tests {
         let msg = d.describe();
         assert!(msg.contains("HTTP 412 Precondition Failed"), "{msg}");
         assert!(msg.contains("疑似反爬"), "{msg}");
-        assert!(msg.contains("301 https://bilibili.com/video/BV1"), "重定向链应可见: {msg}");
+        assert!(
+            msg.contains("301 https://bilibili.com/video/BV1"),
+            "重定向链应可见: {msg}"
+        );
         assert!(msg.contains("server=nginx"), "{msg}");
     }
 
@@ -825,7 +842,10 @@ mod tests {
     fn describe_marks_a_failed_warm_up_retry() {
         let mut d = detail(403, "https://example.com/a");
         d.warmed_up = true;
-        assert!(d.describe().contains("预热"), "重试过就该说明，否则看不出已经试过了");
+        assert!(
+            d.describe().contains("预热"),
+            "重试过就该说明，否则看不出已经试过了"
+        );
     }
 
     #[test]
@@ -860,7 +880,10 @@ mod tests {
     #[test]
     fn anti_bot_covers_the_retryable_statuses_on_any_path() {
         for status in RETRYABLE_ANTI_BOT {
-            assert!(detail(status, "https://a.com/video/x").is_anti_bot(), "{status}");
+            assert!(
+                detail(status, "https://a.com/video/x").is_anti_bot(),
+                "{status}"
+            );
             // 预热在根路径上没意义，但换无头浏览器仍然有戏
             assert!(detail(status, "https://a.com/").is_anti_bot(), "{status}");
         }
@@ -875,28 +898,50 @@ mod tests {
 
     #[test]
     fn referer_is_the_full_page_url_when_same_origin() {
-        let r = referer_for(&url("https://a.com/post/1?x=2#frag"), &url("https://a.com/i.png"));
-        assert_eq!(r.as_deref(), Some("https://a.com/post/1?x=2"), "同源给完整 URL，去掉 fragment");
+        let r = referer_for(
+            &url("https://a.com/post/1?x=2#frag"),
+            &url("https://a.com/i.png"),
+        );
+        assert_eq!(
+            r.as_deref(),
+            Some("https://a.com/post/1?x=2"),
+            "同源给完整 URL，去掉 fragment"
+        );
     }
 
     #[test]
     fn referer_is_origin_only_when_cross_origin() {
         // 防盗链白名单认的是**引用页**的域，所以这里必须是 a.com，不是 CDN 自己
-        let r = referer_for(&url("https://a.com/post/1"), &url("https://cdn.b.com/i.png"));
+        let r = referer_for(
+            &url("https://a.com/post/1"),
+            &url("https://cdn.b.com/i.png"),
+        );
         assert_eq!(r.as_deref(), Some("https://a.com/"));
     }
 
     #[test]
     fn referer_is_dropped_on_https_to_http_downgrade() {
-        assert_eq!(referer_for(&url("https://a.com/p"), &url("http://a.com/i.png")), None);
+        assert_eq!(
+            referer_for(&url("https://a.com/p"), &url("http://a.com/i.png")),
+            None
+        );
     }
 
     #[test]
     fn sec_fetch_site_distinguishes_origins() {
-        assert_eq!(sec_fetch_site(&url("https://a.com/p"), &url("https://a.com/i.png")), "same-origin");
-        assert_eq!(sec_fetch_site(&url("https://a.com/p"), &url("https://b.com/i.png")), "cross-site");
+        assert_eq!(
+            sec_fetch_site(&url("https://a.com/p"), &url("https://a.com/i.png")),
+            "same-origin"
+        );
+        assert_eq!(
+            sec_fetch_site(&url("https://a.com/p"), &url("https://b.com/i.png")),
+            "cross-site"
+        );
         // 端口不同即不同源
-        assert_eq!(sec_fetch_site(&url("https://a.com/p"), &url("https://a.com:8443/i.png")), "cross-site");
+        assert_eq!(
+            sec_fetch_site(&url("https://a.com/p"), &url("https://a.com:8443/i.png")),
+            "cross-site"
+        );
     }
 
     #[test]
@@ -908,7 +953,10 @@ mod tests {
     #[test]
     fn validate_url_scheme_rejects_file_scheme() {
         let url = reqwest::Url::parse("file:///etc/passwd").unwrap();
-        assert!(matches!(validate_url_scheme(&url), Err(ScrapeError::InvalidUrl)));
+        assert!(matches!(
+            validate_url_scheme(&url),
+            Err(ScrapeError::InvalidUrl)
+        ));
     }
 
     #[test]
@@ -979,7 +1027,10 @@ mod tests {
         std::env::remove_var("SSRF_ALLOW_PRIVATE");
         let url = reqwest::Url::parse("http://127.0.0.1:8080/").unwrap();
         let r = validate_target_host(&url).await;
-        assert!(matches!(r, Err(ScrapeError::ForbiddenTarget(_))), "got {r:?}");
+        assert!(
+            matches!(r, Err(ScrapeError::ForbiddenTarget(_))),
+            "got {r:?}"
+        );
     }
 
     #[tokio::test]
@@ -988,6 +1039,9 @@ mod tests {
         std::env::remove_var("SSRF_ALLOW_PRIVATE");
         let url = reqwest::Url::parse("http://169.254.169.254/").unwrap();
         let r = validate_target_host(&url).await;
-        assert!(matches!(r, Err(ScrapeError::ForbiddenTarget(_))), "got {r:?}");
+        assert!(
+            matches!(r, Err(ScrapeError::ForbiddenTarget(_))),
+            "got {r:?}"
+        );
     }
 }

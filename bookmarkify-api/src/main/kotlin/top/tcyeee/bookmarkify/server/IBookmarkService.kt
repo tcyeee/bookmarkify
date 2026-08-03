@@ -49,6 +49,27 @@ interface IBookmarkService : IService<BookmarkEntity> {
      */
     fun enrich(bookmarkId: String)
 
+    /**
+     * 抓取成功后补一张页面截图，作为详情面板的封面。
+     *
+     * 由 BookmarkScreenshotEvent 在**单线程**的截图池上触发。单线程是硬约束：截图强制走
+     * 无头浏览器，而 scrapper 侧的 Chrome 由一把全局互斥锁串行化，这边多开只会一起堵在
+     * 对端那把锁上。抓不到就没有封面，前端按可选处理。
+     */
+    fun captureScreenshot(bookmarkId: String)
+
+    /**
+     * 书签详情弹窗顶部那张封面的签名地址（截图优先，退 og:image）。
+     *
+     * **按需单取，不随桌面列表下发**：桌面可能有几百条书签，而封面只在用户点开某一条时才看得到，
+     * 给每条都签一个几百字节的 URL 是纯粹的浪费。
+     *
+     * @param linkId `bookmark_user_link.id`，同时充当归属校验的凭据——查不到该 uid 名下的这条链接
+     *   就返回 null，不会泄露别人书签的封面
+     * @return 没有可用封面时返回 null，前端据此**不渲染任何占位**
+     */
+    fun coverOf(linkId: String, uid: String): String?
+
     /** 定时扫描 SUCCESS 书签（含已认证）做活性复查，结果写入 bookmark_ping_log；异步执行，不占用调度线程 */
     fun livenessCheckStaleBookmarks()
 

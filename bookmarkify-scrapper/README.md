@@ -17,7 +17,7 @@
 
 - **URL 规范化缓存**：基于 `moka`，自动去除 fragment、排序查询参数，TTL 可配置
 - **截图能力**：无头模式下捕获全页 PNG 截图；配置 OSS 后自动上传并返回公网 URL，否则返回 base64 编码数据
-- **OSS 上传**：可选接入阿里云 OSS，自动将截图和封面图上传并替换为持久化 URL，对象统一归档于 `bookmarkify/scrapper/{og,logo,screenshots}/` 前缀下
+- **OSS 上传**：可选接入阿里云 OSS。图片按**内容寻址**（`scrapper/asset/<sha256-of-bytes>`，同图去重），截图按**页面 URL 寻址**（`scrapper/screenshots/<sha256-of-url>.<ext>`，自我覆盖）。返回的是 **object key 而非 URL** —— 桶是私有读的，域名/签名/缩放都是调用方的部署策略
 - **代理支持**：通过 `PROXY_URL` 配置 HTTP 代理，Layer 1/Layer 2/OSS 上传均生效
 - **SSRF 防护**：默认拦截解析到私有 / 回环 / 链路本地地址的目标，IP 字面量与 DNS 解析结果均校验；可信代理主机自动放行。设置 `SSRF_ALLOW_PRIVATE=1` 关闭（用于内网集成测试等可信场景）
 - **鉴权 + 限流**：设置 `SCRAPER_AUTH_TOKEN` 后 `/scrape`、`/ping` 要求 `Authorization: Bearer <token>`；`MAX_CONCURRENT_REQUESTS` 限制并发数，超出快速返回 `503` 而非排队

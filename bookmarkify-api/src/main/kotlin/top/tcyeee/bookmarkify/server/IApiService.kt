@@ -31,8 +31,19 @@ interface IApiService {
      *
      * @param cacheMode 后台"重试/重新获取"必须传 [CacheMode.BYPASS]，否则可能直接命中
      *   scrapper 侧缓存，等于没重试
+     * @param screenshot 是否要页面截图。默认取 `ScrapperConfig.screenshot`（生产为关）。
+     *   显式传 `true` 的只有截图补抓任务——截图强制走无头浏览器，而 scrapper 侧的
+     *   Chrome 是全局串行的，放进主解析链路会让每条书签排队等浏览器。
+     * @param extractAssets 是否让 scrapper 提取页面声明的图片。**只有截图补抓任务传 false**：
+     *   那些图在主抓取里已经落过库了，再探测一轮只是白跑几十次 HTTP。除此之外一律 true ——
+     *   它一旦为 false，这次抓取就一张图都不会带回来，新书签永远拿不到图标。
      */
-    fun scrapeRequest(url: String, cacheMode: CacheMode = CacheMode.DEFAULT): ScrapeRequest
+    fun scrapeRequest(
+        url: String,
+        cacheMode: CacheMode = CacheMode.DEFAULT,
+        screenshot: Boolean? = null,
+        extractAssets: Boolean = true,
+    ): ScrapeRequest
 
     /** 完全控制 scrapper 行为的抓取入口；参数请优先用 [scrapeRequest] 生成。 */
     fun scrape(domain: String, request: ScrapeRequest): ScrapeResponse
