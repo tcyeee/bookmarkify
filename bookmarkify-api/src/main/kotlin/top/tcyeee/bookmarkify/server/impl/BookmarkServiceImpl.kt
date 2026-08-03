@@ -566,17 +566,29 @@ class BookmarkServiceImpl(
             statusFilter = ParseStatusEnum.UNREACHABLE,
             configuredIntervalHours = config.abnormalCheckIntervalHours,
             batchSize = RETRY_UNREACHABLE_BATCH_SIZE,
-            triggeredParseOf = { bookmark, outcome -> outcome == PingOutcome.ALIVE && !bookmark.verifyFlag },
+            // **UNKNOWN 也要触发重抓，只有 DEAD 才不试。**
+            //
+            // ping 只是个便宜探针（一个 HEAD），而抓取链路的能力严格更强：它有无头浏览器回退，
+            // 还有 siteapi.rs 那级站点官方 API 救援。反爬站点（403/406/412）在 ping 侧必然是
+            // UNKNOWN —— 判据只看得到"我们这次被拒了"，看不到"换个姿势能不能拿到"。
+            //
+            // 卡在 `== ALIVE` 的后果实测过：B 站视频页对机房 IP 恒返 412 → UNKNOWN → 永不重抓，
+            // 而那恰恰是本项目投入最多精力去救的一类站点，`siteapi.rs` 整个模块就是为它写的。
+            // 这些行本来就已经是 UNREACHABLE，多试一次几乎没有代价；真正的我方故障则由熔断
+            // （UNKNOWN 过半即中止整轮）在更上游拦掉，不会演变成疯狂重试。
+            triggeredParseOf = { bookmark, outcome -> outcome != PingOutcome.DEAD && !bookmark.verifyFlag },
         ) { bookmark, outcome, triggeredParse, evidence ->
             if (triggeredParse) {
                 // 调度状态交给重新解析那条链路去写（成功回到正常周期、失败继续退避），
                 // 这里抢着写只会被它覆盖，还会掩盖真实的失败次数
-                log.debug("[retryUnreachableBookmarks] ping 成功，触发重新解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                val why = if (outcome == PingOutcome.ALIVE) "ping 成功" else "探测无结论，交给能力更强的抓取链路再试"
+                log.debug("[retryUnreachableBookmarks] $why，触发重新解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
             } else {
-                val reason = when (outcome) {
-                    PingOutcome.ALIVE -> "ping 成功但已手动认证，跳过重新解析"
-                    PingOutcome.DEAD -> "ping 失败"
-                    PingOutcome.UNKNOWN -> "探测无结论"
+                val reason = when {
+                    bookmark.verifyFlag -> "已手动认证，跳过重新解析"
+                    outcome == PingOutcome.DEAD -> "ping 失败"
+                    // 走到这里只可能是站点层短路（本轮没实际探测）或被背压推迟
+                    else -> "本轮未实际探测，跳过重新解析"
                 }
                 log.debug("[retryUnreachableBookmarks] $reason: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
                 persistProbeResult(bookmark, outcome, config, evidence = evidence)
@@ -825,10 +837,22 @@ class BookmarkServiceImpl(
             (parseExecutor.threadPoolExecutor.queue.remainingCapacity() - SWEEP_PARSE_QUEUE_HEADROOM).coerceAtLeast(0)
         }
         var granted = 0
+
+        // 哪些是站点层短路出来的（结论是复用的，不是本轮的新证据）。
+        // 用 id 而不是引用比较：同一条记录在两个列表里是同一个对象，但显式一点更稳
+        val shortCircuitedIds = shortCircuited.mapTo(HashSet()) { it.first.id }
+
         // 熔断时依旧落 ping 日志：这批结果本身就是判断「我方哪里坏了」的证据，
         // 不落等于把唯一的现场也丢了。只是 triggeredParse 全为 false，且不改动任何书签。
         val wantsParse = probed.map { (bookmark, outcome) ->
-            breakerReason == null && triggeredParseOf(bookmark, outcome)
+            breakerReason == null &&
+                // **短路出来的行一律不触发重新抓取。** 这是所有巡检共通的不变式，不是某个任务的策略：
+                // 本轮压根没探过它，那个 outcome 是上一轮站点结论的复用。
+                // 一旦某个任务把判据放宽到 UNKNOWN 也触发（retryUnreachableBookmarks 就是），
+                // 少了这一条，一个域名判死 + 根地址探测无结论，就会让该域名下**所有**页面
+                // 同时投递重新抓取 —— 正好是站点层短路当初要省掉的那笔开销，被原样放大回来
+                bookmark.id !in shortCircuitedIds &&
+                triggeredParseOf(bookmark, outcome)
         }
         val triggeredParseOfEach = wantsParse.map { want ->
             (want && granted < parseBudget).also { if (it) granted++ }
@@ -875,10 +899,6 @@ class BookmarkServiceImpl(
             recordRound()
             return
         }
-
-        // 哪些是站点层短路出来的（结论是复用的，不是本轮的新证据）。
-        // 用 id 而不是引用比较：同一条记录在两个列表里是同一个对象，但显式一点更稳
-        val shortCircuitedIds = shortCircuited.mapTo(HashSet()) { it.first.id }
 
         probed.forEachIndexed { index, (bookmark, outcome) ->
             val evidence = ProbeEvidence(
