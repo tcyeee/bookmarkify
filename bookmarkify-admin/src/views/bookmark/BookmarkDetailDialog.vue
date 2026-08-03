@@ -21,7 +21,7 @@ import { getCategoryListApi } from "#/api/category";
 import { createIngestSocket, type IngestSocketHandle } from "#/api/similarIngestSocket";
 
 import BookmarkAssetCell from "./BookmarkAssetCell.vue";
-import BookmarkIcon from "./liveness/BookmarkIcon.vue";
+import BookmarkIcon from "./BookmarkIcon.vue";
 import {
   BOOKMARK_LOCKED_FIELD_LABEL,
   DISPLAY_MODE_LABEL,

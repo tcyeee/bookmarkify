@@ -1,9 +1,21 @@
 package top.tcyeee.bookmarkify.server
 
+import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.IService
+import top.tcyeee.bookmarkify.entity.SiteAdminVO
+import top.tcyeee.bookmarkify.entity.SiteSearchParams
 import top.tcyeee.bookmarkify.entity.entity.SiteEntity
 
 interface ISiteService : IService<SiteEntity> {
+
+    /**
+     * 管理后台的站点列表：一个域名一行。
+     *
+     * 与 `IBookmarkService.adminListAll` 是两个层，不是详略两版 —— 那边一行是一个页面，
+     * 同域名下的 1000 个视频会把域名层的问题（品牌名没抓到、整站被判 NSFW、域名不可达）
+     * 完全淹没。回填的页面数与图标都走批量查询，与行数无关。
+     */
+    fun adminListAll(params: SiteSearchParams): IPage<SiteAdminVO>
 
     /**
      * 按 host 获取或创建站点。并发插入同一 host 时，落败的一方捕获唯一键冲突后回查已存在记录，

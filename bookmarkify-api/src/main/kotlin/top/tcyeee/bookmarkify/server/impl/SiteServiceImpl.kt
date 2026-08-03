@@ -1,19 +1,125 @@
 package top.tcyeee.bookmarkify.server.impl
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper
+import com.baomidou.mybatisplus.core.metadata.IPage
+import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
+import top.tcyeee.bookmarkify.entity.SiteAdminVO
+import top.tcyeee.bookmarkify.entity.SiteAssetAdminVO
+import top.tcyeee.bookmarkify.entity.SiteSearchParams
+import top.tcyeee.bookmarkify.entity.entity.PageEntity
+import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteEntity
+import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.SiteLockedField
+import top.tcyeee.bookmarkify.mapper.PageMapper
+import top.tcyeee.bookmarkify.mapper.SiteAssetMapper
 import top.tcyeee.bookmarkify.mapper.SiteMapper
 import top.tcyeee.bookmarkify.server.ISiteService
+import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
+import top.tcyeee.bookmarkify.utils.OssUtils
 import java.time.LocalDateTime
 
 @Service
-class SiteServiceImpl : ISiteService, ServiceImpl<SiteMapper, SiteEntity>() {
+class SiteServiceImpl(
+    private val pageMapper: PageMapper,
+    private val siteAssetMapper: SiteAssetMapper,
+    private val siteAssetResolver: SiteAssetResolver,
+) : ISiteService, ServiceImpl<SiteMapper, SiteEntity>() {
 
     private val logger = LoggerFactory.getLogger(javaClass)
+
+    override fun adminListAll(params: SiteSearchParams): IPage<SiteAdminVO> {
+        val entityPage = baseMapper.selectPage(params.toPage(), params.toWrapper())
+        val page = entityPage.convert { SiteAdminVO(it) }
+        val siteIds = page.records.map { it.id }
+        if (siteIds.isEmpty()) return page
+
+        // 回填失败不该拖垮整个列表：这两块都是「看着方便」的补充信息，站点主表字段才是必需的
+        runCatching {
+            val counts = pageCountBySite(siteIds)
+            page.records.forEach { vo -> vo.pageCount = counts[vo.id] ?: 0 }
+        }.onFailure { logger.warn("[adminListAll] 页面数回填失败(忽略): ${it.message}") }
+
+        runCatching {
+            val assets = assetsBySite(siteIds)
+            page.records.forEach { vo -> vo.assets = toAssetVOs(assets[vo.id].orEmpty()) }
+        }.onFailure { logger.warn("[adminListAll] 站点图标回填失败(忽略): ${it.message}") }
+
+        return page
+    }
+
+    /**
+     * siteId → 该站点下的页面数。一条 `group by` 走 `idx_page_site`，逐行 count 就是 N+1。
+     *
+     * 走 `selectMaps` 而不是把结果映射回实体：这是投影查询，[PageEntity] 是没有无参构造的
+     * data class，接残缺列会在运行时抛 `No constructor found`（同 [SiteAssetResolver.siteIdOf]）。
+     */
+    private fun pageCountBySite(siteIds: List<String>): Map<String, Int> = pageMapper.selectMaps(
+        // 聚合列只能走字符串版 QueryWrapper —— KtQueryWrapper.select 只收属性引用，
+        // 表达不了 `count(1)`。列名是本文件写死的常量，不含任何请求输入。
+        QueryWrapper<PageEntity>()
+            .select("site_id", "count(1) as cnt")
+            .`in`("site_id", siteIds)
+            .groupBy("site_id")
+    ).mapNotNull { row ->
+        val siteId = row.entries.firstOrNull { it.key.equals("site_id", true) }?.value?.toString()
+        val count = row.entries.firstOrNull { it.key.equals("cnt", true) }?.value?.toString()?.toIntOrNull()
+        if (siteId.isNullOrBlank() || count == null) null else siteId to count
+    }.toMap()
+
+    /** siteId → 该站点的图标资产。只取 SITE 层：社交图与截图挂在页面上，不属于域名。 */
+    private fun assetsBySite(siteIds: List<String>): Map<String, List<SiteAssetEntity>> =
+        siteAssetMapper.selectList(
+            KtQueryWrapper(SiteAssetEntity::class.java)
+                .eq(SiteAssetEntity::ownerType, AssetOwnerType.SITE)
+                .`in`(SiteAssetEntity::ownerId, siteIds)
+                .orderByAsc(SiteAssetEntity::role)
+                .orderByDesc(SiteAssetEntity::isPrimary)
+        ).groupBy { it.ownerId }
+
+    /**
+     * 资产行 → 后台视图。私有读桶里的对象直连会 403，预览地址必须签名。
+     *
+     * 列表格子只有 32px，按 [ADMIN_LIST_ASSET_SIZE] 缩放而不是回原图。
+     */
+    private fun toAssetVOs(assets: List<SiteAssetEntity>): List<SiteAssetAdminVO> {
+        if (assets.isEmpty()) return emptyList()
+        // 撞 hash 说明该站的 LOGO 其实就是它的 favicon 换了个 rel，后台据此一眼看出"没有独立 LOGO"
+        val dupHashes = assets.mapNotNull { it.contentHash }
+            .groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+        val objectByFileId = siteAssetResolver.objectsOf(assets)
+
+        return assets.map { a ->
+            val row = a.fileId?.let { objectByFileId[it] }
+            SiteAssetAdminVO(
+                id = a.id,
+                role = a.role,
+                extractor = a.extractor,
+                quality = a.quality,
+                url = OssUtils.signAsset(
+                    row?.objectKey ?: a.storageUrl,
+                    ADMIN_LIST_ASSET_SIZE,
+                    row?.immutable == true,
+                    mime = row?.mime ?: a.mime,
+                    isVector = a.isVector,
+                ) ?: a.resolvedUrl,
+                resolvedUrl = a.resolvedUrl,
+                width = a.width,
+                height = a.height,
+                byteSize = a.byteSize,
+                mime = a.mime,
+                isVector = a.isVector,
+                contentHash = a.contentHash,
+                isPrimary = a.isPrimary,
+                duplicateOfOther = a.contentHash != null && a.contentHash in dupHashes,
+                errorMsg = a.errorMsg,
+            )
+        }
+    }
 
     override fun findByHost(host: String): SiteEntity? =
         ktQuery().eq(SiteEntity::host, host).one()
@@ -111,5 +217,8 @@ class SiteServiceImpl : ISiteService, ServiceImpl<SiteMapper, SiteEntity>() {
     companion object {
         /** 判过且干净时写入 `nsfw_reason` 的占位值，用来把"已判过"与"没判过"区分开。 */
         const val CLEAN_MARK = "CLEAN"
+
+        /** 后台列表格子的目标边长，向 OSS 请求缩略图用。 */
+        private const val ADMIN_LIST_ASSET_SIZE = 128
     }
 }

@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.AiCallScene
+import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.OssObjectSource
 import top.tcyeee.bookmarkify.entity.enums.OssObjectState
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
@@ -258,6 +259,59 @@ data class BookmarkPingLogSearchParams(
         }
         outcome?.let { query.eq(PagePingLogEntity::outcome, it) }
         return query.orderByDesc(PagePingLogEntity::createTime)
+    }
+}
+
+/**
+ * 管理后台站点(域名)列表查询入参。
+ *
+ * 这里的每一个筛选项都对应后台的一类具体排查：`nsfw`/`verifyFlag` 找需要人工过一遍的站，
+ * `alive=false` + `minConsecutiveFail` 找该下线的域名，`brandNameEmpty` 找抓取没拿到品牌名、
+ * 磁贴上只能显示裸域名的那批。全部为 null 即「不筛」，不要用哨兵值代替。
+ */
+data class SiteSearchParams(
+    @field:Schema(description = "关键词：域名 / 站点全名 / 站点短名 模糊匹配") var keyword: String? = null,
+    @field:Schema(description = "链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType? = null,
+    @field:Schema(description = "是否 NSFW") var nsfw: Boolean? = null,
+    @field:Schema(description = "域名是否可达") var alive: Boolean? = null,
+    @field:Schema(description = "是否已人工认证") var verifyFlag: Boolean? = null,
+    @field:Schema(description = "仅看品牌名为空的站点") var brandNameEmpty: Boolean? = null,
+    @field:Schema(description = "连续探测失败次数下限(含)") var minConsecutiveFail: Int? = null,
+    @field:Schema(description = "创建时间起(含)") var createTimeStart: LocalDateTime? = null,
+    @field:Schema(description = "创建时间止(含)") var createTimeEnd: LocalDateTime? = null,
+    @field:Schema(description = "排序字段：createTime / updateTime / lastCheckAt / consecutiveFail / host") var sortField: String? = null,
+    @field:Schema(description = "是否升序") var sortAsc: Boolean = false,
+) : PageBean() {
+    fun toWrapper(): Wrapper<SiteEntity> {
+        val query = KtQueryWrapper(SiteEntity::class.java)
+        if (!keyword.isNullOrBlank()) {
+            query.and {
+                it.like(SiteEntity::host, keyword)
+                    .or().like(SiteEntity::brandName, keyword)
+                    .or().like(SiteEntity::shortName, keyword)
+            }
+        }
+        linkType?.let { query.eq(SiteEntity::linkType, it) }
+        nsfw?.let { query.eq(SiteEntity::nsfw, it) }
+        alive?.let { query.eq(SiteEntity::isAlive, it) }
+        verifyFlag?.let { query.eq(SiteEntity::verifyFlag, it) }
+        // 空品牌名在库里有两种写法（NULL 与空串），只判其一会漏掉另一半
+        brandNameEmpty?.let { empty ->
+            if (empty) query.and { it.isNull(SiteEntity::brandName).or().eq(SiteEntity::brandName, "") }
+            else query.isNotNull(SiteEntity::brandName).ne(SiteEntity::brandName, "")
+        }
+        minConsecutiveFail?.let { query.ge(SiteEntity::consecutiveFail, it) }
+        createTimeStart?.let { query.ge(SiteEntity::createTime, it) }
+        createTimeEnd?.let { query.le(SiteEntity::createTime, it) }
+        // 排序字段是白名单映射而不是把字符串拼进 SQL：这个值直接来自请求体
+        val column = when (sortField) {
+            "updateTime" -> SiteEntity::updateTime
+            "lastCheckAt" -> SiteEntity::lastCheckAt
+            "consecutiveFail" -> SiteEntity::consecutiveFail
+            "host" -> SiteEntity::host
+            else -> SiteEntity::createTime
+        }
+        return query.orderBy(true, sortAsc, column)
     }
 }
 

@@ -41,21 +41,21 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
-        name: 'BookmarkLiveness',
-        path: '/bookmark/liveness',
-        component: () => import('#/views/bookmark/liveness/index.vue'),
+        name: 'SystemBookmarkCollection',
+        path: '/bookmark-collection/system',
+        component: () => import('#/views/bookmark-collection/system/index.vue'),
         meta: {
           icon: 'carbon:workspace',
-          title: '书签图标管理',
+          title: '系统书签集',
         },
       },
       {
-        name: 'BookmarkCategory',
-        path: '/bookmark/category',
-        component: () => import('#/views/bookmark/category/index.vue'),
+        name: 'CustomBookmarkCollection',
+        path: '/bookmark-collection/custom',
+        component: () => import('#/views/bookmark-collection/custom/index.vue'),
         meta: {
-          icon: 'carbon:tag',
-          title: '分类管理',
+          icon: 'carbon:workspace',
+          title: '用户自定义书签集',
         },
       },
       {
@@ -127,29 +127,22 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    // 站点层：一个域名一行。与「书签管理」下的页面层刻意分成两个菜单 ——
+    // 同域名下的上千个深链会把域名级的问题(品牌名没抓到/整站 NSFW/域名不可达)完全淹没
     meta: {
-      icon: 'lucide:library',
-      title: '书签集管理',
+      icon: 'lucide:globe',
+      title: '网站管理',
     },
-    name: 'BookmarkCollection',
-    path: '/bookmark-collection',
+    name: 'Website',
+    path: '/website',
     children: [
       {
-        name: 'SystemBookmarkCollection',
-        path: '/bookmark-collection/system',
-        component: () => import('#/views/bookmark-collection/system/index.vue'),
+        name: 'AllWebsites',
+        path: '/website/all',
+        component: () => import('#/views/website/all/index.vue'),
         meta: {
-          icon: 'carbon:workspace',
-          title: '系统书签集',
-        },
-      },
-      {
-        name: 'CustomBookmarkCollection',
-        path: '/bookmark-collection/custom',
-        component: () => import('#/views/bookmark-collection/custom/index.vue'),
-        meta: {
-          icon: 'carbon:workspace',
-          title: '用户自定义书签集',
+          icon: 'carbon:collaborate',
+          title: '全部网站管理',
         },
       },
     ],
