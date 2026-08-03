@@ -33,6 +33,15 @@ jobs:
         working-directory: bookmarkify-web
         run: pnpm install --frozen-lockfile
 
+      # Type check before building. `nuxt generate` does NOT type check — vite
+      # strips types without reading them — so a broken type lands in prod
+      # silently. Deliberately placed before the build and left blocking: the
+      # suite is clean (0 errors), so any failure here is something introduced
+      # by the commit being deployed.
+      - name: Type check
+        working-directory: bookmarkify-web
+        run: pnpm typecheck
+
       # Static site generation (nuxt generate → .output/public). The public
       # runtimeConfig is baked in at build time, so the prod URLs are set here.
       - name: Generate static site

@@ -24,5 +24,9 @@ export default defineNuxtPlugin(async () => {
   const bookmarkStore = useBookmarkStore()
   // 缓存新鲜（2 分钟内拉取过且非空）时跳过全量拉取，避免不必要的重渲染；
   // 缺失或过期时正常拉取（首次加载 / 长时间不活跃 / 清除缓存后）。
-  if (!bookmarkStore.isFresh()) bookmarkStore.update()
+  if (!bookmarkStore.isFresh()) bookmarkStore.refresh('页面加载')
+  // localStorage 里可能恢复出上次会话没解析完的 LOADING 节点，而它们的兜底定时器是进程内状态、
+  // 刷新即失效。偏偏"加完书签立刻 F5"这个最常见的动作必然落在上面那条「缓存新鲜、跳过拉取」的
+  // 分支上——不在这里补挂，那些格子就没有任何人看着，只能干等一条可能早就发过了的 WebSocket 推送。
+  bookmarkStore.armPendingWatches()
 })

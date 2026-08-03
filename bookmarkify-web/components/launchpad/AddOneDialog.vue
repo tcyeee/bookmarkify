@@ -104,7 +104,7 @@
 import { bookmarksAddOne, bookmarksLinkOne, bookmarksSearch } from '@api'
 import type { UserLayoutNodeVO } from '@typing'
 import { useBookmarkStore } from '@stores/bookmark.store'
-import { isBookmarkableUrl } from '@utils'
+import { canonicalUrlKey, isBookmarkableUrl } from '@utils'
 import { useDebounceFn } from '@vueuse/core'
 
 const sysStore = useSysStore()
@@ -125,6 +125,17 @@ const ownedBookmarkIds = computed(() => {
     if (node.typeApp?.bookmarkId) ids.add(node.typeApp.bookmarkId)
   }
   return ids
+})
+
+// 当前用户已持有的网址（归一化后），用于在提交前就地判重，见 canonicalUrlKey 的取舍说明。
+// LOADING 占位没有 typeApp、也就没有网址，落不进这个集合——那种情况仍由后端拦下。
+const ownedUrlKeys = computed(() => {
+  const keys = new Set<string>()
+  for (const node of Object.values(bookmarkStore.nodes)) {
+    const key = canonicalUrlKey(node.typeApp?.urlFull)
+    if (key) keys.add(key)
+  }
+  return keys
 })
 
 const handleSearch = useDebounceFn(async (val: string) => {
@@ -194,6 +205,14 @@ function addOne() {
   if (!data.input || submitting.value) return
   if (!isBookmarkableUrl(data.input)) {
     data.notice = '你输入的网址看起来有点怪...'
+    return
+  }
+  // 本地已有就不必往返一次再等后端弹 E126——同一份判断搜索结果那边一直在做（ownedBookmarkIds），
+  // 只有直接粘贴网址这条路以前漏了。漏判无所谓，后端仍是判重的唯一权威。
+  const inputKey = canonicalUrlKey(data.input)
+  if (inputKey && ownedUrlKeys.value.has(inputKey)) {
+    data.notice = '该网址已经在你的书签里了'
+    useToastStore().warning('该网址已经在你的书签里了')
     return
   }
 

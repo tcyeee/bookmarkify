@@ -85,6 +85,37 @@ export function isBookmarkableUrl(input?: string | null): boolean {
 }
 
 /**
+ * 把网址归一成一个可比较的键，用于**前端侧**的"这条我已经收藏过了"判断。
+ *
+ * 这不是后端那套 canonical 四元组的复刻，也不该是——真正的判重永远在后端（`assertNotAlreadyLinked`，
+ * 按 canonical bookmarkId 比对）。这里只是省掉一次注定失败的往返，所以规则刻意取**更保守**的一档：
+ * 只做「统一大小写 + 去掉结尾斜杠 + 查询参数按 key 排序」，不剥离追踪参数。后端会剥，也就是说
+ * 后端认定相同的集合严格包含这里认定相同的集合 —— 于是这里只会漏判（交给后端兜住），不会误判把
+ * 用户明明没收藏过的网址拦下来。
+ *
+ * 无法解析或不是 http(s) 时返回 null，调用方据此跳过本地判断。
+ */
+export function canonicalUrlKey(input?: string | null): string | null {
+  const href = externalHref(input)
+  if (!href || href === BLOCKED_HREF) return null
+  let parsed: URL
+  try {
+    parsed = new URL(href)
+  } catch {
+    return null
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+  // 只按 key 排序，同名参数的相对顺序保持不变（?a=1&a=2 与 ?a=2&a=1 是两个不同的地址）
+  const query = [...parsed.searchParams.entries()]
+    .map(([k, v], i) => [k, v, i] as const)
+    .sort((x, y) => x[0].localeCompare(y[0]) || x[2] - y[2])
+    .map(([k, v]) => `${k}=${v}`)
+    .join('&')
+  const path = parsed.pathname.replace(/\/+$/, '') || '/'
+  return `${parsed.host.toLowerCase()}${path}${query ? `?${query}` : ''}`
+}
+
+/**
  * 用 DiceBear adventurer-neutral 按 seed 生成头像，返回可上传的 SVG File 与可预览的 dataUri。
  * 仅客户端调用（依赖 File / Blob）。相同 seed 结果可复现（uid 用于默认头像，nanoid 用于随机头像）。
  */
@@ -110,7 +141,8 @@ const NICK_NOUN = ['小熊猫', '柯基', '水豚', '旅人', '喵星人', '北�
 
 /** 生成一个「形容词 + 的 + 动物」风格的随机昵称，长度可控（≤ 20）。 */
 export function randomNickName(): string {
-  const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]
+  // 两个词表都是非空常量，随机下标必然命中；`?? arr[0]!` 只是给类型系统一个交代
+  const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)] ?? arr[0]!
   return `${pick(NICK_ADJ)}的${pick(NICK_NOUN)}`
 }
 

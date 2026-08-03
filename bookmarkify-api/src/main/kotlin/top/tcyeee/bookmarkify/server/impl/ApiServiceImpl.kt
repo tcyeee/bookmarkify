@@ -77,6 +77,13 @@ class ApiServiceImpl(
     private fun classifyScrapperError(code: String?): ErrorType = when (code) {
         "INVALID_URL" -> ErrorType.E305                                          // URL 格式非法
         "FORBIDDEN_TARGET", "FETCH_FAILED", "HEADLESS_FAILED", "TIMEOUT" -> ErrorType.E304 // 目标站点打不开
+        // 负缓存命中(60s TTL)：这条 URL 刚刚抓失败过。它是**关于目标站点的事实**——scrapper
+        // 只在取回阶段失败时写负缓存，且刻意排除了 INVALID_URL / FORBIDDEN_TARGET，所以命中
+        // 即等价于"刚判过一次抓不到"。归进 else 的后果相当重：会被 isScrapperUnavailable()
+        // 认作我方故障，于是 parseByApi 刻意把书签留在 PENDING 不收口，用户桌面上那个节点要
+        // 一直转到 30 分钟后 drainStuckLoading 的陈旧阈值到期。同一网址被两个用户先后添加、
+        // 或者手快点了两次，第二次就会撞上。
+        "RECENTLY_FAILED" -> ErrorType.E304
         // UNAUTHORIZED(鉴权 token 配错)、OSS_FAILED、限流 503、422(请求体字段对不上)、
         // 以及任何未识别取值，都归为我方服务问题
         else -> ErrorType.E307

@@ -18,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.async.AsyncConfig
 import top.tcyeee.bookmarkify.config.async.ParseLock
 import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
+import top.tcyeee.bookmarkify.entity.dto.StuckLoadingItem
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.scrape.applyTo
@@ -148,11 +149,14 @@ class BookmarkServiceImpl(
 
     override fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO {
         // 与 addOne 同一套前置检查：这两个方法对用户是同一件事（把一个页面放到我的桌面上），
-        // 差别只在 canonical 记录是现查的还是现建的，重复判定自然也该一致。
-        assertNotAlreadyLinked(uid, bookmarkId)
+        // 差别只在 canonical 记录是现查的还是现建的，重复判定自然也该一致——**包括导入队列里
+        // 那批还没绑定 canonical 记录的占位**，它们同样会在桌面上变成第二个一模一样的磁贴。
+        // 记录先查出来再判重：目标都不存在的话，重复与否根本无从谈起。
+        val bookmark = findById(bookmarkId)
+        assertNotAlreadyLinked(uid, bookmark)
 
         val nodeEntity = UserLayoutNodeEntity(uid = uid)
-        val userLink = BookmarkUserLink(this.findById(bookmarkId), nodeEntity.id, uid)
+        val userLink = BookmarkUserLink(bookmark, nodeEntity.id, uid)
         // 两条写入必须原子提交，理由与 addOne 第 4 步完全相同：分开写时第二条失败会在用户桌面上
         // 留下一个没有任何书签数据的孤儿节点——layout() 按 layoutNodeId 找不到对应的 BookmarkShow，
         // 前端只能渲染出一个点不开也删不掉的空格子。addOne 当初补了事务，这里被漏掉了。
@@ -169,14 +173,53 @@ class BookmarkServiceImpl(
      * `deleted = false` 不能省：本项目没有配置 MyBatis-Plus 的逻辑删除，`deleted` 全靠各查询手写
      * 过滤。漏掉这个条件，用户删掉一条书签之后就再也加不回来了。
      */
-    private fun assertNotAlreadyLinked(uid: String, bookmarkId: String) {
+    private fun assertNotAlreadyLinked(uid: String, bookmark: BookmarkEntity) {
         val exists = bookmarkUserLinkService.ktQuery()
             .eq(BookmarkUserLink::uid, uid)
-            .eq(BookmarkUserLink::bookmarkId, bookmarkId)
+            .eq(BookmarkUserLink::bookmarkId, bookmark.id)
             .eq(BookmarkUserLink::deleted, false)
             .exists()
         if (exists) {
-            log.debug("[assertNotAlreadyLinked] 用户已收藏该页面，拒绝重复添加: uid=$uid, bookmarkId=$bookmarkId")
+            log.debug("[assertNotAlreadyLinked] 用户已收藏该页面，拒绝重复添加: uid=$uid, bookmarkId=${bookmark.id}")
+            throw CommonException(ErrorType.E126)
+        }
+        assertNotPendingImport(uid, bookmark)
+    }
+
+    /**
+     * 导入还没抓完的那批占位是否已经包含了这个页面。
+     *
+     * 上面那道检查按 canonical `bookmarkId` 比对，而批量导入写下的关联行 `bookmark_id` 是字符串
+     * 常量 `'LOADING'`（canonical 记录要等 drainStuckLoading 抓完才绑上去），永远匹配不上——
+     * 导入正在跑的时候手动添加同一个网址，桌面上就会多出一个磁贴，等两边都抓完才看得出重复。
+     *
+     * 判定必须落在 canonical 四元组上而不是 URL 字符串上，理由与上面那道检查完全相同
+     * （`github.com/x` / `https://github.com/x/` 是同一个页面）。基准直接取自 canonical 记录
+     * 自己的那四列，而不是再解析一遍入参网址——addOne 与 linkOne 因此比的是同一份东西。
+     * 反过来占位行只有用户给的原始网址，库里没有可比的规范化列，只能取回来在内存里规范化：
+     * 所以先用 host 子串在 SQL 侧收窄（host 必然逐字出现在原始网址中），再逐条比对
+     * (path, query, fragment)。这样即使正在导入几千条，参与比对的也只是同域名下的那几条。
+     */
+    private fun assertNotPendingImport(uid: String, bookmark: BookmarkEntity) {
+        val pending = bookmarkUserLinkService.ktQuery()
+            .eq(BookmarkUserLink::uid, uid)
+            .eq(BookmarkUserLink::bookmarkId, StuckLoadingItem.UNBOUND_BOOKMARK_ID)
+            .eq(BookmarkUserLink::deleted, false)
+            .like(BookmarkUserLink::urlFull, bookmark.urlHost)
+            .last("LIMIT $IMPORT_DUPLICATE_SCAN_LIMIT")
+            .list()
+        if (pending.isEmpty()) return
+        // 规范化失败的占位行直接跳过：那种网址本来就进不了 canonical 体系，谈不上与它重复
+        val duplicated = pending.any { row ->
+            runCatching { WebsiteParser.urlWrapper(row.urlFull) }.getOrNull()?.let { other ->
+                other.urlHost == bookmark.urlHost &&
+                    (other.urlPath ?: "/") == bookmark.urlPath &&
+                    other.urlQuery == bookmark.urlQuery &&
+                    other.urlFragment == bookmark.urlFragment
+            } == true
+        }
+        if (duplicated) {
+            log.debug("[assertNotPendingImport] 该页面已在导入队列中，拒绝重复添加: uid=$uid, urlHost=${bookmark.urlHost}")
             throw CommonException(ErrorType.E126)
         }
     }
@@ -838,7 +881,9 @@ class BookmarkServiceImpl(
         //     同一个页面用户可能写作 github.com/x、https://github.com/x、https://github.com/x/，
         //     字符串各不相同，canonical 记录却是同一条。此前完全没有这道检查，同一个网址点两次
         //     就在桌面上留下两个一模一样的磁贴（导入路径反倒有重复检测，两条入口行为不一致）。
-        assertNotAlreadyLinked(uid, bookmark.id)
+        //     除了按 canonical id 比对，还会盖住导入占位那一类：它们的 bookmark_id 还是 'LOADING'，
+        //     光比 canonical id 匹配不上（见 assertNotPendingImport）。
+        assertNotAlreadyLinked(uid, bookmark)
 
         // 3. 判断书签是否需要重新解析（首次添加 / 上次解析距今超过有效期 / 已有记录处于失效状态）。
         //    先判断再插入：需要解析的节点以 BOOKMARK_LOADING 落库等待推送，不需要的直接落 BOOKMARK，
@@ -1958,6 +2003,9 @@ class BookmarkServiceImpl(
         private const val RETRY_UNREACHABLE_BATCH_SIZE = 50
         private const val LIVENESS_CHECK_BATCH_SIZE = 200
         private const val MAX_IMPORT_BOOKMARK_COUNT = 2000
+        // addOne 判重时最多回捞多少条「同域名的导入占位」做规范化比对（见 assertNotPendingImport）。
+        // 同一用户在同一域名下同时挂着几百条待抓占位已经极端，够用且不会让判重本身变成慢查询。
+        private const val IMPORT_DUPLICATE_SCAN_LIMIT = 200
         // 对应 `bookmark_user_link.url_full varchar(1000)`（见 deploy/schema.sql）。
         // 与 WebsiteParser 里的入口校验同源，只是导入路径不经过那里：它刻意保留 javascript:
         // 这类解析不出来的网址，所以只能在这里单独按列宽兜一道。

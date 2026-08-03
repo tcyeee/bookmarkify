@@ -17,8 +17,15 @@ export const useWebSocketStore = defineStore('socket', {
     manualClose: false,
     // 是否因页面进入 bfcache 而暂停连接(与 manualClose 语义不同:恢复时应立即重连,不走退避)
     pausedForBfcache: false,
-    // pagehide/pageshow 监听器是否已注册(避免 connect() 重复调用时重复注册)
+    // 生命周期监听器(pagehide/pageshow/online/visibilitychange)是否已注册(避免 connect() 重复调用时重复注册)
     listenersRegistered: false,
+    // 本页面是否成功连接过。用于区分「首次连接」与「重连」:只有重连需要补拉布局,
+    // 首次连接时 plugins/auth.ts 已经拉过了
+    hasEverConnected: false,
+    // 最近一次收到**任何**帧(含 pong)的时间戳,由看门狗判定链路是否已经半开
+    lastMessageAt: 0,
+    // 看门狗定时器句柄
+    watchdogInterval: undefined as number | undefined,
     // 预留的消息处理映射（按类型分发回调）
     actions: new Map() as Map<SocketTypes, Function>,
     // 心跳定时器句柄
@@ -84,12 +91,23 @@ export const useWebSocketStore = defineStore('socket', {
         console.log('[WebSocket] 已连接..')
         this.isConnected = true
         this.reconnectAttempts = 0 // 重置重连次数
+        this.lastMessageAt = Date.now()
         this.startHeartbeat() // 开启心跳检测
+        // 断线期间服务端推的消息是**直接丢弃**的(没有离线队列,见 SessionManager.send),
+        // 重连成功后必须主动跟服务端对一次账,否则那期间解析完成的书签会永远停在 LOADING。
+        // 首次连接不做:plugins/auth.ts 刚拉过,重复拉一次纯属浪费。
+        if (this.hasEverConnected) {
+          console.log('[WebSocket] 重连成功,补拉桌面布局以对齐断线期间错过的推送')
+          useBookmarkStore().refresh('WebSocket 重连')
+        }
+        this.hasEverConnected = true
       }
 
       // 接收消息处理:服务端 pong 等心跳帧不是 JSON,需先过滤
       this.socket.onmessage = (event) => {
         const raw = event.data
+        // 收到任何一帧都算链路活着——pong 尤其重要,它是看门狗唯一的正向信号
+        this.lastMessageAt = Date.now()
         if (typeof raw !== 'string' || raw === 'pong' || raw === 'ping') return
         let message: SocketMessage
         try {
@@ -126,13 +144,32 @@ export const useWebSocketStore = defineStore('socket', {
         if (this.debug) console.log('[WebSocket] 发送心跳')
         if (this.socket?.readyState === WebSocket.OPEN) this.socket.send('ping')
       }, this.pingIntervalValue * 1000)
+
+      // 只发不收的心跳什么都证明不了:移动网络切换、NAT 表项超时、笔记本合盖之后,连接会变成
+      // "半开"——对端已经没了,本端的 readyState 却还是 OPEN,send() 也不报错。于是 onclose
+      // 永远不触发、重连永远不发生、推送永远收不到,表现就是书签一直转圈。
+      // 服务端现在会回 pong(WebSocketHandler.handleTextMessage),这里据此判定链路死活:
+      // 连续 3 个心跳周期没收到任何一帧就主动 close(),把它转成一次正常的 onclose → 重连。
+      this.watchdogInterval = window.setInterval(() => {
+        if (this.socket?.readyState !== WebSocket.OPEN) return
+        const silentMs = Date.now() - this.lastMessageAt
+        if (silentMs < this.pingIntervalValue * 1000 * 3) return
+        console.warn(`[WebSocket] ${Math.round(silentMs / 1000)}s 未收到任何帧,判定连接已失效,主动断开重连`)
+        // 不置 manualClose:要的正是 onclose 里那条自动重连
+        try { this.socket.close() } catch { /* noop */ }
+      }, this.pingIntervalValue * 1000)
     },
 
     // 停止心跳检测
     stopHeartbeat() {
-      if (!this.pingInterval) return
-      clearInterval(this.pingInterval)
-      this.pingInterval = undefined
+      if (this.pingInterval) {
+        clearInterval(this.pingInterval)
+        this.pingInterval = undefined
+      }
+      if (this.watchdogInterval) {
+        clearInterval(this.watchdogInterval)
+        this.watchdogInterval = undefined
+      }
     },
 
     // 按指数退避策略进行重连
@@ -175,9 +212,15 @@ export const useWebSocketStore = defineStore('socket', {
       this.currentToken = ''
       this.isConnected = false
       this.reconnectAttempts = 0
+      // 主动断开通常意味着退出登录/切换账号,下次连上是一次全新会话:
+      // 此时的布局由登录流程负责拉取,不该再由 onopen 当作"重连"补拉一次
+      this.hasEverConnected = false
+      this.lastMessageAt = 0
     },
 
-    // 注册 pagehide/pageshow 监听,处理页面进入/恢复 bfcache 的场景(只注册一次)
+    // 注册页面/网络生命周期监听(只注册一次):
+    // - pagehide/pageshow: 进入与恢复 bfcache
+    // - online/visibilitychange: 断网恢复与标签页重新可见
     registerBfcacheListeners() {
       if (!import.meta.client || this.listenersRegistered) return
       this.listenersRegistered = true
@@ -189,6 +232,35 @@ export const useWebSocketStore = defineStore('socket', {
       window.addEventListener('pageshow', (event) => {
         if (event.persisted) this.resumeFromBfcache()
       })
+
+      // 退避预算只有 5 次(累计约 31s),真断网超过这个数就再也不会自己回来了。
+      // 而"网络恢复"和"标签页重新可见"是两个明确的、值得立刻重试的外部信号——
+      // 没有它们,用户合上笔记本再打开,这个页面的 WebSocket 就是永久死的。
+      window.addEventListener('online', () => this.forceReconnect('网络已恢复'))
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') this.forceReconnect('标签页重新可见')
+      })
+    },
+
+    // 由外部信号(网络恢复/页面重新可见)触发的立即重连:不走退避,也不消耗重连预算。
+    // 已连接或用户已主动断开时什么都不做。
+    forceReconnect(reason: string) {
+      if (!import.meta.client) return
+      if (this.manualClose || this.pausedForBfcache) return
+      if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) return
+
+      const token: string = useAuthStore().account?.token ?? ''
+      if (!token) return // 未登录/已退出,没有可用会话
+
+      console.log(`[WebSocket] ${reason},立即重连`)
+      if (this.reconnectTimeout) {
+        clearTimeout(this.reconnectTimeout)
+        this.reconnectTimeout = undefined
+      }
+      this.reconnectAttempts = 0
+      this.currentToken = '' // 清掉缓存 token,确保 connect 真的会建立新连接
+      this.connect(token)
     },
 
     // 页面即将进入 bfcache:主动关闭连接,避免浏览器强制断开时打印错误日志
