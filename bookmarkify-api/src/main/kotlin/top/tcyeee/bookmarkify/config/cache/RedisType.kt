@@ -28,6 +28,6 @@ enum class RedisType(
     /* 企业微信 ACCESS_TOKEN */
     WECHAT_WORK_ACCESS_TOKEN(1, TimeUnit.HOURS),
 
-    /* 管理后台「重新获取」书签的暂存抓取结果（预览与应用之间桥接，按 bookmarkId 区分） */
+    /* 管理后台「重新获取」书签的暂存抓取结果（预览与应用之间桥接，按 pageId 区分） */
     BOOKMARK_REFETCH(10, TimeUnit.MINUTES)
 }

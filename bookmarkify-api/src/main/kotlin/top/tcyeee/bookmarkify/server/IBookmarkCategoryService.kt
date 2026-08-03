@@ -1,17 +1,17 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
-import top.tcyeee.bookmarkify.entity.entity.BookmarkCategory
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
+import top.tcyeee.bookmarkify.entity.entity.PageCategory
+import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.Category
 import top.tcyeee.bookmarkify.entity.entity.CategorySource
 
-interface IBookmarkCategoryService : IService<BookmarkCategory> {
+interface IBookmarkCategoryService : IService<PageCategory> {
     /**
      * 为 canonical 书签生成并保存分类（幂等：先删旧关联再插新）。
      * 失败静默，不抛异常、不影响解析主流程。
      */
-    fun categorize(bookmark: BookmarkEntity)
+    fun categorize(bookmark: PageEntity)
 
     /**
      * 后台「重新 AI 归类」：让 DeepSeek 自由提议分类，**词表里没有的会被建进 `category` 字典**，
@@ -22,11 +22,11 @@ interface IBookmarkCategoryService : IService<BookmarkCategory> {
      *
      * @return 该书签最终命中的分类；AI 无结果时返回空列表且不改动既有关联。
      */
-    fun categorizeAllowingNew(bookmark: BookmarkEntity): List<Category>
+    fun categorizeAllowingNew(bookmark: PageEntity): List<Category>
 
-    /** 批量查询多个书签各自命中的分类（避免 N+1）。返回 bookmarkId -> 分类列表。 */
-    fun categoriesOf(bookmarkIds: Collection<String>): Map<String, List<Category>>
+    /** 批量查询多个书签各自命中的分类（避免 N+1）。返回 pageId -> 分类列表。 */
+    fun categoriesOf(pageIds: Collection<String>): Map<String, List<Category>>
 
     /** 幂等替换某书签的全部分类关联（物理删旧 + 插新）。source 标记来源。 */
-    fun replaceLinks(bookmarkId: String, categoryIds: List<String>, source: CategorySource)
+    fun replaceLinks(pageId: String, categoryIds: List<String>, source: CategorySource)
 }

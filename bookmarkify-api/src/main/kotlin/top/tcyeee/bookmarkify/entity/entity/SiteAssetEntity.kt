@@ -35,7 +35,7 @@ data class SiteAssetEntity(
      * 站点图标是所有页面共享的一行，"属于哪个 bookmark" 这个问题对它没有意义 ——
      * 留着这一列只是为了排查"这张图当初是从哪个页面抓到的"。
      */
-    @field:Schema(description = "最初由哪个页面抓来的(溯源用，勿用于归属判断)") var bookmarkId: String? = null,
+    @field:Schema(description = "最初由哪个页面抓来的(溯源用，勿用于归属判断)") var pageId: String? = null,
 
     @field:Schema(description = "用途(本服务推导)") var role: AssetRole = AssetRole.FAVICON,
     @field:Schema(description = "出处(scrapper 报告的事实)") var extractor: String = "",
@@ -97,9 +97,9 @@ data class SiteAssetEntity(
 /**
  * 页面文字元数据。与 [SiteAssetEntity] 一样，只由抓取流程写入。
  */
-@TableName("site_page_meta")
-data class SitePageMetaEntity(
-    @TableId var bookmarkId: String = "",
+@TableName("page_meta")
+data class PageMetaEntity(
+    @TableId var pageId: String = "",
     @field:Schema(description = "页面标题") var title: String? = null,
     @field:Schema(description = "页面描述") var description: String? = null,
     @field:Schema(description = "站点名(列表模式用)") var siteName: String? = null,
@@ -118,7 +118,7 @@ data class SitePageMetaEntity(
 /**
  * 展示偏好：按（**站点** × [DisplayMode]）分行。
  *
- * **只由人工写入。** 重抓流程写 [SitePageMetaEntity] 与 [SiteAssetEntity]，永不触碰这张表 ——
+ * **只由人工写入。** 重抓流程写 [PageMetaEntity] 与 [SiteAssetEntity]，永不触碰这张表 ——
  * 旧的 `bookmark_logo` 把抓取事实与人工偏好混在一起，导致每次重抓都得做小心翼翼的部分更新。
  *
  * 键从「书签」改成「站点」：内边距、背景色、钉死哪张图，调的都是**站点图标**的观感，
@@ -129,7 +129,7 @@ data class SiteDisplayPrefEntity(
     @TableId var id: String = IdUtil.fastUUID(),
     @field:Schema(description = "所属站点ID") var siteId: String = "",
     /** 历史列：最初在哪个页面上调的，仅供溯源，业务代码不读。 */
-    @field:Schema(description = "最初在哪个页面上调的(溯源用)") var bookmarkId: String? = null,
+    @field:Schema(description = "最初在哪个页面上调的(溯源用)") var pageId: String? = null,
     @field:Schema(description = "展示模式") var displayMode: DisplayMode = DisplayMode.TILE,
     @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
     @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
@@ -147,7 +147,7 @@ data class SiteDisplayPrefEntity(
 @TableName("scrape_snapshot")
 data class ScrapeSnapshotEntity(
     @TableId var id: String = IdUtil.fastUUID(),
-    @field:Schema(description = "所属书签ID") var bookmarkId: String = "",
+    @field:Schema(description = "所属书签ID") var pageId: String = "",
     @field:Schema(description = "请求URL") var url: String = "",
     @field:Schema(description = "是否成功") var ok: Boolean = false,
     @field:Schema(description = "实际生效的请求参数(JSON)") var request: String? = null,

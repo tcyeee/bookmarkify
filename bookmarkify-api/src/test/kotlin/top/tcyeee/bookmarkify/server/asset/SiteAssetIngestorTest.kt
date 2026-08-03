@@ -41,7 +41,7 @@ class SiteAssetIngestorTest {
     fun `snapshot keeps the whole response for later backfill`() {
         val p = project()
         assertTrue(p.snapshot.ok)
-        assertEquals("bm-1", p.snapshot.bookmarkId)
+        assertEquals("bm-1", p.snapshot.pageId)
         assertEquals(421, p.snapshot.durationMs)
 
         // 快照必须是可解析的完整响应 —— 将来想启用当时没提列的字段能直接回填
@@ -120,7 +120,7 @@ class SiteAssetIngestorTest {
             assets.count { it.role != AssetRole.SCREENSHOT },
             "样例里 6 条声明应全部落库",
         )
-        assertTrue(assets.all { it.bookmarkId == "bm-1" })
+        assertTrue(assets.all { it.pageId == "bm-1" })
         assertTrue(assets.all { it.resolvedUrl.isNotBlank() })
         // 每个 role 至多一个 primary
         AssetRole.entries.forEach { role ->

@@ -1,7 +1,7 @@
 package top.tcyeee.bookmarkify.entity.dto.scrape
 
 import org.slf4j.LoggerFactory
-import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
+import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.server.asset.AssetRolePolicy
@@ -85,7 +85,7 @@ val ScrapeResponse.screenshotUrl: String?
  * [SiteAssetWriter][top.tcyeee.bookmarkify.server.asset.SiteAssetWriter] 落进
  * `site_page_meta`，主表这份是给列表查询用的冗余。
  */
-fun ScrapeResponse.applyTo(bookmark: BookmarkEntity): BookmarkEntity = bookmark.apply {
+fun ScrapeResponse.applyTo(bookmark: PageEntity): PageEntity = bookmark.apply {
     title = this@applyTo.title
     description = this@applyTo.description
     isActivity = true

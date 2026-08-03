@@ -6,13 +6,13 @@ import top.tcyeee.bookmarkify.entity.BookmarkPingLogSearchParams
 import top.tcyeee.bookmarkify.entity.BookmarkPingLogVO
 import top.tcyeee.bookmarkify.entity.BookmarkSweepLogSearchParams
 import top.tcyeee.bookmarkify.entity.SweepHealthVO
-import top.tcyeee.bookmarkify.entity.entity.BookmarkPingLogEntity
-import top.tcyeee.bookmarkify.entity.entity.BookmarkSweepLogEntity
+import top.tcyeee.bookmarkify.entity.entity.PagePingLogEntity
+import top.tcyeee.bookmarkify.entity.entity.SweepLogEntity
 
 /**
  * 书签活性检查日志 Service
  */
-interface IBookmarkPingLogService : IService<BookmarkPingLogEntity> {
+interface IBookmarkPingLogService : IService<PagePingLogEntity> {
     fun adminListAll(params: BookmarkPingLogSearchParams): IPage<BookmarkPingLogVO>
 
     /**
@@ -22,7 +22,7 @@ interface IBookmarkPingLogService : IService<BookmarkPingLogEntity> {
      * 这边一轮一行，回答"巡检系统本身怎么样"——有没有被熔断、积压追不追得上、
      * 有多少重新抓取因为队列拥堵被推迟。
      */
-    fun adminListSweeps(params: BookmarkSweepLogSearchParams): IPage<BookmarkSweepLogEntity>
+    fun adminListSweeps(params: BookmarkSweepLogSearchParams): IPage<SweepLogEntity>
 
     /**
      * 巡检健康摘要，供后台常驻告警条使用。

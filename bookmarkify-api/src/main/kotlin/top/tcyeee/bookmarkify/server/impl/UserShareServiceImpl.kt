@@ -54,7 +54,7 @@ class UserShareServiceImpl(
         )
         save(share)
         params.bookmarkUserLinkIds.forEachIndexed { index, linkId ->
-            userShareBookmarkMapper.insert(UserShareBookmarkEntity(shareId = share.id, bookmarkUserLinkId = linkId, sort = index))
+            userShareBookmarkMapper.insert(UserShareBookmarkEntity(shareId = share.id, bookmarkId = linkId, sort = index))
         }
         applyRuleReview(share)
         return UserShareVO(share, params.bookmarkUserLinkIds.size)
@@ -93,8 +93,8 @@ class UserShareServiceImpl(
         val user = userService.getById(share.uid) ?: throw CommonException(ErrorType.E122)
         // 分享页与桌面一样是大图形态，按 TILE 解析图标；一次批量解析避免逐条查资产表
         val bookmarks = userShareBookmarkMapper.bookmarksByShareId(id)
-        val logoMap = siteAssetResolver.resolveBatch(bookmarks.mapNotNull { it.bookmarkId }, DisplayMode.TILE)
-        bookmarks.forEach { it.initDisplay(logoMap[it.bookmarkId], DisplayMode.TILE) }
+        val logoMap = siteAssetResolver.resolveBatch(bookmarks.mapNotNull { it.pageId }, DisplayMode.TILE)
+        bookmarks.forEach { it.initDisplay(logoMap[it.pageId], DisplayMode.TILE) }
         return SharePublicVO(
             id = share.id,
             note = share.note,

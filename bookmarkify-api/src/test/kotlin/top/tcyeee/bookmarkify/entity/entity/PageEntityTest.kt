@@ -1,7 +1,7 @@
 package top.tcyeee.bookmarkify.entity.entity
 
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
-import top.tcyeee.bookmarkify.entity.enums.BookmarkLockedField
+import top.tcyeee.bookmarkify.entity.enums.PageLockedField
 import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,15 +10,15 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * 校验 [BookmarkEntity.checkFlag] 的过期判定。
+ * 校验 [PageEntity.checkFlag] 的过期判定。
  *
  * 这里唯一值得测的是**边界**：原实现用 `ChronoUnit.DAYS.between(...) > 1`，而 DAYS.between
  * 向下取整，于是「距上次解析 1.9 天」算出来是 1、判定为不过期——真实阈值悄悄变成了满 2 天，
  * 与代码里一直写着的「超过 1 天」差了一倍。用小时比较即可消除这个截断。
  */
-class BookmarkEntityTest {
+class PageEntityTest {
 
-    private fun bookmarkParsedAt(updateTime: LocalDateTime?) = BookmarkEntity(
+    private fun bookmarkParsedAt(updateTime: LocalDateTime?) = PageEntity(
         BookmarkUrlWrapper(
             urlRaw = "https://example.com/",
             urlScheme = "https",
@@ -63,17 +63,17 @@ class BookmarkEntityTest {
     fun `no locks by default`() {
         val bookmark = bookmarkParsedAt(null)
         assertTrue(bookmark.lockedFieldSet.isEmpty())
-        assertFalse(bookmark.isLocked(BookmarkLockedField.TITLE))
+        assertFalse(bookmark.isLocked(PageLockedField.TITLE))
     }
 
     @Test
     fun `lock is idempotent and serialises to a comma separated column`() {
         val bookmark = bookmarkParsedAt(null).apply {
-            lock(BookmarkLockedField.TITLE)
-            lock(BookmarkLockedField.TITLE)
-            lock(BookmarkLockedField.APP_NAME)
+            lock(PageLockedField.TITLE)
+            lock(PageLockedField.TITLE)
+            lock(PageLockedField.APP_NAME)
         }
-        assertEquals(setOf(BookmarkLockedField.TITLE, BookmarkLockedField.APP_NAME), bookmark.lockedFieldSet)
+        assertEquals(setOf(PageLockedField.TITLE, PageLockedField.APP_NAME), bookmark.lockedFieldSet)
         // 逗号拼接，且不能因为重复加锁就写出 'TITLE,TITLE'
         assertEquals(2, bookmark.lockedFields!!.split(',').size)
     }
@@ -82,8 +82,8 @@ class BookmarkEntityTest {
     fun `unlocking the last field stores NULL rather than an empty string`() {
         // 两种「没有锁」的表示会让后续的查询与判空都要各写一遍
         val bookmark = bookmarkParsedAt(null).apply {
-            lock(BookmarkLockedField.TITLE)
-            unlock(BookmarkLockedField.TITLE)
+            lock(PageLockedField.TITLE)
+            unlock(PageLockedField.TITLE)
         }
         assertNull(bookmark.lockedFields)
     }
@@ -91,16 +91,16 @@ class BookmarkEntityTest {
     @Test
     fun `unlocking one field keeps the others`() {
         val bookmark = bookmarkParsedAt(null).apply {
-            lock(BookmarkLockedField.TITLE, BookmarkLockedField.DESCRIPTION)
-            unlock(BookmarkLockedField.TITLE)
+            lock(PageLockedField.TITLE, PageLockedField.DESCRIPTION)
+            unlock(PageLockedField.TITLE)
         }
-        assertEquals(setOf(BookmarkLockedField.DESCRIPTION), bookmark.lockedFieldSet)
+        assertEquals(setOf(PageLockedField.DESCRIPTION), bookmark.lockedFieldSet)
     }
 
     /** 脏数据不能把整条书签的解析拖崩：无法识别的取值静默忽略。 */
     @Test
     fun `unknown values in the column are ignored`() {
         val bookmark = bookmarkParsedAt(null).apply { lockedFields = "TITLE, WHAT_IS_THIS ,,APP_NAME" }
-        assertEquals(setOf(BookmarkLockedField.TITLE, BookmarkLockedField.APP_NAME), bookmark.lockedFieldSet)
+        assertEquals(setOf(PageLockedField.TITLE, PageLockedField.APP_NAME), bookmark.lockedFieldSet)
     }
 }

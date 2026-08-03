@@ -11,7 +11,7 @@ import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
-import top.tcyeee.bookmarkify.entity.enums.BookmarkLockedField
+import top.tcyeee.bookmarkify.entity.enums.PageLockedField
 import top.tcyeee.bookmarkify.entity.enums.OssAddressing
 import top.tcyeee.bookmarkify.entity.enums.OssObjectSource
 import top.tcyeee.bookmarkify.entity.enums.OssObjectState
@@ -42,8 +42,8 @@ data class BookmarkLivenessConfigVO(
 }
 
 data class BookmarkShow(
-    @field:Schema(description = "关联书签ID") var bookmarkId: String? = null,
-    @field:Schema(description = "关联用户自定义信息ID") var bookmarkUserLinkId: String? = null,
+    @field:Schema(description = "关联书签ID") var pageId: String? = null,
+    @field:Schema(description = "关联用户自定义信息ID") var bookmarkId: String? = null,
     @field:Schema(description = "书签标题") var title: String? = null,
     @field:Schema(description = "书签备注") var description: String? = null,
     @field:Schema(description = "完整url") var urlFull: String? = null,
@@ -56,7 +56,7 @@ data class BookmarkShow(
     @JsonIgnore @field:Schema(description = "用户ID") var uid: String? = null,
     @JsonIgnore @field:Schema(description = "Host(什么都拿不到时的最后兜底)") var urlHost: String? = null,
     @JsonIgnore @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)，供分享审核使用") var nsfw: Boolean = false,
-    @field:Schema(description = "用户桌面排布节点ID(书签管理页批量删除/移入文件夹等操作使用此ID，而非 bookmarkUserLinkId)") var layoutNodeId: String? = null,
+    @field:Schema(description = "用户桌面排布节点ID(书签管理页批量删除/移入文件夹等操作使用此ID，而非 bookmarkId)") var layoutNodeId: String? = null,
     @field:Schema(description = "所属文件夹节点ID，无所属文件夹时为 null") var folderId: String? = null,
     @field:Schema(description = "所属文件夹名称，无所属文件夹时为 null") var folderName: String? = null,
 
@@ -77,9 +77,9 @@ data class BookmarkShow(
      * 之后会直接坏掉：hutool 默认连 null 一起拷，于是绝大多数书签的页面标题会被一个 null 冲掉。
      * 逐字段显式赋值，优先级交给 [BookmarkDisplayPolicy]，不再依赖拷贝顺序这种隐式契约。
      */
-    constructor(userlink: BookmarkUserLink, bookmark: BookmarkEntity?, site: SiteEntity?) : this() {
-        bookmarkId = userlink.bookmarkId
-        bookmarkUserLinkId = userlink.id
+    constructor(userlink: BookmarkEntity, bookmark: PageEntity?, site: SiteEntity?) : this() {
+        pageId = userlink.pageId
+        bookmarkId = userlink.id
         uid = userlink.uid
         layoutNodeId = userlink.layoutNodeId
         urlFull = userlink.urlFull
@@ -167,7 +167,7 @@ data class BookmarkSearchVO(
     @field:Schema(description = "书签标题") var title: String? = null,
     @field:Schema(description = "图标信息") var logo: BookmarkLogoShowVO = BookmarkLogoShowVO(),
 ) {
-    constructor(entity: BookmarkEntity, resolved: SiteAssetResolver.ResolvedLogo?) : this(
+    constructor(entity: PageEntity, resolved: SiteAssetResolver.ResolvedLogo?) : this(
         id = entity.id,
         urlHost = entity.urlHost,
         urlScheme = entity.urlScheme,
@@ -298,9 +298,9 @@ data class BookmarkAdminVO(
     @field:Schema(description = "上次活性探测时间(不论结论)") var lastCheckAt: LocalDateTime? = null,
     @field:Schema(description = "下次巡检时间") var nextCheckAt: LocalDateTime? = null,
     @field:Schema(description = "连续探测失败次数") var consecutiveFail: Int = 0,
-    @field:Schema(description = "被人工锁定、不会被自动抓取覆盖的字段") var lockedFields: List<BookmarkLockedField> = emptyList(),
+    @field:Schema(description = "被人工锁定、不会被自动抓取覆盖的字段") var lockedFields: List<PageLockedField> = emptyList(),
 ) {
-    constructor(entity: BookmarkEntity) : this(
+    constructor(entity: PageEntity) : this(
         id = entity.id,
         urlHost = entity.urlHost,
         urlScheme = entity.urlScheme,
@@ -497,16 +497,16 @@ data class AiCallLogVO(
 /** 管理后台展示的书签活性检查日志条目 */
 data class BookmarkPingLogVO(
     @field:Schema(description = "日志ID") var id: String,
-    @field:Schema(description = "书签ID") var bookmarkId: String,
+    @field:Schema(description = "书签ID") var pageId: String,
     @field:Schema(description = "URL host") var urlHost: String,
     @field:Schema(description = "探测结论(ALIVE/DEAD/UNKNOWN)") var outcome: PingOutcome,
     @field:Schema(description = "是否存活；结论为 UNKNOWN 时为 null") var alive: Boolean? = null,
     @field:Schema(description = "ping通后是否触发了重新解析") var triggeredParse: Boolean = false,
     @field:Schema(description = "检查时间") var createTime: LocalDateTime = LocalDateTime.now(),
 ) {
-    constructor(entity: BookmarkPingLogEntity) : this(
+    constructor(entity: PagePingLogEntity) : this(
         id = entity.id,
-        bookmarkId = entity.bookmarkId,
+        pageId = entity.pageId,
         urlHost = entity.urlHost,
         outcome = entity.outcome,
         alive = entity.alive,
@@ -678,7 +678,7 @@ data class SweepHealthVO(
     @field:Schema(description = "窗口内的巡检轮次总数") var roundCount: Int = 0,
     @field:Schema(description = "窗口内被熔断中止的轮次数") var breakerCount: Int = 0,
     @field:Schema(description = "窗口内因解析队列拥堵被推迟的重新抓取条数") var deferredParse: Int = 0,
-    @field:Schema(description = "最近一次熔断的轮次；窗口内没有熔断时为空") var latestBreaker: BookmarkSweepLogEntity? = null,
+    @field:Schema(description = "最近一次熔断的轮次；窗口内没有熔断时为空") var latestBreaker: SweepLogEntity? = null,
     @field:Schema(
         description = "最近一轮巡检的时间。距今过久说明巡检压根没在跑(调度线程卡死/巡检锁没释放)，" +
             "那种情况下熔断次数恒为 0，只看熔断数看不出来"

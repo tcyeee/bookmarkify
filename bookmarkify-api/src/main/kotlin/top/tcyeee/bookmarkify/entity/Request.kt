@@ -82,17 +82,17 @@ data class AccountLoginParams(val account: String, val password: String)
 data class ChangePasswordParams(val oldPassword: String, val newPassword: String)
 
 data class BookmarkSearchParams(var name: String?, var status: ParseStatusEnum?) : PageBean() {
-    fun toWrapper(): Wrapper<BookmarkEntity> {
-        val query = KtQueryWrapper(BookmarkEntity::class.java)
+    fun toWrapper(): Wrapper<PageEntity> {
+        val query = KtQueryWrapper(PageEntity::class.java)
         if (!name.isNullOrBlank()) {
             query.and {
-                it.like(BookmarkEntity::appName, name)
-                    .or().like(BookmarkEntity::title, name)
-                    .or().like(BookmarkEntity::description, name)
-                    .or().like(BookmarkEntity::urlHost, name)
+                it.like(PageEntity::appName, name)
+                    .or().like(PageEntity::title, name)
+                    .or().like(PageEntity::description, name)
+                    .or().like(PageEntity::urlHost, name)
             }
         }
-        if (status != null) query.eq(BookmarkEntity::parseStatus, status)
+        if (status != null) query.eq(PageEntity::parseStatus, status)
         return query
     }
 }
@@ -119,19 +119,19 @@ data class AllOfMyBookmarkParams(
     @field:Schema(description = "仅返回重复书签(同一站点被本用户添加了多次)") var duplicatesOnly: Boolean = false,
     @field:Schema(description = "仅返回失效书签(链接存活检测失败)") var invalidOnly: Boolean = false,
 ) : PageBean() {
-    fun toWrapper(restrictBookmarkIds: Set<String>? = null): Wrapper<BookmarkUserLink> {
-        val query = KtQueryWrapper(BookmarkUserLink::class.java)
-        query.eq(BookmarkUserLink::uid, uid)
-            .eq(BookmarkUserLink::deleted, false)
+    fun toWrapper(restrictPageIds: Set<String>? = null): Wrapper<BookmarkEntity> {
+        val query = KtQueryWrapper(BookmarkEntity::class.java)
+        query.eq(BookmarkEntity::uid, uid)
+            .eq(BookmarkEntity::deleted, false)
         if (!name.isNullOrBlank()) {
             query.and {
-                it.like(BookmarkUserLink::title, name)
-                    .or().like(BookmarkUserLink::description, name)
+                it.like(BookmarkEntity::title, name)
+                    .or().like(BookmarkEntity::description, name)
             }
         }
-        if (restrictBookmarkIds != null) query.`in`(BookmarkUserLink::bookmarkId, restrictBookmarkIds)
-        // 查看"重复书签"时按 bookmarkId 排序，让同一站点的重复项在列表中相邻，便于用户对比和清理
-        if (duplicatesOnly) query.orderByAsc(BookmarkUserLink::bookmarkId).orderByAsc(BookmarkUserLink::createTime)
+        if (restrictPageIds != null) query.`in`(BookmarkEntity::pageId, restrictPageIds)
+        // 查看"重复书签"时按 pageId 排序，让同一站点的重复项在列表中相邻，便于用户对比和清理
+        if (duplicatesOnly) query.orderByAsc(BookmarkEntity::pageId).orderByAsc(BookmarkEntity::createTime)
         return query
     }
 }
@@ -237,11 +237,11 @@ data class BookmarkSweepLogSearchParams(
     @field:Schema(description = "按巡检任务筛选") var taskLabel: String? = null,
     @field:Schema(description = "只看被熔断中止的轮次") var onlyBreaker: Boolean = false,
 ) : PageBean() {
-    fun toWrapper(): Wrapper<BookmarkSweepLogEntity> {
-        val query = KtQueryWrapper(BookmarkSweepLogEntity::class.java)
-        if (!taskLabel.isNullOrBlank()) query.eq(BookmarkSweepLogEntity::taskLabel, taskLabel)
-        if (onlyBreaker) query.isNotNull(BookmarkSweepLogEntity::breakerReason)
-        return query.orderByDesc(BookmarkSweepLogEntity::createTime)
+    fun toWrapper(): Wrapper<SweepLogEntity> {
+        val query = KtQueryWrapper(SweepLogEntity::class.java)
+        if (!taskLabel.isNullOrBlank()) query.eq(SweepLogEntity::taskLabel, taskLabel)
+        if (onlyBreaker) query.isNotNull(SweepLogEntity::breakerReason)
+        return query.orderByDesc(SweepLogEntity::createTime)
     }
 }
 
@@ -251,13 +251,13 @@ data class BookmarkPingLogSearchParams(
     /** 按探测结论筛选。替代了原来的 alive 布尔筛选——那个表达不了「无结论」这一态。 */
     var outcome: PingOutcome? = null,
 ) : PageBean() {
-    fun toWrapper(): Wrapper<BookmarkPingLogEntity> {
-        val query = KtQueryWrapper(BookmarkPingLogEntity::class.java)
+    fun toWrapper(): Wrapper<PagePingLogEntity> {
+        val query = KtQueryWrapper(PagePingLogEntity::class.java)
         if (!urlHost.isNullOrBlank()) {
-            query.like(BookmarkPingLogEntity::urlHost, urlHost)
+            query.like(PagePingLogEntity::urlHost, urlHost)
         }
-        outcome?.let { query.eq(BookmarkPingLogEntity::outcome, it) }
-        return query.orderByDesc(BookmarkPingLogEntity::createTime)
+        outcome?.let { query.eq(PagePingLogEntity::outcome, it) }
+        return query.orderByDesc(PagePingLogEntity::createTime)
     }
 }
 

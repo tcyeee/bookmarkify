@@ -15,9 +15,9 @@ interface UserShareBookmarkMapper : BaseMapper<UserShareBookmarkEntity> {
 
     @Select(
         """
-            SELECT a.bookmark_id                            AS bookmarkId,
+            SELECT a.page_id                            AS pageId,
                a.uid                                        AS uid,
-               a.id                                         AS bookmarkUserLinkId,
+               a.id                                         AS bookmarkId,
                a.url_full                                   AS urlFull,
                a.layout_node_id                             AS layoutNodeId,
                CONCAT(b.url_scheme,'://', b.url_host) AS urlBase,
@@ -38,10 +38,10 @@ interface UserShareBookmarkMapper : BaseMapper<UserShareBookmarkEntity> {
                -- NSFW 是站点级判定：同一域名不必逐页判一遍。页面级那份副本已删。
                COALESCE(st.nsfw, false)                     AS nsfw
             FROM user_share_bookmark s
-                     JOIN bookmark_user_link a
-                          ON a.id = s.bookmark_user_link_id
-                     LEFT JOIN bookmark b
-                               ON a.bookmark_id = b.id
+                     JOIN bookmark a
+                          ON a.id = s.bookmark_id
+                     LEFT JOIN page b
+                               ON a.page_id = b.id
                      LEFT JOIN site st
                                ON st.id = b.site_id
             WHERE s.share_id = #{shareId}

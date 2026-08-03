@@ -6,10 +6,10 @@ import com.baomidou.mybatisplus.annotation.TableName
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import java.time.LocalDateTime
 
-@TableName("bookmark_ping_log")
-data class BookmarkPingLogEntity(
+@TableName("page_ping_log")
+data class PagePingLogEntity(
     @TableId val id: String = IdUtil.fastUUID(),
-    val bookmarkId: String,
+    val pageId: String,
     val urlHost: String,
     /** 探测结论。[alive] 只是它的派生视图，判断一律以本列为准。 */
     val outcome: PingOutcome,

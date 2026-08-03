@@ -49,11 +49,11 @@ import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
-import top.tcyeee.bookmarkify.entity.enums.BookmarkLockedField
+import top.tcyeee.bookmarkify.entity.enums.PageLockedField
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.server.liveness.LivenessPolicy
-import top.tcyeee.bookmarkify.entity.entity.BookmarkPingLogEntity
+import top.tcyeee.bookmarkify.entity.entity.PagePingLogEntity
 import top.tcyeee.bookmarkify.mapper.*
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkLivenessConfigService
@@ -79,7 +79,7 @@ import java.util.concurrent.CompletableFuture
  */
 @Service
 class BookmarkServiceImpl(
-    private val bookmarkUserLinkMapper: BookmarkUserLinkMapper,
+    private val bookmarkUserLinkMapper: BookmarkMapper,
     private val projectConfig: ProjectConfig,
     private val scrapperConfig: ScrapperConfig,
     private val eventPublisher: ApplicationEventPublisher,
@@ -93,14 +93,14 @@ class BookmarkServiceImpl(
     private val layoutNodeFunctionMapper: LayoutNodeFunctionMapper,
     private val bookmarkCategoryService: IBookmarkCategoryService,
     private val adminUserViewAssembler: AdminUserViewAssembler,
-    private val pingLogMapper: BookmarkPingLogMapper,
-    private val sweepLogMapper: BookmarkSweepLogMapper,
+    private val pingLogMapper: PagePingLogMapper,
+    private val sweepLogMapper: SweepLogMapper,
     private val bookmarkLivenessConfigService: IBookmarkLivenessConfigService,
     private val parseLock: ParseLock,
     @Qualifier(AsyncConfig.BOOKMARK_PARSE_EXECUTOR) private val parseExecutor: ThreadPoolTaskExecutor,
     @Qualifier(AsyncConfig.BOOKMARK_PING_EXECUTOR) private val pingExecutor: ThreadPoolTaskExecutor,
     transactionManager: PlatformTransactionManager,
-) : IBookmarkService, ServiceImpl<BookmarkMapper, BookmarkEntity>() {
+) : IBookmarkService, ServiceImpl<PageMapper, PageEntity>() {
 
     // 用于在「网络抓取完成之后」把多条 DB 写入包进一个短事务，
     // 避免直接在方法上加 @Transactional 而在整个抓取期间长时间占用数据库连接。
@@ -110,7 +110,7 @@ class BookmarkServiceImpl(
     override fun setDefaultBookmark(uid: String) =
         findListByUrl(projectConfig.defaultBookmarkify)
             .map { bookmark ->
-                UserLayoutNodeEntity(uid = uid).let { node -> Pair(node, BookmarkUserLink(bookmark, node.id, uid)) }
+                UserLayoutNodeEntity(uid = uid).let { node -> Pair(node, BookmarkEntity(bookmark, node.id, uid)) }
             }.also { pair ->
                 layoutNodeMapper.insert(pair.map { it.first })
                 bookmarkUserLinkMapper.insert(pair.map { it.second })
@@ -124,14 +124,14 @@ class BookmarkServiceImpl(
      * 唯一的调用方（相似站点收录）真正想问的是「这个域名的首页收没收过」，所以收窄成按
      * canonical 根页面查询：域名下有别的深链被收录过，不代表首页也有了。
      */
-    override fun findRootPageByHost(host: String): BookmarkEntity? =
+    override fun findRootPageByHost(host: String): PageEntity? =
         siteService.findByHost(host)?.let { getByCanonical(it.id, "/", "", "") }
 
-    override fun findListByUrl(urls: List<String>): List<BookmarkEntity> =
+    override fun findListByUrl(urls: List<String>): List<PageEntity> =
         urls.mapNotNull { runCatching { WebsiteParser.urlWrapper(it) }.getOrNull() }
             .mapNotNull { getByUrl(it) }
 
-    override fun getOrCreateCanonical(url: String): BookmarkEntity =
+    override fun getOrCreateCanonical(url: String): PageEntity =
         getOrCreateByUrl(WebsiteParser.urlWrapper(url))
 
     @Transactional
@@ -140,24 +140,24 @@ class BookmarkServiceImpl(
             .let { LayoutNodeFunctionEntity(it, uid) }.also { layoutNodeFunctionMapper.insert(it) }.run {}
 
     override fun search(name: String): List<BookmarkSearchVO> {
-        val list = ktQuery().eq(BookmarkEntity::isActivity, true).like(BookmarkEntity::appName, name).or()
-            .like(BookmarkEntity::title, name).or().like(BookmarkEntity::description, name).or()
-            .like(BookmarkEntity::urlHost, name).last("limit 5").list()
+        val list = ktQuery().eq(PageEntity::isActivity, true).like(PageEntity::appName, name).or()
+            .like(PageEntity::title, name).or().like(PageEntity::description, name).or()
+            .like(PageEntity::urlHost, name).last("limit 5").list()
         // 搜索结果是小图 + 全名的形态，按 LIST 模式解析图标
         val logoMap = siteAssetResolver.resolveBatch(list.map { it.id }, DisplayMode.LIST)
         return list.map { BookmarkSearchVO(it, logoMap[it.id]) }
     }
 
-    override fun linkOne(bookmarkId: String, uid: String): UserLayoutNodeVO {
+    override fun linkOne(pageId: String, uid: String): UserLayoutNodeVO {
         // 与 addOne 同一套前置检查：这两个方法对用户是同一件事（把一个页面放到我的桌面上），
         // 差别只在 canonical 记录是现查的还是现建的，重复判定自然也该一致——**包括导入队列里
         // 那批还没绑定 canonical 记录的占位**，它们同样会在桌面上变成第二个一模一样的磁贴。
         // 记录先查出来再判重：目标都不存在的话，重复与否根本无从谈起。
-        val bookmark = findById(bookmarkId)
+        val bookmark = findById(pageId)
         assertNotAlreadyLinked(uid, bookmark)
 
         val nodeEntity = UserLayoutNodeEntity(uid = uid)
-        val userLink = BookmarkUserLink(bookmark, nodeEntity.id, uid)
+        val userLink = BookmarkEntity(bookmark, nodeEntity.id, uid)
         insertNodeAndLink(nodeEntity, userLink)
         return showForDesktop(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
     }
@@ -176,7 +176,7 @@ class BookmarkServiceImpl(
      * 现在由 `uk_bul_uid_bookmark` 兜底，与 `getOrCreateByUrl` 靠 `uk_bookmark_canonical`
      * 收敛并发插入是同一个套路。
      */
-    private fun insertNodeAndLink(node: UserLayoutNodeEntity, link: BookmarkUserLink) {
+    private fun insertNodeAndLink(node: UserLayoutNodeEntity, link: BookmarkEntity) {
         try {
             txTemplate.execute {
                 layoutNodeMapper.insert(node)
@@ -184,7 +184,7 @@ class BookmarkServiceImpl(
             }
         } catch (e: DuplicateKeyException) {
             // 事务已整体回滚，那个刚插进去的布局节点不会留下来
-            log.debug("[insertNodeAndLink] 唯一键冲突，判定为重复收藏: uid=${link.uid}, bookmarkId=${link.bookmarkId}, err=${e.message}")
+            log.debug("[insertNodeAndLink] 唯一键冲突，判定为重复收藏: uid=${link.uid}, pageId=${link.pageId}, err=${e.message}")
             throw CommonException(ErrorType.E126)
         }
     }
@@ -195,14 +195,14 @@ class BookmarkServiceImpl(
      * `deleted = false` 不能省：本项目没有配置 MyBatis-Plus 的逻辑删除，`deleted` 全靠各查询手写
      * 过滤。漏掉这个条件，用户删掉一条书签之后就再也加不回来了。
      */
-    private fun assertNotAlreadyLinked(uid: String, bookmark: BookmarkEntity) {
+    private fun assertNotAlreadyLinked(uid: String, bookmark: PageEntity) {
         val exists = bookmarkUserLinkService.ktQuery()
-            .eq(BookmarkUserLink::uid, uid)
-            .eq(BookmarkUserLink::bookmarkId, bookmark.id)
-            .eq(BookmarkUserLink::deleted, false)
+            .eq(BookmarkEntity::uid, uid)
+            .eq(BookmarkEntity::pageId, bookmark.id)
+            .eq(BookmarkEntity::deleted, false)
             .exists()
         if (exists) {
-            log.debug("[assertNotAlreadyLinked] 用户已收藏该页面，拒绝重复添加: uid=$uid, bookmarkId=${bookmark.id}")
+            log.debug("[assertNotAlreadyLinked] 用户已收藏该页面，拒绝重复添加: uid=$uid, pageId=${bookmark.id}")
             throw CommonException(ErrorType.E126)
         }
         assertNotPendingImport(uid, bookmark)
@@ -211,7 +211,7 @@ class BookmarkServiceImpl(
     /**
      * 导入还没抓完的那批占位是否已经包含了这个页面。
      *
-     * 上面那道检查按 canonical `bookmarkId` 比对，而批量导入写下的关联行 `bookmark_id` 是字符串
+     * 上面那道检查按 canonical `pageId` 比对，而批量导入写下的关联行 `page_id` 是字符串
      * 常量 `'LOADING'`（canonical 记录要等 drainStuckLoading 抓完才绑上去），永远匹配不上——
      * 导入正在跑的时候手动添加同一个网址，桌面上就会多出一个磁贴，等两边都抓完才看得出重复。
      *
@@ -222,12 +222,12 @@ class BookmarkServiceImpl(
      * 所以先用 host 子串在 SQL 侧收窄（host 必然逐字出现在原始网址中），再逐条比对
      * (path, query, fragment)。这样即使正在导入几千条，参与比对的也只是同域名下的那几条。
      */
-    private fun assertNotPendingImport(uid: String, bookmark: BookmarkEntity) {
+    private fun assertNotPendingImport(uid: String, bookmark: PageEntity) {
         val pending = bookmarkUserLinkService.ktQuery()
-            .eq(BookmarkUserLink::uid, uid)
-            .eq(BookmarkUserLink::bookmarkId, StuckLoadingItem.UNBOUND_BOOKMARK_ID)
-            .eq(BookmarkUserLink::deleted, false)
-            .like(BookmarkUserLink::urlFull, bookmark.urlHost)
+            .eq(BookmarkEntity::uid, uid)
+            .eq(BookmarkEntity::pageId, StuckLoadingItem.UNBOUND_BOOKMARK_ID)
+            .eq(BookmarkEntity::deleted, false)
+            .like(BookmarkEntity::urlFull, bookmark.urlHost)
             .last("LIMIT $IMPORT_DUPLICATE_SCAN_LIMIT")
             .list()
         if (pending.isEmpty()) return
@@ -247,12 +247,12 @@ class BookmarkServiceImpl(
     }
 
     override fun allOfMyBookmark(uid: String, params: AllOfMyBookmarkParams): IPage<BookmarkShow> {
-        // "重复书签"/"失效书签" 筛选：先在用户自己的书签范围内算出候选 bookmarkId 集合，
+        // "重复书签"/"失效书签" 筛选：先在用户自己的书签范围内算出候选 pageId 集合，
         // 再作为 IN 条件叠加到分页查询上；两者同时开启时取交集。
-        val duplicateIds = if (params.duplicatesOnly) bookmarkUserLinkService.duplicateBookmarkIds(uid) else null
+        val duplicateIds = if (params.duplicatesOnly) bookmarkUserLinkService.duplicatePageIds(uid) else null
         val invalidIds = if (params.invalidOnly) {
             val mine = bookmarkUserLinkService.bookmarkIdsByUid(uid)
-            if (mine.isEmpty()) emptySet() else ktQuery().`in`(BookmarkEntity::id, mine).eq(BookmarkEntity::isActivity, false).list().map { it.id }.toSet()
+            if (mine.isEmpty()) emptySet() else ktQuery().`in`(PageEntity::id, mine).eq(PageEntity::isActivity, false).list().map { it.id }.toSet()
         } else null
         val restrictIds: Set<String>? = when {
             duplicateIds != null && invalidIds != null -> duplicateIds intersect invalidIds
@@ -264,11 +264,11 @@ class BookmarkServiceImpl(
         if (restrictIds != null && restrictIds.isEmpty()) return Page(params.currentPage.toLong(), params.pageSize.toLong(), 0)
 
         val result = bookmarkUserLinkMapper.selectPage(params.toPage(), params.toWrapper(restrictIds))
-        val bookmarkIds: List<String> = result.records.mapNotNull { it.bookmarkId }
+        val pageIds: List<String> = result.records.mapNotNull { it.pageId }
         val bookmarkEntityMap =
-            if (bookmarkIds.isEmpty()) emptyMap() else baseMapper.selectByIds(bookmarkIds).associateBy { it.id }
+            if (pageIds.isEmpty()) emptyMap() else baseMapper.selectByIds(pageIds).associateBy { it.id }
         // 前台桌面是大图 + 短名的形态，按 TILE 模式解析图标
-        val logoMap = siteAssetResolver.resolveBatch(bookmarkIds, DisplayMode.TILE)
+        val logoMap = siteAssetResolver.resolveBatch(pageIds, DisplayMode.TILE)
         // 站点层带上品牌名/短名/NSFW：文案优先级要用它们，一次批量取回避免 N+1
         val siteMap = siteService.mapByIds(bookmarkEntityMap.values.map { it.siteId })
 
@@ -280,9 +280,9 @@ class BookmarkServiceImpl(
 
         return result.convert {
             val folder = layoutNodeMap[it.layoutNodeId]?.parentId?.let { fid -> folderMap[fid] }
-            val bookmark = bookmarkEntityMap[it.bookmarkId]
+            val bookmark = bookmarkEntityMap[it.pageId]
             BookmarkShow(it, bookmark, siteMap[bookmark?.siteId])
-                .initDisplay(logoMap[it.bookmarkId], DisplayMode.TILE).apply {
+                .initDisplay(logoMap[it.pageId], DisplayMode.TILE).apply {
                 folderId = folder?.id
                 folderName = folder?.name
             }
@@ -369,7 +369,7 @@ class BookmarkServiceImpl(
         }
 
         val allBookmarkNodes: List<Pair<ChromeBookmarkRawData, UserLayoutNodeEntity>> = slices.flatMap { it.items }
-        val allLinks: List<BookmarkUserLink> = allBookmarkNodes.map { (raw, node) -> BookmarkUserLink(uid, node.id, raw) }
+        val allLinks: List<BookmarkEntity> = allBookmarkNodes.map { (raw, node) -> BookmarkEntity(uid, node.id, raw) }
 
         txTemplate.execute {
             val folderNodes = slices.mapNotNull { it.folderNode }
@@ -383,7 +383,7 @@ class BookmarkServiceImpl(
         // 让**调用线程**同步跑完剩下的任务——调用线程就是当前这个 HTTP 请求线程，于是一次大导入
         // 能把 Tomcat 的线程一个个钉死在网络等待上，拖垮整个 API。
         //
-        // 改由 drainStuckLoading() 按解析线程池的空闲容量分批捞取（占位行 bookmark_id='LOADING'
+        // 改由 drainStuckLoading() 按解析线程池的空闲容量分批捞取（占位行 page_id='LOADING'
         // 就是待办标记）。压力落在数据库这个本来就要写的地方，而不是某个线程上；顺带获得了
         // 「进程重启后导入能自动接着做完」的能力——以前重启会让在途事件连同队列一起丢光。
 
@@ -407,7 +407,7 @@ class BookmarkServiceImpl(
         // PENDING 正常应在几分钟内被异步解析消费掉，超过 CHECKALL_PENDING_STALE_MINUTES 未更新基本可判定是事件丢失。
         //
         // 时间基准取 COALESCE(update_time, create_time) 而非 update_time：新建的书签 update_time 为 NULL
-        // （BookmarkEntity 只在解析出结果时才写它），而 SQL 里 `NULL < ?` 恒为 NULL，于是「从未被解析过」
+        // （PageEntity 只在解析出结果时才写它），而 SQL 里 `NULL < ?` 恒为 NULL，于是「从未被解析过」
         // 的书签——恰恰是最需要兜底的那批——反而一条都选不出来。一旦 addOne 之后的解析事件丢失
         // （进程重启、线程池饱和回退到调用线程后抛异常），这条书签就会永久停在 PENDING：
         // needRecheckOnAdd() 对 PENDING 直接返回 false，另两个定时任务又按 status 把它过滤掉，
@@ -415,8 +415,8 @@ class BookmarkServiceImpl(
         // 用 create_time 兜底而不是把 NULL 直接视作「已过期」，是为了保住那 30 分钟的窗口：
         // 否则刚添加、事件还在途中的书签会在下一次 tick(5min) 就被重复投递一次解析。
         ktQuery()
-            .eq(BookmarkEntity::parseStatus, ParseStatusEnum.PENDING)
-            .eq(BookmarkEntity::verifyFlag, false)
+            .eq(PageEntity::parseStatus, ParseStatusEnum.PENDING)
+            .eq(PageEntity::verifyFlag, false)
             .apply(
                 "COALESCE(update_time, create_time) < {0}",
                 LocalDateTimeUtil.offset(LocalDateTime.now(), -CHECKALL_PENDING_STALE_MINUTES, ChronoUnit.MINUTES)
@@ -480,7 +480,7 @@ class BookmarkServiceImpl(
                 )
             } else {
                 eventPublisher.publishEvent(
-                    BookmarkParseAndNoticeEvent(item.uid, item.bookmarkId!!, item.userLinkId, item.layoutNodeId)
+                    BookmarkParseAndNoticeEvent(item.uid, item.pageId!!, item.userLinkId, item.layoutNodeId)
                 )
             }
         }
@@ -582,7 +582,7 @@ class BookmarkServiceImpl(
                 // 调度状态交给重新解析那条链路去写（成功回到正常周期、失败继续退避），
                 // 这里抢着写只会被它覆盖，还会掩盖真实的失败次数
                 val why = if (outcome == PingOutcome.ALIVE) "ping 成功" else "探测无结论，交给能力更强的抓取链路再试"
-                log.debug("[retryUnreachableBookmarks] $why，触发重新解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                log.debug("[retryUnreachableBookmarks] $why，触发重新解析: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}")
             } else {
                 val reason = when {
                     bookmark.verifyFlag -> "已手动认证，跳过重新解析"
@@ -590,7 +590,7 @@ class BookmarkServiceImpl(
                     // 走到这里只可能是站点层短路（本轮没实际探测）或被背压推迟
                     else -> "本轮未实际探测，跳过重新解析"
                 }
-                log.debug("[retryUnreachableBookmarks] $reason: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                log.debug("[retryUnreachableBookmarks] $reason: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}")
                 persistProbeResult(bookmark, outcome, config, evidence = evidence)
             }
         }
@@ -611,7 +611,7 @@ class BookmarkServiceImpl(
         ) { bookmark, outcome, triggeredParse, evidence ->
             if (triggeredParse) {
                 // 同上：调度状态由重新解析那条链路负责写
-                log.debug("[livenessCheckStaleBookmarks] 内容已过期，触发重新抓取: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                log.debug("[livenessCheckStaleBookmarks] 内容已过期，触发重新抓取: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}")
             } else {
                 val reason = when (outcome) {
                     PingOutcome.ALIVE -> "ping 成功且内容未过期，仅推进下次检查时间"
@@ -619,7 +619,7 @@ class BookmarkServiceImpl(
                     // 无结论绝不能落库成 UNREACHABLE：那正是「一次抓取服务故障洗掉一批健康书签」的成因
                     PingOutcome.UNKNOWN -> "探测无结论，只做短退避"
                 }
-                log.debug("[livenessCheckStaleBookmarks] $reason: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                log.debug("[livenessCheckStaleBookmarks] $reason: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}")
                 persistProbeResult(
                     bookmark, outcome, config,
                     markUnreachable = outcome == PingOutcome.DEAD,
@@ -657,17 +657,17 @@ class BookmarkServiceImpl(
         ) { bookmark, outcome, triggeredParse, _ ->
             if (triggeredParse) {
                 // 抓取成功会走 markParseSucceeded 写回 SUCCESS，这条记录就此回到常规巡检的候选池
-                log.warn("[reviveArchivedBookmarks] 归档站点重新可达，触发重新抓取: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+                log.warn("[reviveArchivedBookmarks] 归档站点重新可达，触发重新抓取: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}")
             } else {
                 // 仍然不通：只把游标推到下一个复活探测周期。**不走 persistProbeResult** ——
                 // 那会继续累加 consecutiveFail 并按退避曲线算 next_check_at，而归档记录的
                 // 退避早已到顶，再累加只是让这个数字无意义地涨下去
                 runCatching {
-                    ktUpdate().eq(BookmarkEntity::id, bookmark.id)
-                        .set(BookmarkEntity::lastCheckAt, LocalDateTime.now())
-                        .set(BookmarkEntity::nextCheckAt, LocalDateTime.now().plusDays(ARCHIVE_RECHECK_DAYS))
+                    ktUpdate().eq(PageEntity::id, bookmark.id)
+                        .set(PageEntity::lastCheckAt, LocalDateTime.now())
+                        .set(PageEntity::nextCheckAt, LocalDateTime.now().plusDays(ARCHIVE_RECHECK_DAYS))
                         .update()
-                }.onFailure { log.warn("[reviveArchivedBookmarks] 游标推进失败: bookmarkId=${bookmark.id}, err=${it.message}") }
+                }.onFailure { log.warn("[reviveArchivedBookmarks] 游标推进失败: pageId=${bookmark.id}, err=${it.message}") }
             }
         }
     }
@@ -684,7 +684,7 @@ class BookmarkServiceImpl(
      * 投了事件只会白跑一趟并让这条记录每轮都被重新选中。
      */
     private fun shouldRefreshContent(
-        bookmark: BookmarkEntity,
+        bookmark: PageEntity,
         outcome: PingOutcome,
         config: BookmarkLivenessConfigValue,
     ): Boolean {
@@ -695,7 +695,7 @@ class BookmarkServiceImpl(
     }
 
     /**
-     * 定时活性检测任务的通用骨架：按 [statusFilter] + 调度游标选出候选、逐条 ping、写 [BookmarkPingLogEntity]，
+     * 定时活性检测任务的通用骨架：按 [statusFilter] + 调度游标选出候选、逐条 ping、写 [PagePingLogEntity]，
      * 再交给 [onResult] 决定各自的落库/重新解析动作。[triggeredParseOf] 决定是否需要发布 [BookmarkParseEvent]。
      *
      * 候选只看 `next_check_at`，不再按 `update_time` 倒推时间窗：那一列还兼着「记录最近修改时间」，
@@ -714,8 +714,8 @@ class BookmarkServiceImpl(
         statusFilter: ParseStatusEnum,
         configuredIntervalHours: Int,
         batchSize: Int,
-        triggeredParseOf: (bookmark: BookmarkEntity, outcome: PingOutcome) -> Boolean,
-        onResult: (bookmark: BookmarkEntity, outcome: PingOutcome, triggeredParse: Boolean, evidence: ProbeEvidence) -> Unit,
+        triggeredParseOf: (bookmark: PageEntity, outcome: PingOutcome) -> Boolean,
+        onResult: (bookmark: PageEntity, outcome: PingOutcome, triggeredParse: Boolean, evidence: ProbeEvidence) -> Unit,
     ) {
         val lockKey = ParseLock.sweep(taskLabel)
         // 带凭据释放：一轮跑超 TTL 时，无条件 DEL 会把下一轮刚拿到的锁删掉，
@@ -736,14 +736,14 @@ class BookmarkServiceImpl(
         statusFilter: ParseStatusEnum,
         configuredIntervalHours: Int,
         batchSize: Int,
-        triggeredParseOf: (bookmark: BookmarkEntity, outcome: PingOutcome) -> Boolean,
-        onResult: (bookmark: BookmarkEntity, outcome: PingOutcome, triggeredParse: Boolean, evidence: ProbeEvidence) -> Unit,
+        triggeredParseOf: (bookmark: PageEntity, outcome: PingOutcome) -> Boolean,
+        onResult: (bookmark: PageEntity, outcome: PingOutcome, triggeredParse: Boolean, evidence: ProbeEvidence) -> Unit,
     ) {
         val startedAt = System.currentTimeMillis()
         val now = LocalDateTime.now()
 
         val totalBacklog = ktQuery()
-            .eq(BookmarkEntity::parseStatus, statusFilter)
+            .eq(PageEntity::parseStatus, statusFilter)
             .apply(DUE_CLAUSE, now)
             .count()
         if (totalBacklog > batchSize) {
@@ -754,7 +754,7 @@ class BookmarkServiceImpl(
         }
 
         val candidates = ktQuery()
-            .eq(BookmarkEntity::parseStatus, statusFilter)
+            .eq(PageEntity::parseStatus, statusFilter)
             .apply(DUE_CLAUSE, now)
             // 最该查的优先处理，配合 LIMIT 保证积压记录会被逐批消费，不会被新记录饿死
             .last("ORDER BY $DUE_CURSOR ASC LIMIT $batchSize")
@@ -768,7 +768,7 @@ class BookmarkServiceImpl(
             // 系统（书签少、检测间隔又长时几乎总是空闲）会让 lastRoundAt 永远停在过去，
             // 于是告警条常亮"巡检已 N 小时没跑过" —— 一个总在响的警报等于没有警报。
             recordSweepRound(
-                BookmarkSweepLogEntity(
+                SweepLogEntity(
                     taskLabel = taskLabel,
                     candidates = 0,
                     backlog = totalBacklog,
@@ -796,7 +796,7 @@ class BookmarkServiceImpl(
         val recovery = probeRoots(pagesOfDeadSites.mapNotNull { siteMap[it.siteId] })
         // 根地址通了 → 域名恢复，这些页面回到正常逐页探测的路径
         val revived = pagesOfDeadSites.filter { recovery[it.siteId] == PingOutcome.ALIVE }
-        val shortCircuited: List<Pair<BookmarkEntity, PingOutcome>> = pagesOfDeadSites
+        val shortCircuited: List<Pair<PageEntity, PingOutcome>> = pagesOfDeadSites
             .filterNot { recovery[it.siteId] == PingOutcome.ALIVE }
             // 根地址无结论（我方链路的问题）时给 UNKNOWN，不能记在站点账上
             .map { it to (recovery[it.siteId] ?: PingOutcome.UNKNOWN) }
@@ -809,7 +809,7 @@ class BookmarkServiceImpl(
 
         // 并行探测。串行时最坏耗时是 batchSize × 单条超时(15s)，200 条要 50 分钟、贴着调度周期；
         // 并发度受 scrapper 的全局并发上限约束，见 AsyncConfig.PING_CONCURRENCY 的说明。
-        val actuallyProbed: List<Pair<BookmarkEntity, PingOutcome>> = (pagesOfLiveSites + revived)
+        val actuallyProbed: List<Pair<PageEntity, PingOutcome>> = (pagesOfLiveSites + revived)
             .map { bookmark ->
                 bookmark to CompletableFuture.supplyAsync({ apiService.pingWebsite(bookmark.rawUrl) }, pingExecutor)
             }
@@ -866,8 +866,8 @@ class BookmarkServiceImpl(
         // 把短路的也写进去会让失联率、探测耗时这些基于它的统计全部失真。
         pingLogMapper.insert(
             actuallyProbed.mapIndexed { index, (bookmark, outcome) ->
-                BookmarkPingLogEntity(
-                    bookmarkId = bookmark.id,
+                PagePingLogEntity(
+                    pageId = bookmark.id,
                     urlHost = bookmark.urlHost,
                     outcome = outcome,
                     triggeredParse = triggeredParseOfEach[index],
@@ -875,9 +875,9 @@ class BookmarkServiceImpl(
             }
         )
 
-        // 一轮一行，无论正常完成、熔断，还是上面那种没有候选的空轮次。见 BookmarkSweepLogEntity
+        // 一轮一行，无论正常完成、熔断，还是上面那种没有候选的空轮次。见 SweepLogEntity
         fun recordRound() = recordSweepRound(
-            BookmarkSweepLogEntity(
+            SweepLogEntity(
                 taskLabel = taskLabel,
                 candidates = candidates.size,
                 backlog = totalBacklog,
@@ -947,7 +947,7 @@ class BookmarkServiceImpl(
      *
      * 失败只记 warn：这是观测数据，写不进去不该反过来影响刚刚落库的巡检结果。
      */
-    private fun recordSweepRound(round: BookmarkSweepLogEntity, taskLabel: String) = runCatching {
+    private fun recordSweepRound(round: SweepLogEntity, taskLabel: String) = runCatching {
         sweepLogMapper.insert(round)
     }.onFailure { log.warn("[$taskLabel] 巡检汇总落库失败(忽略): ${it.message}") }.let { }
 
@@ -977,7 +977,7 @@ class BookmarkServiceImpl(
      */
     private fun updateSiteLiveness(
         taskLabel: String,
-        probed: List<Pair<BookmarkEntity, PingOutcome>>,
+        probed: List<Pair<PageEntity, PingOutcome>>,
         siteMap: Map<String, SiteEntity>,
         recovery: Map<String, PingOutcome>,
     ) = runCatching {
@@ -1031,15 +1031,15 @@ class BookmarkServiceImpl(
     // ────── 巡检调度状态的推进 ──────
 
     /**
-     * 按本次结论推进调度列（[BookmarkEntity.lastCheckAt] / [BookmarkEntity.nextCheckAt] /
-     * [BookmarkEntity.consecutiveFail]，成功抓到内容时还有 [BookmarkEntity.lastParseAt]）。
+     * 按本次结论推进调度列（[PageEntity.lastCheckAt] / [PageEntity.nextCheckAt] /
+     * [PageEntity.consecutiveFail]，成功抓到内容时还有 [PageEntity.lastParseAt]）。
      *
      * **所有**改动 `parseStatus` 的地方都必须经过这里：漏一处，那条记录的 `next_check_at`
      * 就停在旧值上，要么被每轮重复选中，要么再也不被选中。
      *
      * 刻意不碰 `updateTime` —— 那是「记录最近修改时间」，由真正改了内容的调用方自己写。
      */
-    private fun BookmarkEntity.advanceSchedule(
+    private fun PageEntity.advanceSchedule(
         outcome: PingOutcome,
         contentRefreshed: Boolean = false,
         // 默认自己去读：解析链路一次只处理一条书签，多一次查询无所谓。批量巡检必须显式传入
@@ -1095,21 +1095,21 @@ class BookmarkServiceImpl(
      * 取一个短间隔而不是完整周期：正常情况下解析链路马上就会用真实结论覆盖它，这个值
      * 只在上面那几条异常出口上生效，那时我们希望它尽快被重试，而不是等一整个周期。
      */
-    private fun protectSchedule(bookmark: BookmarkEntity) {
+    private fun protectSchedule(bookmark: PageEntity) {
         val now = LocalDateTime.now()
         // 刻意不写 updateTime：这里没有改动记录的任何业务内容，只是挪了一下巡检游标
         runCatching {
-            ktUpdate().eq(BookmarkEntity::id, bookmark.id)
-                .set(BookmarkEntity::lastCheckAt, now)
-                .set(BookmarkEntity::nextCheckAt, now.plusHours(TRIGGERED_PARSE_PROTECT_HOURS))
+            ktUpdate().eq(PageEntity::id, bookmark.id)
+                .set(PageEntity::lastCheckAt, now)
+                .set(PageEntity::nextCheckAt, now.plusHours(TRIGGERED_PARSE_PROTECT_HOURS))
                 .update()
         }.onFailure {
-            log.warn("[protectSchedule] 保护性游标写入失败: bookmarkId=${bookmark.id}, err=${it.message}")
+            log.warn("[protectSchedule] 保护性游标写入失败: pageId=${bookmark.id}, err=${it.message}")
         }
     }
 
     /** 解析成功后推进调度：内容确实被刷新了。 */
-    private fun BookmarkEntity.scheduleAfterParseSuccess() =
+    private fun PageEntity.scheduleAfterParseSuccess() =
         advanceSchedule(PingOutcome.ALIVE, contentRefreshed = true)
 
     // ────── 解析结果的两种终态（**所有**改 parseStatus 的地方都必须走这里）──────
@@ -1128,7 +1128,7 @@ class BookmarkServiceImpl(
      * 注意它**不写库** —— 调用方往往还要在同一次 update 里带上 title/资产等其它字段，
      * 强行在这里落库会变成两次写。
      */
-    private fun BookmarkEntity.markParseSucceeded() = apply {
+    private fun PageEntity.markParseSucceeded() = apply {
         isActivity = true
         parseStatus = ParseStatusEnum.SUCCESS
         parseErrMsg = null
@@ -1144,7 +1144,7 @@ class BookmarkServiceImpl(
      * drainStuckLoading 的重投递范围，之后即使抓取成功也没有任何机制会把结果回传给它。
      * 判据见 [isScrapperUnavailable]，每个调用点都在进来之前先挡了一道。
      */
-    private fun BookmarkEntity.markParseUnreachable(errMsg: String?) = apply {
+    private fun PageEntity.markParseUnreachable(errMsg: String?) = apply {
         isActivity = false
         parseStatus = ParseStatusEnum.UNREACHABLE
         parseErrMsg = errMsg
@@ -1159,7 +1159,7 @@ class BookmarkServiceImpl(
      * （[persistProbeResult]）负责。解析失败而 ping 仍然通得过，说明站点活着、只是我方抓不动，
      * 那种情况值得继续按最长退避间隔偶尔重试，而不是就地判死。
      */
-    private fun BookmarkEntity.scheduleAfterParseFailure() = advanceSchedule(PingOutcome.DEAD)
+    private fun PageEntity.scheduleAfterParseFailure() = advanceSchedule(PingOutcome.DEAD)
 
     /**
      * 抓取结果落库前，把管理员手工锁定的字段还原成人工值。
@@ -1169,10 +1169,10 @@ class BookmarkServiceImpl(
      *
      * 锁本身也一并还原：自动链路只读锁、不改锁。
      */
-    private fun BookmarkEntity.restoreLockedFields(manual: BookmarkEntity) {
-        if (manual.isLocked(BookmarkLockedField.TITLE)) title = manual.title
-        if (manual.isLocked(BookmarkLockedField.DESCRIPTION)) description = manual.description
-        if (manual.isLocked(BookmarkLockedField.APP_NAME)) appName = manual.appName
+    private fun PageEntity.restoreLockedFields(manual: PageEntity) {
+        if (manual.isLocked(PageLockedField.TITLE)) title = manual.title
+        if (manual.isLocked(PageLockedField.DESCRIPTION)) description = manual.description
+        if (manual.isLocked(PageLockedField.APP_NAME)) appName = manual.appName
         lockedFields = manual.lockedFields
     }
 
@@ -1191,7 +1191,7 @@ class BookmarkServiceImpl(
      * 用户侧没有新语义：`isActivity=false` 不变，照旧算失效书签，归档只是停止巡检。
      */
     private fun persistProbeResult(
-        bookmark: BookmarkEntity,
+        bookmark: PageEntity,
         outcome: PingOutcome,
         config: BookmarkLivenessConfigValue,
         markUnreachable: Boolean = false,
@@ -1206,15 +1206,15 @@ class BookmarkServiceImpl(
             // 停在候选池里，每轮吃掉 LIMIT 名额，把真正该复查的记录挤出去
             else -> LivenessPolicy.shouldArchive(evidence.siteConsecutiveFail)
         }
-        val update = ktUpdate().eq(BookmarkEntity::id, bookmark.id)
-            .set(BookmarkEntity::lastCheckAt, bookmark.lastCheckAt)
-            .set(BookmarkEntity::nextCheckAt, bookmark.nextCheckAt)
-            .set(BookmarkEntity::consecutiveFail, bookmark.consecutiveFail)
+        val update = ktUpdate().eq(PageEntity::id, bookmark.id)
+            .set(PageEntity::lastCheckAt, bookmark.lastCheckAt)
+            .set(PageEntity::nextCheckAt, bookmark.nextCheckAt)
+            .set(PageEntity::consecutiveFail, bookmark.consecutiveFail)
         if (archived) {
             // 归档不是终点，只是退出常规巡检。游标推到复活探测的周期上，
             // 由 reviveArchivedBookmarks 每天捞一次 —— 见那个方法的说明
             update.set(
-                BookmarkEntity::nextCheckAt,
+                PageEntity::nextCheckAt,
                 LocalDateTime.now().plusDays(ARCHIVE_RECHECK_DAYS)
             )
         }
@@ -1225,13 +1225,13 @@ class BookmarkServiceImpl(
                 // 归档是个值得留痕的终态变更，warn 的级别也合适。
                 log.warn(
                     "[persistProbeResult] 连续失败 ${bookmark.consecutiveFail} 次，转入归档不再巡检: " +
-                        "bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}"
+                        "pageId=${bookmark.id}, urlHost=${bookmark.urlHost}"
                 )
             }
-            update.set(BookmarkEntity::parseStatus, if (archived) ParseStatusEnum.ARCHIVED else ParseStatusEnum.UNREACHABLE)
-                .set(BookmarkEntity::isActivity, false)
+            update.set(PageEntity::parseStatus, if (archived) ParseStatusEnum.ARCHIVED else ParseStatusEnum.UNREACHABLE)
+                .set(PageEntity::isActivity, false)
                 // 状态真的变了，这才算记录被修改
-                .set(BookmarkEntity::updateTime, LocalDateTime.now())
+                .set(PageEntity::updateTime, LocalDateTime.now())
         }
         update.update()
     }
@@ -1251,13 +1251,13 @@ class BookmarkServiceImpl(
         //    事务内触发约束冲突，整个事务就进入 aborted 状态，回查那条 SELECT 也会一并失败。
         //    即便后续步骤失败，多出来的只是一条无人引用的 canonical 记录，下次添加同一网址会复用它。
         val bookmark = getOrCreateByUrl(bookmarkUrl)
-        log.debug("[addOne] Step2 书签记录就绪: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}, parseStatus=${bookmark.parseStatus}")
+        log.debug("[addOne] Step2 书签记录就绪: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}, parseStatus=${bookmark.parseStatus}")
 
-        // 2.5 该用户是否已经收藏过这个页面。判定落在 canonical bookmarkId 上而不是 URL 字符串上：
+        // 2.5 该用户是否已经收藏过这个页面。判定落在 canonical pageId 上而不是 URL 字符串上：
         //     同一个页面用户可能写作 github.com/x、https://github.com/x、https://github.com/x/，
         //     字符串各不相同，canonical 记录却是同一条。此前完全没有这道检查，同一个网址点两次
         //     就在桌面上留下两个一模一样的磁贴（导入路径反倒有重复检测，两条入口行为不一致）。
-        //     除了按 canonical id 比对，还会盖住导入占位那一类：它们的 bookmark_id 还是 'LOADING'，
+        //     除了按 canonical id 比对，还会盖住导入占位那一类：它们的 page_id 还是 'LOADING'，
         //     光比 canonical id 匹配不上（见 assertNotPendingImport）。
         assertNotAlreadyLinked(uid, bookmark)
 
@@ -1273,7 +1273,7 @@ class BookmarkServiceImpl(
         // 存 urlRaw 而不是入参 url：两者的差别只有「协议头补全」这一步，参数一个不少。用户手输
         // 时省略协议是常态（github.com/tcyeee），存原样的话这一列就不是个可跳转的地址，前端把它
         // 放进 href 会被当成站内相对路径，点开变成 https://bookmarkify.cc/github.com/tcyeee。
-        val userLink = BookmarkUserLink(bookmarkUrl.urlRaw, uid, nodeEntity.id, bookmark)
+        val userLink = BookmarkEntity(bookmarkUrl.urlRaw, uid, nodeEntity.id, bookmark)
 
         // 4. 布局节点与用户关联原子写入，见 insertNodeAndLink。
         insertNodeAndLink(nodeEntity, userLink)
@@ -1283,19 +1283,19 @@ class BookmarkServiceImpl(
         //    解析完成后由 parseAndNotice 通过 WebSocket 将最终结果推送到客户端。
         //    事件在事务提交之后发布，避免回滚后监听器读到不存在的记录。
         if (needParse) {
-            log.debug("[addOne] Step5 书签需要解析，返回 LOADING 占位，已发布异步解析事件: bookmarkId=${bookmark.id}, parseStatus=${bookmark.parseStatus}, isActivity=${bookmark.isActivity}, userLinkId=${userLink.id}, nodeId=${nodeEntity.id}")
+            log.debug("[addOne] Step5 书签需要解析，返回 LOADING 占位，已发布异步解析事件: pageId=${bookmark.id}, parseStatus=${bookmark.parseStatus}, isActivity=${bookmark.isActivity}, userLinkId=${userLink.id}, nodeId=${nodeEntity.id}")
             return nodeEntity.loadingVO(bookmark.urlHost)
                 .also { eventPublisher.publishEvent(BookmarkParseAndNoticeEvent(uid, bookmark.id, userLink.id, nodeEntity.id)) }
         }
 
         // 6. 书签在有效期内，无需重新抓取，直接返回完整数据。
-        log.debug("[addOne] Step6 书签在有效期内，无需重新解析，直接返回完整数据: bookmarkId=${bookmark.id}, nodeId=${nodeEntity.id}")
+        log.debug("[addOne] Step6 书签在有效期内，无需重新解析，直接返回完整数据: pageId=${bookmark.id}, nodeId=${nodeEntity.id}")
         return showForDesktop(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
     }
 
     override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> {
         val entityPage = baseMapper.selectPage(params.toPage(), params.toWrapper())
-        // NSFW 是站点级判定，而 BookmarkAdminVO 是靠 BeanUtil 从 BookmarkEntity 整体拷贝的 ——
+        // NSFW 是站点级判定，而 BookmarkAdminVO 是靠 BeanUtil 从 PageEntity 整体拷贝的 ——
         // `bookmark.nsfw` 删列之后那次拷贝什么也拷不到，vo.nsfw 会**静默**停在默认的 false，
         // 后台从此再也标不出违规站点，且没有任何报错。所以这里必须显式按 siteId 回填。
         // siteId 要在 convert **之前**取：IPage.convert 是就地替换 records，之后拿到的已是 VO。
@@ -1345,17 +1345,17 @@ class BookmarkServiceImpl(
      * 给后台列表回填「收录者」：最早把该书签加进来的那个用户，外加收录人数。
      *
      * 书签表没有属主列 —— 它是全站共享的规范化记录，归属只存在于 `bookmark_user_link`。所以
-     * 这里按 bookmarkId 批量捞关联行（一次 in 查询，不是逐行查），同一书签内按 createTime 取
+     * 这里按 pageId 批量捞关联行（一次 in 查询，不是逐行查），同一书签内按 createTime 取
      * 最早的一条当收录者。软删的关联不算：用户把书签从桌面删掉之后，他就不该再作为收录者出现。
      */
     private fun fillOwners(records: List<BookmarkAdminVO>) {
         if (records.isEmpty()) return
         val links = bookmarkUserLinkService.ktQuery()
-            .`in`(BookmarkUserLink::bookmarkId, records.map { it.id })
-            .eq(BookmarkUserLink::deleted, false)
+            .`in`(BookmarkEntity::pageId, records.map { it.id })
+            .eq(BookmarkEntity::deleted, false)
             .list()
         if (links.isEmpty()) return
-        val byBookmark = links.groupBy { it.bookmarkId }
+        val byBookmark = links.groupBy { it.pageId }
         // 收录者用户信息同样批量取：整页的 uid 去重后一次查完
         val firstUidOf = byBookmark.mapValues { (_, rows) -> rows.minBy { it.createTime }.uid }
         val users = adminUserViewAssembler.findByIds(firstUidOf.values.toSet())
@@ -1367,24 +1367,24 @@ class BookmarkServiceImpl(
         }
     }
 
-    override fun adminUpdateIcon(bookmarkId: String, params: BookmarkIconUpdateParams) {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+    override fun adminUpdateIcon(pageId: String, params: BookmarkIconUpdateParams) {
+        val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
         // appName 仍属于 bookmark 主表。手工填了值就加锁，清空则解锁——空的简称本来就会
         // 被下一次抓取用 manifest.short_name 或 LLM 推断补上，锁住一个空值没有意义
         if (params.appName.isNullOrBlank()) {
-            bookmark.unlock(BookmarkLockedField.APP_NAME)
+            bookmark.unlock(PageLockedField.APP_NAME)
         } else {
-            bookmark.lock(BookmarkLockedField.APP_NAME)
+            bookmark.lock(PageLockedField.APP_NAME)
         }
-        ktUpdate().eq(BookmarkEntity::id, bookmarkId)
-            .set(BookmarkEntity::appName, params.appName)
-            .set(BookmarkEntity::lockedFields, bookmark.lockedFields)
+        ktUpdate().eq(PageEntity::id, pageId)
+            .set(PageEntity::appName, params.appName)
+            .set(PageEntity::lockedFields, bookmark.lockedFields)
             .update()
         // 显示设置按（站点 × 展示模式）分行：72px 大图上的内边距/背景色，与 16px 列表行
         // 完全是两回事，不该互相影响；而它们调的都是站点图标的观感，所以键是站点而非书签
         siteDisplayPrefService.save(
             siteId = bookmark.siteId,
-            bookmarkId = bookmarkId,
+            pageId = pageId,
             mode = params.displayMode,
             iconPadding = params.iconPadding,
             iconBgColor = params.iconBgColor,
@@ -1392,19 +1392,19 @@ class BookmarkServiceImpl(
         )
     }
 
-    override fun adminRefetch(bookmarkId: String): BookmarkRefetchVO {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
-        log.debug("[adminRefetch] 管理员重新获取书签元信息: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
+    override fun adminRefetch(pageId: String): BookmarkRefetchVO {
+        val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
+        log.debug("[adminRefetch] 管理员重新获取书签元信息: pageId=$pageId, rawUrl=${bookmark.rawUrl}")
         // 仅预览，不落库：重新抓取一次，拿到新的标题与小图标。
         // BYPASS 是必须的——命中 scrapper 缓存的"重新获取"等于没获取
         val vo = apiService.scrape(bookmark.rawUrl, apiService.scrapeRequest(bookmark.rawUrl, CacheMode.BYPASS))
         val iconUrl = vo.faviconUrl
         // 预览与应用之间用 Redis 暂存完整抓取结果，确保「所见即所存」且避免应用时再抓一次造成漂移
-        RedisUtils.set(RedisType.BOOKMARK_REFETCH, bookmarkId, vo)
+        RedisUtils.set(RedisType.BOOKMARK_REFETCH, pageId, vo)
         // vo.logoUrl / vo.faviconUrl 已在 ScrapeResponseExt 里过了 OssUtils.signAsset，
         // 这里不能再签一次(会把签名 query 当成 key 的一部分)。未抓到则为 null，交由前端说明。
         val logoUrl = vo.logoUrl?.takeIf { it.isNotBlank() }
-        log.debug("[adminRefetch] 重新获取完成并已暂存: bookmarkId=$bookmarkId, newTitle=${vo.title}, hasLogo=${logoUrl != null}")
+        log.debug("[adminRefetch] 重新获取完成并已暂存: pageId=$pageId, newTitle=${vo.title}, hasLogo=${logoUrl != null}")
         return BookmarkRefetchVO(title = vo.title, iconUrl = iconUrl, logoUrl = logoUrl)
     }
 
@@ -1416,15 +1416,15 @@ class BookmarkServiceImpl(
     private fun Throwable.isScrapperUnavailable(): Boolean =
         this is CommonException && errorType == ErrorType.E307
 
-    override fun adminCheckLiveness(bookmarkId: String): BookmarkLivenessVO {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
-        log.debug("[adminCheckLiveness] 管理员触发书签活性检测: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
+    override fun adminCheckLiveness(pageId: String): BookmarkLivenessVO {
+        val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
+        log.debug("[adminCheckLiveness] 管理员触发书签活性检测: pageId=$pageId, rawUrl=${bookmark.rawUrl}")
         val startedAt = System.currentTimeMillis()
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
                 bookmark.markParseSucceeded()
                 baseMapper.updateById(bookmark)
-                log.debug("[adminCheckLiveness] 检测成功: bookmarkId=$bookmarkId, source=${vo.primarySource}")
+                log.debug("[adminCheckLiveness] 检测成功: pageId=$pageId, source=${vo.primarySource}")
                 BookmarkLivenessVO(
                     success = true,
                     title = vo.title,
@@ -1441,13 +1441,13 @@ class BookmarkServiceImpl(
             },
             onFailure = { e ->
                 if (e.isScrapperUnavailable()) {
-                    log.warn("[adminCheckLiveness] 抓取服务不可用，不改动书签状态: bookmarkId=$bookmarkId, err=${e.message}")
+                    log.warn("[adminCheckLiveness] 抓取服务不可用，不改动书签状态: pageId=$pageId, err=${e.message}")
                     throw e
                 }
                 recordScrapeFailure(bookmark, e, startedAt)
                 bookmark.markParseUnreachable(e.message)
                 baseMapper.updateById(bookmark)
-                log.debug("[adminCheckLiveness] 检测失败: bookmarkId=$bookmarkId, err=${e.message}")
+                log.debug("[adminCheckLiveness] 检测失败: pageId=$pageId, err=${e.message}")
                 BookmarkLivenessVO(
                     success = false,
                     errorMsg = e.message,
@@ -1458,37 +1458,37 @@ class BookmarkServiceImpl(
         )
     }
 
-    override fun adminApplyRefetch(bookmarkId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
-        val vo = RedisUtils.get<ScrapeResponse>(RedisType.BOOKMARK_REFETCH, bookmarkId)
+    override fun adminApplyRefetch(pageId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO {
+        val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
+        val vo = RedisUtils.get<ScrapeResponse>(RedisType.BOOKMARK_REFETCH, pageId)
             ?: throw CommonException(ErrorType.E112)
-        log.debug("[adminApplyRefetch] 应用重新获取结果: bookmarkId=$bookmarkId, useNewTitle=${params.useNewTitle}, useNewIcon=${params.useNewIcon}, useNewLogo=${params.useNewLogo}")
+        log.debug("[adminApplyRefetch] 应用重新获取结果: pageId=$pageId, useNewTitle=${params.useNewTitle}, useNewIcon=${params.useNewIcon}, useNewLogo=${params.useNewLogo}")
 
         // 管理员显式选择采用抓取来的标题：这个字段此后不再是人工值，解锁交回自动链路
         if (params.useNewTitle) {
             bookmark.title = vo.title
-            bookmark.unlock(BookmarkLockedField.TITLE)
+            bookmark.unlock(PageLockedField.TITLE)
         }
         // 资产是整体替换的：图标与 LOGO 同源于一次抓取，没法只采用其中一半而保持一致，
         // 因此只要任一开关打开就整批落库（细粒度取舍改由 site_display_pref.pinnedAssetId 表达）
         if (params.useNewIcon || params.useNewLogo) {
             // 回放的是 adminRefetch 暂存在 Redis 里的那次抓取结果，本次没发生网络请求，
             // 耗时记 0 是准确的（真实耗时属于当初那次抓取）
-            siteAssetWriter.persist(bookmark.siteId, bookmarkId, bookmark.rawUrl, vo, 0, bookmark.isRootPage)
+            siteAssetWriter.persist(bookmark.siteId, pageId, bookmark.rawUrl, vo, 0, bookmark.isRootPage)
         }
         bookmark.updateTime = LocalDateTime.now()
         // 管理员刚刚亲眼确认过这份内容是新的，等价于一次成功的重新抓取：
         // 不推进 lastParseAt 的话，这条记录仍会被内容刷新巡检当成过期的再抓一遍
         bookmark.scheduleAfterParseSuccess()
         baseMapper.insertOrUpdate(bookmark)
-        RedisUtils.del(RedisType.BOOKMARK_REFETCH, bookmarkId)
-        log.debug("[adminApplyRefetch] 应用完成: bookmarkId=$bookmarkId, title=${bookmark.title}")
-        return adminDetail(bookmarkId)
+        RedisUtils.del(RedisType.BOOKMARK_REFETCH, pageId)
+        log.debug("[adminApplyRefetch] 应用完成: pageId=$pageId, title=${bookmark.title}")
+        return adminDetail(pageId)
     }
 
-    override fun adminRefresh(bookmarkId: String): BookmarkAdminVO {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
-        log.debug("[adminRefresh] 管理员一键更新书签信息: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
+    override fun adminRefresh(pageId: String): BookmarkAdminVO {
+        val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
+        log.debug("[adminRefresh] 管理员一键更新书签信息: pageId=$pageId, rawUrl=${bookmark.rawUrl}")
         val startedAt = System.currentTimeMillis()
         runCatching { apiService.scrape(bookmark.rawUrl, apiService.scrapeRequest(bookmark.rawUrl, CacheMode.BYPASS)) }.fold(
             onSuccess = { vo ->
@@ -1496,54 +1496,54 @@ class BookmarkServiceImpl(
                     title = vo.title
                     description = vo.description
                     // 「一键更新」是管理员显式要求采用抓取值，标题/简介此后不再是人工值 → 解锁
-                    unlock(BookmarkLockedField.TITLE, BookmarkLockedField.DESCRIPTION)
+                    unlock(PageLockedField.TITLE, PageLockedField.DESCRIPTION)
                 }
-                siteAssetWriter.persist(bookmark.siteId, bookmarkId, bookmark.rawUrl, vo, elapsedMs(startedAt), bookmark.isRootPage)
-                log.debug("[adminRefresh] 更新成功: bookmarkId=$bookmarkId, title=${bookmark.title}")
+                siteAssetWriter.persist(bookmark.siteId, pageId, bookmark.rawUrl, vo, elapsedMs(startedAt), bookmark.isRootPage)
+                log.debug("[adminRefresh] 更新成功: pageId=$pageId, title=${bookmark.title}")
             },
             onFailure = { e ->
                 if (e.isScrapperUnavailable()) {
-                    log.warn("[adminRefresh] 抓取服务不可用，不改动书签状态: bookmarkId=$bookmarkId, err=${e.message}")
+                    log.warn("[adminRefresh] 抓取服务不可用，不改动书签状态: pageId=$pageId, err=${e.message}")
                     throw e
                 }
                 recordScrapeFailure(bookmark, e, startedAt)
                 bookmark.markParseUnreachable(e.message)
-                log.debug("[adminRefresh] 更新失败: bookmarkId=$bookmarkId, err=${e.message}")
+                log.debug("[adminRefresh] 更新失败: pageId=$pageId, err=${e.message}")
             },
         )
         baseMapper.updateById(bookmark)
-        return adminDetail(bookmarkId)
+        return adminDetail(pageId)
     }
 
     override fun adminSyncFromExternalScrape(url: String, vo: ScrapeResponse): Boolean {
         val urlWrapper = WebsiteParser.urlWrapper(url)
         val bookmark = getByUrl(urlWrapper) ?: return false
-        log.debug("[adminSyncFromExternalScrape] 网站管理活性检测命中已有书签，同步落库: bookmarkId=${bookmark.id}, url=$url")
+        log.debug("[adminSyncFromExternalScrape] 网站管理活性检测命中已有书签，同步落库: pageId=${bookmark.id}, url=$url")
         bookmark.markParseSucceeded().apply {
             title = vo.title
             description = vo.description
         }
         siteAssetWriter.persist(bookmark.siteId, bookmark.id, bookmark.rawUrl, vo, 0, bookmark.isRootPage)
         baseMapper.updateById(bookmark)
-        log.debug("[adminSyncFromExternalScrape] 同步完成: bookmarkId=${bookmark.id}, title=${bookmark.title}")
+        log.debug("[adminSyncFromExternalScrape] 同步完成: pageId=${bookmark.id}, title=${bookmark.title}")
         return true
     }
 
-    override fun adminUpdateBasicInfo(bookmarkId: String, params: BookmarkBasicInfoUpdateParams): BookmarkAdminVO {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+    override fun adminUpdateBasicInfo(pageId: String, params: BookmarkBasicInfoUpdateParams): BookmarkAdminVO {
+        val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
         // 手工改过的字段加锁，否则定期重抓会在下一个刷新周期把它静默改回抓取值
-        params.title?.let { bookmark.title = it; bookmark.lock(BookmarkLockedField.TITLE) }
-        params.description?.let { bookmark.description = it; bookmark.lock(BookmarkLockedField.DESCRIPTION) }
+        params.title?.let { bookmark.title = it; bookmark.lock(PageLockedField.TITLE) }
+        params.description?.let { bookmark.description = it; bookmark.lock(PageLockedField.DESCRIPTION) }
         bookmark.updateTime = LocalDateTime.now()
         baseMapper.updateById(bookmark)
-        log.debug("[adminUpdateBasicInfo] 管理员手动更新基础信息: bookmarkId=$bookmarkId, title=${bookmark.title}, lockedFields=${bookmark.lockedFields}")
-        return adminDetail(bookmarkId)
+        log.debug("[adminUpdateBasicInfo] 管理员手动更新基础信息: pageId=$pageId, title=${bookmark.title}, lockedFields=${bookmark.lockedFields}")
+        return adminDetail(pageId)
     }
 
-    override fun adminUpdateCategories(bookmarkId: String, categoryIds: List<String>): List<CategoryVO> {
-        baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
-        bookmarkCategoryService.replaceLinks(bookmarkId, categoryIds, CategorySource.MANUAL)
-        return loadCategoryVOs(bookmarkId)
+    override fun adminUpdateCategories(pageId: String, categoryIds: List<String>): List<CategoryVO> {
+        baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
+        bookmarkCategoryService.replaceLinks(pageId, categoryIds, CategorySource.MANUAL)
+        return loadCategoryVOs(pageId)
     }
 
     /**
@@ -1552,10 +1552,10 @@ class BookmarkServiceImpl(
      * 自动抓取链路仍然用闭词表的 [IBookmarkCategoryService.categorize]，两者不能互换：
      * 让爬虫有权写分类字典，收录量一上来分类体系就散了。
      */
-    override fun adminRecategorize(bookmarkId: String): List<CategoryVO> {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+    override fun adminRecategorize(pageId: String): List<CategoryVO> {
+        val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
         bookmarkCategoryService.categorizeAllowingNew(bookmark)
-        return loadCategoryVOs(bookmarkId)
+        return loadCategoryVOs(pageId)
     }
 
     /**
@@ -1567,9 +1567,9 @@ class BookmarkServiceImpl(
      * "抓到的没有就不覆盖"这条语义由 [SiteAssetWriter.persist] 自己保证：本次没抓到该层资产时
      * 它保留库中现值，不清空。
      */
-    override fun adminRefetchAssets(bookmarkId: String): BookmarkAssetRefetchVO {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
-        log.debug("[adminRefetchAssets] 管理员重抓图片资产: bookmarkId=$bookmarkId, rawUrl=${bookmark.rawUrl}")
+    override fun adminRefetchAssets(pageId: String): BookmarkAssetRefetchVO {
+        val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
+        log.debug("[adminRefetchAssets] 管理员重抓图片资产: pageId=$pageId, rawUrl=${bookmark.rawUrl}")
         val startedAt = System.currentTimeMillis()
         // BYPASS：不绕开 scrapper 缓存的话"重新抓取"可能直接命中上一次的结果，等于没抓
         return runCatching {
@@ -1577,26 +1577,26 @@ class BookmarkServiceImpl(
         }.fold(
             onSuccess = { vo ->
                 siteAssetWriter.persist(
-                    bookmark.siteId, bookmarkId, bookmark.rawUrl, vo, elapsedMs(startedAt), bookmark.isRootPage,
+                    bookmark.siteId, pageId, bookmark.rawUrl, vo, elapsedMs(startedAt), bookmark.isRootPage,
                 )
                 val count = vo.assets.size
-                log.debug("[adminRefetchAssets] 抓取成功: bookmarkId=$bookmarkId, scrapedAssets=$count")
-                BookmarkAssetRefetchVO(success = true, scrapedAssetCount = count, bookmark = adminDetail(bookmarkId))
+                log.debug("[adminRefetchAssets] 抓取成功: pageId=$pageId, scrapedAssets=$count")
+                BookmarkAssetRefetchVO(success = true, scrapedAssetCount = count, bookmark = adminDetail(pageId))
             },
             onFailure = { e ->
                 // 抓取服务本身不可用要如实报错，不能伪装成"这个站没有图"
                 if (e.isScrapperUnavailable()) throw e
                 recordScrapeFailure(bookmark, e, startedAt)
-                log.debug("[adminRefetchAssets] 抓取失败: bookmarkId=$bookmarkId, err=${e.message}")
+                log.debug("[adminRefetchAssets] 抓取失败: pageId=$pageId, err=${e.message}")
                 BookmarkAssetRefetchVO(
-                    success = false, scrapedAssetCount = 0, errorMsg = e.message, bookmark = adminDetail(bookmarkId),
+                    success = false, scrapedAssetCount = 0, errorMsg = e.message, bookmark = adminDetail(pageId),
                 )
             },
         )
     }
 
-    override fun adminSimilarSites(bookmarkId: String): List<SimilarSite> {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+    override fun adminSimilarSites(pageId: String): List<SimilarSite> {
+        val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
         val sites = apiService.inferSimilarSites(bookmark.title, bookmark.description, bookmark.urlHost)
         if (sites.isEmpty()) return sites
         // 把推荐域名按与入库一致的方式归一化为 urlHost，再批量比对本地是否已收录
@@ -1642,27 +1642,27 @@ class BookmarkServiceImpl(
         }
     }
 
-    private fun loadCategoryVOs(bookmarkId: String): List<CategoryVO> =
-        bookmarkCategoryService.categoriesOf(listOf(bookmarkId))[bookmarkId].orEmpty()
+    private fun loadCategoryVOs(pageId: String): List<CategoryVO> =
+        bookmarkCategoryService.categoriesOf(listOf(pageId))[pageId].orEmpty()
             .map { CategoryVO(it.id, it.slug, it.name, it.color) }
 
-    override fun adminGenerateAppName(bookmarkId: String): String? {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+    override fun adminGenerateAppName(pageId: String): String? {
+        val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
         val title = bookmark.title?.takeIf { it.isNotBlank() } ?: run {
-            log.debug("[adminGenerateAppName] title 为空，跳过生成: bookmarkId=$bookmarkId")
+            log.debug("[adminGenerateAppName] title 为空，跳过生成: pageId=$pageId")
             return null
         }
-        log.debug("[adminGenerateAppName] 调用 DeepSeek 生成 appName: bookmarkId=$bookmarkId, title=$title")
+        log.debug("[adminGenerateAppName] 调用 DeepSeek 生成 appName: pageId=$pageId, title=$title")
         return apiService.inferAppName(title)?.takeIf { it.isNotBlank() }
     }
 
-    override fun findListByHost(defaultBookmarkify: List<String>): List<BookmarkEntity> =
-        ktQuery().`in`(BookmarkEntity::urlHost, defaultBookmarkify).list()
+    override fun findListByHost(defaultBookmarkify: List<String>): List<PageEntity> =
+        ktQuery().`in`(PageEntity::urlHost, defaultBookmarkify).list()
 
     // ────── 异步解析入口（由 BookmarkParseEventListener 调用）──────
 
-    override fun parseAndSave(bookmarkId: String) {
-        parseBookmark(baseMapper.selectById(bookmarkId))
+    override fun parseAndSave(pageId: String) {
+        parseBookmark(baseMapper.selectById(pageId))
     }
 
     /**
@@ -1670,13 +1670,13 @@ class BookmarkServiceImpl(
      *
      * 两者都只写各自的字段、互不影响，任一失败也不该拖累另一个，故各自 runCatching 收口。
      */
-    override fun enrich(bookmarkId: String) {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: run {
-            log.debug("[enrich] 书签已不存在，跳过: bookmarkId=$bookmarkId")
+    override fun enrich(pageId: String) {
+        val bookmark = baseMapper.selectById(pageId) ?: run {
+            log.debug("[enrich] 书签已不存在，跳过: pageId=$pageId")
             return
         }
         runCatching { bookmarkCategoryService.categorize(bookmark) }
-            .onFailure { log.warn("[enrich] 分类打标失败(忽略): bookmarkId=$bookmarkId, err=${it.message}") }
+            .onFailure { log.warn("[enrich] 分类打标失败(忽略): pageId=$pageId, err=${it.message}") }
         checkNsfw(bookmark)
     }
 
@@ -1686,18 +1686,18 @@ class BookmarkServiceImpl(
         // deleted 也必须显式带上：本项目没有配 MyBatis-Plus 的逻辑删除，不写这一条，
         // 已删除的书签照样能查出封面来
         val link = bookmarkUserLinkMapper.selectOne(
-            KtQueryWrapper(BookmarkUserLink::class.java)
-                .eq(BookmarkUserLink::id, linkId)
-                .eq(BookmarkUserLink::uid, uid)
-                .eq(BookmarkUserLink::deleted, false)
+            KtQueryWrapper(BookmarkEntity::class.java)
+                .eq(BookmarkEntity::id, linkId)
+                .eq(BookmarkEntity::uid, uid)
+                .eq(BookmarkEntity::deleted, false)
         ) ?: return null
-        val bookmarkId = link.bookmarkId?.takeIf { it.isNotBlank() } ?: return null
-        return siteAssetResolver.resolveCoverOne(bookmarkId)
+        val pageId = link.pageId?.takeIf { it.isNotBlank() } ?: return null
+        return siteAssetResolver.resolveCoverOne(pageId)
     }
 
-    override fun captureScreenshot(bookmarkId: String) {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: run {
-            log.debug("[captureScreenshot] 书签已不存在，跳过: bookmarkId=$bookmarkId")
+    override fun captureScreenshot(pageId: String) {
+        val bookmark = baseMapper.selectById(pageId) ?: run {
+            log.debug("[captureScreenshot] 书签已不存在，跳过: pageId=$pageId")
             return
         }
         // 用户手动认证过的书签不再被自动抓取覆盖，截图同样不该去动它
@@ -1708,8 +1708,8 @@ class BookmarkServiceImpl(
         // 截图事件，而截图是全系统最贵的一次调用——强制无头浏览器，对端 Chrome 全局串行、
         // 生产容器只有 1GB。不拦这一道，稳态下截图池会长期占着对端那把锁，把用户当场触发的
         // 反爬无头回退饿死在锁上（那条路是有人在等结果的）。页面改版换封面的收益远抵不过这个代价。
-        if (siteAssetResolver.assetsOf(bookmarkId).any { it.role == AssetRole.SCREENSHOT }) {
-            log.debug("[captureScreenshot] 已有截图，跳过: bookmarkId=$bookmarkId")
+        if (siteAssetResolver.assetsOf(pageId).any { it.role == AssetRole.SCREENSHOT }) {
+            log.debug("[captureScreenshot] 已有截图，跳过: pageId=$pageId")
             return
         }
 
@@ -1722,39 +1722,39 @@ class BookmarkServiceImpl(
                 apiService.scrapeRequest(url, CacheMode.BYPASS, screenshot = true, extractAssets = false),
             )
         }.getOrElse {
-            log.debug("[captureScreenshot] 抓取失败(不影响书签): bookmarkId=$bookmarkId, err=${it.message}")
+            log.debug("[captureScreenshot] 抓取失败(不影响书签): pageId=$pageId, err=${it.message}")
             return
         }
 
         if (response.screenshot?.storageKey == null) {
             // 常态而非异常：反爬站点、无头熔断、站点 API 救援都会走到这里
             log.debug(
-                "[captureScreenshot] 本次没有截图: bookmarkId=$bookmarkId, " +
+                "[captureScreenshot] 本次没有截图: pageId=$pageId, " +
                     "layer=${response.fetch.layerUsed}, warnings=${response.diagnostics?.warnings}"
             )
             return
         }
 
-        runCatching { siteAssetWriter.upsertScreenshot(bookmarkId, url, response) }
-            .onSuccess { if (it) log.debug("[captureScreenshot] 封面已更新: bookmarkId=$bookmarkId") }
-            .onFailure { log.warn("[captureScreenshot] 截图落库失败: bookmarkId=$bookmarkId, err=${it.message}") }
+        runCatching { siteAssetWriter.upsertScreenshot(pageId, url, response) }
+            .onSuccess { if (it) log.debug("[captureScreenshot] 封面已更新: pageId=$pageId") }
+            .onFailure { log.warn("[captureScreenshot] 截图落库失败: pageId=$pageId, err=${it.message}") }
     }
 
     /** 解析书签，然后保存到数据库，同时通知到用户 */
-    override fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
-        log.debug("[parseAndNotice-4] 开始书签解析: uid=$uid, bookmarkId=$bookmarkId, userLinkId=$userLinkId, nodeId=$nodeId")
+    override fun parseAndNotice(uid: String, pageId: String, userLinkId: String, nodeId: String) {
+        log.debug("[parseAndNotice-4] 开始书签解析: uid=$uid, pageId=$pageId, userLinkId=$userLinkId, nodeId=$nodeId")
         // 交互式路径绕过 scrapper 的缓存。要绕的主要是那 60 秒的**负缓存**：它是
         // "刚刚有人抓这个网址失败过"，命中即 RECENTLY_FAILED → E304 → 这条书签直接落成
         // UNREACHABLE —— 而当前这个用户根本没有得到过一次真实的尝试，别人的一次失败记在了
         // 他账上。用户此刻正盯着那个转圈的格子，多花几 KB 换一次真实结论是划算的。
         // 导入路径(parseAndResetUserItem)刻意**不**这么做：那里几千条一起跑，缓存正是要用的。
-        val resolved = runCatching { parseBookmark(baseMapper.selectById(bookmarkId), CacheMode.BYPASS) }.onFailure { ex ->
+        val resolved = runCatching { parseBookmark(baseMapper.selectById(pageId), CacheMode.BYPASS) }.onFailure { ex ->
             // 解析链路中的未预期异常（而非「抓取失败」这类已内部兜底为 UNREACHABLE 的正常业务失败）不能让节点
             // 永久停在 BOOKMARK_LOADING——此前这里的异常会一路冒泡到事件监听器，被其 runCatching 吞掉且
             // 不回写任何状态，用户端只会看到一个转不动的加载占位符。与 parseAndResetUserItem 保持一致，
             // 退化为与「ping 不通」一致的处理：落一条 UNREACHABLE 记录，让节点照常收口而不是无限转圈。
-            log.error("[parseAndNotice-4] 解析异常，标记为不可用: bookmarkId=$bookmarkId", ex)
-            baseMapper.selectById(bookmarkId)
+            log.error("[parseAndNotice-4] 解析异常，标记为不可用: pageId=$pageId", ex)
+            baseMapper.selectById(pageId)
                 ?.markParseUnreachable("parse failed: ${ex.message}")
                 ?.also { baseMapper.insertOrUpdate(it) }
         }.getOrNull()
@@ -1767,7 +1767,7 @@ class BookmarkServiceImpl(
         // 重新抓取成功，也没有任何机制会把结果回传给这个已经"收口"的节点。
         // 因此仍是 PENDING 时直接返回，节点继续留在 LOADING，等 drainStuckLoading() 按陈旧阈值补投递。
         if (resolved?.parseStatus == ParseStatusEnum.PENDING) {
-            log.debug("[parseAndNotice-4] 书签仍为 PENDING(多半是抓取服务暂不可用)，节点保持 LOADING 等待重投递: nodeId=$nodeId, bookmarkId=$bookmarkId")
+            log.debug("[parseAndNotice-4] 书签仍为 PENDING(多半是抓取服务暂不可用)，节点保持 LOADING 等待重投递: nodeId=$nodeId, pageId=$pageId")
             // 这一次补投递没有得到任何关于这个网址的结论，不能算在它头上。少了这一步，一次几十
             // 分钟的 scrapper 故障会把积压里每条记录的重试预算耗光，恢复后它们已经被
             // terminateExhaustedLoading 当作"重试到上限"终结成无源书签了 —— 我方故障不该有这种后果
@@ -1838,8 +1838,8 @@ class BookmarkServiceImpl(
 
         // 与 parseAndNotice 同理：parseByApi 在「抓取服务本身不可用」时会刻意把 entity 留在 PENDING，
         // 交给 drainStuckLoading 之后重投递。这里若仍照常重绑 + 收口成 BOOKMARK，节点会永久脱离
-        // BOOKMARK_LOADING 状态、也脱离 drainStuckLoading 的重投递范围，且 bookmark_id 提前绑死在一条
-        // 还没抓到内容的记录上。保持不重绑、不收口、直接返回，节点(及 bookmark_id='LOADING' 占位)
+        // BOOKMARK_LOADING 状态、也脱离 drainStuckLoading 的重投递范围，且 page_id 提前绑死在一条
+        // 还没抓到内容的记录上。保持不重绑、不收口、直接返回，节点(及 page_id='LOADING' 占位)
         // 原样留给下一轮 drainStuckLoading 重新触发本方法。
         if (entity.parseStatus == ParseStatusEnum.PENDING) {
             log.debug("[parseAndResetUserItem] 书签仍为 PENDING(多半是抓取服务暂不可用)，节点保持 LOADING 等待重投递: rawUrl=$rawUrl")
@@ -1855,7 +1855,7 @@ class BookmarkServiceImpl(
             layoutNodeMapper.selectById(layoutNodeId)
                 ?.apply { type = NodeTypeEnum.BOOKMARK }
                 ?.also {
-                    bookmarkUserLinkService.resetBookmarkId(uid, userLinkId, entity.id)
+                    bookmarkUserLinkService.resetPageId(uid, userLinkId, entity.id)
                     layoutNodeMapper.updateById(it)
                 }
         } ?: run {
@@ -1870,7 +1870,7 @@ class BookmarkServiceImpl(
     // ────── 公开接口（明确指定解析方式时调用）──────
 
     /** 通过 scrapper 远程解析书签，若书签已通过手动认证则直接返回 */
-    override fun parseBookmarkByApi(bookmark: BookmarkEntity): BookmarkEntity {
+    override fun parseBookmarkByApi(bookmark: PageEntity): PageEntity {
         val existing = baseMapper.selectById(bookmark.id)
         if (existing != null && existing.verifyFlag) return existing
         return parseByApi(bookmark)
@@ -1890,10 +1890,10 @@ class BookmarkServiceImpl(
      * 据此照常翻转节点并推送，用户先看到基础信息，在跑的那次解析完成后刷新即是完整数据。
      * 让一个解析线程空等几十秒去换这一次的完整度，不划算。
      */
-    private fun parseBookmark(bookmark: BookmarkEntity, cacheMode: CacheMode = CacheMode.DEFAULT): BookmarkEntity {
+    private fun parseBookmark(bookmark: PageEntity, cacheMode: CacheMode = CacheMode.DEFAULT): PageEntity {
         val lockKey = ParseLock.bookmark(bookmark.id)
         val token = parseLock.acquire(lockKey, PARSE_LOCK_TTL) ?: run {
-            log.debug("[parseBookmark] 该书签已有解析在途，跳过本次: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+            log.debug("[parseBookmark] 该书签已有解析在途，跳过本次: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}")
             return baseMapper.selectById(bookmark.id) ?: bookmark
         }
         return try {
@@ -1916,20 +1916,20 @@ class BookmarkServiceImpl(
      * 而不是抓取前的一道预检。
      */
     private fun parseBookmarkExclusively(
-        bookmark: BookmarkEntity,
+        bookmark: PageEntity,
         cacheMode: CacheMode = CacheMode.DEFAULT,
-    ): BookmarkEntity {
-        log.debug("[parseBookmark] 开始调度解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+    ): PageEntity {
+        log.debug("[parseBookmark] 开始调度解析: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}")
         val existing = baseMapper.selectById(bookmark.id)
         if (existing != null && existing.verifyFlag) {
-            log.debug("[parseBookmark] 书签已手动认证(verifyFlag=true), 跳过解析直接返回: bookmarkId=${bookmark.id}")
+            log.debug("[parseBookmark] 书签已手动认证(verifyFlag=true), 跳过解析直接返回: pageId=${bookmark.id}")
             return existing
         }
 
         // 非域名类型(本地/IP/其他)不进行网络抓取：直接标记为可用，
         // 前端会对这类书签展示统一的圆圈图标，不依赖抓取到的标题/图标。
         if (WebsiteParser.classifyLinkType(bookmark.urlHost) != BookmarkLinkType.DOMAIN) {
-            log.debug("[parseBookmark] 非域名类型，跳过抓取: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
+            log.debug("[parseBookmark] 非域名类型，跳过抓取: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}")
             // markParseSucceeded 顺带写上调度列：这类书签被 pingSweep 的 DOMAIN 过滤排除在外，
             // 调度列对它们没有实际作用，但宁可多余，也不要留下一批 next_check_at 永远为 NULL
             // 的记录 —— 那会让「NULL 视为到期」的兜底规则每轮都把它们捞出来
@@ -1937,7 +1937,7 @@ class BookmarkServiceImpl(
         }
 
         val mode = if (projectConfig.useThirdPartyParser) "远程scrapper" else "本地Jsoup"
-        log.debug("[parseBookmark] 选择解析模式: $mode, bookmarkId=${bookmark.id}")
+        log.debug("[parseBookmark] 选择解析模式: $mode, pageId=${bookmark.id}")
         val parsed = if (projectConfig.useThirdPartyParser) parseByApi(bookmark, cacheMode) else parseLocally(bookmark)
         // 分类与 NSFW 判定都是纯后台元数据，用户看不到，却各要一次 10s 的 DeepSeek 往返。
         // 留在这里等于让每条书签多占解析线程 20s，而解析池的吞吐直接决定「加书签要等多久」。
@@ -1963,9 +1963,9 @@ class BookmarkServiceImpl(
      *
      * 判定输入仍然用页面的标题/描述：站点自己没有文字，首页或任一页面的文案就是判据。
      */
-    private fun checkNsfw(bookmark: BookmarkEntity) {
+    private fun checkNsfw(bookmark: PageEntity) {
         val siteId = bookmark.siteId.takeIf { it.isNotBlank() } ?: run {
-            log.debug("[checkNsfw] 书签未挂站点，跳过: bookmarkId=${bookmark.id}")
+            log.debug("[checkNsfw] 书签未挂站点，跳过: pageId=${bookmark.id}")
             return
         }
         runCatching {
@@ -1978,7 +1978,7 @@ class BookmarkServiceImpl(
             val result = apiService.inferNsfw(bookmark.title, bookmark.description, bookmark.urlHost)
             siteService.markNsfw(siteId, result.nsfw, result.reason)
         }.onFailure {
-            log.warn("[checkNsfw] NSFW 检测失败(忽略): bookmarkId=${bookmark.id}, siteId=$siteId, err=${it.message}")
+            log.warn("[checkNsfw] NSFW 检测失败(忽略): pageId=${bookmark.id}, siteId=$siteId, err=${it.message}")
         }
     }
 
@@ -2017,26 +2017,26 @@ class BookmarkServiceImpl(
      * 一份图标正是本次重构要消除的问题（模型不同、字段不同、互相覆盖）。走这条路径的书签
      * 只有标题/描述，图标需要后续由 scrapper 补齐。
      */
-    private fun parseLocally(bookmark: BookmarkEntity): BookmarkEntity {
-        log.debug("[parseLocally] 开始本地解析(Jsoup): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")
+    private fun parseLocally(bookmark: PageEntity): PageEntity {
+        log.debug("[parseLocally] 开始本地解析(Jsoup): pageId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")
         // 同 parseByApi：successInit 会覆盖 title/description/appName，先留一份人工值
         val manual = bookmark.copy()
         val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
-            log.debug("[parseLocally] 页面抓取失败: bookmarkId=${bookmark.id}, err=${it.message}")
+            log.debug("[parseLocally] 页面抓取失败: pageId=${bookmark.id}, err=${it.message}")
             bookmark.markParseUnreachable(it.message).also { b -> baseMapper.insertOrUpdate(b) }
-            log.warn("[parseLocally] 页面抓取失败: bookmarkId=${bookmark.id}, err=${it.message}")
+            log.warn("[parseLocally] 页面抓取失败: pageId=${bookmark.id}, err=${it.message}")
             return bookmark
         }
-        log.debug("[parseLocally] 页面抓取成功, 开始填充元信息: bookmarkId=${bookmark.id}, title=${wrapper.title}")
+        log.debug("[parseLocally] 页面抓取成功, 开始填充元信息: pageId=${bookmark.id}, title=${wrapper.title}")
         val previousTitle = bookmark.title
         bookmark.successInit(wrapper)
         bookmark.scheduleAfterParseSuccess()
-        if (!manual.isLocked(BookmarkLockedField.APP_NAME)) inferAndSetAppName(bookmark, previousTitle)
+        if (!manual.isLocked(PageLockedField.APP_NAME)) inferAndSetAppName(bookmark, previousTitle)
         bookmark.restoreLockedFields(manual)
         baseMapper.insertOrUpdate(bookmark)
         // 本地解析路径（Jsoup）不产出契约资产，图标改由 scrapper 路径统一落 site_asset；
         // 这里只保住主表的文字信息，避免两套解析各写一份互相打架
-        log.debug("[parseLocally] 本地解析全部完成: bookmarkId=${bookmark.id}, parseStatus=${bookmark.parseStatus}, appName=${bookmark.appName}")
+        log.debug("[parseLocally] 本地解析全部完成: pageId=${bookmark.id}, parseStatus=${bookmark.parseStatus}, appName=${bookmark.appName}")
         return bookmark
     }
 
@@ -2049,19 +2049,19 @@ class BookmarkServiceImpl(
      * 只记"这个站点抓不到"这一事实；我方服务不可用（[isScrapperUnavailable]）的情况不该走到这里。
      * 快照纯属诊断数据，写不进去也不能反过来影响解析主流程，故失败只记日志。
      */
-    private fun recordScrapeFailure(bookmark: BookmarkEntity, e: Throwable, startedAt: Long) {
+    private fun recordScrapeFailure(bookmark: PageEntity, e: Throwable, startedAt: Long) {
         runCatching {
             siteAssetWriter.persistFailure(bookmark.id, bookmark.rawUrl, e.message, elapsedMs(startedAt))
         }.onFailure {
-            log.warn("[recordScrapeFailure] 失败快照落库失败(忽略): bookmarkId=${bookmark.id}, err=${it.message}")
+            log.warn("[recordScrapeFailure] 失败快照落库失败(忽略): pageId=${bookmark.id}, err=${it.message}")
         }
     }
 
     /**
      * 远程解析（scrapper）：通过自部署的 bookmarkify-scrapper 获取元信息 + favicon base64 + LOGO/OG 存 OSS
      */
-    private fun parseByApi(bookmark: BookmarkEntity, cacheMode: CacheMode = CacheMode.DEFAULT): BookmarkEntity {
-        log.debug("[parseByApi] 开始远程解析(scrapper): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}, cacheMode=$cacheMode")
+    private fun parseByApi(bookmark: PageEntity, cacheMode: CacheMode = CacheMode.DEFAULT): PageEntity {
+        log.debug("[parseByApi] 开始远程解析(scrapper): pageId=${bookmark.id}, rawUrl=${bookmark.rawUrl}, cacheMode=$cacheMode")
         val startedAt = System.currentTimeMillis()
         // 抓取会覆盖 title/description/appName，先留一份人工值，落库前还原被锁定的那些
         val manual = bookmark.copy()
@@ -2069,7 +2069,7 @@ class BookmarkServiceImpl(
             apiService.scrape(bookmark.rawUrl, apiService.scrapeRequest(bookmark.rawUrl, cacheMode))
         }.fold(
             onSuccess = { vo ->
-                log.debug("[parseByApi] scrapper 返回成功: bookmarkId=${bookmark.id}, title=${vo.title}, source=${vo.primarySource}, assets=${vo.assets.size}")
+                log.debug("[parseByApi] scrapper 返回成功: pageId=${bookmark.id}, title=${vo.title}, source=${vo.primarySource}, assets=${vo.assets.size}")
                 val previousTitle = bookmark.title
                 vo.applyTo(bookmark)
                 bookmark.scheduleAfterParseSuccess()
@@ -2079,7 +2079,7 @@ class BookmarkServiceImpl(
                 bookmark.appName = vo.shortName?.takeIf { n -> n.isNotBlank() }
                 // appName 已被人工锁定时连推断都不必做：结果反正要被 restoreLockedFields 丢掉，
                 // 白烧一次 10s 的 LLM 往返还占着解析线程
-                if (bookmark.appName.isNullOrBlank() && !manual.isLocked(BookmarkLockedField.APP_NAME)) {
+                if (bookmark.appName.isNullOrBlank() && !manual.isLocked(PageLockedField.APP_NAME)) {
                     inferAndSetAppName(bookmark, previousTitle)
                 }
                 bookmark.restoreLockedFields(manual)
@@ -2103,7 +2103,7 @@ class BookmarkServiceImpl(
                         fromRootPage = bookmark.isRootPage,
                     )
                 }.onFailure { log.warn("[parseByApi] 站点信息回写失败(忽略): siteId=${bookmark.siteId}, err=${it.message}") }
-                log.debug("[parseByApi] 第三方API解析全部完成: bookmarkId=${bookmark.id}, assets=${vo.assets.size}")
+                log.debug("[parseByApi] 第三方API解析全部完成: pageId=${bookmark.id}, assets=${vo.assets.size}")
                 bookmark
             },
             onFailure = { e ->
@@ -2111,10 +2111,10 @@ class BookmarkServiceImpl(
                 // 别把我方故障记成书签失联（异步链路不抛，抛了也没人接）。
                 // 也不落失败快照：那记录的是我方故障，不是这个站点的抓取事实
                 if (e.isScrapperUnavailable()) {
-                    log.warn("[parseByApi] 抓取服务不可用，保留待抓取状态: bookmarkId=${bookmark.id}, err=${e.message}")
+                    log.warn("[parseByApi] 抓取服务不可用，保留待抓取状态: pageId=${bookmark.id}, err=${e.message}")
                     return@fold bookmark
                 }
-                log.debug("[parseByApi] API 调用失败: bookmarkId=${bookmark.id}, err=${e.message}")
+                log.debug("[parseByApi] API 调用失败: pageId=${bookmark.id}, err=${e.message}")
                 // 失败也留快照：只把书签标成 UNREACHABLE 的话，事后只知道"抓不到"，
                 // 不知道抓的是哪个 URL、报了什么错、耗了多久。persistFailure 一直没人调用
                 recordScrapeFailure(bookmark, e, startedAt)
@@ -2178,17 +2178,17 @@ class BookmarkServiceImpl(
      * 刻意返回全部资产而非仅选中的那张 —— 排查"这站为什么用了张丑图"时需要看到它到底
      * 声明了哪些图、各自出处是什么、有没有互相撞 hash。
      */
-    private fun adminDetail(bookmarkId: String): BookmarkAdminVO {
-        val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
+    private fun adminDetail(pageId: String): BookmarkAdminVO {
+        val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
         val vo = BookmarkAdminVO(bookmark)
         // 同 adminListAll：NSFW 在站点层，BeanUtil 拷不到，必须显式取
         vo.nsfw = siteService.mapByIds(setOf(bookmark.siteId))[bookmark.siteId]?.nsfw ?: false
 
-        vo.assets = toAssetVOs(siteAssetResolver.assetsOf(bookmarkId))
+        vo.assets = toAssetVOs(siteAssetResolver.assetsOf(pageId))
 
         vo.displayPrefs = DisplayMode.entries.map { mode ->
             val pref = siteDisplayPrefService.find(bookmark.siteId, mode)
-            val resolved = siteAssetResolver.resolveOne(bookmarkId, mode)
+            val resolved = siteAssetResolver.resolveOne(pageId, mode)
             SiteDisplayPrefVO(
                 displayMode = mode,
                 iconPadding = pref?.iconPadding ?: 25,
@@ -2200,7 +2200,7 @@ class BookmarkServiceImpl(
         }
 
         runCatching {
-            vo.categories = bookmarkCategoryService.categoriesOf(listOf(bookmarkId))[bookmarkId]
+            vo.categories = bookmarkCategoryService.categoriesOf(listOf(pageId))[pageId]
                 .orEmpty().map { CategoryVO(it.id, it.slug, it.name, it.color) }
         }.onFailure { log.warn("[adminDetail] 分类回填失败(忽略): ${it.message}") }
 
@@ -2216,21 +2216,21 @@ class BookmarkServiceImpl(
      * 这类定时对账会对同一 canonical 书签反复重新解析，若网页标题相较上次没有变化、且已经有 appName，
      * 就没必要再打一次 DeepSeek——这既省了一次外部 API 调用，也缩短了异步解析任务占用线程池的时间。
      */
-    private fun inferAndSetAppName(bookmark: BookmarkEntity, previousTitle: String? = null) {
+    private fun inferAndSetAppName(bookmark: PageEntity, previousTitle: String? = null) {
         val title = bookmark.title ?: run {
-            log.debug("[inferAndSetAppName] title 为空，跳过 appName 推断: bookmarkId=${bookmark.id}")
+            log.debug("[inferAndSetAppName] title 为空，跳过 appName 推断: pageId=${bookmark.id}")
             return
         }
         if (!bookmark.appName.isNullOrBlank() && title == previousTitle) {
-            log.debug("[inferAndSetAppName] 标题未变化且已有 appName，跳过重复推断: bookmarkId=${bookmark.id}, appName=${bookmark.appName}")
+            log.debug("[inferAndSetAppName] 标题未变化且已有 appName，跳过重复推断: pageId=${bookmark.id}, appName=${bookmark.appName}")
             return
         }
-        log.debug("[inferAndSetAppName] 调用 DeepSeek 推断 appName: bookmarkId=${bookmark.id}, title=$title")
+        log.debug("[inferAndSetAppName] 调用 DeepSeek 推断 appName: pageId=${bookmark.id}, title=$title")
         apiService.inferAppName(title)?.takeIf { it.isNotBlank() }
             ?.also {
                 bookmark.appName = it
-                log.debug("[inferAndSetAppName] appName 推断成功: bookmarkId=${bookmark.id}, appName=$it")
-            } ?: log.debug("[inferAndSetAppName] appName 推断结果为空，保持原值: bookmarkId=${bookmark.id}")
+                log.debug("[inferAndSetAppName] appName 推断成功: pageId=${bookmark.id}, appName=$it")
+            } ?: log.debug("[inferAndSetAppName] appName 推断结果为空，保持原值: pageId=${bookmark.id}")
     }
 
     /**
@@ -2252,7 +2252,7 @@ class BookmarkServiceImpl(
      * 留在 LOADING 会被 [drainStuckLoading] 当作待办无限重投，而它的展示数据本来就只能来自
      * 用户自己填的那份。
      *
-     * 关联行的 `bookmark_id` 必须从 `'LOADING'` 改成 NULL，不能原样留着：那个字面量的含义是
+     * 关联行的 `page_id` 必须从 `'LOADING'` 改成 NULL，不能原样留着：那个字面量的含义是
      * 「等着被绑定」，[assertNotPendingImport] 正是靠它判断「这个网址已经在导入队列里了」。
      * 留着的话，用户日后再添加同一个网址会撞上一个**假的 E126**，而且再也解释不清 ——
      * 队列里那条其实早就终结了。语义收敛成：`'LOADING'` = 待绑定，NULL = 确定没有 canonical 记录。
@@ -2279,21 +2279,21 @@ class BookmarkServiceImpl(
      */
     private fun showForDesktop(userLinkId: String): BookmarkShow =
         bookmarkUserLinkMapper.findShowById(userLinkId)
-            .let { it.initDisplay(it.bookmarkId?.let { id -> siteAssetResolver.resolveOne(id, DisplayMode.LIST) }, DisplayMode.LIST) }
+            .let { it.initDisplay(it.pageId?.let { id -> siteAssetResolver.resolveOne(id, DisplayMode.LIST) }, DisplayMode.LIST) }
 
     /** 按 canonical 四元组精确命中一条页面记录。 */
-    private fun getByCanonical(siteId: String, urlPath: String, urlQuery: String, urlFragment: String): BookmarkEntity? =
-        ktQuery().eq(BookmarkEntity::siteId, siteId)
-            .eq(BookmarkEntity::urlPath, urlPath)
-            .eq(BookmarkEntity::urlQuery, urlQuery)
-            .eq(BookmarkEntity::urlFragment, urlFragment)
+    private fun getByCanonical(siteId: String, urlPath: String, urlQuery: String, urlFragment: String): PageEntity? =
+        ktQuery().eq(PageEntity::siteId, siteId)
+            .eq(PageEntity::urlPath, urlPath)
+            .eq(PageEntity::urlQuery, urlQuery)
+            .eq(PageEntity::urlFragment, urlFragment)
             .one()
 
-    private fun getByUrl(siteId: String, w: BookmarkUrlWrapper): BookmarkEntity? =
+    private fun getByUrl(siteId: String, w: BookmarkUrlWrapper): PageEntity? =
         getByCanonical(siteId, w.urlPath ?: "/", w.urlQuery, w.urlFragment)
 
     /** 同上，但站点未知时用（先按 host 找 site；site 都没有就必然没有页面记录）。 */
-    private fun getByUrl(w: BookmarkUrlWrapper): BookmarkEntity? =
+    private fun getByUrl(w: BookmarkUrlWrapper): PageEntity? =
         siteService.findByHost(w.urlHost)?.let { getByUrl(it.id, w) }
 
     /**
@@ -2311,11 +2311,11 @@ class BookmarkServiceImpl(
      * 冲突后回查来收敛，而 PostgreSQL 里一旦事务内触发约束冲突，整个事务就进入 aborted 状态，
      * 回查那条 SELECT 也会一并失败。
      */
-    private fun getOrCreateByUrl(urlWrapper: BookmarkUrlWrapper): BookmarkEntity {
+    private fun getOrCreateByUrl(urlWrapper: BookmarkUrlWrapper): PageEntity {
         val site = siteService.getOrCreateByHost(urlWrapper.urlHost, urlWrapper.urlScheme)
         getByUrl(site.id, urlWrapper)?.let { return it }
         return try {
-            BookmarkEntity(urlWrapper, site.id).also { save(it) }
+            PageEntity(urlWrapper, site.id).also { save(it) }
         } catch (e: DuplicateKeyException) {
             getByUrl(site.id, urlWrapper) ?: throw e
         }
@@ -2334,15 +2334,15 @@ class BookmarkServiceImpl(
      * - verifyFlag=true(已人工认证)：parseBookmark() 会直接短路返回，重新解析是无效开销。
      * - 距上次检查不足 [DEAD_RECHECK_COOLDOWN_MINUTES]：避免确实已经挂掉的站点被反复添加时反复 ping/抓取。
      */
-    private fun BookmarkEntity.needRecheckOnAdd(): Boolean {
+    private fun PageEntity.needRecheckOnAdd(): Boolean {
         if (parseStatus == ParseStatusEnum.PENDING || verifyFlag) return false
         if (parseStatus == ParseStatusEnum.SUCCESS && isActivity) return false
         val lastCheck = updateTime ?: return true
         return LocalDateTimeUtil.between(lastCheck, LocalDateTime.now(), ChronoUnit.MINUTES) >= DEAD_RECHECK_COOLDOWN_MINUTES
     }
 
-    private fun findById(bookmarkId: String): BookmarkEntity =
-        requireNotNull(ktQuery().eq(BookmarkEntity::id, bookmarkId).one())
+    private fun findById(pageId: String): PageEntity =
+        requireNotNull(ktQuery().eq(PageEntity::id, pageId).one())
 
     // 单次导入的书签数量上限：10MB 的书签文件可能包含数万条 <A> 记录，
     // 若不加限制会在一个事务里批量写入并逐条发布异步解析事件，冲垮解析线程池与抓取下游。

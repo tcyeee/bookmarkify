@@ -3,6 +3,23 @@
 > 设计日期：2026-07-31 · 范围：`bookmark`、`bookmark_user_link`、`site_asset`、`site_page_meta`、`site_display_pref` 及其上的抓取、巡检、展示链路
 > 结论：`bookmark` 这一张表同时扮演着「站点」和「页面」两个角色，`bookmark_user_link` 里又混着抓取快照。**带路径/参数的深链（YouTube 视频、GitHub 仓库、Notion 页面）在当前模型下是错的，不是"旧"。**
 
+> ⚠️ **本文用的是 2026-08-03 三层正名之前的表名。** 这是一份历史设计文档，描述的是当时的
+> 库结构与当时的问题，把里面的名字改成新的只会让论述自相矛盾（比如下面说「`bookmark` 这张表
+> 同时扮演站点和页面两个角色」——那正是它当年叫 `bookmark` 的原因）。读的时候按这张表换算：
+>
+> | 本文写的 | 现在叫 |
+> |---|---|
+> | `bookmark`（页面） | `page` |
+> | `bookmark_user_link` / user_link（用户收藏） | `bookmark` |
+> | `bookmark_ping_log` | `page_ping_log` |
+> | `bookmark_category` | `page_category` |
+> | `bookmark_sweep_log` | `sweep_log` |
+> | `site_page_meta` | `page_meta` |
+> | `bookmark_id`（指向页面的列） | `page_id` |
+> | `BookmarkEntity` / `BookmarkUserLink` | `PageEntity` / `BookmarkEntity` |
+>
+> 正名的动机与执行见 `deploy/migrations/2026-08-03_rename_three_layers.sql`。
+
 代码中多处注释写了"详见根目录 SITE_LAYERING_DESIGN.md"，指的就是本文件。
 
 ## 1. 触发这次设计的具体故障

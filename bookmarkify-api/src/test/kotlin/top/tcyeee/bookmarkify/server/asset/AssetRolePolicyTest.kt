@@ -52,7 +52,7 @@ class AssetRolePolicyTest {
         url: String = "https://cdn.example.com/${extractor.name.lowercase()}.png",
         error: String? = null,
     ) = SiteAssetEntity(
-        bookmarkId = "bm-1",
+        pageId = "bm-1",
         extractor = extractor.name,
         originUrl = url,
         resolvedUrl = url,

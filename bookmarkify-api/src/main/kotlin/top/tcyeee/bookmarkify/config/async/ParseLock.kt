@@ -90,7 +90,7 @@ class ParseLock(private val redis: StringRedisTemplate) {
         )
 
         /** 抓取一个书签的锁 key。 */
-        fun bookmark(bookmarkId: String) = "bookmark:$bookmarkId"
+        fun bookmark(pageId: String) = "bookmark:$pageId"
 
         /** 补投递一条用户书签的解析任务的锁 key。 */
         fun dispatch(userLinkId: String) = "dispatch:$userLinkId"

@@ -10,14 +10,14 @@ import top.tcyeee.bookmarkify.config.entity.ScrapperConfig
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
-import top.tcyeee.bookmarkify.entity.entity.SitePageMetaEntity
+import top.tcyeee.bookmarkify.entity.entity.PageMetaEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.OssAddressing
 import top.tcyeee.bookmarkify.entity.enums.OssObjectSource
 import top.tcyeee.bookmarkify.mapper.ScrapeSnapshotMapper
 import top.tcyeee.bookmarkify.mapper.SiteAssetMapper
-import top.tcyeee.bookmarkify.mapper.SitePageMetaMapper
+import top.tcyeee.bookmarkify.mapper.PageMetaMapper
 import top.tcyeee.bookmarkify.server.IOssObjectService
 import top.tcyeee.bookmarkify.server.OssObjectSpec
 import top.tcyeee.bookmarkify.utils.OssUtils
@@ -32,7 +32,7 @@ import top.tcyeee.bookmarkify.utils.OssUtils
 @Service
 class SiteAssetWriter(
     private val scrapeSnapshotMapper: ScrapeSnapshotMapper,
-    private val sitePageMetaMapper: SitePageMetaMapper,
+    private val sitePageMetaMapper: PageMetaMapper,
     private val siteAssetMapper: SiteAssetMapper,
     private val objectMapper: ObjectMapper,
     private val scrapperConfig: ScrapperConfig,
@@ -63,26 +63,26 @@ class SiteAssetWriter(
     @Transactional(rollbackFor = [Exception::class])
     fun persist(
         siteId: String,
-        bookmarkId: String,
+        pageId: String,
         url: String,
         response: ScrapeResponse,
         durationMs: Int,
         isRootPage: Boolean,
     ) {
-        val p = SiteAssetIngestor.project(siteId, bookmarkId, url, response, durationMs, objectMapper)
+        val p = SiteAssetIngestor.project(siteId, pageId, url, response, durationMs, objectMapper)
 
         registerObjects(p.assets)
 
         scrapeSnapshotMapper.insert(p.snapshot)
 
         p.pageMeta?.let { meta ->
-            val exists = sitePageMetaMapper.selectById(bookmarkId) != null
+            val exists = sitePageMetaMapper.selectById(pageId) != null
             if (exists) sitePageMetaMapper.updateById(meta) else sitePageMetaMapper.insert(meta)
         }
 
         val (siteAssets, pageAssets) = p.assets.partition { it.ownerType == AssetOwnerType.SITE }
 
-        replaceAssets(AssetOwnerType.PAGE, bookmarkId, pageAssets)
+        replaceAssets(AssetOwnerType.PAGE, pageId, pageAssets)
         if (isRootPage) {
             replaceAssets(AssetOwnerType.SITE, siteId, siteAssets)
         } else {
@@ -90,8 +90,8 @@ class SiteAssetWriter(
         }
 
         log.debug(
-            "[SiteAssetWriter] 落库完成: bookmarkId={}, siteId={}, isRootPage={}, siteAssets={}, pageAssets={}, hasMeta={}",
-            bookmarkId, siteId, isRootPage, siteAssets.size, pageAssets.size, p.pageMeta != null
+            "[SiteAssetWriter] 落库完成: pageId={}, siteId={}, isRootPage={}, siteAssets={}, pageAssets={}, hasMeta={}",
+            pageId, siteId, isRootPage, siteAssets.size, pageAssets.size, p.pageMeta != null
         )
     }
 
@@ -177,14 +177,14 @@ class SiteAssetWriter(
      * @return 是否真的写进去了
      */
     @Transactional(rollbackFor = [Exception::class])
-    fun upsertScreenshot(bookmarkId: String, url: String, response: ScrapeResponse): Boolean {
-        if (bookmarkId.isBlank()) return false
-        val shot = SiteAssetIngestor.screenshotAsset(bookmarkId, url, response)
+    fun upsertScreenshot(pageId: String, url: String, response: ScrapeResponse): Boolean {
+        if (pageId.isBlank()) return false
+        val shot = SiteAssetIngestor.screenshotAsset(pageId, url, response)
             ?: return false
 
         registerObjects(listOf(shot))
 
-        val existing = assetsOf(AssetOwnerType.PAGE, bookmarkId)
+        val existing = assetsOf(AssetOwnerType.PAGE, pageId)
             .filter { it.role == AssetRole.SCREENSHOT }
 
         // 截图 key 是**页面 URL** 的哈希（见 `oss.rs::screenshot_key`），同一页面每次补抓都是同一个
@@ -192,7 +192,7 @@ class SiteAssetWriter(
         // byte_size/mime 会一直停在第一次的值，而它们描述的对象早就换过内容了。
         // 按整行比：key 没变但尺寸/体积/格式变了，照样要把那行重写成实际的样子。
         if (isIdenticalToExisting(existing, listOf(shot))) {
-            log.debug("[SiteAssetWriter] 截图与库中一致，跳过: bookmarkId={}", bookmarkId)
+            log.debug("[SiteAssetWriter] 截图与库中一致，跳过: pageId={}", pageId)
             return false
         }
 
@@ -200,8 +200,8 @@ class SiteAssetWriter(
         existing.forEach { siteAssetMapper.deleteById(it.id) }
         siteAssetMapper.insert(shot)
 
-        scheduleOrphanCleanup(bookmarkId, previousKeys - setOfNotNull(shot.storageUrl))
-        log.debug("[SiteAssetWriter] 截图落库: bookmarkId={}, key={}", bookmarkId, shot.storageUrl)
+        scheduleOrphanCleanup(pageId, previousKeys - setOfNotNull(shot.storageUrl))
+        log.debug("[SiteAssetWriter] 截图落库: pageId={}, key={}", pageId, shot.storageUrl)
         return true
     }
 
@@ -357,20 +357,20 @@ class SiteAssetWriter(
 
     /** 落一次失败抓取：只留快照，便于事后排查。资产与元数据保持上一次的值不动。 */
     @Transactional(rollbackFor = [Exception::class])
-    fun persistFailure(bookmarkId: String, url: String, errorMsg: String?, durationMs: Int) {
-        val p = SiteAssetIngestor.projectFailure(bookmarkId, url, errorMsg, durationMs)
+    fun persistFailure(pageId: String, url: String, errorMsg: String?, durationMs: Int) {
+        val p = SiteAssetIngestor.projectFailure(pageId, url, errorMsg, durationMs)
         scrapeSnapshotMapper.insert(p.snapshot)
     }
 
     /** 供管理后台单独改某个字段用（不走抓取流程）。 */
-    fun upsertPageMeta(meta: SitePageMetaEntity) {
-        val exists = sitePageMetaMapper.selectById(meta.bookmarkId) != null
+    fun upsertPageMeta(meta: PageMetaEntity) {
+        val exists = sitePageMetaMapper.selectById(meta.pageId) != null
         if (exists) sitePageMetaMapper.updateById(meta) else sitePageMetaMapper.insert(meta)
     }
 
     /** 读取某书签的文字元数据，不存在时给一个未持久化的空实例。 */
-    fun pageMetaOf(bookmarkId: String): SitePageMetaEntity =
-        sitePageMetaMapper.selectById(bookmarkId) ?: SitePageMetaEntity(bookmarkId = bookmarkId)
+    fun pageMetaOf(pageId: String): PageMetaEntity =
+        sitePageMetaMapper.selectById(pageId) ?: PageMetaEntity(pageId = pageId)
 
     /**
      * 收敛 `scrape_snapshot`：每个书签只留最近 [SNAPSHOT_RETAIN_PER_BOOKMARK] 份。
