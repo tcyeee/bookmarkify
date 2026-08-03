@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.AiCallScene
+import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
@@ -323,6 +324,14 @@ data class BookmarkAdminVO(
 data class SiteAssetAdminVO(
     @field:Schema(description = "资产ID") var id: String = "",
     @field:Schema(description = "用途(本服务推导)") var role: AssetRole = AssetRole.FAVICON,
+    /**
+     * 挂在站点层还是页面层。
+     *
+     * 后台必须能看到这一列：图标正常归 SITE，只有当这一页被判成「同域下的另一个产品」
+     * （见 `AssetRolePolicy.divergesFromSite`）时才会有 PAGE 层的 FAVICON/LOGO。
+     * 不下发的话，"这一页为什么用了跟隔壁不一样的图标"在后台无从查起。
+     */
+    @field:Schema(description = "归属层级：SITE=全站共享，PAGE=这一页自己的") var ownerType: AssetOwnerType = AssetOwnerType.SITE,
     @field:Schema(description = "出处(scrapper 报告的事实)") var extractor: String = "",
     @field:Schema(description = "可信度") var quality: AssetQuality = AssetQuality.DEGRADED,
     @field:Schema(description = "可直接预览的地址(私有桶已签名)") var url: String? = null,

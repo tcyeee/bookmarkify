@@ -675,6 +675,18 @@ const livenessImageUrls = computed(() => {
                 </ElTag>
                 <ElTag v-if="a.isPrimary" size="small" type="success">主图</ElTag>
                 <ElTag v-if="a.isVector" size="small" type="info">矢量</ElTag>
+                <!--
+                  图标归页面层是**例外**，只在该页被判成"同域下的另一个产品"时出现，
+                  所以只给例外打标；社交图/截图本来就归页面层，标了纯属噪音
+                -->
+                <ElTag
+                  v-if="a.ownerType === 'PAGE' && (a.role === 'FAVICON' || a.role === 'LOGO')"
+                  size="small"
+                  type="warning"
+                  title="这一页有自己的一套图标(与站点图标字节毫无交集)，被判定为同域下的另一个产品，因此图标不与全站共享"
+                >
+                  本页专属图标
+                </ElTag>
                 <ElTag
                   v-if="a.duplicateOfOther"
                   size="small"

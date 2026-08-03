@@ -50,6 +50,10 @@ class SiteAssetWriter(
      * | SITE（favicon/logo），抓的是首页 | 整体替换 | 首页是站点图标的权威来源 |
      * | SITE，抓的是深链 | **只补齐缺失的，绝不删** | 见下 |
      *
+     * 还有一条例外：深链声明的图标若与站点现有图标**字节毫无交集**，说明这个域名下塞了
+     * 多个互不相关的产品（`tools.example.com/tools/a` 与 `/tools/b`），那批图标改判给
+     * PAGE 层，走上面第一行的整体替换。判定见 [AssetRolePolicy.divergesFromSite]。
+     *
      * 最后一条是这个方法里唯一不显然的地方。站点图标现在是同域所有页面共享的一份，如果任何
      * 一个深链抓取都能整体替换它，那么同一站点两个页面的抓取会互相覆盖 —— 而
      * `ParseLock` 是**按 bookmark** 加的，根本挡不住这种跨页面的竞争（两把锁，两个不同的 id）。
@@ -69,7 +73,15 @@ class SiteAssetWriter(
         durationMs: Int,
         isRootPage: Boolean,
     ) {
-        val p = SiteAssetIngestor.project(siteId, pageId, url, response, durationMs, objectMapper)
+        // 深链才需要判"这一页是不是同域下的另一个产品"，判据是它声明的图标与站点现有图标
+        // 的字节交集 —— 所以得先把站点现有图标取出来。首页跳过这次查询：它就是站点本身。
+        val existingSiteIcons = if (isRootPage) emptyList() else assetsOf(AssetOwnerType.SITE, siteId)
+
+        val p = SiteAssetIngestor.project(
+            siteId, pageId, url, response, durationMs, objectMapper,
+            isRootPage = isRootPage,
+            existingSiteIcons = existingSiteIcons,
+        )
 
         registerObjects(p.assets)
 

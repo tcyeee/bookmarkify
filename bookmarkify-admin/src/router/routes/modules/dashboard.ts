@@ -67,15 +67,6 @@ const routes: RouteRecordRaw[] = [
           title: '书签检查配置',
         },
       },
-      {
-        name: 'WebsiteManagement',
-        path: '/bookmark/website',
-        component: () => import('#/views/bookmark/website/index.vue'),
-        meta: {
-          icon: 'carbon:workspace',
-          title: '网站管理',
-        },
-      },
     ],
   },
   {

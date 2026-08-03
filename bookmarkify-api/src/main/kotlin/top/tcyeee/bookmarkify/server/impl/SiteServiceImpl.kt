@@ -98,6 +98,7 @@ class SiteServiceImpl(
             SiteAssetAdminVO(
                 id = a.id,
                 role = a.role,
+                ownerType = a.ownerType,
                 extractor = a.extractor,
                 quality = a.quality,
                 url = OssUtils.signAsset(

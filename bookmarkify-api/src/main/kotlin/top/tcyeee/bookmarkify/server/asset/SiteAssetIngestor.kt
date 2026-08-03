@@ -34,6 +34,10 @@ object SiteAssetIngestor {
      * @param response scrapper 响应
      * @param durationMs 端到端耗时
      * @param mapper 用于把原始块序列化进 jsonb 列
+     * @param isRootPage 抓的是不是站点首页。首页**就是**站点，它的图标永远归 SITE，
+     *   不参与 [AssetRolePolicy.divergesFromSite] 的判定
+     * @param existingSiteIcons 站点当前已有的 FAVICON/LOGO 行，用于判定这一页是不是
+     *   同域下的另一个产品（见 [AssetRolePolicy.divergesFromSite]）。传空即退回原有行为
      */
     fun project(
         siteId: String,
@@ -42,6 +46,8 @@ object SiteAssetIngestor {
         response: ScrapeResponse,
         durationMs: Int,
         mapper: ObjectMapper,
+        isRootPage: Boolean = true,
+        existingSiteIcons: List<SiteAssetEntity> = emptyList(),
     ): Projection {
         val snapshot = ScrapeSnapshotEntity(
             pageId = pageId,
@@ -78,7 +84,15 @@ object SiteAssetIngestor {
         // 归属得按最终的 role 来定。
         val declared = AssetRolePolicy.assignRoles(
             response.assets.mapNotNull { toEntity(pageId, it) }
-        ).onEach { it.assignOwner(siteId) }
+        )
+
+        // 同域下的另一个产品？首页永远不是（它就是站点本身），深链才需要判。
+        // 判定用的是**本次投影出来的图标**与站点现有图标的字节交集，见 divergesFromSite。
+        val ownIcons = !isRootPage && AssetRolePolicy.divergesFromSite(
+            siteIcons = existingSiteIcons,
+            pageIcons = declared.filter { AssetRolePolicy.ownerTypeOf(it.role) == AssetOwnerType.SITE },
+        )
+        declared.onEach { it.assignOwner(siteId, ownIcons) }
 
         val assets = declared + listOfNotNull(screenshotAsset(pageId, url, response))
 
@@ -90,9 +104,13 @@ object SiteAssetIngestor {
      *
      * `pageId` 保持原值不动 —— 它降级成了纯溯源信息（"这张图当初是从哪个页面抓到的"），
      * 归属看 `ownerType` / `ownerId`。
+     *
+     * @param ownIcons 这一页有自己的一套图标（同域下的另一个产品），此时连 FAVICON/LOGO
+     *   也归 PAGE。默认 false —— 绝大多数站点一个域名就是一个产品，图标全站共享才是常态
      */
-    private fun SiteAssetEntity.assignOwner(siteId: String) {
+    private fun SiteAssetEntity.assignOwner(siteId: String, ownIcons: Boolean = false) {
         ownerType = AssetRolePolicy.ownerTypeOf(role)
+            .let { if (ownIcons) AssetOwnerType.PAGE else it }
         ownerId = when (ownerType) {
             AssetOwnerType.SITE -> siteId
             AssetOwnerType.PAGE -> pageId.orEmpty()

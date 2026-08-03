@@ -81,6 +81,44 @@ object AssetRolePolicy {
     }
 
     /**
+     * 这一页声明的图标，是不是**跟本站点完全不是一套**。
+     *
+     * ## 要解决的问题
+     *
+     * [ownerTypeOf] 把图标一律判给 SITE，前提是"一个 host 就是一个产品"。这个前提对
+     * YouTube、GitHub 成立，对 `tools.example.com/tools/a` 与 `/tools/b` 这类**一个域名下
+     * 塞了多个互不相关产品**的站点不成立 —— 它们会共用同一张图标，磁贴上长得一模一样。
+     *
+     * Web App Manifest 的 `scope` 就是标准给这件事的答案（一个 origin 可以承载多个应用，
+     * 各有自己的 `name`/`icons`），但那要求站点正确声明 scope，且得改跨服务契约。
+     * 字节哈希是同一个判断的**事后版本**：真把子路径当独立产品做的站点，必然会给它配一张
+     * 不同的图标 —— 那张图的 sha256 一比就露出来了，不需要站点配合任何声明。
+     *
+     * ## 判据刻意保守：**必须毫无交集**
+     *
+     * 只要本页声明的图标里有**任何一张**与站点已有图标字节相同，就认为还是同一个产品。
+     * 部分重叠（共用 favicon、但多带了一张自己的 apple-touch-icon）是普通站点的常态，
+     * 按"有一张不同就算独立产品"去判会让绝大多数深链都误判成独立产品，那等于取消了站点层。
+     *
+     * 两侧**都必须有可比的哈希**才敢下结论：`assets.download` 是 PROBE 之外的模式、
+     * 或该张取回失败时 `contentHash` 为空，此时无从比较，一律返回 false 走原有行为
+     * （宁可两个产品共用图标，也不要凭空把图标钉死在页面上）。
+     *
+     * @param siteIcons 站点当前已有的 FAVICON/LOGO 行
+     * @param pageIcons 本次抓取从这一个页面声明里投影出来的 FAVICON/LOGO 行
+     */
+    fun divergesFromSite(
+        siteIcons: List<SiteAssetEntity>,
+        pageIcons: List<SiteAssetEntity>,
+    ): Boolean {
+        val siteHashes = siteIcons.filter { it.renderable() }.mapNotNull { it.contentHash }.toSet()
+        if (siteHashes.isEmpty()) return false
+        val pageHashes = pageIcons.filter { it.renderable() }.mapNotNull { it.contentHash }.toSet()
+        if (pageHashes.isEmpty()) return false
+        return siteHashes.intersect(pageHashes).isEmpty()
+    }
+
+    /**
      * 给一批**同一书签**的资产定角色、定质量、定 primary，返回可直接落库的列表。
      *
      * 两条降级规则在这里生效：
@@ -165,7 +203,7 @@ object AssetRolePolicy {
         }
 
         for (role in roleOrder) {
-            val candidates = usable.filter { it.role == role }
+            val candidates = preferPageOwned(usable.filter { it.role == role })
             if (candidates.isEmpty()) continue
             val best = when (mode) {
                 // 大图要尽量大：先可信度，再尺寸
@@ -210,6 +248,22 @@ object AssetRolePolicy {
                         .thenBy { it.effectiveSize() }
                 )
         }
+    }
+
+    /**
+     * 同一 role 内，**页面自己的图标压过站点图标**。
+     *
+     * 只有 [divergesFromSite] 判定"这一页跟本站点不是一套"时，才会有 PAGE 层的
+     * FAVICON/LOGO 行存在（见 `SiteAssetIngestor.assignOwner`）。既然那条判定已经确认过
+     * 字节与站点毫无交集，这里就不该再让两者按尺寸/可信度去竞争 —— 站点图标可能又大又
+     * TRUSTED，一比就把页面自己的那张挤掉，整条链路白做。
+     *
+     * 返回的是**筛选**而不是排序：混在一起排序仍会让站点图标在页面图标不可渲染时悄悄胜出，
+     * 而那种情况下宁可走首字母色块，也好过挂一张属于隔壁产品的图标。
+     */
+    private fun preferPageOwned(candidates: List<SiteAssetEntity>): List<SiteAssetEntity> {
+        val pageOwned = candidates.filter { it.ownerType == AssetOwnerType.PAGE }
+        return pageOwned.ifEmpty { candidates }
     }
 
     /** 封面的取图顺序，见 [resolveCover]。 */
