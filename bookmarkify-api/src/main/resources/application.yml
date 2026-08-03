@@ -42,6 +42,13 @@ spring:
       read-unknown-enum-values-using-default-value: true
 
 bookmarkify:
+  # 本实例是否承担后台定时任务（活性巡检、解析对账、日志清理、OSS 对账）。
+  #
+  # 默认 true —— 线上那台必须跑。dev profile 显式置 false，理由见 application-dev.yml。
+  # 关掉它的实例同时也不参与 SingleInstanceGuard 的所有权竞争：不跑调度的实例在
+  # "谁来写生产数据"这件事上是无害的，让它去抢租约只会把线上那台的护栏刷成噪音。
+  scheduling:
+    enabled: true
   wechat:
     # 微信企业邮箱-企业ID
     corpid: ${BOOKMARKIFY_WECHAT_WORK_CORPID}

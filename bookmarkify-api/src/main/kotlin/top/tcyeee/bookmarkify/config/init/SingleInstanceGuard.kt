@@ -51,6 +51,20 @@ class SingleInstanceGuard(private val redis: StringRedisTemplate) {
     private var enabled: Boolean = true
 
     /**
+     * 本实例是否承担定时任务（见 [top.tcyeee.bookmarkify.controller.scheduled.ScheduledTasks]）。
+     *
+     * **不跑定时任务的实例不参与所有权竞争。** 这把锁保护的是"谁来跑那些会写生产数据的
+     * 定时任务"，一个已经把调度整个关掉的实例（本地开发）在这件事上是无害的，它去抢租约
+     * 只会有一个效果：让**线上那台**每分钟打一条 error 说自己不是持有者 —— 把护栏变成噪音，
+     * 而噪音化的告警等于没有告警。
+     *
+     * 反过来，本地要是**显式打开**了调度（`--bookmarkify.scheduling.enabled=true`），
+     * 它就是一个货真价实的第二实例，那时护栏照常竞争、照常报错，正是要的行为。
+     */
+    @Value("\${bookmarkify.scheduling.enabled:true}")
+    private var schedulingEnabled: Boolean = true
+
+    /**
      * 续约兼冲突检测。
      *
      * 周期必须**明显短于** [OWNERSHIP_TTL]，否则自己的租约会在两次续约之间过期，
@@ -58,7 +72,7 @@ class SingleInstanceGuard(private val redis: StringRedisTemplate) {
      */
     @Scheduled(fixedDelay = RENEW_INTERVAL_MS, initialDelay = 0)
     fun renewOwnership() {
-        if (!enabled) return
+        if (!enabled || !schedulingEnabled) return
         runCatching {
             val ops = redis.opsForValue()
             // 抢占：没人持有就写上自己
@@ -90,7 +104,7 @@ class SingleInstanceGuard(private val redis: StringRedisTemplate) {
     /** 优雅停机时主动让出，免得下一次部署要干等一个 TTL 才不报冲突。 */
     @PreDestroy
     fun releaseOwnership() {
-        if (!enabled) return
+        if (!enabled || !schedulingEnabled) return
         runCatching {
             if (redis.opsForValue().get(OWNER_KEY) == instanceId) redis.delete(OWNER_KEY)
         }.onFailure { log.warn("[SingleInstanceGuard] 释放所有权失败(忽略): ${it.message}") }
