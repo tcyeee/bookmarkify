@@ -35,10 +35,8 @@ interface UserShareBookmarkMapper : BaseMapper<UserShareBookmarkEntity> {
                a.link_type                                  AS linkType,
                b.is_activity                                AS isActivity,
                b.url_host                                   AS urlHost,
-               -- 过渡期：NSFW 判定的写入端还在 bookmark 上（上移到站点级是下一批的事），
-               -- 两层任一命中都算命中 —— 朝"标记"方向失败是安全的那一侧。
-               -- 判定上移之后这里收敛成 st.nsfw 单列。
-               (COALESCE(st.nsfw, false) OR COALESCE(b.nsfw, false)) AS nsfw
+               -- NSFW 是站点级判定：同一域名不必逐页判一遍。页面级那份副本已删。
+               COALESCE(st.nsfw, false)                     AS nsfw
             FROM user_share_bookmark s
                      JOIN bookmark_user_link a
                           ON a.id = s.bookmark_user_link_id

@@ -97,8 +97,8 @@ data class BookmarkShow(
 
         siteShortName = site?.shortName
         siteBrandName = site?.brandName
-        // 同 mapper SQL 的过渡期处理：两层任一命中都算命中
-        nsfw = (site?.nsfw ?: false) || (bookmark?.nsfw ?: false)
+        // NSFW 是站点级判定，页面级那份副本已删（见 SiteEntity.nsfw）
+        nsfw = site?.nsfw ?: false
     }
 
     /**
@@ -284,7 +284,8 @@ data class BookmarkAdminVO(
     @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
     @field:Schema(description = "命中的分类") var categories: List<CategoryVO> = emptyList(),
-    @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)") var nsfw: Boolean = false,
+    /** 来自 `site.nsfw`（站点级判定）。**不在 BeanUtil 拷贝范围内**，由调用方按 siteId 显式回填。 */
+    @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW，站点级判定)") var nsfw: Boolean = false,
 
     /* 收录者。书签是全站共享的规范化记录，没有"属主"这一列——归属只存在于 bookmark_user_link。
      * 这里给的是**最早把它加进来的那个用户**，也就是这条记录当初为什么会存在的答案；
