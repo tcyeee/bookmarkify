@@ -1295,7 +1295,14 @@ class BookmarkServiceImpl(
 
     override fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO> {
         val entityPage = baseMapper.selectPage(params.toPage(), params.toWrapper())
+        // NSFW 是站点级判定，而 BookmarkAdminVO 是靠 BeanUtil 从 BookmarkEntity 整体拷贝的 ——
+        // `bookmark.nsfw` 删列之后那次拷贝什么也拷不到，vo.nsfw 会**静默**停在默认的 false，
+        // 后台从此再也标不出违规站点，且没有任何报错。所以这里必须显式按 siteId 回填。
+        // siteId 要在 convert **之前**取：IPage.convert 是就地替换 records，之后拿到的已是 VO。
+        val siteIdOf = entityPage.records.associate { it.id to it.siteId }
         val page = entityPage.convert { BookmarkAdminVO(it) }
+        val siteMap = siteService.mapByIds(siteIdOf.values.toSet())
+        page.records.forEach { vo -> vo.nsfw = siteMap[siteIdOf[vo.id]]?.nsfw ?: false }
         // 后台列表按 role 分列展示 favicon/logo/社交图，缺哪张要一眼可见，所以资产必须随列表下发；
         // 用一条 in 查询批量取回避免 N+1，签名按列表格子的尺寸缩放
         runCatching {
@@ -2174,6 +2181,8 @@ class BookmarkServiceImpl(
     private fun adminDetail(bookmarkId: String): BookmarkAdminVO {
         val bookmark = baseMapper.selectById(bookmarkId) ?: throw CommonException(ErrorType.E102)
         val vo = BookmarkAdminVO(bookmark)
+        // 同 adminListAll：NSFW 在站点层，BeanUtil 拷不到，必须显式取
+        vo.nsfw = siteService.mapByIds(setOf(bookmark.siteId))[bookmark.siteId]?.nsfw ?: false
 
         vo.assets = toAssetVOs(siteAssetResolver.assetsOf(bookmarkId))
 

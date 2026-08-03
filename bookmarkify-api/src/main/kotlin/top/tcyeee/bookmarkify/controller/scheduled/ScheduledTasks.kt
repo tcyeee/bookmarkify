@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.server.IBookmarkPingLogService
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IOssReconcileService
+import top.tcyeee.bookmarkify.server.asset.SiteAssetWriter
 
 /**
  * 全部后台定时任务。
@@ -44,6 +45,7 @@ class ScheduledTasks(
     private val bookmarkService: IBookmarkService,
     private val bookmarkPingLogService: IBookmarkPingLogService,
     private val ossReconcileService: IOssReconcileService,
+    private val siteAssetWriter: SiteAssetWriter,
 ) {
     @Description("每5分钟对账一次未完成解析的书签")
     @Scheduled(cron = "0 */5 * * * ?")
@@ -83,6 +85,16 @@ class ScheduledTasks(
     @Description("每天凌晨 3 点清理过期的活性探测日志，避免这张只增不减的表无限膨胀")
     @Scheduled(cron = "0 0 3 * * ?")
     fun purgeExpiredPingLogs() = bookmarkPingLogService.purgeExpired()
+
+    /**
+     * 与上面的日志清理错开 15 分钟：两者都是删行，但这一条要跑窗口函数扫全表，
+     * 没必要和它抢同一秒的 IO。
+     */
+    @Description("每天凌晨 3:15 收敛抓取快照：每个书签只留最近 3 份，其余删除")
+    @Scheduled(cron = "0 15 3 * * ?")
+    fun purgeOldScrapeSnapshots() {
+        siteAssetWriter.purgeOldSnapshots()
+    }
 
     /**
      * 放在凌晨 4 点：要把桶里几万个 key 全部列一遍并与库比对，与白天的抓取、巡检错开。

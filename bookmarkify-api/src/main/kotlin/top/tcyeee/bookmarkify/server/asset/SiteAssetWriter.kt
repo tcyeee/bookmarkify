@@ -371,4 +371,31 @@ class SiteAssetWriter(
     /** 读取某书签的文字元数据，不存在时给一个未持久化的空实例。 */
     fun pageMetaOf(bookmarkId: String): SitePageMetaEntity =
         sitePageMetaMapper.selectById(bookmarkId) ?: SitePageMetaEntity(bookmarkId = bookmarkId)
+
+    /**
+     * 收敛 `scrape_snapshot`：每个书签只留最近 [SNAPSHOT_RETAIN_PER_BOOKMARK] 份。
+     *
+     * 这是全库唯一一张只写不读、又没有任何清理、还带 GIN 索引存整份 jsonb 响应的表：
+     * 每条书签每 30 天的内容刷新都会追加一份完整响应，一年约 12 份 —— 是唯一会线性吃满
+     * 磁盘的表。`bookmark_ping_log` / `bookmark_sweep_log` 早有 90 天清理，唯独它没有。
+     *
+     * 为什么按份数而不按时间过期，见 [ScrapeSnapshotMapper.purgeKeepingLatestPerBookmark]。
+     */
+    fun purgeOldSnapshots(): Int {
+        val deleted = scrapeSnapshotMapper.purgeKeepingLatestPerBookmark(SNAPSHOT_RETAIN_PER_BOOKMARK)
+        if (deleted > 0) {
+            log.warn("[purgeOldSnapshots] 已清理 $deleted 份历史抓取快照(每书签保留最近 $SNAPSHOT_RETAIN_PER_BOOKMARK 份)")
+        }
+        return deleted
+    }
+
+    companion object {
+        /**
+         * 每个书签保留的抓取快照份数。
+         *
+         * 3 份的依据是这张表的用途：回填要的是「最新那份」，多留两份是为了排查「这个字段
+         * 是什么时候开始抓不到的」。再多就只是在为一年前的 HTML 付存储费了。
+         */
+        private const val SNAPSHOT_RETAIN_PER_BOOKMARK = 3
+    }
 }

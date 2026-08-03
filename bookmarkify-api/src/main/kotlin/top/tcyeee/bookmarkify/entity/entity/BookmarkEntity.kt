@@ -59,8 +59,9 @@ data class BookmarkEntity(
     @JsonIgnore @field:Schema(description = "该页面是否可访问(域名级活性见 site.is_alive)") var isActivity: Boolean = false,
     @JsonIgnore @field:Schema(description = "抓取成功但页面疑似反爬虫/WAF挑战页,内容可能不可靠") var antiCrawlerBlocked: Boolean = false,
     @JsonIgnore @field:Schema(description = "手动认证状态") var verifyFlag: Boolean = false, // 如果该书签信息都没问题, 添加手动认证状态以后, 即可被搜索到
-    @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)，由 DeepSeek 判断") var nsfw: Boolean = false,
-    @JsonIgnore @field:Size(max = 50) @field:Schema(description = "NSFW 判定理由，由 DeepSeek 给出，供人工审核/排查使用") var nsfwReason: String? = null,
+    // NSFW 判定是**站点级**的，见 SiteEntity.nsfw：同一域名不必逐页判一遍。
+    // 这里曾有一份页面级副本，写入端上移到 site 之后它就只剩存量，已随
+    // 2026-08-03_site_layering_cleanup.sql 删除。
     @JsonIgnore @field:Schema(description = "解析失败后的反馈") var parseErrMsg: String? = null,
     @JsonIgnore @field:Schema(description = "添加时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,  // 最近更新时间创建的时候默认为null,表示是刚创建的
