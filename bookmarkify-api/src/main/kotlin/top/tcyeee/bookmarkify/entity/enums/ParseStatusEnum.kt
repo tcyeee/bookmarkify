@@ -20,8 +20,12 @@ enum class ParseStatusEnum {
      * 两个巡检任务分别只认 UNREACHABLE 与 SUCCESS，所以归档记录会自然退出候选池，
      * 不再每半个月去 ping 一个早就没了的域名，也就不会挤占 LIMIT 名额。
      *
-     * 对用户侧没有新语义：`isActivity` 依旧是 false，照旧算失效书签。恢复手段是管理员手动
-     * 刷新/检测（会重新写回 SUCCESS 或 UNREACHABLE）。
+     * 对用户侧没有新语义：`isActivity` 依旧是 false，照旧算失效书签。
+     *
+     * **不是不可逆终态。** 除了管理员手动刷新/检测，`reviveArchivedBookmarks`（每天一轮）
+     * 会捞归档记录做复活探测，ping 通即重新抓取、写回 SUCCESS。这条出口是必须的：把记录
+     * 送进归档的是一条可能出错的自动判定链（域名临时改 DNS、机房出口被目标站点拉黑一段
+     * 时间都够了），只有自动入口而没有自动出口，一次误判就等于永久删除。
      */
     ARCHIVED
 }

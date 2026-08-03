@@ -73,6 +73,14 @@ interface IBookmarkService : IService<BookmarkEntity> {
     /** 定时扫描 SUCCESS 书签（含已认证）做活性复查，结果写入 bookmark_ping_log；异步执行，不占用调度线程 */
     fun livenessCheckStaleBookmarks()
 
+    /**
+     * 定时复活探测：捞一批 ARCHIVED 记录，ping 通就重新抓取。
+     *
+     * 归档否则是一个没有出口的终态（两个常规巡检分别只认 SUCCESS/UNREACHABLE，checkAll 只认
+     * PENDING），而把记录推进归档的是一条**可能出错**的自动判定链。自动进得去，就得自动出得来。
+     */
+    fun reviveArchivedBookmarks()
+
     /** 添加书签并异步检查 */
     fun addOne(url: String, uid: String): UserLayoutNodeVO
 

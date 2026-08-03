@@ -11,6 +11,62 @@ import java.time.LocalDateTime
  */
 object LivenessPolicy {
 
+    // ────── 由探测事实判定死活 ──────
+
+    /**
+     * 「这个页面已经没了」。
+     *
+     * 只收这两个：服务器明确表态该资源不存在(404)、或曾经存在而已被永久移除(410)。
+     * 这是本策略**唯一**的判死来源里最重要的一条——用户口中"这个书签打不开"，绝大多数
+     * 是深链失效（视频被删、文章下架、仓库归档），而不是整个域名消失。
+     */
+    private val GONE_STATUSES = setOf(404, 410)
+
+    /**
+     * 「探不出结论」，既不判活也不判死。
+     *
+     * 这几个码的共同点是：站点活得好好的，只是**拒绝了我们这一次请求**。
+     * - 403/406/412：典型的反爬拦截。生产机实测过，机房出口 IP 会被整段拒绝，而同一个
+     *   URL 在用户浏览器里完全正常——判死就是拿我方的网络位置给用户的书签定罪。
+     * - 429：限流，多半还是我们自己探得太密。
+     * - 451：法律原因下架，是地域性的，同样不是"这个页面没了"。
+     *
+     * 判成 UNKNOWN 而非 DEAD 有两层保护：不写 `UNREACHABLE`，也不累加 `consecutiveFail`，
+     * 于是这类站点不会一路走到归档。
+     */
+    private val INCONCLUSIVE_STATUSES = setOf(403, 406, 412, 425, 429, 451)
+
+    /**
+     * 把 scrapper 报回来的**事实**折叠成一个结论。
+     *
+     * 这个映射此前住在 scrapper 里（`alive = status < 500`），和 `extractor`→`role`
+     * 一样属于放错了服务的策略。搬回来之后，改判定规则不需要动 Rust、不需要重新探测。
+     *
+     * ⚠️ **[blocked] 必须判 UNKNOWN。** 那表示 scrapper 的 SSRF 策略拒绝去探这个地址——
+     * 是我方的安全决策，不是站点的事实。这与 `classifyScrapperError` 里 E308 刻意不并进
+     * E304 是同一条界线：「我们拒绝抓它」不能当作「它挂了」的证据。
+     *
+     * @param reachable 是否拿到了 HTTP 响应（传输层是否成功）
+     * @param status 最终一跳的状态码；[reachable] 为 false 时无意义
+     * @param blocked 被 scrapper 的 SSRF 策略拒绝
+     */
+    fun outcomeOf(reachable: Boolean, status: Int?, blocked: Boolean): PingOutcome = when {
+        blocked -> PingOutcome.UNKNOWN
+        // 传输层就没成功：DNS 没了、连接被拒、TLS 失败、超时。这是站点的事实。
+        // 我方出网链路整体故障时同样会大面积落到这里，那一层由 breakerReason 的
+        // 「DEAD 近全灭」规则兜住——单条无从分辨，整批的形态才分辨得出来
+        !reachable -> PingOutcome.DEAD
+        // 拿到了响应却没有状态码，只可能是契约对不上，属于我方问题
+        status == null -> PingOutcome.UNKNOWN
+        status in GONE_STATUSES -> PingOutcome.DEAD
+        status in INCONCLUSIVE_STATUSES -> PingOutcome.UNKNOWN
+        // 5xx：服务器在，但它自己提供不了服务。瞬时故障的代价只是一格退避，
+        // 下一次探活即把 consecutiveFail 归零，不会误伤到归档
+        status >= 500 -> PingOutcome.DEAD
+        // 其余 2xx/3xx，以及 401(要登录)、405(不认这个方法) 等等，都说明页面还在
+        else -> PingOutcome.ALIVE
+    }
+
     // ────── 熔断阈值 ──────
 
     /** 「探不到」过半就该认为是我方的问题，而不是这半批站点恰好都出了状况 */

@@ -101,6 +101,14 @@ Concretely, the scrapper's response contains `extractor` — *which tag/field th
 | `quality` (policy — how much we trust it) | API | `TRUSTED`, `DEGRADED` |
 | `storageKey` (fact — where the bytes landed) | scrapper | `scrapper/asset/<sha256-of-bytes>` |
 | the URL a browser gets (policy — domain, signature, resize) | API | `OssUtils.signAsset` |
+| `/ping`'s `{reachable, status, blocked}` (fact — what the probe saw) | scrapper | `status: 404` |
+| whether that counts as dead (policy) | API | `LivenessPolicy.outcomeOf` |
+
+The `/ping` row is the same rule again, and it was violated until 2026-08-06: the endpoint
+returned `alive = status < 500`. Besides putting a Bookmarkify judgement in Rust, collapsing
+the status code that way reported **404/410 as alive** — deep-link rot, the most common way a
+bookmark actually breaks, was structurally invisible. Details in `bookmarkify-api/CLAUDE.md`
+› Liveness sweeps.
 
 The last row is the same rule applied to storage: the scrapper reports *which key it wrote*, never a
 usable URL. Domain, presigning and per-mode resizing are the API's deployment concerns and would
@@ -200,6 +208,8 @@ bookmarkify-api/.../server/asset/
 - **The local Jsoup path (`parseLocally`) no longer produces images.** Only the scrapper path writes `site_asset`. Two parsers each writing their own icon model is exactly what this refactor removed.
 - **`fetch.tls` and `diagnostics.robots` are deliberately omitted,** not populated with guesses — the underlying capability isn't implemented yet.
 - **Migrations are hand-applied** (`deploy/migrations/`, no Flyway) and the deploy workflow does *not* run them. Order matters: create tables → deploy → full re-crawl → only then the corresponding drop migration.
+- **`2026-08-06_liveness_sweep_hardening.sql` should be applied *before* deploying the API.** It creates `bookmark_sweep_log`, which every sweep round writes to. The insert is wrapped in `runCatching`, so a missing table only produces `warn` lines and the sweeps still run — but that table *is* the only durable record of a breaker trip, so a late migration means a silent hole exactly where the evidence matters. It also swaps `idx_bookmark_next_check` for `idx_bookmark_due_check`, which the new candidate query is written against (missing it costs a seq scan per round, not correctness), and pushes existing `ARCHIVED` rows' cursors onto the new 30-day revival cycle.
+- **The `/ping` contract change in that same batch is deploy-order-free, in both directions.** The scrapper still emits the legacy `alive` field and the API still reads it when `reachable` is absent, so either service can ship first. Both halves of the shim are marked for deletion once the rollout settles — see `PingResponse` on each side.
 - **`2026-08-05_bookmark_flow_hardening.sql` must be applied *before* deploying the API.** It adds `bookmark_user_link.dispatch_attempts`, which `drainStuckLoading` reads every 30 seconds — deploy first and that sweep throws on every tick, i.e. bulk imports never finish and every lost parse event stays lost. It also adds the indexes that the add-bookmark path depends on (`bookmark_user_link` and `user_layout_node` previously had **no secondary indexes at all**, so `drainStuckLoading` was doing a full table scan twice a minute) and the `uk_bul_uid_bookmark` unique index that now backs duplicate detection. The duplicate-repair step inside it is destructive by design: it keeps the earliest link per `(uid, bookmark_id)` and deletes the extra tiles, which is E126's semantics applied retroactively — without it the unique index cannot be created.
 - **`deploy/schema.sql` is the schema of record** — a full snapshot of what the database currently looks like, *not* a migration. It exists because the one-off scripts under `deploy/migrations/` get pruned periodically (they are change records, and clearing them is fine), but "the current structure" must not disappear with them: without it a new environment cannot be stood up, nothing can be reproduced locally, and indexes/constraints are unreviewable. **Refresh this file after any structural change**; it should always run cleanly against an empty database. Regenerate with `pg_dump --schema-only` where available (a `pg_catalog`-based reconstruction script was used to seed it).
 - **`2026-08-02_file_id_indirection.sql` must be applied *before* deploying the API.** The new code reads `oss_object` and no longer reads `user_file` — deploying first turns every avatar and background image blank. `2026-08-03_oss_object_hash_unique.sql` is the opposite: it must wait until *after* a full re-crawl has moved every asset onto content-addressed keys, and it fails loudly with a pre-check rather than half-applying.

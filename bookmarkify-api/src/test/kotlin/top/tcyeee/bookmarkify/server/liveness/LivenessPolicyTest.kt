@@ -20,6 +20,78 @@ class LivenessPolicyTest {
     private fun outcomes(alive: Int = 0, dead: Int = 0, unknown: Int = 0): List<PingOutcome> =
         List(alive) { PingOutcome.ALIVE } + List(dead) { PingOutcome.DEAD } + List(unknown) { PingOutcome.UNKNOWN }
 
+    // ────── 由探测事实判定死活 ──────
+
+    private fun outcomeOf(status: Int) =
+        LivenessPolicy.outcomeOf(reachable = true, status = status, blocked = false)
+
+    @Test
+    fun `2xx 与 3xx 判活`() {
+        listOf(200, 201, 204, 301, 302, 304, 307).forEach {
+            assertEquals(PingOutcome.ALIVE, outcomeOf(it), "status=$it")
+        }
+    }
+
+    @Test
+    fun `页面确实没了才判死`() {
+        // 这是本次改造的全部意义：改造前 scrapper 折叠成 alive=true，深链失效永远发现不了
+        assertEquals(PingOutcome.DEAD, outcomeOf(404))
+        assertEquals(PingOutcome.DEAD, outcomeOf(410))
+    }
+
+    @Test
+    fun `反爬状态码判无结论而不是判死`() {
+        // 机房出口 IP 被整段拒绝，而同一个 URL 在用户浏览器里完全正常 ——
+        // 判死等于拿我方的网络位置给用户的书签定罪
+        listOf(403, 406, 412, 425, 429, 451).forEach {
+            assertEquals(PingOutcome.UNKNOWN, outcomeOf(it), "status=$it")
+        }
+    }
+
+    @Test
+    fun `要登录或不认这个方法都说明页面还在`() {
+        assertEquals(PingOutcome.ALIVE, outcomeOf(401))
+        assertEquals(PingOutcome.ALIVE, outcomeOf(405))
+    }
+
+    @Test
+    fun `5xx 判死`() {
+        listOf(500, 502, 503, 504).forEach {
+            assertEquals(PingOutcome.DEAD, outcomeOf(it), "status=$it")
+        }
+    }
+
+    @Test
+    fun `传输层失败判死`() {
+        assertEquals(
+            PingOutcome.DEAD,
+            LivenessPolicy.outcomeOf(reachable = false, status = null, blocked = false)
+        )
+    }
+
+    @Test
+    fun `我方拒绝去探绝不能判死`() {
+        // 与 classifyScrapperError 里 E308 不并进 E304 是同一条界线：
+        // 「我们拒绝抓它」不是「它挂了」的证据
+        assertEquals(
+            PingOutcome.UNKNOWN,
+            LivenessPolicy.outcomeOf(reachable = false, status = null, blocked = true)
+        )
+        // 即便同时带着状态码，blocked 也优先
+        assertEquals(
+            PingOutcome.UNKNOWN,
+            LivenessPolicy.outcomeOf(reachable = true, status = 200, blocked = true)
+        )
+    }
+
+    @Test
+    fun `拿到响应却没有状态码属于契约问题判无结论`() {
+        assertEquals(
+            PingOutcome.UNKNOWN,
+            LivenessPolicy.outcomeOf(reachable = true, status = null, blocked = false)
+        )
+    }
+
     @Test
     fun `全部存活不熔断`() {
         assertNull(LivenessPolicy.breakerReason(outcomes(alive = 200)))

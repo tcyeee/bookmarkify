@@ -665,3 +665,22 @@ data class OssReconcileReport(
     @field:Schema(description = "耗时(ms)") var durationMs: Long = 0,
     @field:Schema(description = "失败原因，成功时为空") var errorMsg: String? = null,
 )
+
+/**
+ * 巡检健康摘要（后台常驻告警条的数据源）。
+ *
+ * 熔断的语义是「我方链路坏了，那一轮全表结论不可信」——它此前唯一的出口是一行会滚掉的
+ * `log.error`。把它做成一个后台随时看得见的数字，才谈得上"有人知道"。
+ */
+data class SweepHealthVO(
+    @field:Schema(description = "统计窗口(小时)") var windowHours: Int = 24,
+    @field:Schema(description = "窗口内的巡检轮次总数") var roundCount: Int = 0,
+    @field:Schema(description = "窗口内被熔断中止的轮次数") var breakerCount: Int = 0,
+    @field:Schema(description = "窗口内因解析队列拥堵被推迟的重新抓取条数") var deferredParse: Int = 0,
+    @field:Schema(description = "最近一次熔断的轮次；窗口内没有熔断时为空") var latestBreaker: BookmarkSweepLogEntity? = null,
+    @field:Schema(
+        description = "最近一轮巡检的时间。距今过久说明巡检压根没在跑(调度线程卡死/巡检锁没释放)，" +
+            "那种情况下熔断次数恒为 0，只看熔断数看不出来"
+    )
+    var lastRoundAt: LocalDateTime? = null,
+)

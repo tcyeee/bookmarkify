@@ -33,6 +33,7 @@ import top.tcyeee.bookmarkify.entity.entity.AiCallLogEntity
 import top.tcyeee.bookmarkify.entity.entity.ScrapperCallLogEntity
 import top.tcyeee.bookmarkify.entity.enums.AiCallScene
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
+import top.tcyeee.bookmarkify.server.liveness.LivenessPolicy
 import top.tcyeee.bookmarkify.mapper.AiCallLogMapper
 import top.tcyeee.bookmarkify.mapper.ScrapperCallLogMapper
 import top.tcyeee.bookmarkify.server.IApiService
@@ -515,14 +516,32 @@ class ApiServiceImpl(
             }
         }
 
-        return runCatching { objectMapper.readValue<PingResponse>(httpResponse.body()).alive }.fold(
-            onSuccess = { alive -> if (alive) PingOutcome.ALIVE else PingOutcome.DEAD },
-            onFailure = {
-                // 契约对不上是我方两侧代码不同步，同样不是站点的问题
-                log.warn("[pingWebsite] 响应解析失败(契约不匹配)，本次探测无结论: url=$targetUrl, err=${it.message}")
-                PingOutcome.UNKNOWN
-            },
-        )
+        val body = runCatching { objectMapper.readValue<PingResponse>(httpResponse.body()) }.getOrElse {
+            // 契约对不上是我方两侧代码不同步，同样不是站点的问题
+            log.warn("[pingWebsite] 响应解析失败(契约不匹配)，本次探测无结论: url=$targetUrl, err=${it.message}")
+            return PingOutcome.UNKNOWN
+        }
+
+        // 新契约：scrapper 只报事实，判死由 LivenessPolicy 决定
+        body.reachable?.let { reachable ->
+            val outcome = LivenessPolicy.outcomeOf(reachable, body.status, body.blocked)
+            if (outcome != PingOutcome.ALIVE) log.debug(
+                "[pingWebsite] $outcome: url=$targetUrl, reachable=$reachable, status=${body.status}, " +
+                    "blocked=${body.blocked}, method=${body.method}, redirects=${body.redirects}"
+            )
+            return outcome
+        }
+
+        // 旧版 scrapper（只有一个 alive 布尔）。两个服务各自独立发布，必然有版本错配的窗口；
+        // 这条回退只是把改造前的行为原样保留，拿不到状态码就没法分辨 404 与 200。
+        // 线上 scrapper 全部升级后可以连同 PingResponse.alive 一起删除。
+        body.alive?.let { alive ->
+            log.debug("[pingWebsite] 对端为旧版 scrapper，退回粗粒度判定: url=$targetUrl, alive=$alive")
+            return if (alive) PingOutcome.ALIVE else PingOutcome.DEAD
+        }
+
+        log.warn("[pingWebsite] 响应里既无 reachable 也无 alive，本次探测无结论: url=$targetUrl")
+        return PingOutcome.UNKNOWN
     }
 
     override fun inferNsfw(title: String?, description: String?, host: String): NsfwCheckResult {

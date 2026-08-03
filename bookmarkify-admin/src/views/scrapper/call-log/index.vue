@@ -10,6 +10,7 @@ import { getAdminScrapperCallLogListApi } from "#/api/scrapper-call-log";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 
 import BookmarkDetailDialog from "#/views/bookmark/BookmarkDetailDialog.vue";
+import SweepBreakerAlert from "#/views/scrapper/SweepBreakerAlert.vue";
 
 import ScrapeResultDialog from "./ScrapeResultDialog.vue";
 
@@ -182,6 +183,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
+    <!-- 巡检熔断/停摆的常驻告警。一切正常时整条不渲染，不占版面 -->
+    <SweepBreakerAlert />
     <ElCard shadow="never">
       <template #header>
         <div class="flex items-center justify-between">

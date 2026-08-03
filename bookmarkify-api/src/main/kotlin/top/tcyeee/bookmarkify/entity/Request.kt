@@ -227,6 +227,24 @@ data class OssObjectSearchParams(
     }
 }
 
+/**
+ * 管理后台巡检轮次查询入参。
+ *
+ * [onlyBreaker] 是这个接口存在的主要理由：熔断意味着"我方链路坏了、那一轮全表结论不可信"，
+ * 是整套巡检里最该被看到的信号，而它此前只有一行会滚掉的 log.error。
+ */
+data class BookmarkSweepLogSearchParams(
+    @field:Schema(description = "按巡检任务筛选") var taskLabel: String? = null,
+    @field:Schema(description = "只看被熔断中止的轮次") var onlyBreaker: Boolean = false,
+) : PageBean() {
+    fun toWrapper(): Wrapper<BookmarkSweepLogEntity> {
+        val query = KtQueryWrapper(BookmarkSweepLogEntity::class.java)
+        if (!taskLabel.isNullOrBlank()) query.eq(BookmarkSweepLogEntity::taskLabel, taskLabel)
+        if (onlyBreaker) query.isNotNull(BookmarkSweepLogEntity::breakerReason)
+        return query.orderByDesc(BookmarkSweepLogEntity::createTime)
+    }
+}
+
 /** 管理后台书签活性检查日志查询入参 */
 data class BookmarkPingLogSearchParams(
     var urlHost: String? = null,

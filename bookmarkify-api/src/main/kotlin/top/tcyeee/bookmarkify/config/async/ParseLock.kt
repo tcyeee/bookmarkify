@@ -1,9 +1,12 @@
 package top.tcyeee.bookmarkify.config.async
 
 import org.springframework.data.redis.core.StringRedisTemplate
+import org.springframework.data.redis.core.script.DefaultRedisScript
+import org.springframework.data.redis.core.script.RedisScript
 import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.config.log
 import java.time.Duration
+import java.util.UUID
 
 /**
  * 书签解析链路的互斥锁（Redis SETNX + TTL）。
@@ -29,32 +32,62 @@ import java.time.Duration
 @Component
 class ParseLock(private val redis: StringRedisTemplate) {
 
-    /** 拿到锁返回 true。[ttl] 应当大于任务本身的最长耗时，否则锁会在任务还在跑时提前失效。 */
-    fun tryAcquire(key: String, ttl: Duration): Boolean {
-        val acquired = runCatching { redis.opsForValue().setIfAbsent("$KEY_PREFIX$key", "1", ttl) }
+    /**
+     * 拿到锁返回 true。[ttl] 应当大于任务本身的最长耗时，否则锁会在任务还在跑时提前失效。
+     *
+     * 只适用于**不主动释放**的场景（[dispatch]）。需要在 `finally` 里释放的，用
+     * [acquire] + [release]，否则超时后会误删别人的锁。
+     */
+    fun tryAcquire(key: String, ttl: Duration): Boolean = acquire(key, ttl) != null
+
+    /**
+     * 拿锁并返回本次持有的**凭据**，拿不到返回 null。释放时把凭据传回 [release]。
+     *
+     * ## 为什么需要凭据
+     *
+     * 原来的实现写死一个 `"1"`，释放就是无条件 `DEL`。TTL 一旦短于任务的实际耗时，
+     * 就会出现这个序列：A 超时 → 锁自然过期 → B 拿到锁开始跑 → A 终于跑完，`finally`
+     * 里把 **B 的锁**删掉 → C 也进来了。锁不仅失效，还会**互相破坏**，而且越是"任务
+     * 比预期慢"的时候（正是最需要互斥的时候）越容易发生。带上凭据做 CAS 删除之后，
+     * 最坏情况退回到"锁失效"，不会再演变成"锁互删"。
+     */
+    fun acquire(key: String, ttl: Duration): String? {
+        val token = UUID.randomUUID().toString()
+        val acquired = runCatching { redis.opsForValue().setIfAbsent("$KEY_PREFIX$key", token, ttl) }
             .getOrElse {
                 log.warn("[ParseLock] Redis 异常，降级放行: key={}, err={}", key, it.message)
-                return true
+                return token
             }
         return when (acquired) {
-            true -> true
-            false -> false
+            true -> token
+            false -> null
             // setIfAbsent 返回 null 表示连接异常
             else -> {
                 log.warn("[ParseLock] Redis 不可用，降级放行: key={}", key)
-                true
+                token
             }
         }
     }
 
-    /** 提前释放。仅用于「确认无需再执行」的场景；正常路径依赖 TTL 自然过期即可。 */
-    fun release(key: String) {
-        runCatching { redis.delete("$KEY_PREFIX$key") }
+    /**
+     * 提前释放，仅当锁仍然是 [token] 那一次持有时才删。
+     *
+     * 判断与删除必须在一次 Redis 往返里完成——分成 GET 再 DEL 的话，两步之间锁照样可能
+     * 过期并被别人拿走，那就还是删了别人的锁，只是窗口小一点。
+     */
+    fun release(key: String, token: String) {
+        runCatching { redis.execute(RELEASE_SCRIPT, listOf("$KEY_PREFIX$key"), token) }
             .onFailure { log.warn("[ParseLock] 释放锁失败(忽略): key={}, err={}", key, it.message) }
     }
 
     companion object {
         private const val KEY_PREFIX = "parse:lock:"
+
+        /** 「值还是我写的那个才删」——Redis 官方推荐的 CAS 释放写法。 */
+        private val RELEASE_SCRIPT: RedisScript<Long> = DefaultRedisScript(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            Long::class.java,
+        )
 
         /** 抓取一个书签的锁 key。 */
         fun bookmark(bookmarkId: String) = "bookmark:$bookmarkId"
