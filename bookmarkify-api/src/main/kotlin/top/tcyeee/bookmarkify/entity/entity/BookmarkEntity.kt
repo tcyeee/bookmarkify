@@ -180,6 +180,18 @@ data class BookmarkUserLink(
     @field:Schema(description = "是否置顶") var pinned: Boolean = false,
     @JsonIgnore @field:Schema(description = "用户打开该书签的累计次数(仅做记录)") var openCount: Int = 0,
 
+    /**
+     * `drainStuckLoading` 已经为这条占位补投递过多少次解析。
+     *
+     * 存在的理由是队头阻塞：`findStuckLoading` 按 `created_at ASC LIMIT n` 取行，一批「永远收不了口」
+     * 的记录会稳定占住那 n 个名额，排在后面的行一轮都轮不到。没有计数就没有放弃的依据，
+     * 补投递会以补投递锁的 TTL 为周期永远重试同一批。
+     *
+     * 「我方抓取服务不可用」(E307) **不计入**：那是我方故障，不该消耗用户这条书签的重试预算，
+     * 解析链路在那条早退分支上会把它清零（见 BookmarkServiceImpl.parseAndNotice）。
+     */
+    @JsonIgnore @field:Schema(description = "补投递解析的累计次数(E307 不计)") var dispatchAttempts: Int = 0,
+
     @JsonIgnore @field:Schema(description = "创建时间") val createTime: LocalDateTime = LocalDateTime.now(),
     @JsonIgnore @field:Schema(description = "是否删除") val deleted: Boolean = false,
 ) {

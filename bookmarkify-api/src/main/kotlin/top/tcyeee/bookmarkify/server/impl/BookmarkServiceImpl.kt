@@ -157,14 +157,35 @@ class BookmarkServiceImpl(
 
         val nodeEntity = UserLayoutNodeEntity(uid = uid)
         val userLink = BookmarkUserLink(bookmark, nodeEntity.id, uid)
-        // 两条写入必须原子提交，理由与 addOne 第 4 步完全相同：分开写时第二条失败会在用户桌面上
-        // 留下一个没有任何书签数据的孤儿节点——layout() 按 layoutNodeId 找不到对应的 BookmarkShow，
-        // 前端只能渲染出一个点不开也删不掉的空格子。addOne 当初补了事务，这里被漏掉了。
-        txTemplate.execute {
-            layoutNodeMapper.insert(nodeEntity)
-            bookmarkUserLinkMapper.insert(userLink)
-        }
+        insertNodeAndLink(nodeEntity, userLink)
         return showForDesktop(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
+    }
+
+    /**
+     * 写入「桌面节点 + 用户关联」这一对记录。`addOne` 与 `linkOne` 共用。
+     *
+     * **必须原子提交**：分开写时第二条失败会在用户桌面上留下一个没有任何书签数据的孤儿节点
+     * ——`layout()` 按 `layoutNodeId` 找不到对应的 `BookmarkShow`，前端只能渲染出一个点不开
+     * 也删不掉的空格子。
+     *
+     * **唯一键冲突翻成 E126，这里才是判重的权威。** 上游的 [assertNotAlreadyLinked] 是
+     * check-then-act：查一次、再插入，两个并发请求可以同时通过那道检查。此前真正挡住重复磁贴的
+     * 其实是 `addOne` 上那个 1 秒的 `@Throttle` —— 而限流是 UX 设施不是正确性设施，它的参数会
+     * 因为「加书签太慢」被调宽，`ThrottleAspect` 在 Redis 故障时更是**明确降级放行**。
+     * 现在由 `uk_bul_uid_bookmark` 兜底，与 `getOrCreateByUrl` 靠 `uk_bookmark_canonical`
+     * 收敛并发插入是同一个套路。
+     */
+    private fun insertNodeAndLink(node: UserLayoutNodeEntity, link: BookmarkUserLink) {
+        try {
+            txTemplate.execute {
+                layoutNodeMapper.insert(node)
+                bookmarkUserLinkMapper.insert(link)
+            }
+        } catch (e: DuplicateKeyException) {
+            // 事务已整体回滚，那个刚插进去的布局节点不会留下来
+            log.debug("[insertNodeAndLink] 唯一键冲突，判定为重复收藏: uid=${link.uid}, bookmarkId=${link.bookmarkId}, err=${e.message}")
+            throw CommonException(ErrorType.E126)
+        }
     }
 
     /**
@@ -419,6 +440,14 @@ class BookmarkServiceImpl(
     // 反倒是投递到解析池这件事必须由一个「不怕被 CallerRunsPolicy 拖住」的线程来做——
     // 上面的余量检查就是为此，headroom 保证正常情况下永远投得进队列。
     override fun drainStuckLoading() {
+        // 先报「还有多少人在等」。放在最前面且无条件执行：队列打满而提前 return 的那一轮，
+        // 恰恰是这个数字最该被看到的时候
+        reportStuckLoading()
+
+        // 重试预算已经用尽的先就地终结。必须排在补投递**之前**：它们正是按 created_at 排在
+        // 队头、把后面的行挡住的那批，不清掉的话下面捞回来的还是同一批人
+        terminateExhaustedLoading()
+
         val free = parseExecutor.threadPoolExecutor.queue.remainingCapacity() - DRAIN_QUEUE_HEADROOM
         if (free <= 0) {
             log.debug("[drainStuckLoading] 解析队列余量不足，本轮跳过: remaining=${free + DRAIN_QUEUE_HEADROOM}")
@@ -426,11 +455,23 @@ class BookmarkServiceImpl(
         }
 
         val staleBefore = LocalDateTimeUtil.offset(LocalDateTime.now(), -CHECKALL_PENDING_STALE_MINUTES, ChronoUnit.MINUTES)
-        val items = bookmarkUserLinkMapper.findStuckLoading(staleBefore, minOf(free, DRAIN_MAX_BATCH_SIZE))
+        val items = bookmarkUserLinkMapper.findStuckLoading(
+            staleBefore, minOf(free, DRAIN_MAX_BATCH_SIZE), MAX_DISPATCH_ATTEMPTS
+        )
         if (items.isEmpty()) return
 
         // 取锁失败说明这条已经在途（上一轮投递的任务还没跑完），跳过即可，别投第二遍
         val dispatched = items.filter { parseLock.tryAcquire(ParseLock.dispatch(it.userLinkId), DISPATCH_LOCK_TTL) }
+        if (dispatched.isEmpty()) {
+            log.debug("[drainStuckLoading] 本轮 ${items.size} 条全部在途，无需补投递")
+            return
+        }
+
+        // 计数先落库再投递。反过来的话，任务跑得快的那些会在 UPDATE 之前就把节点翻走，
+        // 这条 UPDATE 于是加在一条已经收口的记录上——虽然无害，但计数就不再等于"投了几次"
+        runCatching { bookmarkUserLinkMapper.incrementDispatchAttempts(dispatched.map { it.userLinkId }) }
+            .onFailure { log.warn("[drainStuckLoading] 重试计数累加失败(仍继续投递): ${it.message}") }
+
         dispatched.forEach { item ->
             if (item.unbound) {
                 eventPublisher.publishEvent(
@@ -444,6 +485,53 @@ class BookmarkServiceImpl(
         }
         log.debug("[drainStuckLoading] 本轮补投递 ${dispatched.size}/${items.size} 条(其余在途)，解析队列余量 $free")
     }
+
+    /**
+     * 输出「此刻有多少用户桌面在转圈、最久的转了多久」。
+     *
+     * 这是整条添加链路唯一真正的 SLI，而在此之前它没有任何一处被观测 —— `scrapper_call_log`
+     * 记的是单次调用、`bookmark_ping_log` 记的是巡检，都回答不了「用户现在还在等的有几条」。
+     * 于是 ADD-BOOKMARK-FLOW.md §7 那张兜底矩阵只是"设计上应该成立"，线上无从验证。
+     *
+     * 分级刻意做了区分：有积压但都很新是正常的（抓取本来就要几十秒），**超过陈旧阈值还在转**
+     * 才说明某条兜底没兜住，那才值得 warn。
+     */
+    private fun reportStuckLoading() = runCatching {
+        val stats = bookmarkUserLinkMapper.stuckLoadingStats()
+        if (stats.total == 0L) return@runCatching
+        val oldestMinutes = stats.oldestAgeSeconds / 60
+        val line = "[drainStuckLoading] 转圈中: 共 ${stats.total} 条(导入积压 ${stats.importPending} 条), " +
+            "最久已等 ${oldestMinutes} 分钟"
+        if (oldestMinutes >= CHECKALL_PENDING_STALE_MINUTES) {
+            log.warn("$line —— 已超过 ${CHECKALL_PENDING_STALE_MINUTES} 分钟陈旧阈值，说明有兜底没生效")
+        } else {
+            log.debug(line)
+        }
+    }.onFailure { log.warn("[drainStuckLoading] 转圈统计失败(忽略): ${it.message}") }.let { }
+
+    /**
+     * 把重试预算已经用尽、仍停在 `BOOKMARK_LOADING` 的占位就地终结成无源书签。
+     *
+     * 没有这一步，[drainStuckLoading] 就是一个**没有放弃条件**的重试循环：`findStuckLoading`
+     * 按 `created_at ASC LIMIT n` 取行，补投递锁只让在途的被跳过、并不改变它们仍排在最前面
+     * 这一事实，于是一批永远收不了口的记录会稳定占满那 n 个名额，新记录一轮都轮不到。
+     *
+     * 终结方式与「网址本身就解析不出来」完全一致（[finishNodeWithoutBookmark]）：翻成普通磁贴，
+     * 不绑 canonical 书签 —— `bookmark_user_link` 里存着用户自己的标题和网址，足够渲染，
+     * 这也是这类记录能有的最好结果。**比一个永远转圈的格子好。**
+     */
+    private fun terminateExhaustedLoading() = runCatching {
+        val exhausted = bookmarkUserLinkMapper.findExhaustedLoading(DRAIN_MAX_BATCH_SIZE, MAX_DISPATCH_ATTEMPTS)
+        if (exhausted.isEmpty()) return@runCatching
+        log.warn(
+            "[drainStuckLoading] ${exhausted.size} 条占位补投递已达 $MAX_DISPATCH_ATTEMPTS 次仍未收口，" +
+                "就地终结为无源书签(样例: ${exhausted.take(3).joinToString { it.urlFull.take(80) }})"
+        )
+        exhausted.forEach { item ->
+            runCatching { finishNodeWithoutBookmark(item.uid, item.userLinkId, item.layoutNodeId) }
+                .onFailure { log.warn("[drainStuckLoading] 终结占位失败: userLinkId=${item.userLinkId}, err=${it.message}") }
+        }
+    }.onFailure { log.warn("[drainStuckLoading] 终结耗尽占位失败(忽略): ${it.message}") }.let { }
 
     @Async(AsyncConfig.BOOKMARK_SWEEP_EXECUTOR)
     override fun retryUnreachableBookmarks() {
@@ -792,6 +880,46 @@ class BookmarkServiceImpl(
     private fun BookmarkEntity.scheduleAfterParseSuccess() =
         advanceSchedule(PingOutcome.ALIVE, contentRefreshed = true)
 
+    // ────── 解析结果的两种终态（**所有**改 parseStatus 的地方都必须走这里）──────
+    //
+    // 这五行此前被逐字复制了十遍：`isActivity` / `parseStatus` / `parseErrMsg` / `updateTime`
+    // 再加一句 schedule*。四个字段之间是有约束的（SUCCESS 必然 isActivity=true 且 errMsg 为空），
+    // 而调度列那一句漏掉不会报任何错 —— 那条记录的 next_check_at 就停在旧值上，要么被每轮巡检
+    // 重复选中，要么再也不被选中。把它写成注释里的一条纪律（"每个写 parse_status 的地方都必须
+    // 调 scheduleAfterParse*"）是不够的：纪律靠人记，而这里可以靠类型。
+    //
+    // 新增解析路径时**不要**再手写这四个字段，调这两个方法。
+
+    /**
+     * 落成「抓到了」：可用、SUCCESS、清空错误、推进内容刷新周期。
+     *
+     * 注意它**不写库** —— 调用方往往还要在同一次 update 里带上 title/资产等其它字段，
+     * 强行在这里落库会变成两次写。
+     */
+    private fun BookmarkEntity.markParseSucceeded() = apply {
+        isActivity = true
+        parseStatus = ParseStatusEnum.SUCCESS
+        parseErrMsg = null
+        updateTime = LocalDateTime.now()
+        scheduleAfterParseSuccess()
+    }
+
+    /**
+     * 落成「这个站点抓不到」：不可用、UNREACHABLE、记下原因、计入连续失败走退避。
+     *
+     * ⚠️ 只用于**目标站点**的失败。「我方抓取服务不可用」(E307) 绝不能走到这里——那种情况必须
+     * 保持 PENDING 不收口，否则用户桌面上那个节点会脱离 BOOKMARK_LOADING、也就脱离
+     * drainStuckLoading 的重投递范围，之后即使抓取成功也没有任何机制会把结果回传给它。
+     * 判据见 [isScrapperUnavailable]，每个调用点都在进来之前先挡了一道。
+     */
+    private fun BookmarkEntity.markParseUnreachable(errMsg: String?) = apply {
+        isActivity = false
+        parseStatus = ParseStatusEnum.UNREACHABLE
+        parseErrMsg = errMsg
+        updateTime = LocalDateTime.now()
+        scheduleAfterParseFailure()
+    }
+
     /**
      * 解析判定站点不可达后推进调度：计入连续失败，走指数退避。
      *
@@ -899,13 +1027,8 @@ class BookmarkServiceImpl(
         // 放进 href 会被当成站内相对路径，点开变成 https://bookmarkify.cc/github.com/tcyeee。
         val userLink = BookmarkUserLink(bookmarkUrl.urlRaw, uid, nodeEntity.id, bookmark)
 
-        // 4. 布局节点与用户关联必须原子写入：分开写时，第二条失败会在用户桌面上留下一个
-        //    没有任何书签数据的孤儿节点——layout() 按 layoutNodeId 找不到对应的 BookmarkShow，
-        //    前端只能渲染出一个点不开也删不掉的空格子。
-        txTemplate.execute {
-            layoutNodeMapper.insert(nodeEntity)
-            bookmarkUserLinkMapper.insert(userLink)
-        }
+        // 4. 布局节点与用户关联原子写入，见 insertNodeAndLink。
+        insertNodeAndLink(nodeEntity, userLink)
         log.debug("[addOne] Step3 已创建布局节点与用户关联: nodeId=${nodeEntity.id}, userLinkId=${userLink.id}, type=${nodeEntity.type}")
 
         // 5. 需要解析 → 立即返回 loading 占位 VO，同时发布异步解析事件。
@@ -1044,13 +1167,7 @@ class BookmarkServiceImpl(
         val startedAt = System.currentTimeMillis()
         return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
             onSuccess = { vo ->
-                bookmark.apply {
-                    isActivity = true
-                    parseStatus = ParseStatusEnum.SUCCESS
-                    parseErrMsg = null
-                    updateTime = LocalDateTime.now()
-                    scheduleAfterParseSuccess()
-                }
+                bookmark.markParseSucceeded()
                 baseMapper.updateById(bookmark)
                 log.debug("[adminCheckLiveness] 检测成功: bookmarkId=$bookmarkId, source=${vo.primarySource}")
                 BookmarkLivenessVO(
@@ -1073,13 +1190,7 @@ class BookmarkServiceImpl(
                     throw e
                 }
                 recordScrapeFailure(bookmark, e, startedAt)
-                bookmark.apply {
-                    isActivity = false
-                    parseStatus = ParseStatusEnum.UNREACHABLE
-                    parseErrMsg = e.message
-                    updateTime = LocalDateTime.now()
-                    scheduleAfterParseFailure()
-                }
+                bookmark.markParseUnreachable(e.message)
                 baseMapper.updateById(bookmark)
                 log.debug("[adminCheckLiveness] 检测失败: bookmarkId=$bookmarkId, err=${e.message}")
                 BookmarkLivenessVO(
@@ -1126,14 +1237,9 @@ class BookmarkServiceImpl(
         val startedAt = System.currentTimeMillis()
         runCatching { apiService.scrape(bookmark.rawUrl, apiService.scrapeRequest(bookmark.rawUrl, CacheMode.BYPASS)) }.fold(
             onSuccess = { vo ->
-                bookmark.apply {
+                bookmark.markParseSucceeded().apply {
                     title = vo.title
                     description = vo.description
-                    isActivity = true
-                    parseStatus = ParseStatusEnum.SUCCESS
-                    parseErrMsg = null
-                    updateTime = LocalDateTime.now()
-                    scheduleAfterParseSuccess()
                     // 「一键更新」是管理员显式要求采用抓取值，标题/简介此后不再是人工值 → 解锁
                     unlock(BookmarkLockedField.TITLE, BookmarkLockedField.DESCRIPTION)
                 }
@@ -1146,13 +1252,7 @@ class BookmarkServiceImpl(
                     throw e
                 }
                 recordScrapeFailure(bookmark, e, startedAt)
-                bookmark.apply {
-                    isActivity = false
-                    parseStatus = ParseStatusEnum.UNREACHABLE
-                    parseErrMsg = e.message
-                    updateTime = LocalDateTime.now()
-                    scheduleAfterParseFailure()
-                }
+                bookmark.markParseUnreachable(e.message)
                 log.debug("[adminRefresh] 更新失败: bookmarkId=$bookmarkId, err=${e.message}")
             },
         )
@@ -1164,14 +1264,9 @@ class BookmarkServiceImpl(
         val urlWrapper = WebsiteParser.urlWrapper(url)
         val bookmark = getByUrl(urlWrapper) ?: return false
         log.debug("[adminSyncFromExternalScrape] 网站管理活性检测命中已有书签，同步落库: bookmarkId=${bookmark.id}, url=$url")
-        bookmark.apply {
+        bookmark.markParseSucceeded().apply {
             title = vo.title
             description = vo.description
-            isActivity = true
-            parseStatus = ParseStatusEnum.SUCCESS
-            parseErrMsg = null
-            updateTime = LocalDateTime.now()
-            scheduleAfterParseSuccess()
         }
         siteAssetWriter.persist(bookmark.siteId, bookmark.id, bookmark.rawUrl, vo, 0, bookmark.isRootPage)
         baseMapper.updateById(bookmark)
@@ -1393,20 +1488,20 @@ class BookmarkServiceImpl(
     /** 解析书签，然后保存到数据库，同时通知到用户 */
     override fun parseAndNotice(uid: String, bookmarkId: String, userLinkId: String, nodeId: String) {
         log.debug("[parseAndNotice-4] 开始书签解析: uid=$uid, bookmarkId=$bookmarkId, userLinkId=$userLinkId, nodeId=$nodeId")
-        val resolved = runCatching { parseBookmark(baseMapper.selectById(bookmarkId)) }.onFailure { ex ->
+        // 交互式路径绕过 scrapper 的缓存。要绕的主要是那 60 秒的**负缓存**：它是
+        // "刚刚有人抓这个网址失败过"，命中即 RECENTLY_FAILED → E304 → 这条书签直接落成
+        // UNREACHABLE —— 而当前这个用户根本没有得到过一次真实的尝试，别人的一次失败记在了
+        // 他账上。用户此刻正盯着那个转圈的格子，多花几 KB 换一次真实结论是划算的。
+        // 导入路径(parseAndResetUserItem)刻意**不**这么做：那里几千条一起跑，缓存正是要用的。
+        val resolved = runCatching { parseBookmark(baseMapper.selectById(bookmarkId), CacheMode.BYPASS) }.onFailure { ex ->
             // 解析链路中的未预期异常（而非「抓取失败」这类已内部兜底为 UNREACHABLE 的正常业务失败）不能让节点
             // 永久停在 BOOKMARK_LOADING——此前这里的异常会一路冒泡到事件监听器，被其 runCatching 吞掉且
             // 不回写任何状态，用户端只会看到一个转不动的加载占位符。与 parseAndResetUserItem 保持一致，
             // 退化为与「ping 不通」一致的处理：落一条 UNREACHABLE 记录，让节点照常收口而不是无限转圈。
             log.error("[parseAndNotice-4] 解析异常，标记为不可用: bookmarkId=$bookmarkId", ex)
-            baseMapper.selectById(bookmarkId)?.apply {
-                isActivity = false
-                parseStatus = ParseStatusEnum.UNREACHABLE
-                parseErrMsg = "parse failed: ${ex.message}"
-                updateTime = LocalDateTime.now()
-                scheduleAfterParseFailure()
-                baseMapper.insertOrUpdate(this)
-            }
+            baseMapper.selectById(bookmarkId)
+                ?.markParseUnreachable("parse failed: ${ex.message}")
+                ?.also { baseMapper.insertOrUpdate(it) }
         }.getOrNull()
 
         // parseByApi 在「抓取服务本身不可用」(isScrapperUnavailable) 时会刻意把书签留在 PENDING，
@@ -1418,6 +1513,10 @@ class BookmarkServiceImpl(
         // 因此仍是 PENDING 时直接返回，节点继续留在 LOADING，等 drainStuckLoading() 按陈旧阈值补投递。
         if (resolved?.parseStatus == ParseStatusEnum.PENDING) {
             log.debug("[parseAndNotice-4] 书签仍为 PENDING(多半是抓取服务暂不可用)，节点保持 LOADING 等待重投递: nodeId=$nodeId, bookmarkId=$bookmarkId")
+            // 这一次补投递没有得到任何关于这个网址的结论，不能算在它头上。少了这一步，一次几十
+            // 分钟的 scrapper 故障会把积压里每条记录的重试预算耗光，恢复后它们已经被
+            // terminateExhaustedLoading 当作"重试到上限"终结成无源书签了 —— 我方故障不该有这种后果
+            forgiveDispatchAttempt(userLinkId)
             return
         }
 
@@ -1478,14 +1577,8 @@ class BookmarkServiceImpl(
                 finishNodeWithoutBookmark(uid, userLinkId, layoutNodeId)
                 return
             }
-            existing.apply {
-                isActivity = false
-                parseStatus = ParseStatusEnum.UNREACHABLE
-                parseErrMsg = "parse failed: ${ex.message}"
-                updateTime = LocalDateTime.now()
-                scheduleAfterParseFailure()
-                baseMapper.insertOrUpdate(this)
-            }
+            existing.markParseUnreachable("parse failed: ${ex.message}")
+                .also { baseMapper.insertOrUpdate(it) }
         }
 
         // 与 parseAndNotice 同理：parseByApi 在「抓取服务本身不可用」时会刻意把 entity 留在 PENDING，
@@ -1495,6 +1588,8 @@ class BookmarkServiceImpl(
         // 原样留给下一轮 drainStuckLoading 重新触发本方法。
         if (entity.parseStatus == ParseStatusEnum.PENDING) {
             log.debug("[parseAndResetUserItem] 书签仍为 PENDING(多半是抓取服务暂不可用)，节点保持 LOADING 等待重投递: rawUrl=$rawUrl")
+            // 同 parseAndNotice：我方故障不消耗这条记录的重试预算
+            forgiveDispatchAttempt(userLinkId)
             return
         }
 
@@ -1540,14 +1635,14 @@ class BookmarkServiceImpl(
      * 据此照常翻转节点并推送，用户先看到基础信息，在跑的那次解析完成后刷新即是完整数据。
      * 让一个解析线程空等几十秒去换这一次的完整度，不划算。
      */
-    private fun parseBookmark(bookmark: BookmarkEntity): BookmarkEntity {
+    private fun parseBookmark(bookmark: BookmarkEntity, cacheMode: CacheMode = CacheMode.DEFAULT): BookmarkEntity {
         val lockKey = ParseLock.bookmark(bookmark.id)
         if (!parseLock.tryAcquire(lockKey, PARSE_LOCK_TTL)) {
             log.debug("[parseBookmark] 该书签已有解析在途，跳过本次: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
             return baseMapper.selectById(bookmark.id) ?: bookmark
         }
         return try {
-            parseBookmarkExclusively(bookmark)
+            parseBookmarkExclusively(bookmark, cacheMode)
         } finally {
             parseLock.release(lockKey)
         }
@@ -1565,7 +1660,10 @@ class BookmarkServiceImpl(
      * ping 保留给定时活性巡检 [pingSweep]：那里它是主角（判定站点死活并写 bookmark_ping_log），
      * 而不是抓取前的一道预检。
      */
-    private fun parseBookmarkExclusively(bookmark: BookmarkEntity): BookmarkEntity {
+    private fun parseBookmarkExclusively(
+        bookmark: BookmarkEntity,
+        cacheMode: CacheMode = CacheMode.DEFAULT,
+    ): BookmarkEntity {
         log.debug("[parseBookmark] 开始调度解析: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
         val existing = baseMapper.selectById(bookmark.id)
         if (existing != null && existing.verifyFlag) {
@@ -1577,22 +1675,15 @@ class BookmarkServiceImpl(
         // 前端会对这类书签展示统一的圆圈图标，不依赖抓取到的标题/图标。
         if (WebsiteParser.classifyLinkType(bookmark.urlHost) != BookmarkLinkType.DOMAIN) {
             log.debug("[parseBookmark] 非域名类型，跳过抓取: bookmarkId=${bookmark.id}, urlHost=${bookmark.urlHost}")
-            return bookmark.apply {
-                isActivity = true
-                parseStatus = ParseStatusEnum.SUCCESS
-                parseErrMsg = null
-                updateTime = LocalDateTime.now()
-                // 这类书签被 pingSweep 的 DOMAIN 过滤排除在外，调度列对它们没有实际作用，
-                // 但仍然写上：宁可多余，也不要留下一批 next_check_at 永远为 NULL 的记录，
-                // 那会让「NULL 视为到期」的兜底规则每轮都把它们捞出来
-                scheduleAfterParseSuccess()
-                baseMapper.insertOrUpdate(this)
-            }
+            // markParseSucceeded 顺带写上调度列：这类书签被 pingSweep 的 DOMAIN 过滤排除在外，
+            // 调度列对它们没有实际作用，但宁可多余，也不要留下一批 next_check_at 永远为 NULL
+            // 的记录 —— 那会让「NULL 视为到期」的兜底规则每轮都把它们捞出来
+            return bookmark.markParseSucceeded().also { baseMapper.insertOrUpdate(it) }
         }
 
         val mode = if (projectConfig.useThirdPartyParser) "远程scrapper" else "本地Jsoup"
         log.debug("[parseBookmark] 选择解析模式: $mode, bookmarkId=${bookmark.id}")
-        val parsed = if (projectConfig.useThirdPartyParser) parseByApi(bookmark) else parseLocally(bookmark)
+        val parsed = if (projectConfig.useThirdPartyParser) parseByApi(bookmark, cacheMode) else parseLocally(bookmark)
         // 分类与 NSFW 判定都是纯后台元数据，用户看不到，却各要一次 10s 的 DeepSeek 往返。
         // 留在这里等于让每条书签多占解析线程 20s，而解析池的吞吐直接决定「加书签要等多久」。
         // 拆到独立线程池上异步补，主链路抓完就能推送给用户。
@@ -1677,13 +1768,7 @@ class BookmarkServiceImpl(
         val manual = bookmark.copy()
         val wrapper = runCatching { WebsiteParser.parse(bookmark.rawUrl) }.getOrElse {
             log.debug("[parseLocally] 页面抓取失败: bookmarkId=${bookmark.id}, err=${it.message}")
-            bookmark.apply {
-                parseStatus = ParseStatusEnum.UNREACHABLE
-                isActivity = false
-                parseErrMsg = it.message
-                scheduleAfterParseFailure()
-                baseMapper.insertOrUpdate(this)
-            }
+            bookmark.markParseUnreachable(it.message).also { b -> baseMapper.insertOrUpdate(b) }
             log.warn("[parseLocally] 页面抓取失败: bookmarkId=${bookmark.id}, err=${it.message}")
             return bookmark
         }
@@ -1720,12 +1805,14 @@ class BookmarkServiceImpl(
     /**
      * 远程解析（scrapper）：通过自部署的 bookmarkify-scrapper 获取元信息 + favicon base64 + LOGO/OG 存 OSS
      */
-    private fun parseByApi(bookmark: BookmarkEntity): BookmarkEntity {
-        log.debug("[parseByApi] 开始远程解析(scrapper): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}")
+    private fun parseByApi(bookmark: BookmarkEntity, cacheMode: CacheMode = CacheMode.DEFAULT): BookmarkEntity {
+        log.debug("[parseByApi] 开始远程解析(scrapper): bookmarkId=${bookmark.id}, rawUrl=${bookmark.rawUrl}, cacheMode=$cacheMode")
         val startedAt = System.currentTimeMillis()
         // 抓取会覆盖 title/description/appName，先留一份人工值，落库前还原被锁定的那些
         val manual = bookmark.copy()
-        return runCatching { apiService.queryWebsiteInfo(bookmark.rawUrl) }.fold(
+        return runCatching {
+            apiService.scrape(bookmark.rawUrl, apiService.scrapeRequest(bookmark.rawUrl, cacheMode))
+        }.fold(
             onSuccess = { vo ->
                 log.debug("[parseByApi] scrapper 返回成功: bookmarkId=${bookmark.id}, title=${vo.title}, source=${vo.primarySource}, assets=${vo.assets.size}")
                 val previousTitle = bookmark.title
@@ -1776,14 +1863,7 @@ class BookmarkServiceImpl(
                 // 失败也留快照：只把书签标成 UNREACHABLE 的话，事后只知道"抓不到"，
                 // 不知道抓的是哪个 URL、报了什么错、耗了多久。persistFailure 一直没人调用
                 recordScrapeFailure(bookmark, e, startedAt)
-                bookmark.apply {
-                    isActivity = false
-                    parseStatus = ParseStatusEnum.UNREACHABLE
-                    parseErrMsg = e.message
-                    updateTime = LocalDateTime.now()
-                    scheduleAfterParseFailure()
-                    baseMapper.insertOrUpdate(this)
-                }
+                bookmark.markParseUnreachable(e.message).also { baseMapper.insertOrUpdate(it) }
             }
         )
     }
@@ -1897,15 +1977,38 @@ class BookmarkServiceImpl(
     }
 
     /**
+     * 免掉这一次补投递的重试计数。
+     *
+     * 只用于「我方抓取服务不可用」(E307) 的早退路径。重试上限要防的是「这条记录本身有问题、
+     * 重试多少次都收不了口」，而 E307 说明**我方**坏了 —— 拿它扣用户书签的重试预算，等于把
+     * 一次运维故障变成一批永久降级的无源书签。判据必须只计入「跑到底了仍然没收口」的那些。
+     */
+    private fun forgiveDispatchAttempt(userLinkId: String) {
+        runCatching { bookmarkUserLinkMapper.resetDispatchAttempts(userLinkId) }
+            .onFailure { log.warn("[forgiveDispatchAttempt] 重试计数清零失败(忽略): userLinkId=$userLinkId, err=${it.message}") }
+    }
+
+    /**
      * 把一个布局节点从 BOOKMARK_LOADING 收口成 BOOKMARK，但不绑定任何 canonical 书签。
      *
-     * 用于「这个网址永远抓不成书签」的终局（如 javascript: 小书签）：留在 LOADING 会被
-     * [drainStuckLoading] 当作待办无限重投，而它的展示数据本来就只能来自用户自己填的那份。
+     * 用于「这个网址永远抓不成书签」的终局（如 javascript: 小书签，或补投递到达上限仍不收口）：
+     * 留在 LOADING 会被 [drainStuckLoading] 当作待办无限重投，而它的展示数据本来就只能来自
+     * 用户自己填的那份。
+     *
+     * 关联行的 `bookmark_id` 必须从 `'LOADING'` 改成 NULL，不能原样留着：那个字面量的含义是
+     * 「等着被绑定」，[assertNotPendingImport] 正是靠它判断「这个网址已经在导入队列里了」。
+     * 留着的话，用户日后再添加同一个网址会撞上一个**假的 E126**，而且再也解释不清 ——
+     * 队列里那条其实早就终结了。语义收敛成：`'LOADING'` = 待绑定，NULL = 确定没有 canonical 记录。
      */
     private fun finishNodeWithoutBookmark(uid: String, userLinkId: String, layoutNodeId: String) {
         val node = layoutNodeMapper.selectById(layoutNodeId) ?: return
-        node.type = NodeTypeEnum.BOOKMARK
-        layoutNodeMapper.updateById(node)
+        // 两处写入放进同一个短事务：节点翻了而标记没清，就是上面说的假 E126；
+        // 标记清了而节点没翻，这条记录会掉出 findStuckLoading 的 unbound 分支永远转圈
+        txTemplate.execute {
+            bookmarkUserLinkService.clearUnboundMarker(userLinkId)
+            node.type = NodeTypeEnum.BOOKMARK
+            layoutNodeMapper.updateById(node)
+        }
         showForDesktop(userLinkId)
             .let { UserLayoutNodeVO(node, it) }
             .also { SocketUtils.homeItemUpdate(uid, it) }
@@ -2015,6 +2118,13 @@ class BookmarkServiceImpl(
         private const val DRAIN_QUEUE_HEADROOM = 50
         // 单轮补投递上限：即使队列很空也不一次性捞几千条，避免一次导入独占整个队列
         private const val DRAIN_MAX_BATCH_SIZE = 200
+        // 一条占位最多补投递几次。超过即由 terminateExhaustedLoading 就地终结成无源书签。
+        //
+        // 取 5 而不是更大：补投递锁 TTL 是 5 分钟，5 次意味着一条记录在放弃前会横跨约 25 分钟、
+        // 期间足够覆盖 scrapper 重启这类短暂故障；而真正持续的我方故障(E307)根本不消耗这个
+        // 预算（见 forgiveDispatchAttempt），所以能耗尽它的只有「跑到底了仍然收不了口」——
+        // 那种记录再试 50 次也是一样的结果，还会一直占着队头把新记录饿死。
+        private const val MAX_DISPATCH_ATTEMPTS = 5
         // 补投递锁的存活时间，需大于单条解析的最长耗时(ping 15s + 抓取 60s + LLM 富化)，
         // 否则任务还在跑锁就过期了，下一轮会重复投递同一条
         private val DISPATCH_LOCK_TTL: Duration = Duration.ofMinutes(5)

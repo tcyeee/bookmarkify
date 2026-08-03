@@ -12,6 +12,7 @@ import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.dto.*
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
+import java.net.URI
 import java.net.URL
 
 /** 网站信息解析器 负责从 URL 获取 Document 并解析出 WebsiteHeaderInfo */
@@ -142,18 +143,57 @@ object WebsiteParser {
 
     /**
      * 爬取网站信息
+     *
+     * **重定向改为手动逐跳跟随**，理由不是要产出跳转链（那是 scrapper 的事），而是 SSRF：
+     * 这条路径由 API 进程直接发请求，而 API 能看到数据库、Redis 与整个内网。Jsoup 默认自动
+     * 跟随重定向，于是一个公网地址 302 到 `169.254.169.254` 就绕过了发起前的那次地址校验 ——
+     * 校验必须发生在**每一跳**上才有意义。见 [SsrfGuard]。
+     *
      * @param urlWrapper 网站url包装类
      */
     private fun getDocument(urlWrapper: BookmarkUrlWrapper): Document {
         log.debug("[getDocument] 开始爬取: url={}", urlWrapper.urlFull)
-        return runCatching {
-            Jsoup.connect(urlWrapper.urlFull).timeout(10000).ignoreHttpErrors(false).get()
-        }.onSuccess {
-            log.debug("[getDocument] 爬取成功: title={}, charset={}, elementCount={}", it.title(), it.charset(), it.allElements.size)
-        }.getOrElse {
-            log.debug("[getDocument] 爬取失败: url={}, error={}", urlWrapper.urlFull, it.message)
-            throw CommonException(ErrorType.E304, it.message ?: it.toString())
+        var current = urlWrapper.urlFull
+        // SsrfGuard 抛的 CommonException 必须原样冒泡，不能被下面的 catch 翻成 E304：
+        // "我们拒绝访问" 和 "这个站点打不开" 是两件事，混在一起会让书签被误判成失联
+        repeat(SsrfGuard.MAX_REDIRECTS + 1) { hop ->
+            SsrfGuard.assertPublic(current)
+            val response = runCatching {
+                Jsoup.connect(current)
+                    .timeout(10000)
+                    .followRedirects(false)
+                    .ignoreHttpErrors(true)
+                    .execute()
+            }.getOrElse {
+                log.debug("[getDocument] 爬取失败: url={}, error={}", current, it.message)
+                throw CommonException(ErrorType.E304, it.message ?: it.toString())
+            }
+
+            val location = response.header("Location")
+            if (response.statusCode() !in 300..399 || location.isNullOrBlank()) {
+                if (response.statusCode() >= 400) {
+                    log.debug("[getDocument] 目标返回错误状态: url={}, status={}", current, response.statusCode())
+                    throw CommonException(ErrorType.E304, "HTTP ${response.statusCode()} $current")
+                }
+                // parse() 也会抛：响应不是 HTML（PDF、图片、二进制附件）时解析不出文档。
+                // 旧实现用 .get() 时这一步同样在 runCatching 里，别把它漏在外面变成 500
+                return runCatching { response.parse() }.getOrElse {
+                    log.debug("[getDocument] 响应无法解析为 HTML: url={}, contentType={}", current, response.contentType())
+                    throw CommonException(ErrorType.E304, "响应不是 HTML(${response.contentType()}): ${it.message}")
+                }.also {
+                    log.debug(
+                        "[getDocument] 爬取成功: hops={}, title={}, charset={}, elementCount={}",
+                        hop, it.title(), it.charset(), it.allElements.size,
+                    )
+                }
+            }
+            // Location 可能是相对地址，按当前 URL 解析成绝对地址后进入下一跳
+            current = runCatching { URI(current).resolve(location).toString() }.getOrElse {
+                throw CommonException(ErrorType.E304, "无法解析重定向目标: $location")
+            }
+            log.debug("[getDocument] 跟随重定向: hop={}, next={}", hop, current)
         }
+        throw CommonException(ErrorType.E304, "重定向次数超过 ${SsrfGuard.MAX_REDIRECTS} 次: ${urlWrapper.urlFull}")
     }
 
     /**
@@ -362,7 +402,11 @@ object WebsiteParser {
 
     private fun fetchManifest(manifestUrl: String): String? {
         log.debug("[fetchManifest] 请求Manifest: {}", manifestUrl)
+        // manifest 的地址来自页面自己声明的 <link rel="manifest">，也就是**目标站点可控的输入**，
+        // 与页面地址同样需要过 SSRF 检查。这里失败只记日志返回 null：manifest 是增量信息，
+        // 拿不到不该让整次解析失败（与其它 fetchManifest 失败路径一致）
         return runCatching {
+            SsrfGuard.assertPublic(manifestUrl)
             HttpUtil.createGet(manifestUrl).header(
                 "User-Agent",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
