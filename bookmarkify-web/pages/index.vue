@@ -256,6 +256,7 @@ interface BookmarkSearchVO {
 }
 
 const bookmarkStore = useBookmarkStore()
+const { $track } = useNuxtApp()
 
 const isLoadingBookmarks = ref(false)
 // 骨架屏行宽随机化，避免整齐划一显得呆板
@@ -365,6 +366,7 @@ async function confirmCreateFolder() {
   creatingFolder.value = true
   try {
     await bookmarksCreateDir(ids, name, 0)
+    $track('folder-create')
     useToastStore().success('文件夹创建成功')
     closeCreateFolderPicker()
     await bookmarkStore.update()

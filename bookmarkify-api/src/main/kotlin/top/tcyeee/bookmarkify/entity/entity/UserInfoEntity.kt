@@ -39,7 +39,7 @@ data class UserInfoEntity(
         deviceId = deviceId,
     )
 
-    fun authVO(token: String): UserSessionInfo = UserSessionInfo(this, token)
+    fun authVO(token: String, isNewUser: Boolean = false): UserSessionInfo = UserSessionInfo(this, token, isNewUser)
 }
 
 enum class RoleEnum { USER, ADMIN }

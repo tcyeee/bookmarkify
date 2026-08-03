@@ -327,6 +327,7 @@ export const useBookmarkStore = defineStore('homeItems', {
       delete this.nodes[id]
       for (const k of Object.keys(this.order)) this.order[k] = (this.order[k] ?? []).filter((x) => x !== id)
       delete this.order[id]
+      if (import.meta.client) useNuxtApp().$track('bookmark-delete')
       // 删除后源文件夹若 ≤1 项 → 解散，杜绝单项文件夹残留
       if (from && from !== ROOT_KEY && this.nodes[from]?.type === HomeItemType.BOOKMARK_DIR && (this.order[from]?.length ?? 0) <= 1) {
         this.dissolveFolderLocal(from)
@@ -334,19 +335,22 @@ export const useBookmarkStore = defineStore('homeItems', {
     },
 
     // 删除一个节点及其全部子孙（后端 deleteByIds 对 BOOKMARK_DIR 会级联删除子项，本地需保持一致）
-    removeSubtree(id: string) {
+    // isRoot 仅用于埋点去重：递归到子孙时传 false，避免一次文件夹删除按子项数量重复上报
+    removeSubtree(id: string, isRoot = true) {
       const node = this.nodes[id]
       if (node?.type === HomeItemType.BOOKMARK_DIR) {
-        for (const cid of [...(this.order[id] ?? [])]) this.removeSubtree(cid)
+        for (const cid of [...(this.order[id] ?? [])]) this.removeSubtree(cid, false)
       }
       this.clearResolutionWatch(id)
       delete this.nodes[id]
       delete this.order[id]
       for (const k of Object.keys(this.order)) this.order[k] = (this.order[k] ?? []).filter((x) => x !== id)
+      if (isRoot && import.meta.client) useNuxtApp().$track('folder-delete')
     },
 
     reorderLocal(parentKey: string, ids: Array<string>) {
       this.order[parentKey] = [...ids]
+      if (import.meta.client) useNuxtApp().$track('bookmark-reorder')
     },
 
     moveLocal(id: string, toParentKey: string, index: number) {
@@ -356,6 +360,7 @@ export const useBookmarkStore = defineStore('homeItems', {
       next.splice(Math.max(0, Math.min(index, next.length)), 0, id)
       this.order[toParentKey] = next
       if (this.nodes[id]) this.nodes[id] = { ...this.nodes[id], parentId: toParentKey === ROOT_KEY ? null : toParentKey }
+      if (import.meta.client) useNuxtApp().$track('bookmark-move')
       // 移出后源文件夹若 ≤1 项 → 正常解散（预期行为，不报警）。这是「绝不出现单项文件夹」的主路径。
       if (from && from !== ROOT_KEY && this.nodes[from]?.type === HomeItemType.BOOKMARK_DIR && (this.order[from]?.length ?? 0) <= 1) {
         this.dissolveFolderLocal(from)

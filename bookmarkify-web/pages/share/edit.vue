@@ -137,6 +137,7 @@ function shareable(node: UserLayoutNodeVO) {
 const route = useRoute()
 const bookmarkStore = useBookmarkStore()
 const runtimeConfig = useRuntimeConfig()
+const { $track } = useNuxtApp()
 
 const folderId = (route.query.folderId as string) ?? ''
 
@@ -207,7 +208,9 @@ async function publish() {
       rejectReason.value = res.rejectReason || '内容不符合发布规范'
     }
     published.value = true
+    $track('share-create', String(bookmarkUserLinkIds.length))
   } catch (error) {
+    $track('share-create-fail')
     console.error('[share/edit] 发布分享失败', error)
   } finally {
     publishing.value = false
@@ -217,6 +220,7 @@ async function publish() {
 async function copyLink() {
   try {
     await navigator.clipboard.writeText(shareUrl.value)
+    $track('share-copy-link')
     useToastStore().success('链接已复制')
   } catch (error) {
     console.error('[share/edit] 复制链接失败', error)

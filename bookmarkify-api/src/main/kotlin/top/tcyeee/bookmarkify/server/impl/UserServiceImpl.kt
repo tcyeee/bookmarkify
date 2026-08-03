@@ -189,11 +189,13 @@ class UserServiceImpl(
         if (cacheCode != params.code.trim()) throw CommonException(ErrorType.E301)
         RedisUtils.del(RedisType.CODE_EMAIL, email)
 
-        val userEntity = ktQuery().eq(UserInfoEntity::email, email).eq(UserInfoEntity::deleted, false).one() ?: createVerifiedUser(email)
+        var isNewUser = false
+        val userEntity = ktQuery().eq(UserInfoEntity::email, email).eq(UserInfoEntity::deleted, false).one()
+            ?: createVerifiedUser(email).also { isNewUser = true }
         // 该接口为公开端点,正常调用时无登录态;若携带了有效旧 token 则先登出再切换账户
         if (StpKit.USER.isLogin) StpKit.USER.logout()
         StpKit.USER.login(userEntity.id, true)
-        return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
+        return userEntity.authVO(StpKit.USER.tokenValue, isNewUser).writeToSession()
     }
 
     /**
@@ -208,6 +210,7 @@ class UserServiceImpl(
     override fun loginByGoogle(params: GoogleLoginParams): UserSessionInfo {
         val identity = verifyGoogleIdToken(params.idToken)
 
+        var isNewUser = false
         // 1. 先按稳定唯一标识 google_id 查找已关联账户
         val userEntity = ktQuery().eq(UserInfoEntity::googleId, identity.googleId).eq(UserInfoEntity::deleted, false).one()
         // 2. 未命中则按 Google 邮箱兑现现有账户并自动回填关联
@@ -221,11 +224,12 @@ class UserServiceImpl(
                 it.googleId = identity.googleId
                 it.googleEmail = identity.email
                 updateById(it)
+                isNewUser = true
             }
 
         if (StpKit.USER.isLogin) StpKit.USER.logout()
         StpKit.USER.login(userEntity.id, true)
-        return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
+        return userEntity.authVO(StpKit.USER.tokenValue, isNewUser).writeToSession()
     }
 
     /**
@@ -239,6 +243,7 @@ class UserServiceImpl(
     override fun loginByGithub(params: GithubLoginParams): UserSessionInfo {
         val identity = verifyGithubCode(params)
 
+        var isNewUser = false
         val userEntity = ktQuery().eq(UserInfoEntity::githubId, identity.githubId).eq(UserInfoEntity::deleted, false).one()
             ?: ktQuery().eq(UserInfoEntity::email, identity.email).eq(UserInfoEntity::deleted, false).one()?.also {
                 it.githubId = identity.githubId
@@ -249,11 +254,12 @@ class UserServiceImpl(
                 it.githubId = identity.githubId
                 it.githubLogin = identity.login
                 updateById(it)
+                isNewUser = true
             }
 
         if (StpKit.USER.isLogin) StpKit.USER.logout()
         StpKit.USER.login(userEntity.id, true)
-        return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
+        return userEntity.authVO(StpKit.USER.tokenValue, isNewUser).writeToSession()
     }
 
     /**
