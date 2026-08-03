@@ -278,6 +278,7 @@ type CleanupKind = 'invalid' | 'duplicate'
 const { t: translate } = useI18n()
 const bookmarkStore = useBookmarkStore()
 const toastStore = useToastStore()
+const { $track } = useNuxtApp()
 
 const pageSizeOptions = [10, 20, 50, 100]
 
@@ -686,6 +687,7 @@ async function confirmCreateCollection() {
   closeCreateDialog()
   try {
     await bookmarksCreateDir(ids, name, 0)
+    $track('folder-create')
     toastStore.success(translate('bookmarkLibrary.createSuccess'))
     selectedIds.value = new Set()
     if (selectedFolderId.value === null) await fetchPage()

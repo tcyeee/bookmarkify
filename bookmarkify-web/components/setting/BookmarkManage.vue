@@ -128,6 +128,7 @@ import type * as t from '@typing'
 type Phase = 'idle' | 'loading' | 'reviewing' | 'importing'
 
 const { t: translate } = useI18n()
+const { $track } = useNuxtApp()
 const bookmarkStore = useBookmarkStore()
 
 const fileInputRef = ref<HTMLInputElement>()
@@ -204,12 +205,14 @@ async function processFile(file: File) {
     const data = await bookmarksUploadPreview(file)
 
     if (data.total === 0) {
+      $track('import-preview-empty')
       statusMessage.value = translate('bookmarkManage.noBookmarksFound')
       statusType.value = 'default'
       phase.value = 'idle'
       return
     }
 
+    $track('import-preview', String(data.total))
     previewData.value = data
     pendingFile.value = file
 
@@ -236,6 +239,7 @@ async function processFile(file: File) {
     checkedUrls.value = new Set(data.items.filter((i) => !skipDuplicates || !i.isDuplicate).map((i) => i.url))
     phase.value = 'reviewing'
   } catch (error: any) {
+    $track('import-preview-fail')
     statusMessage.value = error?.msg || error?.message || translate('bookmarkManage.readFileFailed')
     statusType.value = 'error'
     phase.value = 'idle'
@@ -250,16 +254,19 @@ async function startImport() {
     : []
 
   phase.value = 'importing'
+  $track('import-start', String(selectedCount.value))
 
   try {
     const nodes = await bookmarksUpload(pendingFile.value, skipUrls)
     // 批量导入同样只靠 WebSocket 推送解除 loading；兜底监听由 addImportLoadingBatch 内部统一挂载
     // （逐项挂上千个定时器没有意义——它们指向的是同一次全量拉取，见 armPendingWatches）
     bookmarkStore.addImportLoadingBatch(nodes)
+    $track('import-done', String(nodes.length))
     statusMessage.value = translate('bookmarkManage.importStarted', { count: nodes.length })
     statusType.value = 'success'
     phase.value = 'idle'
   } catch (error: any) {
+    $track('import-fail')
     statusMessage.value = error?.msg || error?.message || translate('bookmarkManage.importFailed')
     statusType.value = 'error'
     phase.value = 'idle'

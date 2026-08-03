@@ -240,6 +240,7 @@ function addOne() {
     // 控制台留下一条 unhandled rejection，且对话框状态原地冻结——输入框内容和提示都停在提交前的
     // 样子，用户看不出这次到底走没走。错误 toast 由 http.ts 统一弹，这里只负责恢复可交互状态。
     .catch((error) => {
+      $track('bookmark-add-fail')
       console.error('[AddOneDialog] 添加书签失败', error)
       data.notice = undefined
     })
@@ -277,6 +278,7 @@ function selectBookmark(item: any) {
     })
     // 同 addOne：接住失败，避免 unhandled rejection 并恢复可交互状态
     .catch((error) => {
+      $track('bookmark-link-fail')
       console.error('[AddOneDialog] 关联书签失败', error)
       data.notice = undefined
     })

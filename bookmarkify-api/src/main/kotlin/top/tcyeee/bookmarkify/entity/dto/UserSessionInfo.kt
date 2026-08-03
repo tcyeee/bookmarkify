@@ -23,14 +23,17 @@ data class UserSessionInfo(
 
     @field:Schema(description = "用户是否验证") var verified: Boolean = false,
     @field:Schema(description = "用户TOKEN") var token: String,
+    // 仅登录接口返回一次，供前端区分注册/登录埋点；不写入 session，刷新态时天然为 null
+    @field:Schema(description = "本次调用是否新建了账户") var isNewUser: Boolean? = null,
 ) {
-    constructor(user: UserInfoEntity, token: String) : this(
+    constructor(user: UserInfoEntity, token: String, isNewUser: Boolean = false) : this(
         uid = user.id,
         nickName = user.nickName,
         email = user.email,
         googleEmail = user.googleEmail,
         githubLogin = user.githubLogin,
         token = token,
+        isNewUser = isNewUser,
     ) {
         this.verified = this.email != null
     }

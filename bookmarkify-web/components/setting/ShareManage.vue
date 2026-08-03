@@ -121,6 +121,7 @@ const toastStore = useToastStore()
 const confirmStore = useConfirmStore()
 const runtimeConfig = useRuntimeConfig()
 const websocketStore = useWebSocketStore()
+const { $track } = useNuxtApp()
 
 const PAGE_SIZE = 20
 
@@ -188,6 +189,7 @@ async function copyLink(item: t.ShareVO) {
   const url = `${runtimeConfig.public.siteUrl}/share/${item.id}`
   try {
     await navigator.clipboard.writeText(url)
+    $track('share-copy-link')
     toastStore.success(translate('shareManage.copySuccess'))
   } catch (error) {
     console.error('[ShareManage] 复制链接失败', error)
@@ -203,6 +205,7 @@ async function cancelShareItem(item: t.ShareVO) {
   try {
     await shareCancel(item.id)
     item.status = ShareStatus.CANCELLED
+    $track('share-cancel')
     toastStore.success(translate('shareManage.cancelSuccess'))
   } catch {
     // http 层已提示
@@ -242,6 +245,7 @@ async function confirmEdit() {
     item.note = res.note
     item.expireTime = res.expireTime
     closeEditDialog()
+    $track('share-edit')
     toastStore.success(translate('shareManage.editSuccess'))
   } catch {
     // http 层已提示

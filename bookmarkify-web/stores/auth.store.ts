@@ -33,9 +33,12 @@ export const useAuthStore = defineStore('auth', {
         // 邮箱验证码登录/注册，成功后合并到当前账号信息
         const result = await captchaVerifyEmail(params)
         this.account = { ...this.account, ...result }
-        if (import.meta.client) useNuxtApp().$track('login-email')
+        // isNewUser 由后端在 createVerifiedUser 分支才置 true，据此区分注册与登录埋点，
+        // 否则两者共用一个接口，注册转化率无法单独统计
+        if (import.meta.client) useNuxtApp().$track(result.isNewUser ? 'signup-email' : 'login-email')
         return result
       } catch (err: any) {
+        if (import.meta.client) useNuxtApp().$track('login-fail-email')
         return Promise.reject(err)
       }
     },
@@ -50,6 +53,7 @@ export const useAuthStore = defineStore('auth', {
         if (import.meta.client) useNuxtApp().$track('login-password')
         return result
       } catch (err: any) {
+        if (import.meta.client) useNuxtApp().$track('login-fail-password')
         return Promise.reject(err)
       }
     },
@@ -59,9 +63,10 @@ export const useAuthStore = defineStore('auth', {
         // Google ID Token 登录/注册，成功后合并到当前账号信息
         const result = await authLoginByGoogle({ idToken })
         this.account = { ...this.account, ...result }
-        if (import.meta.client) useNuxtApp().$track('login-google')
+        if (import.meta.client) useNuxtApp().$track(result.isNewUser ? 'signup-google' : 'login-google')
         return result
       } catch (err: any) {
+        if (import.meta.client) useNuxtApp().$track('login-fail-google')
         return Promise.reject(err)
       }
     },
@@ -83,9 +88,10 @@ export const useAuthStore = defineStore('auth', {
         // GitHub 授权码登录/注册，成功后合并到当前账号信息
         const result = await authLoginByGithub({ code, redirectUri })
         this.account = { ...this.account, ...result }
-        if (import.meta.client) useNuxtApp().$track('login-github')
+        if (import.meta.client) useNuxtApp().$track(result.isNewUser ? 'signup-github' : 'login-github')
         return result
       } catch (err: any) {
+        if (import.meta.client) useNuxtApp().$track('login-fail-github')
         return Promise.reject(err)
       }
     },

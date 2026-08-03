@@ -55,6 +55,7 @@ export interface UserInfo {
   avatarUrl?: string | null // 用户头像 OSS 原始路径（如 avatar/xxx.svg），永久有效，可安全持久化；签名 URL 通过 /user/avatar-url 按需获取
   googleEmail?: string | null // 已关联的 Google 邮箱（未关联为 null）
   githubLogin?: string | null // 已关联的 GitHub 用户名（未关联为 null）
+  isNewUser?: boolean | null // 仅登录接口返回一次：本次调用是否新建了账户，用于区分注册/登录埋点
 }
 
 export interface UserPreference {
