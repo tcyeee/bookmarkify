@@ -173,8 +173,19 @@ CREATE TABLE bookmark_user_link (
     pinned                       boolean DEFAULT false NOT NULL,
     link_type                    varchar(20) DEFAULT 'OTHER'::character varying NOT NULL,
     open_count                   integer DEFAULT 0 NOT NULL,
+    dispatch_attempts            integer DEFAULT 0 NOT NULL,
     CONSTRAINT bookmark_user_link_pkey PRIMARY KEY (id)
 );
+
+-- 同一用户不能重复收藏同一个 canonical 页面。这是判重的**权威约束**：
+-- 应用层的 assertNotAlreadyLinked 是 check-then-act，两个并发请求可以同时通过，
+-- 真正兜底的是这条索引（addOne / linkOne 捕获 DuplicateKeyException 翻成 E126）。
+-- 排除软删（删掉之后要能重新添加）与导入占位（'LOADING' 是常量，一个用户可以有很多条）。
+CREATE UNIQUE INDEX uk_bul_uid_bookmark ON public.bookmark_user_link USING btree (uid, bookmark_id)
+    WHERE deleted = false AND bookmark_id IS NOT NULL AND bookmark_id <> 'LOADING'::text;
+CREATE INDEX idx_bul_uid_live ON public.bookmark_user_link USING btree (uid, bookmark_id) WHERE deleted = false;
+CREATE INDEX idx_bul_layout_node ON public.bookmark_user_link USING btree (layout_node_id);
+CREATE INDEX idx_bul_bookmark ON public.bookmark_user_link USING btree (bookmark_id) WHERE deleted = false;
 
 CREATE TABLE category (
     id                           varchar(64) NOT NULL,
@@ -373,6 +384,11 @@ CREATE TABLE user_layout_node (
     created_at                   timestamp DEFAULT now() NOT NULL,
     CONSTRAINT user_layout_node_pkey PRIMARY KEY (id)
 );
+-- 部分索引：drainStuckLoading 每 30 秒按这个条件扫一次，而 BOOKMARK_LOADING
+-- 在稳态下只有正在抓取的那几条 + 导入积压，全表索引在这里是纯浪费
+CREATE INDEX idx_uln_loading ON public.user_layout_node USING btree (created_at) WHERE type = 'BOOKMARK_LOADING'::text;
+CREATE INDEX idx_uln_uid ON public.user_layout_node USING btree (uid);
+CREATE INDEX idx_uln_parent ON public.user_layout_node USING btree (parent_id) WHERE parent_id IS NOT NULL;
 
 CREATE TABLE user_preference (
     id                           varchar(40) NOT NULL,

@@ -65,6 +65,14 @@ class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<Bookma
             .set(BookmarkUserLink::bookmarkId, bookmarkId)
             .update()
 
+    // set(null) 而不是 setSql("bookmark_id = null")：MyBatis-Plus 的 KtUpdateWrapper 对
+    // 显式传入的 null 会照常拼进 SET 子句（区别于实体更新时的"null 字段跳过"）
+    override fun clearUnboundMarker(userLinkId: String): Boolean =
+        ktUpdate()
+            .eq(BookmarkUserLink::id, userLinkId)
+            .set(BookmarkUserLink::bookmarkId, null)
+            .update()
+
     override fun urlsByUid(uid: String): Set<String> =
         ktQuery()
             .eq(BookmarkUserLink::uid, uid)

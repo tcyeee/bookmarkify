@@ -227,9 +227,11 @@ resolved.parseStatus == PENDING ?   → 直接 return，节点保持 LOADING（�
 | 失败点 | 书签状态 | 节点状态 | 谁来兜底 | 多久 |
 |---|---|---|---|---|
 | 目标站点抓不到（E304） | `UNREACHABLE`, `isActivity=false` | 照常翻 `BOOKMARK` 并推送 | 灰显磁贴，`retryUnreachableBookmarks` 每小时:30 复查 | 立即可见 |
-| **我方抓取服务不可用（E307）** | **刻意保持 `PENDING`** | **刻意保持 `LOADING`** | `drainStuckLoading` | ≤30 分钟 |
+| **我方抓取服务不可用（E307）** | **刻意保持 `PENDING`** | **刻意保持 `LOADING`** | `drainStuckLoading`（且**清零**该行的重试计数） | ≤30 分钟 |
+| 网址指向内网（E308，仅本地解析路径） | `UNREACHABLE` | 照常收口 | 不重试——这是我方的安全决策，不是站点的问题 | 立即 |
 | 解析链路抛未预期异常 | 降级为 `UNREACHABLE` | 照常收口 | 同第一行 | 立即 |
 | 解析事件丢失（重启 / 池饱和） | `PENDING` | `LOADING` | `checkAll`（每 5 分钟）+ `drainStuckLoading`（每 30 秒） | ≤30 分钟 |
+| 补投递 5 次仍不收口 | 不限 | 强制翻 `BOOKMARK` | `terminateExhaustedLoading` 就地终结成无源书签 | ≤约 25 分钟 |
 | WebSocket 推送时用户不在线 | `SUCCESS` | 已是 `BOOKMARK` | 前端重连后 `refresh()` 补拉整棵树 | 重连即刻 |
 | WebSocket 半开（连接假活） | `SUCCESS` | 已是 `BOOKMARK` | 客户端心跳看门狗（3 个周期无任何帧 → 强制重连） | ≤15 秒 |
 | 推送丢了且前端没察觉 | `SUCCESS` | 已是 `BOOKMARK` | `watchForResolution` 递增轮询（30s→5min，8 次，共约 35 分钟） | 30 秒起 |
@@ -238,6 +240,20 @@ resolved.parseStatus == PENDING ?   → 直接 return，节点保持 LOADING（�
 **E307 那一行是整张表里最反直觉、也最容易被改错的。** 抓取服务没起 / 配错 / 限流时，这是**我方故障，不是这个网站挂了**，所以 `parseByApi` 刻意不写 `UNREACHABLE`、`parseAndNotice` 刻意不翻转节点。一旦有人"顺手"把节点收口成 `BOOKMARK` 并推送，用户看到的是一个永久定格的空书签：不仅把我方故障误报成网站失联，节点还从 `BOOKMARK_LOADING` 消失，**永远脱离 `drainStuckLoading` 的重投递范围**——之后即使抓取成功，也没有任何机制会把结果回传给这个已经"收口"的节点。
 
 同理，`classifyScrapperError` 的 `else` 分支就是 E307，所以**每新增一个 scrapper 错误码都必须回头看它**：漏掉一个本属于目标站点的码，代价不是"分类不准"，而是"这条书签转圈半小时"。`RECENTLY_FAILED` 就这么漏过一次。
+
+### 补投递的重试预算（`dispatch_attempts`）
+
+`drainStuckLoading` 每次补投递给 `bookmark_user_link.dispatch_attempts` 加一，超过 5 次就由 `terminateExhaustedLoading` 就地终结。
+
+**为什么需要上限**：`findStuckLoading` 是 `ORDER BY created_at ASC LIMIT n`，而补投递锁只让在途的那些被跳过、并不改变它们仍然排在最前面这一事实。于是一批「永远收不了口」的记录会稳定占满那 n 个名额，排在后面的行一轮都轮不到——一次导入的后半截可能永远抓不完，而日志里看不出任何异常。
+
+**为什么 E307 必须清零**（`forgiveDispatchAttempt`）：重试上限要防的是「这条记录本身有问题」，而 E307 说明**我方**坏了。不清零的话，一次几十分钟的 scrapper 故障会把积压里每条记录的预算耗光，故障恢复时它们已经被当作"重试到上限"终结成无源书签了——把一次运维故障变成了一批永久降级的数据。
+
+### 转圈中的 SLI
+
+`drainStuckLoading` 每轮输出「此刻有多少条在转圈、最久的转了多久、其中多少是导入积压」（`stuckLoadingStats`）。超过 30 分钟陈旧阈值还在转的会打 `warn`。
+
+这是整条链路唯一真正的成败指标，而在此之前它没有任何一处被观测：`scrapper_call_log` 记的是单次调用、`bookmark_ping_log` 记的是巡检，都回答不了「用户现在还在等的有几条」。上面那张兜底矩阵因此只是"设计上应该成立"，线上无从验证。
 
 ### 前端侧兜底的三件事（它们是一组，不是可选加固）
 
@@ -273,10 +289,15 @@ resolved.parseStatus == PENDING ?   → 直接 return，节点保持 LOADING（�
 1. **`BOOKMARK_LOADING` 是用户可见的卡死状态，也是唯一的兜底抓手。** `drainStuckLoading` 按节点类型而非 `parse_status` 选行，正是因为"书签抓取成功、但重绑用户关联或翻转节点失败"时 `parse_status` 是 `SUCCESS`，任何按状态筛选的任务都覆盖不到。
 2. **E307（我方故障）与 E304（站点故障）绝不能合并。** 见 §7。
 3. **同一 canonical 书签的抓取必须互斥**（`ParseLock`），否则资产行会翻倍或丢失。
-4. **`scrapper` 只报事实，`API` 定策略。** `extractor` 由 scrapper 给，`role` / `quality` / 签名 URL / 缩放全在 API 侧（`AssetRolePolicy`、`OssUtils.signAsset`）。新增 `extractor` 取值时记得给 `AssetRolePolicy.TABLE` 补一条映射，否则那张图会被丢掉。
+4. **`scrapper` 只报事实，`API` 定策略。** `extractor` 由 scrapper 给，`role` / `quality` / 签名 URL / 缩放全在 API 侧（`AssetRolePolicy`、`OssUtils.signAsset`）。新增 `extractor` 取值必须给 `AssetRolePolicy.TABLE` 补一条映射，否则那张图会被静默降级丢掉——`AssetRolePolicyTest.every extractor has an explicit role mapping` 会拦下漏配。
 5. **WebSocket 推送不可靠，客户端必须能自愈。** 服务端没有离线队列也不重试；§7 那三件事缺一不可。
 6. **新增一种推送就新增一个消息类型**，不要复用 `HOME_ITEM_UPDATE`——三种布局消息的 payload 形状不同，客户端正是靠类型区分的。
 7. **判重永远落在 canonical 四元组上**，不是 URL 字符串；前端的本地判重只是省一次往返，规则必须弱于后端。
+8. **判重的权威是唯一索引 `uk_bul_uid_bookmark`，不是 `assertNotAlreadyLinked`。** 那道检查是 check-then-act，两个并发请求可以同时通过；此前真正挡住重复磁贴的其实是 `addOne` 上那个 1 秒的 `@Throttle`——而限流是 UX 设施，参数会因为"加书签太慢"被调宽，`ThrottleAspect` 在 Redis 故障时更是**明确降级放行**。正确性不能挂在限流器上。新增写 `bookmark_user_link` 的入口时，记得走 `insertNodeAndLink`（它把 `DuplicateKeyException` 翻成 E126）。
+9. **改 `parse_status` 只能通过 `markParseSucceeded()` / `markParseUnreachable()`。** 那四个字段之间有约束（SUCCESS 必然 `isActivity=true` 且 `parseErrMsg` 为空），而漏掉调度列那一句不会报任何错——那条记录的 `next_check_at` 就停在旧值上，要么被每轮巡检重复选中，要么再也不被选中。这五行曾被逐字复制十遍。
+10. **`bookmark_id = 'LOADING'` 表示"等着被绑定"，NULL 表示"确定没有 canonical 记录"。** 无源书签终结时必须把标记清成 NULL（`clearUnboundMarker`），否则 `assertNotPendingImport` 会永远把它当成还在导入队列里，用户之后添加同一个网址会撞上一个假的 E126。
+11. **本服务当前只能单实例运行。** `SessionManager` 的会话在进程内存里，`@Scheduled` 没有分布式锁。`SingleInstanceGuard` 会在检测到第二个实例时每分钟打一条 error——它只报警不阻止启动，看到那条日志就是真的出问题了。要横向扩容必须先接入 ShedLock **加上** WebSocket 推送的 Redis pub/sub 扇出，两者缺一不可。
+12. **显示偏好是全站级的，用户级差异只能存在于 `bookmark_user_link`。** `bookmark` 是全站共享的可变记录：A 用户添加触发的重抓会改变 B 用户桌面上那条书签的标题和图标。`locked_fields` / `verifyFlag` 是**管理员级**的锁，解决不了"两个用户对同一页面有不同期望"。`site_display_pref` 按 `(bookmark, display_mode)` 而非 `(user, bookmark, mode)` 建键是同一个决定的延伸——真要做用户级图标覆盖时，这里需要一次迁移。
 
 ---
 

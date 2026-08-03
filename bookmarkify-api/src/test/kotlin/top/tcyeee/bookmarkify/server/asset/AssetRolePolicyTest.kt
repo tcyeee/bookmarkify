@@ -19,6 +19,31 @@ import kotlin.test.assertTrue
  */
 class AssetRolePolicyTest {
 
+    /**
+     * 每个 `AssetExtractor` 取值都必须在 `AssetRolePolicy.TABLE` 里有一条映射。
+     *
+     * 这条纪律此前只写在根 `CLAUDE.md` 的注释里（"新增 extractor 取值时记得给 TABLE 补一条
+     * 映射，否则那张图会被丢掉"）。靠人记是不够的：`classify` 对未知取值有兜底
+     * （FAVICON + DEGRADED），所以**漏配不会报任何错**，只会让那张图悄悄降级成一张
+     * 谁也不会选中的低质量 favicon —— 症状是"新加的站点适配器抓到了封面，但前台没有"，
+     * 而日志里一切正常。
+     *
+     * `UNKNOWN` 是契约里 `@JsonEnumDefaultValue` 的兜底值（对端发来我方还不认识的取值时落到
+     * 这里），它本来就该走 `classify` 的默认分支，所以排除在外。
+     */
+    @Test
+    fun `every extractor has an explicit role mapping`() {
+        val unmapped = AssetExtractor.entries
+            .filter { it != AssetExtractor.UNKNOWN }
+            .filter { AssetRolePolicy.classify(it) == (AssetRole.FAVICON to AssetQuality.DEGRADED) }
+            // FAVICON_ICO_FALLBACK / MS_TILE_IMAGE 本来就显式映射成这个组合，不是漏配
+            .filterNot { it in EXPLICITLY_DEGRADED_FAVICONS }
+        assertTrue(
+            unmapped.isEmpty(),
+            "以下 extractor 没有在 AssetRolePolicy.TABLE 里配置映射，它们抓到的图会被静默降级并丢弃: $unmapped",
+        )
+    }
+
     private fun asset(
         extractor: AssetExtractor,
         size: Int? = null,
@@ -337,5 +362,17 @@ class AssetRolePolicyTest {
         val broken = roled(AssetRole.SCREENSHOT, 1280).apply { errorMsg = "upload failed" }
         val chosen = AssetRolePolicy.resolveCover(listOf(broken, roled(AssetRole.SOCIAL, 1200)))
         assertEquals(AssetRole.SOCIAL, assertNotNull(chosen).role)
+    }
+
+    companion object {
+        /**
+         * 这几个取值**确实**被显式映射成了 `FAVICON + DEGRADED`，与"没配映射时的兜底值"
+         * 恰好相同，因此穷尽性检查必须把它们排除，否则会误报。
+         * 新增一条真正映射到该组合的 extractor 时，记得同步加进来。
+         */
+        private val EXPLICITLY_DEGRADED_FAVICONS = setOf(
+            AssetExtractor.FAVICON_ICO_FALLBACK,
+            AssetExtractor.MS_TILE_IMAGE,
+        )
     }
 }

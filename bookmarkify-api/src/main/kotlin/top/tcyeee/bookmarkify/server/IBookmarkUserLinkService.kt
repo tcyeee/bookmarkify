@@ -20,6 +20,16 @@ interface IBookmarkUserLinkService : IService<BookmarkUserLink> {
     fun deleteOneByNodeId(layoutNodeId: String, uid: String)
     /** 通过查询Host,将用户自定义书签和元书签关联上 */
     fun resetBookmarkId(uid: String, userLinkId: String, bookmarkId: String): Boolean
+
+    /**
+     * 把「等着被绑定」的占位标记(`bookmark_id = 'LOADING'`)清成 NULL，表示这条记录**确定**
+     * 没有 canonical 书签，不必再等。
+     *
+     * 只在无源书签的终结路径上调用（见 BookmarkServiceImpl.finishNodeWithoutBookmark）。
+     * 不清的话 assertNotPendingImport 会永远把它当成「还在导入队列里」，用户之后添加同一个
+     * 网址会拿到一个假的 E126。
+     */
+    fun clearUnboundMarker(userLinkId: String): Boolean
     /** 返回用户所有未删除书签的完整 URL 集合，用于导入时重复检测 */
     fun urlsByUid(uid: String): Set<String>
     /** 返回用户所有未删除书签关联的 bookmarkId 集合 */
