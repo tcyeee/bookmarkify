@@ -97,6 +97,33 @@ const ElButton = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElButton),
 );
 
+const ElImageViewer = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/image-viewer/index"),
+    import("element-plus/es/components/image-viewer/style/css"),
+  ]).then(([res]) => res.ElImageViewer),
+);
+
+// ── 图片放大 ──────────────────────────────────────────────────────────────────
+// 后台判断一张图能不能用，靠的就是看清它本身（LOGO 是不是糊的、截图是不是白板），
+// 32px 的格子做不到这件事。查看器按「同一组图」打开，可左右翻，不用退出再点下一张。
+const previewList = ref<string[]>([]);
+const previewIndex = ref(0);
+
+/** [group] 是同组可翻页的图，[src] 是本次点中的那张 */
+function openPreview(group: (null | string | undefined)[], src?: null | string) {
+  if (!src) return;
+  const list = group.filter((u): u is string => !!u);
+  const index = list.indexOf(src);
+  previewList.value = list.length > 0 ? list : [src];
+  previewIndex.value = index < 0 ? 0 : index;
+}
+
+function closePreview() {
+  previewList.value = [];
+  previewIndex.value = 0;
+}
+
 // ── 当前书签：外部给的行对象优先，否则用 lookupUrl 反查到的那条 ──────────────────
 const resolved = ref<BookmarkEntity | null>(null);
 const looking = ref(false);
@@ -338,6 +365,7 @@ async function checkLiveness() {
 
 // ── 打开/关闭时的状态复位 ──────────────────────────────────────────────────────
 watch(visible, (opened) => {
+  closePreview();
   if (!opened) {
     resetIngest();
     resetLiveness();
@@ -410,6 +438,19 @@ function formatTime(value?: string) {
 function siblingUrl(row: BookmarkEntity) {
   return `${row.urlScheme}://${row.urlHost}${row.urlPath ?? ""}`;
 }
+
+// 各卡片内部的图片各成一组，放大后左右翻页只在同类图之间进行
+const assetUrls = computed(() => (current.value?.assets ?? []).map((a) => a.url));
+const displayPrefUrls = computed(() =>
+  (current.value?.displayPrefs ?? []).map((p) => p.previewUrl),
+);
+const siblingIconUrls = computed(() =>
+  siblings.value.map((s) => logoOf(s) ?? faviconOf(s)),
+);
+const livenessImageUrls = computed(() => {
+  const r = livenessResult.value;
+  return r ? [r.favicon, r.logo, r.image, r.screenshot] : [];
+});
 </script>
 
 <template>
@@ -429,7 +470,14 @@ function siblingUrl(row: BookmarkEntity) {
         <div class="flex gap-6">
           <!-- 左：图标 + 状态 + 活跃 -->
           <div class="flex w-32 shrink-0 flex-col items-center gap-3">
-            <BookmarkIcon :src="logoOf(current) ?? faviconOf(current)" :size="64" />
+            <!-- 这张图是「当前展示用的那张」，不属于下面任何一组，单张放大 -->
+            <div
+              class="icon-zoom"
+              :class="{ 'is-zoomable': !!(logoOf(current) ?? faviconOf(current)) }"
+              @click="openPreview([], logoOf(current) ?? faviconOf(current))"
+            >
+              <BookmarkIcon :src="logoOf(current) ?? faviconOf(current)" :size="64" />
+            </div>
             <div class="flex flex-wrap justify-center gap-1">
               <ElTag :type="parseStatusMeta.type" size="small" :title="parseStatusMeta.tip">
                 {{ parseStatusMeta.label }}
@@ -606,6 +654,8 @@ function siblingUrl(row: BookmarkEntity) {
             <BookmarkAssetCell
               :src="a.url"
               :wide="a.role === 'SOCIAL' || a.role === 'SCREENSHOT'"
+              preview
+              @preview="openPreview(assetUrls, $event)"
             />
             <div class="min-w-0 flex-1 space-y-1">
               <div class="flex flex-wrap items-center gap-1">
@@ -663,7 +713,11 @@ function siblingUrl(row: BookmarkEntity) {
             :key="p.displayMode"
             class="flex items-center gap-3 rounded border border-gray-100 p-2"
           >
-            <BookmarkAssetCell :src="p.previewUrl" />
+            <BookmarkAssetCell
+              :src="p.previewUrl"
+              preview
+              @preview="openPreview(displayPrefUrls, $event)"
+            />
             <div class="min-w-0 flex-1 space-y-1">
               <div class="flex flex-wrap items-center gap-1 font-medium">
                 <span>{{ DISPLAY_MODE_LABEL[p.displayMode] ?? p.displayMode }}</span>
@@ -718,7 +772,11 @@ function siblingUrl(row: BookmarkEntity) {
             :key="s.id"
             class="flex items-center gap-3 rounded border border-gray-100 p-2"
           >
-            <BookmarkAssetCell :src="logoOf(s) ?? faviconOf(s)" />
+            <BookmarkAssetCell
+              :src="logoOf(s) ?? faviconOf(s)"
+              preview
+              @preview="openPreview(siblingIconUrls, $event)"
+            />
             <div class="min-w-0 flex-1">
               <div class="truncate font-medium" :title="s.title || s.appName || ''">
                 {{ s.title || s.appName || "（无标题）" }}
@@ -833,7 +891,8 @@ function siblingUrl(row: BookmarkEntity) {
               <img
                 :src="livenessResult.favicon"
                 alt="favicon"
-                class="h-10 w-10 rounded border object-contain"
+                class="zoomable h-10 w-10 rounded border object-contain"
+                @click="openPreview(livenessImageUrls, livenessResult.favicon)"
               />
               <span class="text-xs text-gray-400">favicon</span>
             </div>
@@ -841,7 +900,8 @@ function siblingUrl(row: BookmarkEntity) {
               <img
                 :src="livenessResult.logo"
                 alt="logo"
-                class="h-10 w-10 rounded border object-contain"
+                class="zoomable h-10 w-10 rounded border object-contain"
+                @click="openPreview(livenessImageUrls, livenessResult.logo)"
               />
               <span class="text-xs text-gray-400">logo</span>
             </div>
@@ -849,7 +909,8 @@ function siblingUrl(row: BookmarkEntity) {
               <img
                 :src="livenessResult.image"
                 alt="image"
-                class="h-16 w-28 rounded border object-cover"
+                class="zoomable h-16 w-28 rounded border object-cover"
+                @click="openPreview(livenessImageUrls, livenessResult.image)"
               />
               <span class="text-xs text-gray-400">image</span>
             </div>
@@ -857,7 +918,8 @@ function siblingUrl(row: BookmarkEntity) {
               <img
                 :src="livenessResult.screenshot"
                 alt="screenshot"
-                class="h-16 w-28 rounded border object-cover"
+                class="zoomable h-16 w-28 rounded border object-cover"
+                @click="openPreview(livenessImageUrls, livenessResult.screenshot)"
               />
               <span class="text-xs text-gray-400">screenshot</span>
             </div>
@@ -875,6 +937,16 @@ function siblingUrl(row: BookmarkEntity) {
       <ElButton @click="visible = false">关闭</ElButton>
     </template>
   </ElDialog>
+
+  <!-- 查看器 teleport 到 body，层级在弹窗之上；ESC 由它自己吃掉，不会连带关闭详情弹窗 -->
+  <ElImageViewer
+    v-if="previewList.length > 0"
+    :url-list="previewList"
+    :initial-index="previewIndex"
+    teleported
+    hide-on-click-modal
+    @close="closePreview"
+  />
 </template>
 
 <style scoped>
@@ -890,5 +962,22 @@ function siblingUrl(row: BookmarkEntity) {
 
 .detail-card :deep(.el-card__body) {
   padding: 16px;
+}
+
+.icon-zoom.is-zoomable {
+  cursor: zoom-in;
+}
+
+.icon-zoom.is-zoomable:hover :deep(.icon-card) {
+  transform: scale(1.05);
+}
+
+.zoomable {
+  cursor: zoom-in;
+  transition: border-color 0.15s ease;
+}
+
+.zoomable:hover {
+  border-color: var(--el-color-primary);
 }
 </style>
