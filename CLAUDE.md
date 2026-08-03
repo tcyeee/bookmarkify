@@ -25,6 +25,8 @@ cd bookmarkify-api
 ./gradlew test                                             # run tests
 ```
 
+⚠️ **The `dev` profile connects to the production database** (`.env` supplies the host), and therefore runs with `bookmarkify.scheduling.enabled=false` — no liveness sweeps, no reconciliation, no log purge, no OSS reconcile. Without that switch a local run adds a second set of cron jobs writing to the live database; it has actually happened. The visible consequence is that **bulk import never completes locally** (`drainStuckLoading` is its only consumer, so tiles spin forever with no error). To exercise those paths, point the datasource at a local database first, then pass `--bookmarkify.scheduling.enabled=true`.
+
 ### Web (bookmarkify-web)
 ```bash
 cd bookmarkify-web

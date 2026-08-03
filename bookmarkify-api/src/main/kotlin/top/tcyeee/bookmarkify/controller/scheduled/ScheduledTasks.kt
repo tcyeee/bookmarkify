@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.controller.scheduled
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Description
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
@@ -8,10 +9,37 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IOssReconcileService
 
 /**
+ * 全部后台定时任务。
+ *
+ * ## 为什么整个类挂了一个开关
+ *
+ * 这里每一个任务都**直接写生产数据**：投递解析事件、改 `parse_status`、删日志行、
+ * 甚至回收 OSS 对象。而 `application-dev.yml` 连的就是生产库（见那个文件的说明），
+ * 于是本地随手 `bootRun` 一下，笔记本上就会多出一整套定时任务，与线上实例并行地
+ * 往同一个库上写 —— 两边各跑一遍 ping、各投一遍解析、各删一遍日志。
+ *
+ * 这不是假想：2026-08-06 线上实测到 `bookmark_sweep_log` 同一轮出现两行，相隔 128ms，
+ * 追下去是一台开发机（`cy.local`）上的实例连着生产库在跑巡检，而且它还抢走了
+ * [SingleInstanceGuard][top.tcyeee.bookmarkify.config.init.SingleInstanceGuard] 的租约。
+ * 那张表刚建好就把这件事照了出来。
+ *
+ * 所以：**定时任务只在线上跑**。`bookmarkify.scheduling.enabled` 默认 true，
+ * 由 `application-dev.yml` 显式置 false。
+ *
+ * ⚠️ 本地关掉之后，`drainStuckLoading` 也不跑了 —— 而那是批量导入的**唯一**消费通道。
+ * 本地测导入时导入的书签会一直停在转圈状态，这是预期行为，不是 bug。真要在本地测那条
+ * 链路，用一套本地数据库并显式打开：`--bookmarkify.scheduling.enabled=true`。
+ *
  * @author tcyeee
  * @date 3/14/25 20:34
  */
 @Component
+@ConditionalOnProperty(
+    prefix = "bookmarkify.scheduling",
+    name = ["enabled"],
+    havingValue = "true",
+    matchIfMissing = true,
+)
 class ScheduledTasks(
     private val bookmarkService: IBookmarkService,
     private val bookmarkPingLogService: IBookmarkPingLogService,

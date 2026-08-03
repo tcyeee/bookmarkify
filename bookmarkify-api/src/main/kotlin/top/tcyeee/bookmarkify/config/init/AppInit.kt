@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.config.init
 import cn.hutool.core.util.IdUtil
 import cn.hutool.json.JSONUtil
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
 import org.springframework.context.ApplicationEventPublisher
@@ -29,7 +30,26 @@ class AppInit(
 ) : ApplicationRunner {
 
     private val log = LoggerFactory.getLogger(javaClass)
+
+    /** 见 [top.tcyeee.bookmarkify.controller.scheduled.ScheduledTasks] 上的说明 */
+    @Value("\${bookmarkify.scheduling.enabled:true}")
+    private var schedulingEnabled: Boolean = true
+
     override fun run(args: ApplicationArguments?) {
+        // 启动时把调度状态喊出来。关掉时的症状是**沉默的**：drainStuckLoading 不跑，
+        // 于是本地导入的书签永远停在转圈；桌面上什么都不报，日志里也什么都没有。
+        // 不留这一行，下一个在本地测导入的人只会以为导入功能坏了。
+        if (schedulingEnabled) {
+            log.info("[AppInit] 后台定时任务：已启用")
+        } else {
+            log.warn(
+                "[AppInit] 后台定时任务：**已关闭**(bookmarkify.scheduling.enabled=false)。" +
+                    "活性巡检、解析对账、日志清理、OSS 对账均不会执行；" +
+                    "批量导入的唯一消费通道 drainStuckLoading 也不跑，导入的书签会一直停在加载中。" +
+                    "这是 dev profile 的默认行为（本地连的是生产库，不该并行跑定时任务）。"
+            )
+        }
+
         // 检查是否有默认渐变数据,没有则初始化
         val gradients = backgroundGradientService.ktQuery().eq(BackgroundGradientEntity::isDefault, true).list()
         if (gradients.isEmpty()) {

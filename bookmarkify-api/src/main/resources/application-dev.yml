@@ -19,6 +19,21 @@ logging:
     top.tcyeee.bookmarkify.server.impl.BookmarkServiceImpl: DEBUG
 
 bookmarkify:
+  # 定时任务只在线上跑。
+  #
+  # 本文件连的是**生产库**（见上面 datasource 那段用的环境变量），所以本地随手 bootRun
+  # 一下，笔记本上就会多出一整套定时任务，与线上实例并行地往同一个库写：各跑一遍活性
+  # ping、各投一遍解析事件、各删一遍日志，凌晨还各做一遍 OSS 对账。
+  #
+  # 这不是假想。2026-08-06 线上 bookmark_sweep_log 同一轮出现两行、相隔 128ms，追下去
+  # 就是一台开发机连着生产库在跑巡检，而且抢走了单实例护栏的租约。
+  #
+  # ⚠️ 代价：drainStuckLoading 也跟着停了，而它是批量导入的**唯一**消费通道 ——
+  # 本地测导入时书签会一直停在转圈状态，这是预期行为。真要在本地跑那条链路，
+  # 请先把上面的数据库指向一套本地实例，再显式打开：
+  #   ./gradlew bootRun --args='--spring.profiles.active=dev --bookmarkify.scheduling.enabled=true'
+  scheduling:
+    enabled: false
   scrapper:
     # 之前这里连的是生产服务器的公网 3001 端口——该端口只是"临时对外开放做测试"，
     # 但一直没收回，属于真实的未授权访问敞口，已收紧为仅 127.0.0.1 可达
