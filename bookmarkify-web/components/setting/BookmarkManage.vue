@@ -253,11 +253,9 @@ async function startImport() {
 
   try {
     const nodes = await bookmarksUpload(pendingFile.value, skipUrls)
+    // 批量导入同样只靠 WebSocket 推送解除 loading；兜底监听由 addImportLoadingBatch 内部统一挂载
+    // （逐项挂上千个定时器没有意义——它们指向的是同一次全量拉取，见 armPendingWatches）
     bookmarkStore.addImportLoadingBatch(nodes)
-    const loadingIds = nodes.filter((n) => n.type === HomeItemType.BOOKMARK_LOADING).map((n) => n.id)
-    // 批量导入同样只靠 WebSocket 推送解除 loading，逐项注册超时兜底（放宽到 60s：导入批量大时
-    // 解析队列本身排队更久，避免和正常排队耗时打架产生误报式的重新拉取）
-    loadingIds.forEach((id) => bookmarkStore.watchForResolution(id, 60000))
     statusMessage.value = translate('bookmarkManage.importStarted', { count: nodes.length })
     statusType.value = 'success'
     phase.value = 'idle'

@@ -2,6 +2,14 @@ import { defineStore } from 'pinia'
 import { HomeItemType, ROOT_KEY, type UserLayoutNodeVO } from '@typing'
 import { bookmarksShowAll, bookmarksMoveNode, bookmarksDel } from '@api'
 
+// 兜底重试的退避上限：单次最多等 5 分钟
+const MAX_RESOLUTION_DELAY_MS = 5 * 60 * 1000
+// 兜底重试次数。从 30s 起逐次翻倍并封顶 5 分钟，8 次累计约 35 分钟，刚好跨过后端
+// drainStuckLoading 的 30 分钟陈旧阈值——那之后服务端会重新解析并重新推送，再轮询也无意义
+const MAX_RESOLUTION_ATTEMPTS = 8
+// 同时挂载的兜底监听上限，见 armPendingWatches
+const MAX_ARMED_WATCHES = 20
+
 /** 后端树 → 扁平 { nodes, order }。nodes 不保留 children（归属/顺序唯一来源是 order）。 */
 function normalize(root?: UserLayoutNodeVO | null) {
   const nodes: Record<string, UserLayoutNodeVO> = {}
@@ -25,8 +33,13 @@ export const useBookmarkStore = defineStore('homeItems', {
     nodes: {} as Record<string, UserLayoutNodeVO>,
     order: { [ROOT_KEY]: [] } as Record<string, string[]>,
     lastFetchedAt: 0,
-    // LOADING 节点的兜底定时器句柄（进程内瞬时状态，不落盘，见下方 persist.paths）
+    // LOADING 节点的兜底定时器句柄（进程内瞬时状态，不落盘，见下方 persist.pick）
     pendingTimeouts: {} as Record<string, ReturnType<typeof setTimeout>>,
+    // 各 LOADING 节点已用掉的兜底重试次数（同上，进程内瞬时状态），见 watchForResolution
+    resolutionAttempts: {} as Record<string, number>,
+    // 在途的 update() 请求（同上，进程内瞬时状态）。多个兜底定时器同时到点、
+    // 或重连补拉与兜底重试撞在一起时，共用同一次请求而不是各发一次
+    inflightUpdate: null as Promise<void> | null,
   }),
 
   getters: {
@@ -74,11 +87,29 @@ export const useBookmarkStore = defineStore('homeItems', {
   },
 
   actions: {
+    // 全量拉取桌面布局。并发调用共用同一次请求：兜底定时器、WebSocket 重连补拉、页面加载
+    // 三条路径都会调它，且完全可能同时到点——各发一次除了浪费没有任何收益。
     async update(): Promise<void> {
-      const res = await bookmarksShowAll()
-      this.setLayout(res)
-      this.lastFetchedAt = Date.now()
-      console.log(`[DEBUG]桌面布局更新: 根 ${this.order[ROOT_KEY]?.length ?? 0} 项`)
+      if (this.inflightUpdate) return this.inflightUpdate
+      this.inflightUpdate = (async () => {
+        const res = await bookmarksShowAll()
+        this.setLayout(res)
+        this.lastFetchedAt = Date.now()
+        console.log(`[DEBUG]桌面布局更新: 根 ${this.order[ROOT_KEY]?.length ?? 0} 项`)
+      })().finally(() => {
+        this.inflightUpdate = null
+      })
+      return this.inflightUpdate
+    },
+
+    // update() 的即发即忘版本：失败只记日志。
+    // 兜底定时器、WebSocket 重连补拉这些路径没有调用方去 await，而 http.ts 的所有失败路径都是
+    // Promise.reject —— 直接调 update() 会在控制台留下 unhandled rejection，且掩盖真正的原因。
+    // 拉取失败本身不需要惊动用户：下一次兜底重试还会再来一遍。
+    refresh(reason: string) {
+      this.update().catch((error) => {
+        console.warn(`[bookmark] 布局补拉失败(${reason})，等待下一次重试`, error)
+      })
     },
 
     // 数据是否仍然"新鲜"（缓存非空且在指定时间内拉取过）
@@ -92,10 +123,16 @@ export const useBookmarkStore = defineStore('homeItems', {
 
     setLayout(root?: UserLayoutNodeVO | null) {
       const { nodes, order } = normalize(root)
+      // 服务端这份布局里已经没有的节点，其兜底定时器也该跟着走，否则它会一直空转到超时
+      for (const id of Object.keys(this.pendingTimeouts)) {
+        if (!nodes[id]) this.clearResolutionWatch(id)
+      }
       this.nodes = nodes
       this.order = order
       // 防御：后端不应返回 ≤1 项文件夹，若出现即重大事故 → 报警 + 强制自愈
       this.enforceFolderInvariant()
+      // 拉回来的布局里若仍有 LOADING 节点，就地把兜底监听补上——不能指望每个调用方记得挂
+      this.armPendingWatches()
     },
 
     // 插入加载占位项到根
@@ -107,21 +144,59 @@ export const useBookmarkStore = defineStore('homeItems', {
 
     // 兜底：解析结果靠 WebSocket 推送，是尽力而为的——连接断开/消息丢失时后端不会重试推送。
     // 超时仍未解除 LOADING 就主动整体重新拉取桌面布局对账，避免节点永远转圈。
-    // 调用方应在插入 LOADING 节点后（addLoading / addImportLoadingBatch）为每个节点调用一次。
-    watchForResolution(nodeId: string, timeoutMs = 30000) {
-      console.log(`[bookmark] 开始兜底监听: nodeId=${nodeId}, timeoutMs=${timeoutMs}`)
+    //
+    // **必须重试多次**：首发 30s 几乎必然扑空——后端单条解析的尾部耗时是 scrapper 读超时 60s
+    // 加上 appName 推断 10s，30s 时那条书签八成还在抓。旧实现只发一次、发完就把定时器删了，
+    // 于是"最该起作用的那一次"恰好什么都没捞到，之后就彻底没有兜底了。
+    // 现在按 delayMs 逐次翻倍（上限 [MAX_RESOLUTION_DELAY_MS]）重试到 [MAX_RESOLUTION_ATTEMPTS] 次，
+    // 覆盖范围要跨过后端 drainStuckLoading 的 30 分钟陈旧阈值——那是最后一道服务端补推。
+    watchForResolution(nodeId: string, delayMs = 30000, attempt = 0) {
+      const wait = Math.min(delayMs * 2 ** attempt, MAX_RESOLUTION_DELAY_MS)
+      console.log(`[bookmark] 开始兜底监听: nodeId=${nodeId}, 第 ${attempt + 1} 次, waitMs=${wait}`)
       this.clearResolutionWatch(nodeId)
+      // 记下已用掉的次数：定时器句柄在触发那一刻就删了，光看句柄分不出"还没挂"和"已经挂满了"，
+      // armPendingWatches 会把后者当成前者重新从第 1 次挂起——那样退避永远清零，等于无限轮询
+      this.resolutionAttempts[nodeId] = attempt
       this.pendingTimeouts[nodeId] = setTimeout(() => {
         delete this.pendingTimeouts[nodeId]
-        if (this.nodes[nodeId]?.type === HomeItemType.BOOKMARK_LOADING) {
-          console.warn(`[bookmark] 节点 ${nodeId} 超过 ${timeoutMs}ms 未收到解析结果，主动重新拉取桌面布局`)
-          this.update()
+        if (this.nodes[nodeId]?.type !== HomeItemType.BOOKMARK_LOADING) return
+        // 先续上下一次，再拉取：update() → setLayout() → armPendingWatches() 会看到已有句柄
+        // 而跳过这个节点，否则同一个节点会被挂上两个定时器
+        if (attempt + 1 < MAX_RESOLUTION_ATTEMPTS) {
+          this.watchForResolution(nodeId, delayMs, attempt + 1)
+        } else {
+          console.warn(`[bookmark] 节点 ${nodeId} 兜底重试已达上限，停止轮询（仍可由 WebSocket 推送解除）`)
         }
-      }, timeoutMs)
+        console.warn(`[bookmark] 节点 ${nodeId} 等待 ${wait}ms 仍未收到解析结果，主动重新拉取桌面布局`)
+        this.refresh(`节点 ${nodeId} 解析超时`)
+      }, wait)
     },
 
-    // 收到 WS 更新 / 节点被手动删除时调用，取消其兜底定时器
+    // 为当前所有还在 LOADING 的节点补挂兜底监听（已有监听的跳过）。
+    //
+    // 存在的意义是"不依赖调用方记得挂"：此前只有 AddOneDialog 与 BookmarkManage 两个入口手动挂，
+    // 于是刷新页面之后——localStorage 恢复出来的 LOADING 节点、以及 plugins/auth.ts 在缓存新鲜时
+    // 直接跳过拉取的那条路径——桌面上的转圈节点根本没有任何人看着，只能干等 WebSocket。
+    armPendingWatches() {
+      const pending = Object.values(this.nodes).filter(
+        (n) =>
+          n.type === HomeItemType.BOOKMARK_LOADING &&
+          this.pendingTimeouts[n.id] == null &&
+          (this.resolutionAttempts[n.id] ?? -1) < MAX_RESOLUTION_ATTEMPTS - 1,
+      )
+      if (!pending.length) return
+      // update() 是整棵树一起拉的，挂几个就足以把所有 LOADING 一起对上账。批量导入会一次留下
+      // 上千个 LOADING 节点，逐个挂定时器纯属浪费（它们本来也都指向同一次请求）
+      const armed = pending.slice(0, MAX_ARMED_WATCHES)
+      console.log(`[bookmark] 补挂兜底监听: ${armed.length}/${pending.length} 个 LOADING 节点`)
+      for (const node of armed) this.watchForResolution(node.id)
+    },
+
+    // 收到 WS 更新 / 节点被手动删除时调用，取消其兜底定时器并清空重试计数。
+    // 计数必须一并清掉，且不能因为"没有定时器"就提前返回——重试用尽的节点正是没有定时器、
+    // 却留着计数的那一类，漏清的话这个 id 会一直躺在 resolutionAttempts 里。
     clearResolutionWatch(nodeId: string) {
+      delete this.resolutionAttempts[nodeId]
       const handle = this.pendingTimeouts[nodeId]
       if (handle == null) return
       console.log(`[bookmark] 清除节点 ${nodeId} 的兜底监听定时器`)
@@ -147,6 +222,9 @@ export const useBookmarkStore = defineStore('homeItems', {
           this.order[node.parentId] = [...(this.order[node.parentId] ?? []), node.id]
         }
       }
+      // 导入的 LOADING 占位同样需要兜底：后端对导入路径不发解析事件，全靠 drainStuckLoading
+      // 分批捞，结果是零散推回来的——推丢一条就是一个永远转圈的格子
+      this.armPendingWatches()
     },
 
     // 新增已就绪书签到根（AddOneDialog 关联/添加成功且已带 typeApp）
@@ -229,11 +307,25 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.nodes[nodeId] = { ...node, typeApp: { ...node.typeApp, pinned } }
     },
 
+    // 重命名文件夹的本地同步（后端确认成功后调用）。
+    //
+    // 收进 store 是因为原先两个组件各自写 `nodes[id] = { ...nodes[id], name }`：节点不存在时
+    // 展开 undefined 得到的是 `{ name }` —— 一个没有 id、没有 type 的幽灵节点被塞回 nodes，
+    // 渲染层拿它什么都做不了，却又不会报错。布局的写入本来就该由 store 统一收口。
+    renameFolderLocal(folderId: string, name: string) {
+      const node = this.nodes[folderId]
+      if (!node) {
+        console.warn(`[bookmark] 重命名的文件夹在本地不存在，跳过: folderId=${folderId}`)
+        return
+      }
+      this.nodes[folderId] = { ...node, name }
+    },
+
     removeNode(id: string) {
       this.clearResolutionWatch(id)
       const from = this.parentKeyOf(id)
       delete this.nodes[id]
-      for (const k of Object.keys(this.order)) this.order[k] = this.order[k].filter((x) => x !== id)
+      for (const k of Object.keys(this.order)) this.order[k] = (this.order[k] ?? []).filter((x) => x !== id)
       delete this.order[id]
       // 删除后源文件夹若 ≤1 项 → 解散，杜绝单项文件夹残留
       if (from && from !== ROOT_KEY && this.nodes[from]?.type === HomeItemType.BOOKMARK_DIR && (this.order[from]?.length ?? 0) <= 1) {
@@ -250,7 +342,7 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.clearResolutionWatch(id)
       delete this.nodes[id]
       delete this.order[id]
-      for (const k of Object.keys(this.order)) this.order[k] = this.order[k].filter((x) => x !== id)
+      for (const k of Object.keys(this.order)) this.order[k] = (this.order[k] ?? []).filter((x) => x !== id)
     },
 
     reorderLocal(parentKey: string, ids: Array<string>) {
@@ -259,7 +351,7 @@ export const useBookmarkStore = defineStore('homeItems', {
 
     moveLocal(id: string, toParentKey: string, index: number) {
       const from = this.parentKeyOf(id)
-      if (from) this.order[from] = this.order[from].filter((x) => x !== id)
+      if (from) this.order[from] = (this.order[from] ?? []).filter((x) => x !== id)
       const next = [...(this.order[toParentKey] ?? [])]
       next.splice(Math.max(0, Math.min(index, next.length)), 0, id)
       this.order[toParentKey] = next
@@ -273,12 +365,25 @@ export const useBookmarkStore = defineStore('homeItems', {
     // 本地建夹：folderNode 为后端返回的真实文件夹节点；从根移除两子、文件夹落在 index、子顺序 [target, dragged]
     createFolderLocal(folderNode: UserLayoutNodeVO, draggedId: string, targetId: string, index: number) {
       this.nodes[folderNode.id] = { ...folderNode, parentId: null, children: undefined }
-      this.nodes[draggedId] = { ...this.nodes[draggedId], parentId: folderNode.id, children: undefined }
-      this.nodes[targetId] = { ...this.nodes[targetId], parentId: folderNode.id, children: undefined }
+      // 两个子节点必须逐个确认存在再改写：本地没有这个 id 时展开 undefined 会得到一个既没有 id
+      // 也没有 type 的对象，被当作节点塞进 nodes——渲染层拿它无从下手，也不会报任何错。
+      // 同理，只有真实存在的子节点才进 order，否则文件夹的计数会比实际内容多。
+      const children = [targetId, draggedId].filter((id) => {
+        const child = this.nodes[id]
+        if (!child) {
+          console.warn(`[bookmark] 建夹时子节点在本地不存在，已跳过: nodeId=${id}, folderId=${folderNode.id}`)
+          return false
+        }
+        this.nodes[id] = { ...child, parentId: folderNode.id, children: undefined }
+        return true
+      })
       const root = (this.order[ROOT_KEY] ?? []).filter((x) => x !== draggedId && x !== targetId)
       root.splice(Math.max(0, Math.min(index, root.length)), 0, folderNode.id)
       this.order[ROOT_KEY] = root
-      this.order[folderNode.id] = [targetId, draggedId]
+      this.order[folderNode.id] = children
+      // 子节点没能凑够两个时，这个夹子本身就是不该存在的——交给不变量检查报警并自愈解散，
+      // 而不是在桌面上留一个空文件夹
+      this.enforceFolderInvariant()
     },
 
     // 解散一个文件夹：残留 0/1 子项并入根末尾、删除文件夹自身。安静执行（不报警）。
@@ -361,12 +466,20 @@ export const useBookmarkStore = defineStore('homeItems', {
   // pinia-plugin-persistedstate 会回退到 cookies（单条 ~4KB 上限），书签树（含内嵌
   // base64 图标）写入必然静默失败/截断，导致缓存永远无法在 F5 后存活。与
   // preference.store 写法保持一致。
-  // pendingTimeouts 是进程内定时器句柄，刷新后必然失效，排除在持久化范围外。
+  // pendingTimeouts / inflightUpdate 是进程内瞬时状态，刷新后必然失效，排除在持久化范围外。
+  //
+  // ⚠️ 字段名是 `pick`，不是 `paths`。`paths` 是 pinia-plugin-persistedstate v3 的写法，v4
+  // 把它改名成了 `pick`（本项目装的是 4.7.1）—— 而**多余的键是被静默忽略的**，于是这个白名单
+  // 一直没有生效，整个 state 都在被写进 localStorage。后果不只是多存了几个定时器句柄：Promise
+  // 之类的值 JSON 序列化后是 `{}`，水合回来是个真值，`update()` 里那道「已有在途请求就复用」的
+  // 判断会被它永久命中，桌面布局从此再也不会重新拉取。改错这个键不会有任何报错，只会让白名单
+  // 悄悄失效，所以升级这个插件时要回头看一眼这里。
+  //
   // afterHydrate 在水合完成后立即跑一次 dedupeLayout：坏数据可能是很久以前的一次拖拽留下的，
   // 只在下次 setLayout() 才检查为时已晚——用户在这之前已经看到错误计数了。
   persist: {
     storage: piniaPluginPersistedstate.localStorage(),
-    paths: ['nodes', 'order', 'lastFetchedAt'],
+    pick: ['nodes', 'order', 'lastFetchedAt'],
     afterHydrate: (ctx) => {
       const order = ctx.store.order as Record<string, string[]>
       const seen = new Set<string>()
@@ -377,6 +490,9 @@ export const useBookmarkStore = defineStore('homeItems', {
           return true
         })
       }
+      // 注：缓存里恢复出来的 LOADING 节点需要补挂兜底监听，但那件事放在 plugins/auth.ts 里做——
+      // 在这个选项对象里调 store 的 action 会让「选项 → store 类型 → 选项」成环，加重本文件已有的
+      // Pinia 推断问题；而且 auth 插件那条「缓存新鲜就跳过拉取」的分支本来就是问题现场。
     },
   },
 })

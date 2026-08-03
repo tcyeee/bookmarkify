@@ -388,7 +388,7 @@ async function submitRenameFolder() {
   if (!folder || !name || name === folder.name) return
   try {
     await bookmarksRenameDir(folder.id, name)
-    bookmarkStore.nodes[folder.id] = { ...bookmarkStore.nodes[folder.id], name }
+    bookmarkStore.renameFolderLocal(folder.id, name)
     toastStore.success(translate('bookmarkLibrary.folderPanel.renameSuccess'))
   } catch {
     // http 层已提示

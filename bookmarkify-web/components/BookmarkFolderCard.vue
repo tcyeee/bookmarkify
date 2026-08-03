@@ -249,9 +249,7 @@ async function submitRename() {
   if (!name || name === props.name) return
   try {
     await bookmarksRenameDir(props.folderId, name)
-    if (bookmarkStore.nodes[props.folderId]) {
-      bookmarkStore.nodes[props.folderId] = { ...bookmarkStore.nodes[props.folderId], name }
-    }
+    bookmarkStore.renameFolderLocal(props.folderId, name)
     useToastStore().success('重命名成功')
   } catch (error) {
     console.error('[BookmarkFolderCard] 重命名文件夹失败', error)
