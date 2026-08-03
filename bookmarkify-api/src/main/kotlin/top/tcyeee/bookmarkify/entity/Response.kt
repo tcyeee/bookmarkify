@@ -18,6 +18,7 @@ import top.tcyeee.bookmarkify.entity.enums.OssObjectState
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
+import top.tcyeee.bookmarkify.entity.enums.SiteLockedField
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 import top.tcyeee.bookmarkify.server.asset.BookmarkDisplayPolicy
 import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
@@ -336,6 +337,68 @@ data class SiteAssetAdminVO(
     @field:Schema(description = "与本书签其它资产字节相同(说明该站没有独立 LOGO)") var duplicateOfOther: Boolean = false,
     @field:Schema(description = "该张的失败原因") var errorMsg: String? = null,
 )
+
+/**
+ * 管理后台的站点(域名)视图 —— 一个域名一行。
+ *
+ * 与 [BookmarkAdminVO] 是**两个层**而不是详略两版：那边一行是一个页面（同域名下 1000 个
+ * 视频就是 1000 行），这边一行是一个域名，承载 brandName / NSFW / 域名活性 / 图标这些
+ * 「换个页面也不会变」的事实。后台想回答"我们一共收录了多少个站、哪些站需要人工过一遍"
+ * 只能在这一层看，在页面层看会被同站的深链淹没。
+ *
+ * 刻意**不用** BeanUtil 整体拷贝：`SiteEntity` 上一半的字段挂着 `@JsonIgnore`（那是给
+ * 前台接口用的），而后台恰恰要看那一半（lastCheckAt / consecutiveFail / nsfwReason）。
+ */
+data class SiteAdminVO(
+    @field:Schema(description = "站点ID") var id: String = "",
+    @field:Schema(description = "域名(含端口)") var host: String = "",
+    @field:Schema(description = "基础HTTP协议") var scheme: String = "https",
+    @field:Schema(description = "站点首页地址") var rootUrl: String = "",
+    @field:Schema(description = "链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
+
+    @field:Schema(description = "站点全名(og:site_name / manifest.name)") var brandName: String? = null,
+    @field:Schema(description = "站点短名(manifest.short_name)") var shortName: String? = null,
+    @field:Schema(description = "展示用站点名：短名→全名→域名") var displayName: String = "",
+
+    @field:Schema(description = "疑似涉黄/涉赌等违规内容(NSFW)") var nsfw: Boolean = false,
+    @field:Schema(description = "NSFW 判定理由(CLEAN 表示判过且干净)") var nsfwReason: String? = null,
+
+    @field:Schema(description = "域名是否可达") var isAlive: Boolean = true,
+    @field:Schema(description = "上次域名探测时间(不论结论)") var lastCheckAt: LocalDateTime? = null,
+    @field:Schema(description = "下次域名巡检时间") var nextCheckAt: LocalDateTime? = null,
+    @field:Schema(description = "连续探测失败次数") var consecutiveFail: Int = 0,
+
+    @field:Schema(description = "人工认证：品牌名与图标已核对，抓取不再覆盖") var verifyFlag: Boolean = false,
+    @field:Schema(description = "被人工锁定、不会被自动抓取覆盖的字段") var lockedFields: List<SiteLockedField> = emptyList(),
+
+    @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
+    @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,
+
+    /* 下面两块靠批量回填，不来自 site 表本身 */
+    @field:Schema(description = "该站点下已收录的页面数") var pageCount: Int = 0,
+    @field:Schema(description = "该站点的全部图标资产(favicon/logo，已签名)") var assets: List<SiteAssetAdminVO> = emptyList(),
+) {
+    constructor(entity: SiteEntity) : this(
+        id = entity.id,
+        host = entity.host,
+        scheme = entity.scheme,
+        rootUrl = entity.rootUrl,
+        linkType = entity.linkType,
+        brandName = entity.brandName,
+        shortName = entity.shortName,
+        displayName = entity.displayName,
+        nsfw = entity.nsfw,
+        nsfwReason = entity.nsfwReason,
+        isAlive = entity.isAlive,
+        lastCheckAt = entity.lastCheckAt,
+        nextCheckAt = entity.nextCheckAt,
+        consecutiveFail = entity.consecutiveFail,
+        verifyFlag = entity.verifyFlag,
+        lockedFields = entity.lockedFieldSet.toList(),
+        createTime = entity.createTime,
+        updateTime = entity.updateTime,
+    )
+}
 
 /** 管理后台某展示模式下的图标设置 */
 data class SiteDisplayPrefVO(
