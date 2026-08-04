@@ -60,15 +60,26 @@
             </div>
             <div class="grid justify-center gap-4" :style="folderGridStyle">
               <div v-for="(column, i) in folderColumns" :key="i" class="flex flex-col gap-4 min-w-0">
-                <BookmarkFolderCard
+                <div
                   v-for="folder in column"
                   :key="folder.id"
-                  :name="folder.name"
-                  :is-root="folder.isRoot"
-                  :folder-id="folder.id"
-                  :children="folder.children"
-                  @edit="openEditModal"
-                  @share="onShareFolder" />
+                  :ref="(el) => setFolderCardEl(folder.id, el as Element | null)"
+                  class="relative transition-opacity"
+                  :class="{ 'opacity-40': draggingFolderId === folder.id }">
+                  <span
+                    v-if="dropTargetFolderId === folder.id && dropFolderMode === 'above'"
+                    class="pointer-events-none absolute inset-x-0 -top-2 h-0.5 rounded-full bg-primary z-10" />
+                  <BookmarkFolderCard
+                    :name="folder.name"
+                    :is-root="folder.isRoot"
+                    :folder-id="folder.id"
+                    :children="folder.children"
+                    @edit="openEditModal"
+                    @share="onShareFolder" />
+                  <span
+                    v-if="dropTargetFolderId === folder.id && dropFolderMode === 'below'"
+                    class="pointer-events-none absolute inset-x-0 -bottom-2 h-0.5 rounded-full bg-primary z-10" />
+                </div>
               </div>
             </div>
           </template>
@@ -243,7 +254,7 @@
 
 <script lang="ts" setup>
 import { h } from 'vue'
-import { HomeItemType, type UserLayoutNodeVO } from '@typing'
+import { HomeItemType, ROOT_KEY, type UserLayoutNodeVO } from '@typing'
 import {
   bookmarksSearch,
   bookmarksLinkOne,
@@ -253,12 +264,15 @@ import {
   bookmarksCover,
   bookmarksCreateDir,
   bookmarksRecordOpen,
+  bookmarksSort,
 } from '@api'
 import { useDebounceFn, useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { Icon } from '@iconify/vue'
 import { externalHref } from '@utils'
 import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
+import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -339,6 +353,138 @@ const folderColumns = computed(() => {
     heights[shortest] += folder.children.length + 1
   }
   return columns
+})
+
+// ── 文件夹卡片拖动排序 ──
+// folderColumns 是按「当前最矮列」贪心分配的瀑布流布局，可视化的列/行位置和实际排序无关，
+// 因此拖拽落点始终换算回 order[ROOT_KEY] 里文件夹 id 的相对顺序，而不是操作可视化坐标本身，
+// 提交后交给 folderColumns 按新顺序重新分栏。
+// 与 BookmarkFolderCard.vue 内部「拖书签」是两套独立的 dropTarget：靠 source.data.kind 互斥
+// （该文件里的行/卡片级 dropTarget 都已排除 kind === 'folder-card' 的来源）。
+const folderCardEls = new Map<string, HTMLElement>()
+function setFolderCardEl(id: string, el: Element | null) {
+  if (el) folderCardEls.set(id, el as HTMLElement)
+  else folderCardEls.delete(id)
+}
+
+const draggingFolderId = ref<string | null>(null)
+const dropTargetFolderId = ref<string | null>(null)
+const dropFolderMode = ref<'above' | 'below' | null>(null)
+
+function classifyFolderDrop(el: HTMLElement, clientY: number): 'above' | 'below' {
+  const r = el.getBoundingClientRect()
+  return clientY - r.top < r.height / 2 ? 'above' : 'below'
+}
+
+function resetFolderDrag() {
+  draggingFolderId.value = null
+  dropTargetFolderId.value = null
+  dropFolderMode.value = null
+}
+
+// 只重排文件夹 id 之间的相对顺序，根目录下穿插的普通书签保持原有相对顺序和位置不变——它们
+// 从不与文件夹卡片交叉渲染，folderCards 早已把两者分开分组，交叉顺序本身没有任何可见意义。
+// 拖到根目录卡片上视为「排到所有文件夹最前面」，故忽略 mode，锚定第一个文件夹之前。
+function decideFolderDrop(sourceId: string, targetId: string, mode: 'above' | 'below') {
+  if (sourceId === targetId) return
+  const order = bookmarkStore.order[ROOT_KEY] ?? []
+  const sourceIndex = order.indexOf(sourceId)
+  if (sourceIndex < 0) return
+
+  let insertIndex: number
+  if (targetId === ROOT_CARD_ID) {
+    const dirIds = new Set(bookmarkStore.rootNodes.filter((n) => n.type === HomeItemType.BOOKMARK_DIR).map((n) => n.id))
+    const firstDirIndex = order.findIndex((id) => dirIds.has(id))
+    insertIndex = firstDirIndex < 0 ? order.length : firstDirIndex
+  } else {
+    const targetIndex = order.indexOf(targetId)
+    if (targetIndex < 0) return
+    insertIndex = mode === 'below' ? targetIndex + 1 : targetIndex
+  }
+
+  const next = [...order]
+  next.splice(sourceIndex, 1)
+  if (sourceIndex < insertIndex) insertIndex -= 1
+  next.splice(Math.max(0, Math.min(insertIndex, next.length)), 0, sourceId)
+  bookmarkStore.reorderLocal(ROOT_KEY, next)
+  bookmarksSort(bookmarkStore.fullOrderParams).catch((error) => console.error('[index] 文件夹排序保存失败', error))
+}
+
+let folderDndCleanup: (() => void) | null = null
+let folderMonitorCleanup: (() => void) | null = null
+
+function registerFolderDnd() {
+  folderDndCleanup?.()
+  const disposers: Array<() => void> = []
+  for (const card of folderCards.value) {
+    const el = folderCardEls.get(card.id)
+    if (!el) continue
+    // 根目录卡片是合成分组、不是真实节点，不可被拖动，但仍可作为放置目标（见 decideFolderDrop）
+    if (!card.isRoot) {
+      const handle = el.querySelector<HTMLElement>('[data-folder-handle]')
+      if (handle) {
+        disposers.push(
+          draggable({
+            element: handle,
+            getInitialData: () => ({ kind: 'folder-card', id: card.id }),
+            onDragStart: () => (draggingFolderId.value = card.id),
+            onDrop: resetFolderDrag,
+          }),
+        )
+      }
+    }
+    disposers.push(
+      dropTargetForElements({
+        element: el,
+        canDrop: ({ source }) => source.data.kind === 'folder-card' && source.data.id !== card.id,
+        getData: () => ({ kind: 'folder-card', id: card.id }),
+        onDrag: ({ location }) => {
+          if (location.current.dropTargets[0]?.element !== el) return
+          dropTargetFolderId.value = card.id
+          dropFolderMode.value = classifyFolderDrop(el, location.current.input.clientY)
+        },
+        onDragLeave: () => {
+          if (dropTargetFolderId.value === card.id) {
+            dropTargetFolderId.value = null
+            dropFolderMode.value = null
+          }
+        },
+      }),
+    )
+  }
+  folderDndCleanup = combine(...disposers)
+}
+
+function registerFolderMonitor() {
+  folderMonitorCleanup?.()
+  folderMonitorCleanup = monitorForElements({
+    onDrop: ({ source, location }) => {
+      resetFolderDrag()
+      if (source.data.kind !== 'folder-card') return
+      const target = location.current.dropTargets[0]
+      if (!target) return
+      const sourceId = String(source.data.id)
+      const targetId = String(target.data.id)
+      if (sourceId === targetId) return
+      const mode = classifyFolderDrop(target.element as HTMLElement, location.current.input.clientY)
+      decideFolderDrop(sourceId, targetId, mode)
+    },
+  })
+}
+
+watch(
+  () => folderCards.value.map((c) => c.id).join(','),
+  () => nextTick(registerFolderDnd),
+)
+onMounted(() =>
+  nextTick(() => {
+    registerFolderDnd()
+    registerFolderMonitor()
+  }),
+)
+onBeforeUnmount(() => {
+  folderDndCleanup?.()
+  folderMonitorCleanup?.()
 })
 
 function onShareFolder(folderId: string) {

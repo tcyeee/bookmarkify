@@ -5,6 +5,11 @@
     :class="{ 'ring-2 ring-primary/60': dropTargetId === CARD_END_ID }">
     <div class="flex items-center gap-2 mb-2">
       <Icon
+        v-if="!isRoot"
+        data-folder-handle
+        icon="mdi:drag-vertical"
+        class="size-4 shrink-0 -ml-1 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-400 dark:text-slate-600 dark:hover:text-slate-500" />
+      <Icon
         :icon="isRoot ? 'mdi:home-variant' : 'mdi:folder'"
         class="size-4 shrink-0"
         :class="isRoot ? 'text-slate-400 dark:text-slate-500' : 'text-amber-500'" />
@@ -114,8 +119,11 @@ function registerRows() {
       }),
       dropTargetForElements({
         element: el,
-        // 不再要求 source 必须已属于本卡片：允许从其它文件夹/根目录拖入，实现跨文件夹移动
-        canDrop: ({ source }) => source.data.id !== id,
+        // 不再要求 source 必须已属于本卡片：允许从其它文件夹/根目录拖入，实现跨文件夹移动。
+        // 文件夹卡片级别的拖拽（source.data.kind === 'folder-card'，见 pages/index.vue）走的是
+        // 卡片外层包装 div 的独立 dropTarget，这里必须排除，否则一张文件夹卡片会被当成书签
+        // 塞进另一张卡片的子项列表
+        canDrop: ({ source }) => source.data.id !== id && source.data.kind !== 'folder-card',
         getData: () => ({ id }),
         onDrag: ({ location }) => {
           // dropTargets[0] 是嵌套放置区里被命中的最内层元素；只有真正悬停在本行上时才更新指示线，
@@ -142,6 +150,8 @@ function registerCard() {
   if (!el) return
   cardCleanup = dropTargetForElements({
     element: el,
+    // 同上：拒收文件夹卡片级别的拖拽，交给 pages/index.vue 里包装 div 上的 dropTarget 处理
+    canDrop: ({ source }) => source.data.kind !== 'folder-card',
     getData: () => ({ id: CARD_END_ID }),
     onDrag: ({ location }) => {
       if (location.current.dropTargets[0]?.element !== el) return
