@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.entity.SiteAdminVO
+import top.tcyeee.bookmarkify.entity.SiteBasicInfoUpdateParams
 import top.tcyeee.bookmarkify.entity.SiteSearchParams
 import top.tcyeee.bookmarkify.server.ISiteService
 
@@ -45,4 +46,18 @@ class AdminSiteController(
      */
     @GetMapping("/{siteId}")
     fun detail(@PathVariable siteId: String): SiteAdminVO? = siteService.adminDetail(siteId)
+
+    /**
+     * 手工编辑站点信息（品牌名/短名/人工认证/NSFW 纠正）。
+     *
+     * 这个端点补的是一条断掉的运营动线：`brandNameEmpty` / `verifyFlag` 这些筛选项一直
+     * 筛得出「需要人工过一遍」的站点，却没有任何地方能改它们。
+     *
+     * 返回改完之后的完整快照（与 [detail] 同构），调用方就地替换列表行即可，不必整页重查。
+     */
+    @PostMapping("/{siteId}")
+    fun updateBasicInfo(
+        @PathVariable siteId: String,
+        @RequestBody params: SiteBasicInfoUpdateParams,
+    ): SiteAdminVO = siteService.adminUpdateBasicInfo(siteId, params)
 }

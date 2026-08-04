@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.server
 import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.entity.SiteAdminVO
+import top.tcyeee.bookmarkify.entity.SiteBasicInfoUpdateParams
 import top.tcyeee.bookmarkify.entity.SiteSearchParams
 import top.tcyeee.bookmarkify.entity.entity.SiteEntity
 
@@ -24,6 +25,19 @@ interface ISiteService : IService<SiteEntity> {
      * 当前分页里，摘要条不能只能靠列表命中。找不到返回 null（站点可能已被清理）。
      */
     fun adminDetail(siteId: String): SiteAdminVO?
+
+    /**
+     * 后台手工编辑站点信息，返回与 [adminDetail] 完全一致的新快照。
+     *
+     * 锁语义与 `BookmarkServiceImpl.adminUpdateBasicInfo` 一致，**手工编辑即加锁** ——
+     * 否则下一轮定期重抓会在无人察觉的情况下把管理员刚填的品牌名改回抓取值。
+     * 反过来，把某个名字显式清空（送空串）等于「我不要人工值了，交回抓取托管」，
+     * 于是同时解锁；只想接受抓取值而不改现值时走 [SiteBasicInfoUpdateParams.unlockFields]。
+     *
+     * 返回完整 VO 而不是 void：调用方（站点/页面合并视图）拿它就地替换列表里那一行，
+     * 省掉一次"保存完再整页重查"的往返，也避免列表与摘要条各拿一份快照而显示不一致。
+     */
+    fun adminUpdateBasicInfo(siteId: String, params: SiteBasicInfoUpdateParams): SiteAdminVO
 
     /**
      * 按 host 获取或创建站点。并发插入同一 host 时，落败的一方捕获唯一键冲突后回查已存在记录，

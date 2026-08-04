@@ -32,15 +32,6 @@ const routes: RouteRecordRaw[] = [
     path: '/bookmark',
     children: [
       {
-        name: 'BookmarkCleaning',
-        path: '/bookmark/cleaning',
-        component: () => import('#/views/bookmark/cleaning/index.vue'),
-        meta: {
-          icon: 'carbon:workspace',
-          title: '书签管理',
-        },
-      },
-      {
         name: 'SystemBookmarkCollection',
         path: '/bookmark-collection/system',
         component: () => import('#/views/bookmark-collection/system/index.vue'),
@@ -118,8 +109,9 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
-    // 站点层：一个域名一行。与「书签管理」下的页面层刻意分成两个菜单 ——
-    // 同域名下的上千个深链会把域名级的问题(品牌名没抓到/整站 NSFW/域名不可达)完全淹没
+    // 书签在库里分两层：站点(一个域名一行)与页面(一个具体地址一行)。这里刻意给两层
+    // **各一张平表**，而不是一张混合表 —— 同域名下的上千个深链会把域名级的问题
+    // (品牌名没抓到/整站 NSFW/域名不可达)完全淹没
     meta: {
       icon: 'lucide:globe',
       title: '网站管理',
@@ -128,24 +120,33 @@ const routes: RouteRecordRaw[] = [
     path: '/website',
     children: [
       {
-        // 站点→页面的下钻视图。与下面那张纯站点平表是**增量关系**，不是替代：
-        // 「所有抓取失败的页面」这类跨站点的问题不属于任何单一站点，从这里永远看不到，
-        // 那种工作流依然要走「书签管理 › 书签管理」的页面平表
+        name: 'SiteManage',
+        path: '/website/site',
+        component: () => import('#/views/website/site/index.vue'),
+        meta: {
+          icon: 'carbon:collaborate',
+          title: '站点管理',
+        },
+      },
+      {
+        // 页面层平表。跨站点的问题(「所有抓取失败的页面」)只有在这里看得到 ——
+        // 那种工作流不属于任何单一站点，下钻视图永远回答不了
+        name: 'PageManage',
+        path: '/website/page',
+        component: () => import('#/views/website/page/index.vue'),
+        meta: {
+          icon: 'carbon:document',
+          title: '页面管理',
+        },
+      },
+      {
+        // 站点→页面的下钻视图。与上面两张平表是**增量关系**，不是替代
         name: 'WebsiteExplorer',
         path: '/website/explorer',
         component: () => import('#/views/website/explorer/index.vue'),
         meta: {
           icon: 'carbon:tree-view-alt',
           title: '站点与页面',
-        },
-      },
-      {
-        name: 'AllWebsites',
-        path: '/website/all',
-        component: () => import('#/views/website/all/index.vue'),
-        meta: {
-          icon: 'carbon:collaborate',
-          title: '全部网站管理',
         },
       },
     ],
