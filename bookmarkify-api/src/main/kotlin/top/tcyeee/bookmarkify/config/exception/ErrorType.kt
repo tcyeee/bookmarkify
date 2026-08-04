@@ -57,6 +57,9 @@ enum class ErrorType(var msg: String) {
     E308("该网址指向内网地址，已拒绝访问"),
 
     /* 不提示,也不在前端报错的部分 */
+    // 保留但**已无人抛出**：握手鉴权失败改为 return false + 401(AuthHandshakeInterceptor.reject)。
+    // 从 beforeHandshake 抛异常会被 Spring 包成 HandshakeFailureException 冒到 DispatcherServlet
+    // 无人接手，于是每个过期 token 都变成一条 HTTP 500——别再把它抛回去。
     E201("Websocket认证失败"),
     E203("REDIS断开连接"),
     E215("用户信息丢失"),
