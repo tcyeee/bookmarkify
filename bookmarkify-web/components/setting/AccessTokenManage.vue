@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6 text-slate-900 dark:text-slate-100 transition-colors">
-    <div class="flex items-start justify-between gap-4">
-      <div>
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+      <div class="min-w-0">
         <h3 class="text-xl font-semibold">{{ $t('accessTokenManage.title') }}</h3>
         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t('accessTokenManage.desc') }}</p>
       </div>

@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-white p-8 w-full">
+  <div class="bg-white p-4 sm:p-6 lg:p-8 w-full">
     <Transition name="fade-fast" mode="out-in">
       <component :is="currentComponent" :key="sysStore.settingTabIndex" />
     </Transition>

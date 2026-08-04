@@ -4,7 +4,8 @@
     :key="index"
     class="absolute inset-0 pointer-events-none"
     :style="{ left: bookmark.left, top: bookmark.top, '--i': index }">
-    <img class="rounded-4xl w-25 h-25 blur opacity-50 floating-img" :src="bookmark.src" loading="lazy" />
+    <!-- 手机上 100px 的图块会盖到标题上，缩到 64px 才只是背景 -->
+    <img class="rounded-4xl w-16 h-16 sm:w-25 sm:h-25 blur opacity-50 floating-img" :src="bookmark.src" loading="lazy" />
   </div>
 </template>
 

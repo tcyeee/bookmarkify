@@ -5,12 +5,13 @@
       <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t('bookmarkLibrary.desc') }}</p>
     </div>
 
-    <div class="flex gap-6 items-start">
-      <!-- 文件夹侧栏 -->
-      <aside class="w-44 shrink-0 space-y-1">
+    <div class="flex flex-col md:flex-row gap-4 md:gap-6 items-stretch md:items-start">
+      <!-- 文件夹侧栏：窄屏没有 176px 可以拿去放侧栏（正文会被挤没），改成横向滚动的筛选条 -->
+      <aside
+        class="folder-rail w-full md:w-44 shrink-0 flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-1 md:pb-0">
         <button
           type="button"
-          class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors"
+          class="shrink-0 md:w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left whitespace-nowrap transition-colors"
           :class="
             selectedFolderId === null
               ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-300 font-medium'
@@ -21,11 +22,12 @@
           <span class="truncate">{{ $t('bookmarkLibrary.folderPanel.all') }}</span>
         </button>
 
-        <div class="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
+        <div
+          class="shrink-0 md:w-full flex flex-row md:flex-col gap-1 md:pt-2 md:mt-2 md:border-t border-slate-100 dark:border-slate-800">
           <!-- 根目录：不是真实的文件夹节点（没有 id、不能重命名/删除），用紫色与普通文件夹区分 -->
           <button
             type="button"
-            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors"
+            class="shrink-0 md:w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left whitespace-nowrap transition-colors"
             :class="
               selectedFolderId === ROOT_KEY
                 ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-300 font-medium'
@@ -33,7 +35,7 @@
             "
             @click="selectFolder(ROOT_KEY)">
             <Icon icon="mdi:folder-home" class="size-4 shrink-0 text-violet-500" />
-            <span class="flex-1 truncate">{{ $t('bookmarkLibrary.folderPanel.root') }}</span>
+            <span class="md:flex-1 truncate">{{ $t('bookmarkLibrary.folderPanel.root') }}</span>
             <span class="text-xs text-slate-400 shrink-0">{{ rootBookmarkCount }}</span>
           </button>
 
@@ -41,7 +43,7 @@
             v-for="folder in folders"
             :key="folder.id"
             type="button"
-            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors"
+            class="shrink-0 md:w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left whitespace-nowrap transition-colors"
             :class="
               selectedFolderId === folder.id
                 ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-300 font-medium'
@@ -49,7 +51,9 @@
             "
             @click="selectFolder(folder.id)">
             <Icon icon="mdi:folder" class="size-4 shrink-0 text-amber-500" />
-            <span class="flex-1 truncate">{{ folder.name || $t('bookmarkLibrary.folderPanel.unnamed') }}</span>
+            <span class="md:flex-1 truncate max-w-32 md:max-w-none">{{
+              folder.name || $t('bookmarkLibrary.folderPanel.unnamed')
+            }}</span>
             <span class="text-xs text-slate-400 shrink-0">{{ bookmarkStore.order[folder.id]?.length ?? 0 }}</span>
           </button>
         </div>
@@ -59,7 +63,7 @@
         <!-- 当前文件夹：整体操作（重命名/删除） -->
         <div
           v-if="selectedFolderId"
-          class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 px-4 py-2.5">
+          class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 px-4 py-2.5">
           <div class="flex items-center gap-2 min-w-0 text-sm text-slate-600 dark:text-slate-300">
             <Icon
               :icon="isRootFolder ? 'mdi:folder-home' : 'mdi:folder'"
@@ -192,7 +196,9 @@
         </div>
 
         <!-- 分页（仅全部书签视图，按文件夹浏览时不分页） -->
-        <div v-if="!selectedFolderId" class="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
+        <div
+          v-if="!selectedFolderId"
+          class="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500 dark:text-slate-400">
           <div class="flex items-center gap-3">
             <span>{{ $t('bookmarkLibrary.pagination.total', { total: page?.total ?? 0 }) }}</span>
             <label class="flex items-center gap-1.5 shrink-0">
@@ -219,7 +225,7 @@
     <Transition name="fade-fast">
       <div
         v-if="selectedIds.size > 0"
-        class="sticky bottom-4 flex items-center justify-between gap-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg px-4 py-3">
+        class="sticky bottom-4 flex flex-wrap items-center justify-between gap-2 sm:gap-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg px-4 py-3">
         <span class="text-sm text-slate-600 dark:text-slate-300">{{ $t('bookmarkLibrary.selectedCount', { count: selectedIds.size }) }}</span>
         <div class="flex items-center gap-2">
           <button
@@ -704,6 +710,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 窄屏文件夹筛选条横向滚动，滚动条会在按钮下方压出一条灰杠 */
+.folder-rail {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.folder-rail::-webkit-scrollbar {
+  display: none;
+}
+
 .fade-fast-enter-active,
 .fade-fast-leave-active {
   transition: opacity 200ms ease, transform 200ms ease;

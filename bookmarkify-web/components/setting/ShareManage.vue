@@ -64,7 +64,7 @@
     </div>
 
     <!-- 分页 -->
-    <div class="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
+    <div class="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500 dark:text-slate-400">
       <span>{{ $t('shareManage.pagination.total', { total: page?.total ?? 0 }) }}</span>
       <div v-if="totalPages > 1" class="flex items-center gap-2">
         <button type="button" class="cy-btn cy-btn-ghost cy-btn-sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">

@@ -19,7 +19,7 @@
         </div>
       </div>
 
-      <div class="space-y-3 mt-20">
+      <div class="space-y-3 mt-10 md:mt-20">
         <div class="text-lg font-semibold text-slate-800 dark:text-slate-100 py-3">{{ $t('accountProfile.basicInfo') }}</div>
         <ActionInput
           v-model="form.nickName"
@@ -37,12 +37,12 @@
           @random="randomizeNickName" />
       </div>
 
-      <div class="space-y-3 mt-20">
+      <div class="space-y-3 mt-10 md:mt-20">
         <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ $t('accountProfile.accountSecurity') }}</div>
 
         <div
-          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
-          <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
+          <div class="flex items-center gap-3 min-w-0 text-slate-700 dark:text-slate-200">
             <Icon icon="mdi:email" class="size-5 text-slate-500 dark:text-slate-400" />
             <div>
               <div class="font-medium">{{ $t('accountProfile.email') }}</div>
@@ -55,8 +55,8 @@
         </div>
 
         <div
-          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
-          <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
+          <div class="flex items-center gap-3 min-w-0 text-slate-700 dark:text-slate-200">
             <svg class="size-5 shrink-0" viewBox="0 0 48 48" aria-hidden="true">
               <path
                 fill="#FFC107"
@@ -82,8 +82,8 @@
         </div>
 
         <div
-          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
-          <div class="flex items-center gap-3 text-slate-700 dark:text-slate-200">
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
+          <div class="flex items-center gap-3 min-w-0 text-slate-700 dark:text-slate-200">
             <IconMdiGithub class="size-8 text-slate-800 dark:text-slate-100" />
             <div>
               <div class="font-medium">{{ $t('accountProfile.githubAccount') }}</div>
@@ -97,13 +97,13 @@
       </div>
 
       <!-- 帐户操作 -->
-      <div class="space-y-3 mt-20">
+      <div class="space-y-3 mt-10 md:mt-20">
         <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ $t('accountProfile.accountActions') }}</div>
 
         <!-- 退出登录 -->
         <div
-          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
-          <div class="flex items-center gap-3 text-slate-800 dark:text-slate-200">
+          class="rounded-xl border border-slate-200 bg-white/80 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900/70">
+          <div class="flex items-center gap-3 min-w-0 text-slate-800 dark:text-slate-200">
             <Icon icon="mdi:logout" class="size-[22px] text-slate-500 dark:text-slate-400" />
             <div>
               <div class="font-semibold">{{ $t('accountProfile.logout') }}</div>
@@ -115,13 +115,13 @@
       </div>
 
       <!-- 危险操作 -->
-      <div class="space-y-3 mt-20">
+      <div class="space-y-3 mt-10 md:mt-20">
         <div class="text-lg font-semibold text-rose-600 dark:text-rose-300">{{ $t('accountProfile.dangerZone') }}</div>
 
         <!-- 注销账户 -->
         <div
-          class="rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-3 flex items-center justify-between gap-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-rose-500/60 dark:bg-rose-500/10">
-          <div class="flex items-center gap-3 text-rose-800 dark:text-rose-100">
+          class="rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-[0_1px_4px_rgba(0,0,0,0.04)] dark:border-rose-500/60 dark:bg-rose-500/10">
+          <div class="flex items-center gap-3 min-w-0 text-rose-800 dark:text-rose-100">
             <Icon icon="mdi:logout" class="size-[22px] text-rose-500 dark:text-rose-300" />
             <div>
               <div class="font-semibold">{{ $t('accountProfile.deleteAccount') }}</div>
