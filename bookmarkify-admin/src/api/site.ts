@@ -107,3 +107,36 @@ export async function getSiteListApi(params: SiteSearchParams) {
 export async function getSiteDetailApi(siteId: string) {
   return requestClient.get<null | SiteAdminVO>(`/admin/site/${siteId}`);
 }
+
+/**
+ * 手工编辑站点信息。**部分更新**：只送用户真正动过的字段，`undefined` 表示不改。
+ *
+ * 注意 `brandName` / `shortName` 的空串与 `undefined` 是两个意思：空串 =「清空并交回抓取
+ * 托管」（后端同时解锁该字段），`undefined` = 「这次没动它」。想清空就必须显式送 `''`。
+ */
+export interface SiteBasicInfoUpdateParams {
+  /** 站点全名；空串表示清空并交回抓取托管 */
+  brandName?: string;
+  /** 站点短名；空串表示清空并交回抓取托管 */
+  shortName?: string;
+  /** 人工认证：置 true 后任何抓取都不再覆盖品牌名与图标 */
+  verifyFlag?: boolean;
+  /** 人工改写 NSFW 结论（纠正 AI 误判） */
+  nsfw?: boolean;
+  /** NSFW 理由，仅在 nsfw 一并传入时生效 */
+  nsfwReason?: string;
+  /** 显式解锁的字段：表示接受抓取值，此后允许被自动覆盖 */
+  unlockFields?: SiteLockedField[];
+}
+
+/**
+ * 保存站点编辑，返回改完之后的完整快照。
+ *
+ * 返回完整 VO 而不是 void，是为了让调用方就地替换列表里那一行 —— 站点在「站点管理」平表和
+ * 「站点与页面」摘要条里各显示一份，各自重查会让两处显示不一致，看起来像"保存没生效"。
+ *
+ * 手工编辑的字段会被后端**加锁**，下一轮自动抓取不再覆盖；把名字清成空串则同时解锁。
+ */
+export async function updateSiteBasicInfoApi(siteId: string, params: SiteBasicInfoUpdateParams) {
+  return requestClient.post<SiteAdminVO>(`/admin/site/${siteId}`, params);
+}

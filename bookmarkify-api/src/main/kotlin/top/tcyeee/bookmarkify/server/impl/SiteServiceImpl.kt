@@ -7,8 +7,11 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
+import top.tcyeee.bookmarkify.config.exception.CommonException
+import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.SiteAdminVO
 import top.tcyeee.bookmarkify.entity.SiteAssetAdminVO
+import top.tcyeee.bookmarkify.entity.SiteBasicInfoUpdateParams
 import top.tcyeee.bookmarkify.entity.SiteSearchParams
 import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
@@ -63,6 +66,56 @@ class SiteServiceImpl(
         runCatching { vo.assets = toAssetVOs(assetsBySite(ids)[siteId].orEmpty()) }
             .onFailure { logger.warn("[adminDetail] 站点图标回填失败(忽略): ${it.message}") }
         return vo
+    }
+
+    /**
+     * 后台手工编辑。锁语义详见 [ISiteService.adminUpdateBasicInfo]。
+     *
+     * 与 [applyCrawledMeta] 走完全相反的方向，这是刻意的：那边是抓取值写入，处处让着人工值
+     * （认证过就整体跳过、锁住的列不写、深链只回填空列）；这边是人工值写入，直接覆盖并加锁。
+     * 两条路径共用一张表却谁也不该悄悄改写对方的意图，所以分成两个方法而不是加个布尔参数。
+     */
+    override fun adminUpdateBasicInfo(siteId: String, params: SiteBasicInfoUpdateParams): SiteAdminVO {
+        val site = baseMapper.selectById(siteId) ?: throw CommonException(ErrorType.E102)
+
+        // 送了才改：null 表示前端根本没动这个字段，与「改成空」是两回事
+        params.brandName?.let { site.applyManualName(SiteLockedField.BRAND_NAME, it) { v -> site.brandName = v } }
+        params.shortName?.let { site.applyManualName(SiteLockedField.SHORT_NAME, it) { v -> site.shortName = v } }
+        params.verifyFlag?.let { site.verifyFlag = it }
+        // 显式解锁放在最后：同一次请求里既改名又解锁同一个字段时，以「解锁」为准 ——
+        // 那是管理员更明确的意图表达（"这个值以后交给抓取"），而改名只是顺手把当前值填对
+        if (params.unlockFields.isNotEmpty()) site.unlock(*params.unlockFields.toTypedArray())
+
+        site.updateTime = LocalDateTime.now()
+        baseMapper.updateById(site)
+
+        // NSFW 单独走 markNsfw：那里带着「判过且干净」要写 CLEAN 占位的规则，
+        // 在这里重写一遍就是迟早会跟它跑偏的第二份实现
+        params.nsfw?.let { markNsfw(siteId, it, params.nsfwReason) }
+
+        logger.info(
+            "[adminUpdateBasicInfo] 管理员手工更新站点: siteId=$siteId, host=${site.host}, " +
+                "brandName=${site.brandName}, shortName=${site.shortName}, " +
+                "verifyFlag=${site.verifyFlag}, lockedFields=${site.lockedFields}"
+        )
+        return adminDetail(siteId) ?: throw CommonException(ErrorType.E102)
+    }
+
+    /**
+     * 写入一个人工填的名字并同步锁状态。
+     *
+     * 空白 = 「我不要人工值了」，于是清空并解锁，把这一列交回抓取托管；非空 = 手工值，加锁。
+     * 少了解锁那一半，清空过的列会永远锁在空值上，抓取再也补不回来 —— 而「品牌名为空」
+     * 正是后台筛选里最常用的那一条。
+     */
+    private inline fun SiteEntity.applyManualName(
+        field: SiteLockedField,
+        raw: String,
+        set: (String?) -> Unit,
+    ) {
+        val value = raw.trim().ifBlank { null }
+        set(value)
+        if (value == null) unlock(field) else lock(field)
     }
 
     /**

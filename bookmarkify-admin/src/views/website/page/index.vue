@@ -1,11 +1,15 @@
 <script lang="ts" setup>
 import type { BookmarkEntity, BookmarkSearchParams } from "#/api/bookmark";
+import type { SiteAdminVO } from "#/api/site";
 import type { UserAdminVO } from "#/api/user-manage";
 
-import { defineAsyncComponent, reactive, ref } from "vue";
+import { defineAsyncComponent, onMounted, reactive, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
+
+import { ElMessage } from "element-plus";
 
 import {
   getBookmarkListApi,
@@ -13,15 +17,14 @@ import {
   updateBookmarkBasicInfoApi,
   type BookmarkParseStatus,
 } from "#/api/bookmark";
-import { ElMessage } from "element-plus";
+import { getSiteDetailApi } from "#/api/site";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 
+import BookmarkAssetCell from "#/views/bookmark/BookmarkAssetCell.vue";
+import BookmarkDetailDialog from "#/views/bookmark/BookmarkDetailDialog.vue";
+import { faviconOf, logoOf, socialOf } from "#/views/bookmark/siteAsset";
 import UserDetailDialog from "#/views/user/UserDetailDialog.vue";
 import UserIdentityCell from "#/views/user/UserIdentityCell.vue";
-
-import BookmarkAssetCell from "../BookmarkAssetCell.vue";
-import BookmarkDetailDialog from "../BookmarkDetailDialog.vue";
-import { faviconOf, logoOf, socialOf } from "../siteAsset";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
@@ -79,6 +82,66 @@ const ElButton = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElButton)
 );
 
+const ElLink = defineAsyncComponent(() =>
+  Promise.all([
+    import("element-plus/es/components/link/index"),
+    import("element-plus/es/components/link/style/css"),
+  ]).then(([res]) => res.ElLink)
+);
+
+const route = useRoute();
+const router = useRouter();
+
+const statusOptions: {
+  label: string;
+  value: BookmarkParseStatus;
+  type: "danger" | "info" | "success" | "warning";
+}[] = [
+  { label: "等待中", value: "PENDING", type: "info" },
+  { label: "成功", value: "SUCCESS", type: "success" },
+  { label: "抓取失败", value: "UNREACHABLE", type: "danger" },
+  { label: "已归档", value: "ARCHIVED", type: "warning" },
+];
+
+// ── 站点范围：从「站点管理」下钻过来时带的 ?siteId= ──
+//
+// 与把域名塞进关键字不是一回事：关键字是子串模糊匹配，`qq.com` 会把 `xxqq.com.cn`
+// 一并捞进来。下钻要的是精确的父子关系，所以走独立的 siteId 参数。
+const scopedSiteId = ref(typeof route.query.siteId === "string" ? route.query.siteId : "");
+/** 站点摘要只用于顶部那条范围提示；取不到不影响列表本身（列表只需要 id） */
+const scopedSite = ref<null | SiteAdminVO>(null);
+
+const searchForm = reactive<Pick<BookmarkSearchParams, "name" | "status">>({
+  name: "",
+  // 从健康条某一段点进来时状态已经选好了，再让人手动选一次是白丢一次上下文
+  status: statusOptions.some((o) => o.value === route.query.status)
+    ? (route.query.status as BookmarkParseStatus)
+    : undefined,
+});
+
+/** 把当前的站点范围写回 URL：刷新、切 vben 页签回来都还在 */
+function syncScopeToUrl() {
+  router.replace({
+    query: { ...route.query, siteId: scopedSiteId.value || undefined, status: undefined },
+  });
+}
+
+function clearScope() {
+  scopedSiteId.value = "";
+  scopedSite.value = null;
+  syncScopeToUrl();
+  gridApi.reload();
+}
+
+onMounted(async () => {
+  if (!scopedSiteId.value) return;
+  // 「站点已被清理」(null) 与「这次请求失败了」(抛错) 必须分开：只有前者才该摘掉 URL 上的
+  // id，把一次网络抖动也当成前者，等于悄悄吞了用户的深链
+  const site = await getSiteDetailApi(scopedSiteId.value).catch(() => undefined);
+  if (site) scopedSite.value = site;
+  else if (site === null) clearScope();
+});
+
 // 详情弹窗直接拿表格行对象：弹窗里的改动就地写回该行，表格无需二次同步
 const detailVisible = ref(false);
 const currentRow = ref<BookmarkEntity | null>(null);
@@ -98,6 +161,23 @@ const DESC_MAX = 15;
 function truncate(text: string | undefined, max = DESC_MAX) {
   if (!text) return "";
   return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+/**
+ * 站内相对地址。
+ *
+ * query 与 fragment 必须带上：整列都是同域同路径的深链时，只显示 path 会让
+ * `/watch?v=A` 和 `/watch?v=B` 变成看起来一模一样的两行。库里这两列不含 `?` / `#`。
+ */
+function relativePath(row: BookmarkEntity) {
+  const path = row.urlPath || "/";
+  const query = row.urlQuery ? `?${row.urlQuery}` : "";
+  const fragment = row.urlFragment ? `#${row.urlFragment}` : "";
+  return `${path}${query}${fragment}`;
+}
+
+function fullUrl(row: BookmarkEntity) {
+  return `${row.urlScheme}://${row.urlHost}${relativePath(row)}`;
 }
 
 // ── 行内「更新」：重新抓取网站信息并直接覆盖持久化 ──
@@ -149,25 +229,9 @@ async function handleSaveBasicInfo() {
   }
 }
 
-const searchForm = reactive<Pick<BookmarkSearchParams, "name" | "status">>({
-  name: "",
-  status: undefined,
-});
-
-const statusOptions: {
-  label: string;
-  value: BookmarkParseStatus;
-  type: "danger" | "info" | "success" | "warning";
-}[] = [
-  { label: "等待中", value: "PENDING", type: "info" },
-  { label: "成功", value: "SUCCESS", type: "success" },
-  { label: "抓取失败", value: "UNREACHABLE", type: "danger" },
-  { label: "已归档", value: "ARCHIVED", type: "warning" },
-];
-
 function handleRowClick({ row, column }: { row: BookmarkEntity; column: any }) {
-  // 操作列与收录者列有自己的点击语义，落到这里会把书签详情一起弹出来
-  if (column?.field === "rowActions" || column?.field === "owner") return;
+  // 操作列、收录者列与地址列有自己的点击语义，落到这里会把页面详情一起弹出来
+  if (["owner", "rowActions", "urlPath"].includes(column?.field)) return;
   currentRow.value = row;
   detailVisible.value = true;
 }
@@ -183,7 +247,7 @@ function handleReset() {
 }
 
 const gridOptions: VxeGridProps<BookmarkEntity> = {
-  id: "admin-bookmark-cleaning",
+  id: "admin-website-page",
   columns: [
     // 头像拆成三类图分别展示：favicon(小图标) / logo(高清 LOGO) / 社交图(宽屏分享图)，缺哪张一眼可见。
     // 三列的数据都取自 row.assets，但 field 必须各不相同：它同时是列自定义(customConfig.storage)
@@ -196,6 +260,7 @@ const gridOptions: VxeGridProps<BookmarkEntity> = {
     // 只截前 15 个字，完整描述在悬浮 title 与详情弹窗里
     { field: "description", title: "网站描述", minWidth: 160, slots: { default: "description" } },
     { field: "urlHost", title: "域名", minWidth: 180 },
+    { field: "urlPath", title: "站内地址", minWidth: 200, slots: { default: "path" } },
     // 最早把这条书签加进来的用户。头像与昵称同格显示，点开看该用户的完整信息
     { field: "owner", title: "收录用户", minWidth: 160, slots: { default: "owner" } },
     { field: "parseStatus", title: "状态", width: 140, slots: { default: "parseStatus" } },
@@ -223,6 +288,7 @@ const gridOptions: VxeGridProps<BookmarkEntity> = {
         const res = await getBookmarkListApi({
           name: searchForm.name || undefined,
           status: searchForm.status || undefined,
+          siteId: scopedSiteId.value || undefined,
           currentPage: page.currentPage,
           pageSize: page.pageSize,
         });
@@ -245,9 +311,35 @@ const [Grid, gridApi] = useVbenVxeGrid({
     <ElCard shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
-          <span>书签管理</span>
+          <span>页面管理</span>
+          <span class="text-xs text-gray-400">
+            页面层：一个具体地址一行。域名级的信息在「网站管理 › 站点管理」里看
+          </span>
         </div>
       </template>
+
+      <!-- 从站点管理下钻进来时的范围提示。没有它，一张被过滤过的表和全量表长得一模一样 -->
+      <div v-if="scopedSiteId" class="scope-bar mb-3">
+        <span class="scope-bar__label">仅看站点</span>
+        <ElLink
+          v-if="scopedSite"
+          type="primary"
+          :href="scopedSite.rootUrl"
+          target="_blank"
+          rel="noopener"
+        >
+          {{ scopedSite.host }}
+        </ElLink>
+        <span v-else class="text-gray-400">{{ scopedSiteId }}</span>
+        <span v-if="scopedSite?.brandName" class="text-xs text-gray-400">
+          {{ scopedSite.brandName }}
+        </span>
+        <span v-if="scopedSite" class="text-xs text-gray-400">
+          共 {{ scopedSite.pageCount }} 个页面
+        </span>
+        <ElButton link type="primary" @click="clearScope">查看全部页面</ElButton>
+      </div>
+
       <div class="search-bar mb-4">
         <ElForm :model="searchForm" label-position="left" @submit.prevent="handleSearch">
           <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
@@ -285,6 +377,18 @@ const [Grid, gridApi] = useVbenVxeGrid({
             {{ truncate(row.description) }}
           </span>
           <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #path="{ row }">
+          <ElLink
+            type="primary"
+            :href="fullUrl(row)"
+            target="_blank"
+            rel="noopener"
+            :title="fullUrl(row)"
+            @click.stop
+          >
+            {{ relativePath(row) }}
+          </ElLink>
         </template>
         <template #owner="{ row }">
           <div v-if="row.owner" class="owner-cell" @click.stop="handleOwnerClick(row)">
@@ -377,6 +481,21 @@ const [Grid, gridApi] = useVbenVxeGrid({
 </template>
 
 <style scoped>
+.scope-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--el-color-primary-light-9);
+  border-radius: 4px;
+}
+
+.scope-bar__label {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+
 .owner-cell {
   display: flex;
   gap: 6px;

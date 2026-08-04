@@ -1,8 +1,10 @@
 import type { VxeTableGridOptions } from '@vben/plugins/vxe-table';
 import { h } from 'vue';
 import { setupVbenVxeTable, useVbenVxeGrid } from '@vben/plugins/vxe-table';
-import ElButton from "element-plus"
-import ElImage from "element-plus"
+// 必须是**具名**导入：element-plus 的 default 导出是安装器对象 `{ install, version }`，
+// 不是组件。`import ElButton from 'element-plus'` 拿到的是那个对象，h() 渲染出来是空的 ——
+// 下面两个 renderer 一直如此。样式由 unplugin-element-plus 按具名导入自动注入。
+import { ElButton, ElImage } from 'element-plus';
 import {
   getAdminGridConfigApi,
   saveAdminGridConfigApi,

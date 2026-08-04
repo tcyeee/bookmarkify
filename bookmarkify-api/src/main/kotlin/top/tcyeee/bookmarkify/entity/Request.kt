@@ -13,6 +13,7 @@ import top.tcyeee.bookmarkify.entity.enums.OssObjectState
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
+import top.tcyeee.bookmarkify.entity.enums.SiteLockedField
 import top.tcyeee.bookmarkify.utils.BaseUtils
 import java.time.LocalDateTime
 
@@ -332,6 +333,26 @@ data class SiteSearchParams(
         return query.orderBy(true, sortAsc, column)
     }
 }
+
+/**
+ * 后台手工编辑站点信息。
+ *
+ * 存在的理由：[SiteSearchParams] 的 `brandNameEmpty` / `verifyFlag` 筛出来的正是「需要人工
+ * 过一遍」的那批站点，而在这个类之前，站点侧一个写端点都没有 —— 筛得出来、改不了，
+ * 运营动线断在第二步。
+ *
+ * 每个字段都是 `null = 不改`，不要用空串或 `false` 当哨兵：这个请求体是**部分更新**，
+ * 前端只会送用户真正动过的字段。清空某个名字请显式送空串（见 [ISiteService.adminUpdateBasicInfo]）。
+ */
+data class SiteBasicInfoUpdateParams(
+    @field:Schema(description = "站点全名；空串表示清空并交回抓取托管") var brandName: String? = null,
+    @field:Schema(description = "站点短名；空串表示清空并交回抓取托管") var shortName: String? = null,
+    @field:Schema(description = "人工认证：置 true 后任何抓取都不再覆盖品牌名与图标") var verifyFlag: Boolean? = null,
+    @field:Schema(description = "人工改写 NSFW 结论(纠正 AI 误判)") var nsfw: Boolean? = null,
+    @field:Schema(description = "NSFW 理由，仅在 nsfw 一并传入时生效") var nsfwReason: String? = null,
+    @field:Schema(description = "显式解锁的字段：表示接受抓取值，此后允许被自动覆盖")
+    var unlockFields: List<SiteLockedField> = emptyList(),
+)
 
 /** 创建/发布一个书签分享 */
 data class ShareCreateParams(

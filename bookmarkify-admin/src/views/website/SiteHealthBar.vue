@@ -3,6 +3,8 @@ import type { BookmarkParseStatus } from "#/api/bookmark";
 
 import { computed } from "vue";
 
+import { PAGE_STATUS_META, PAGE_STATUS_ORDER } from "./pageStatus";
+
 /**
  * 站点下页面抓取状态的分段条。
  *
@@ -19,22 +21,13 @@ const emit = defineEmits<{
   (e: "pick", status: BookmarkParseStatus): void;
 }>();
 
-/** 段序固定为「越靠右越糟」，扫一眼右侧的颜色宽度就是问题的量，不必逐个读数字 */
-const SEGMENTS: {
-  status: BookmarkParseStatus;
-  label: string;
-  cssVar: string;
-}[] = [
-  { status: "SUCCESS", label: "成功", cssVar: "--el-color-success" },
-  { status: "PENDING", label: "等待中", cssVar: "--el-color-info" },
-  { status: "UNREACHABLE", label: "抓取失败", cssVar: "--el-color-danger" },
-  { status: "ARCHIVED", label: "已归档", cssVar: "--el-color-warning" },
-];
-
 const parts = computed(() =>
-  SEGMENTS.map((seg) => ({ ...seg, count: props.counts?.[seg.status] ?? 0 })).filter(
-    (p) => p.count > 0,
-  ),
+  PAGE_STATUS_ORDER.map((status) => ({
+    status,
+    label: PAGE_STATUS_META[status].label,
+    cssVar: PAGE_STATUS_META[status].cssVar,
+    count: props.counts?.[status] ?? 0,
+  })).filter((p) => p.count > 0),
 );
 
 const total = computed(() => parts.value.reduce((sum, p) => sum + p.count, 0));
@@ -45,14 +38,19 @@ function handlePick(status: BookmarkParseStatus) {
 </script>
 
 <template>
-  <div v-if="total > 0" class="health-bar">
+  <div
+    v-if="total > 0"
+    class="health-bar"
+    :class="{ 'health-bar--interactive': interactive }"
+    :aria-label="`页面健康：${parts.map((p) => `${p.label} ${p.count}`).join('，')}`"
+  >
     <span
       v-for="p in parts"
       :key="p.status"
       class="health-seg"
       :class="{ 'health-seg--clickable': interactive }"
       :style="{ flexGrow: p.count, background: `var(${p.cssVar})` }"
-      :title="`${p.label} ${p.count} / ${total}`"
+      :title="interactive ? `${p.label} ${p.count} / ${total}（点击只看这些页面）` : `${p.label} ${p.count} / ${total}`"
       @click.stop="handlePick(p.status)"
     />
   </div>
@@ -64,9 +62,20 @@ function handlePick(status: BookmarkParseStatus) {
   display: flex;
   gap: 1px;
   width: 100%;
-  height: 4px;
+  height: 6px;
   overflow: hidden;
-  border-radius: 2px;
+  border-radius: 3px;
+  transition: height 0.12s ease, box-shadow 0.12s ease;
+}
+
+/*
+ * 「点某一段直接下钻到该状态的页面」是这条 bar 最有用的交互，但挂在 6px 高的元素上
+ * 几乎没有可发现性 —— 光靠 cursor:pointer 谁都注意不到。悬浮时整条长高一倍并加描边，
+ * 让它明确表现得像个控件。真正的键盘可达路径不在这里，见调用方的状态 chip。
+ */
+.health-bar--interactive:hover {
+  height: 12px;
+  box-shadow: 0 0 0 1px var(--el-border-color);
 }
 
 .health-bar--empty {
@@ -87,6 +96,6 @@ function handlePick(status: BookmarkParseStatus) {
 }
 
 .health-seg--clickable:hover {
-  opacity: 0.75;
+  filter: brightness(1.15);
 }
 </style>
