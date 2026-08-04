@@ -9,6 +9,9 @@ const MAX_RESOLUTION_DELAY_MS = 5 * 60 * 1000
 const MAX_RESOLUTION_ATTEMPTS = 8
 // 同时挂载的兜底监听上限，见 armPendingWatches
 const MAX_ARMED_WATCHES = 20
+// 批量导入完成提示的超时兜底：留 15 分钟余量越过后端 drainStuckLoading 的 30 分钟陈旧阈值，
+// 避免个别节点因我方抓取服务故障（E307）长期停在 LOADING 导致这批导入永远等不到"全部完成"
+const IMPORT_BATCH_TIMEOUT_MS = 45 * 60 * 1000
 
 /** 后端树 → 扁平 { nodes, order }。nodes 不保留 children（归属/顺序唯一来源是 order）。 */
 function normalize(root?: UserLayoutNodeVO | null) {
@@ -28,6 +31,14 @@ function normalize(root?: UserLayoutNodeVO | null) {
   return { nodes, order }
 }
 
+// 一次批量导入任务的追踪记录，用于导入完成/超时后弹一次 toast，见 checkImportBatches
+interface ImportBatch {
+  id: string // crypto.randomUUID()，仅用于日志区分，不与后端有任何关联
+  nodeIds: string[] // 注册时快照的 BOOKMARK_LOADING 节点 id 列表（不含已秒解析的文件夹）
+  total: number // nodeIds.length，避免重复计算
+  startedAt: number // Date.now()，用于 IMPORT_BATCH_TIMEOUT_MS 超时兜底判断
+}
+
 export const useBookmarkStore = defineStore('homeItems', {
   state: () => ({
     nodes: {} as Record<string, UserLayoutNodeVO>,
@@ -40,6 +51,8 @@ export const useBookmarkStore = defineStore('homeItems', {
     // 在途的 update() 请求（同上，进程内瞬时状态）。多个兜底定时器同时到点、
     // 或重连补拉与兜底重试撞在一起时，共用同一次请求而不是各发一次
     inflightUpdate: null as Promise<void> | null,
+    // 进行中的批量导入任务，见 addImportLoadingBatch / checkImportBatches
+    importBatches: [] as ImportBatch[],
   }),
 
   getters: {
@@ -133,6 +146,9 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.enforceFolderInvariant()
       // 拉回来的布局里若仍有 LOADING 节点，就地把兜底监听补上——不能指望每个调用方记得挂
       this.armPendingWatches()
+      // 整棵树被替换，覆盖兜底轮询补拉、WS 重连补拉两条路径——标签页关闭重开后正是靠这条
+      // 拿到"其实早就解析完了"的新鲜数据
+      this.checkImportBatches()
     },
 
     // 插入加载占位项到根
@@ -204,6 +220,37 @@ export const useBookmarkStore = defineStore('homeItems', {
       delete this.pendingTimeouts[nodeId]
     },
 
+    isNodeStillLoading(id: string): boolean {
+      const n = this.nodes[id]
+      return n != null && n.type === HomeItemType.BOOKMARK_LOADING
+    },
+
+    // 批量导入完成/超时兜底检查。不订阅任何具体 WS 消息类型，而是直接读 this.nodes——本 store
+    // 是节点状态的唯一真相来源，在 nodes 可能变化的三处入口（replaceContent / replaceFolder /
+    // setLayout）末尾各调一次即可覆盖全部解析路径，外加 plugins/auth.ts 水合后调一次覆盖"标签页
+    // 全程关闭、直到超时也没等到下一次拉取"的场景。旧版 importProgress.store.ts 正是因为只订阅了
+    // HOME_ITEM_UPDATE 一种消息，节点经 HOME_DIR_UPDATE / HOME_LAYOUT_REFRESH 解析时计数器永远
+    // 不递减，才会永久卡在未完成状态。
+    // 仅客户端跑：该动作会触发 toast，SSR 阶段跑既无意义也不安全。
+    checkImportBatches() {
+      if (!import.meta.client || !this.importBatches.length) return
+      const now = Date.now()
+      const remaining: ImportBatch[] = []
+      for (const batch of this.importBatches) {
+        const stillLoading = batch.nodeIds.filter((id) => this.isNodeStillLoading(id)).length
+        if (stillLoading === 0) {
+          useToastStore().success(`书签导入完成，共导入 ${batch.total} 个书签！`)
+        } else if (now - batch.startedAt > IMPORT_BATCH_TIMEOUT_MS) {
+          // 超时仍未全部解除 LOADING：多半是个别书签撞上我方抓取服务故障（E307）被设计成停在
+          // LOADING 不收口，不能让这批导入的完成提示永远等不到——按已完成的部分先提示
+          useToastStore().info(`导入完成 ${batch.total - stillLoading}/${batch.total}，其余仍在后台处理，稍后会自动更新`)
+        } else {
+          remaining.push(batch)
+        }
+      }
+      this.importBatches = remaining
+    },
+
     // 批量注入导入书签的 LOADING 节点（含文件夹）；避免全量 update()
     addImportLoadingBatch(nodes: UserLayoutNodeVO[]) {
       for (const node of nodes) {
@@ -225,6 +272,12 @@ export const useBookmarkStore = defineStore('homeItems', {
       // 导入的 LOADING 占位同样需要兜底：后端对导入路径不发解析事件，全靠 drainStuckLoading
       // 分批捞，结果是零散推回来的——推丢一条就是一个永远转圈的格子
       this.armPendingWatches()
+      // 登记这批导入，供 checkImportBatches 判断"是否全部解析完成"并弹出完成提示。
+      // 过滤掉文件夹：文件夹是秒解析的，不该计入需要等待的总数
+      const loadingIds = nodes.filter((n) => n.type === HomeItemType.BOOKMARK_LOADING).map((n) => n.id)
+      if (loadingIds.length > 0) {
+        this.importBatches.push({ id: crypto.randomUUID(), nodeIds: loadingIds, total: loadingIds.length, startedAt: Date.now() })
+      }
     },
 
     // 新增已就绪书签到根（AddOneDialog 关联/添加成功且已带 typeApp）
@@ -248,6 +301,7 @@ export const useBookmarkStore = defineStore('homeItems', {
         `[bookmark] 应用 WS 内容替换: nodeId=${node.id}, title=${node.typeApp.title || node.typeApp.urlBase}, isActivity=${node.typeApp.isActivity}`,
       )
       this.nodes[node.id] = { ...node, parentId: cur.parentId, children: undefined }
+      this.checkImportBatches()
     },
 
     // WebSocket 文件夹结构同步（HOME_DIR_UPDATE）：用服务端下发的子节点列表整体替换该文件夹的
@@ -298,6 +352,7 @@ export const useBookmarkStore = defineStore('homeItems', {
         this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []), node.id]
       }
       console.log(`[bookmark] 应用 WS 文件夹同步: folderId=${node.id}, name=${node.name ?? ''}, children=${childIds.length}`)
+      this.checkImportBatches()
     },
 
     // 置顶/取消置顶：本地就地替换 typeApp 对象引用以触发响应式更新
@@ -484,7 +539,7 @@ export const useBookmarkStore = defineStore('homeItems', {
   // 只在下次 setLayout() 才检查为时已晚——用户在这之前已经看到错误计数了。
   persist: {
     storage: piniaPluginPersistedstate.localStorage(),
-    pick: ['nodes', 'order', 'lastFetchedAt'],
+    pick: ['nodes', 'order', 'lastFetchedAt', 'importBatches'],
     afterHydrate: (ctx) => {
       const order = ctx.store.order as Record<string, string[]>
       const seen = new Set<string>()
