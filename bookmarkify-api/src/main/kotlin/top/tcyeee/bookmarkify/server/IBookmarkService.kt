@@ -90,7 +90,11 @@ interface IBookmarkService : IService<PageEntity> {
     /** 为新用户设置默认功能 */
     fun setDefaultFunction(uid: String)
 
-    /** 搜索书签（用户端「添加」搜索，返回含小图标的精简结果） */
+    /**
+     * 搜索书签（用户端「添加」搜索，返回含小图标的精简结果）。
+     *
+     * 匹配范围是 site 层（域名/品牌名/短名），不下探到具体页面标题；同时排除 NSFW 站点。
+     */
     fun search(name: String): List<BookmarkSearchVO>
 
     /** 关联一个已验证通过的书签 */

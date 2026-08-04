@@ -139,13 +139,47 @@ class BookmarkServiceImpl(
         UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.FUNCTION).also { layoutNodeMapper.insert(it) }
             .let { LayoutNodeFunctionEntity(it, uid) }.also { layoutNodeFunctionMapper.insert(it) }.run {}
 
+    /**
+     * 搜索范围限定在 site 层，不再按具体页面的标题/简介匹配。
+     *
+     * 原实现直接在 [PageEntity] 上模糊匹配 appName/title/description/urlHost：既会把某个用户
+     * 深链页面里的私有标题（论坛帖子、视频标题）当成"网站"推荐给别人，NSFW 判定又是站点级属性
+     * （见 [SiteEntity.nsfw]），单查 page 完全查不到这一列，搜索结果里混进过 NSFW 内容也无从挡。
+     * 改成先在 site 上按 host/brandName/shortName 匹配 + 排除 nsfw，再取每个命中站点的首页
+     * （唯一允许出现在搜索结果里的落点）作为可关联的 [BookmarkSearchVO.id]。
+     *
+     * 候选站点数取得比最终返回数大：命中的站点未必已经抓到一个可用的首页（尚未收录/抓取失败），
+     * 直接按最终条数取会在这些站点身上白白浪费名额。
+     */
     override fun search(name: String): List<BookmarkSearchVO> {
-        val list = ktQuery().eq(PageEntity::isActivity, true).like(PageEntity::appName, name).or()
-            .like(PageEntity::title, name).or().like(PageEntity::description, name).or()
-            .like(PageEntity::urlHost, name).last("limit 5").list()
+        val sites = siteService.ktQuery()
+            .eq(SiteEntity::nsfw, false)
+            .and { w ->
+                w.like(SiteEntity::host, name).or()
+                    .like(SiteEntity::brandName, name).or()
+                    .like(SiteEntity::shortName, name)
+            }
+            .last("limit $SEARCH_SITE_CANDIDATE_LIMIT")
+            .list()
+        if (sites.isEmpty()) return emptyList()
+
+        val siteIds = sites.map { it.id }
+        val rootPageBySite = ktQuery()
+            .`in`(PageEntity::siteId, siteIds)
+            .eq(PageEntity::urlPath, "/")
+            .eq(PageEntity::urlQuery, "")
+            .eq(PageEntity::urlFragment, "")
+            .eq(PageEntity::isActivity, true)
+            .list()
+            .associateBy { it.siteId }
+
+        val matched = sites.mapNotNull { site -> rootPageBySite[site.id]?.let { site to it } }
+            .take(SEARCH_RESULT_LIMIT)
+        if (matched.isEmpty()) return emptyList()
+
         // 搜索结果是小图 + 全名的形态，按 LIST 模式解析图标
-        val logoMap = siteAssetResolver.resolveBatch(list.map { it.id }, DisplayMode.LIST)
-        return list.map { BookmarkSearchVO(it, logoMap[it.id]) }
+        val logoMap = siteAssetResolver.resolveBatch(matched.map { it.second.id }, DisplayMode.LIST)
+        return matched.map { (site, page) -> BookmarkSearchVO(page, site, logoMap[page.id]) }
     }
 
     override fun linkOne(pageId: String, uid: String): UserLayoutNodeVO {
@@ -2361,6 +2395,11 @@ class BookmarkServiceImpl(
         // PENDING 正常几分钟内就会被异步解析消费掉；超过这个时长还没变化，基本可判定是解析事件丢失/进程重启丢弃，
         // 而不是网站本身的活性问题——所以用远短于活性检测的分钟级窗口，而不是活性检测的小时/天级窗口。
         private const val CHECKALL_PENDING_STALE_MINUTES = 30L
+        // search() 的候选站点数：命中的站点未必已有可用首页，取得比最终返回数大，
+        // 免得候选刚好被几个"还没抓到首页"的站点占满
+        private const val SEARCH_SITE_CANDIDATE_LIMIT = 20
+        // search() 最终返回给前端的条数
+        private const val SEARCH_RESULT_LIMIT = 5
         /**
          * 巡检候选的调度游标表达式。
          *

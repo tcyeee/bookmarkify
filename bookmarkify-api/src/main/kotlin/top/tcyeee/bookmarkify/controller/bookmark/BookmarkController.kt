@@ -38,7 +38,7 @@ class BookmarksController(
     private val layoutNodeService: IUserLayoutNodeService,
 ) {
 
-    @Operation(summary = "通过书签简称/标题/描述/根域名,搜索书签")
+    @Operation(summary = "按站点(域名/品牌名/短名)搜索已收录的站点首页，非 NSFW 站点专用")
     @PostMapping("/search")
     fun search(@RequestParam name: String): List<BookmarkSearchVO> = bookmarkService.search(name)
 
