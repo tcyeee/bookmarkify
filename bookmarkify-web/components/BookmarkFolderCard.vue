@@ -1,7 +1,7 @@
 <template>
   <div
     ref="cardRef"
-    class="group w-full rounded-lg bg-slate-50 dark:bg-slate-800/40 p-4 transition-shadow"
+    class="folder-card w-full rounded-lg bg-slate-50 dark:bg-slate-800/40 p-4 transition-shadow"
     :class="{ 'ring-2 ring-primary/60': dropTargetId === CARD_END_ID }">
     <div class="flex items-center gap-2 mb-2">
       <Icon
@@ -22,7 +22,7 @@
       <span v-if="children.length" class="text-xs text-slate-400 dark:text-slate-500">({{ children.length }})</span>
       <button
         type="button"
-        class="ml-auto shrink-0 reveal-on-hover text-slate-400 hover:text-primary dark:hover:text-primary transition-opacity transition-colors"
+        class="ml-auto shrink-0 reveal-on-hover-folder text-slate-400 hover:text-primary dark:hover:text-primary transition-opacity transition-colors"
         title="更多操作"
         @click="openMenu">
         <Icon icon="mdi:dots-vertical" class="size-4" />

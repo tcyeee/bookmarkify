@@ -44,17 +44,27 @@ html {
    全站唯一的 `@media (hover: hover)` 来自 DaisyUI 的 .cy-btn），所以还会更糟：
    tap 产生的黏滞 :hover 让按钮在第一次点击之后才出现，第一下像是没反应。
    正确的做法是把「隐藏」本身关进 (hover: hover) —— 默认可见，只有真有指针设备时才藏起来。 */
-.reveal-on-hover {
+.reveal-on-hover,
+.reveal-on-hover-folder {
   opacity: 1;
 }
 
 @media (hover: hover) {
-  .reveal-on-hover {
+  .reveal-on-hover,
+  .reveal-on-hover-folder {
     opacity: 0;
   }
 
   .group:hover .reveal-on-hover,
   .reveal-on-hover:focus-visible {
+    opacity: 1;
+  }
+
+  /* 文件夹卡片自身的 ⋯ 按钮必须用独立的类名和 .folder-card 作用域 —— 卡片外层若也叫 .group，
+     悬停卡片内任意一行书签都会让卡片本身进入 :hover 态，`.group:hover .reveal-on-hover` 不区分
+     是哪一层 .group 触发的，于是会把卡片内所有行的按钮一起点亮，而不仅仅是鼠标所在的那一行。 */
+  .folder-card:hover .reveal-on-hover-folder,
+  .reveal-on-hover-folder:focus-visible {
     opacity: 1;
   }
 }
