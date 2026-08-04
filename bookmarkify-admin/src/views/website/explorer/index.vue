@@ -205,6 +205,12 @@ async function loadSites() {
     // 刷新后左边计数变了而右边摘要条没变，看起来就是「保存没生效」
     const fresh = res.records.find((s) => s.id === selectedSite.value?.id);
     if (fresh) selectedSite.value = fresh;
+  } catch {
+    // 这个函数被几处事件处理器裸调用(搜索/重置/翻页)，不接住就是未捕获的 promise rejection；
+    // 在 onMounted 里还会把后面的初始化一起中断掉。提示已由请求拦截器弹出，这里只清空列表，
+    // 免得旧数据配着新筛选条件留在屏幕上，看起来像"筛选没生效"
+    sites.value = [];
+    sitesTotal.value = 0;
   } finally {
     sitesLoading.value = false;
   }
@@ -240,12 +246,17 @@ function handleSitePageChange(current: number) {
  * 落到右侧就该是已经过滤好的，再让人手动去选一次状态是白丢一次上下文。
  */
 function selectSite(site: SiteAdminVO, status?: BookmarkParseStatus) {
+  // 表格挂在 `v-if="selectedSite"` 后面：首次选中时它还不存在，此刻 gridApi.grid 仍是空对象，
+  // reload 会在它自己的 try/catch 里抛掉、只留一行日志。而这次不 reload 也是对的 ——
+  // 表格随即被挂上，适配器默认 proxyConfig.autoLoad=true 会自己发起首查，
+  // 再 reload 一次就是同一份数据查两遍
+  const gridMounted = selectedSite.value !== null;
   selectedSite.value = site;
   pageFilters.name = "";
   pageFilters.status = status;
   // 选中态进 URL：刷新、切 vben 页签回来都还在，也让别处能深链到某个站点的页面列表
   router.replace({ query: { ...route.query, siteId: site.id } });
-  gridApi.reload();
+  if (gridMounted) gridApi.reload();
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -379,16 +390,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
 onMounted(async () => {
   const siteId = route.query.siteId;
   if (typeof siteId === "string" && siteId) {
-    try {
-      selectedSite.value = await getSiteDetailApi(siteId);
-    } catch {
-      // 站点已被清理：把 URL 上这个陈旧 id 摘掉，否则每次刷新都会再报一次同样的错
-      router.replace({ query: { ...route.query, siteId: undefined } });
-    }
+    // 「站点已被清理」(null) 与「这次请求失败了」(抛错) 必须分开：
+    // 只有前者才该摘掉 URL 上的 id，把一次网络抖动也当成前者，等于悄悄吞了用户的深链
+    const site = await getSiteDetailApi(siteId).catch(() => undefined);
+    if (site) selectedSite.value = site;
+    else if (site === null) router.replace({ query: { ...route.query, siteId: undefined } });
   }
   await loadSites();
-  // 站点是异步取回的，而表格在父组件 onMounted 之前就已自查过一次(那时还没选中站点)
-  if (selectedSite.value) gridApi.reload();
+  // 这里刻意不 reload：表格在 selectedSite 被赋值后才由 v-if 挂上，
+  // 适配器默认的 proxyConfig.autoLoad 会带着 siteId 自己发起首查
 });
 
 const selectedAbnormal = computed(() =>

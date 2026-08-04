@@ -96,11 +96,14 @@ export async function getSiteListApi(params: SiteSearchParams) {
 }
 
 /**
- * 单个站点。
+ * 单个站点；站点已被清理时返回 `null`（而不是抛错）。
  *
  * 合并视图带着 `?siteId=` 直接进来时，那个站点未必落在左侧列表的当前分页里，
- * 摘要条不能只靠列表命中。站点已被清理时后端返回 404。
+ * 摘要条不能只靠列表命中。
+ *
+ * 「站点不存在」与「请求失败」必须由调用方分开处理：前者该把 URL 上的陈旧 id 摘掉，
+ * 后者只是一次网络抖动，摘掉就等于悄悄吞了用户的深链。所以前者走返回值、后者走异常。
  */
 export async function getSiteDetailApi(siteId: string) {
-  return requestClient.get<SiteAdminVO>(`/admin/site/${siteId}`);
+  return requestClient.get<null | SiteAdminVO>(`/admin/site/${siteId}`);
 }
