@@ -1,4 +1,4 @@
-import type { SiteAsset } from '#/api/bookmark';
+import type { BookmarkParseStatus, SiteAsset } from '#/api/bookmark';
 import type { PageResult } from '#/api/bookmark-ping-log';
 
 import { requestClient } from '#/api/request';
@@ -47,10 +47,26 @@ export interface SiteAdminVO {
   createTime: string;
   updateTime?: string;
 
-  /** 该站点下已收录的页面数 */
+  /** 该站点下已收录的页面数（等于 pageStatusCounts 各项之和） */
   pageCount: number;
+  /**
+   * 该站点下页面按抓取状态的分布。
+   *
+   * 只有 `pageCount` 时站点行只能回答「这个站有多大」，回答不了「这个站烂不烂」——
+   * 而后台列表的用途从来是后者。有了分布才画得出健康分段条。
+   */
+  pageStatusCounts?: Partial<Record<BookmarkParseStatus, number>>;
   /** 该站点的图标资产（favicon/logo，已签名） */
   assets: SiteAsset[];
+}
+
+/** 非 SUCCESS 的页面数：站点值不值得下钻，看的就是这个数 */
+export function abnormalPageCount(site: Pick<SiteAdminVO, 'pageStatusCounts'>) {
+  const counts = site.pageStatusCounts ?? {};
+  return Object.entries(counts).reduce(
+    (sum, [status, n]) => (status === 'SUCCESS' ? sum : sum + (n ?? 0)),
+    0,
+  );
 }
 
 export interface SiteSearchParams {
@@ -77,4 +93,14 @@ export interface SiteSearchParams {
 /** 全部站点，一个域名一行 */
 export async function getSiteListApi(params: SiteSearchParams) {
   return requestClient.post<PageResult<SiteAdminVO>>('/admin/site/all', params);
+}
+
+/**
+ * 单个站点。
+ *
+ * 合并视图带着 `?siteId=` 直接进来时，那个站点未必落在左侧列表的当前分页里，
+ * 摘要条不能只靠列表命中。站点已被清理时后端返回 404。
+ */
+export async function getSiteDetailApi(siteId: string) {
+  return requestClient.get<SiteAdminVO>(`/admin/site/${siteId}`);
 }

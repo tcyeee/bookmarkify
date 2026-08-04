@@ -84,6 +84,16 @@ export interface BookmarkEntity {
   id: string;
   urlHost: string;
   urlPath?: string;
+  /**
+   * 规范化后的查询参数（无参数为空串）。
+   *
+   * 与 {@link urlFragment} 一起构成 canonical 四元组的后半截，不是可省的细节：少了它们，
+   * `/watch?v=A` 与 `/watch?v=B` 在后台看起来是同一行 —— 而拆开这两者正是后端
+   * DeepLinkSplitRepair 干的事。
+   */
+  urlQuery?: string;
+  /** 路由型 fragment（`#/…` / `#!…`），页内锚点不存 */
+  urlFragment?: string;
   urlScheme: string;
   appName?: string;
   title?: string;
@@ -134,6 +144,13 @@ export type BookmarkLockedField = 'APP_NAME' | 'DESCRIPTION' | 'TITLE';
 export interface BookmarkSearchParams {
   name?: string;
   status?: BookmarkParseStatus;
+  /**
+   * 只看该站点下的页面（站点→页面的层级下钻）。
+   *
+   * 与把域名塞进 {@link name} 不是一回事：那条是子串模糊匹配，用 `qq.com` 下钻会把
+   * `xxqq.com.cn` 一并捞进来。下钻要的是精确的父子关系，不是搜索。
+   */
+  siteId?: string;
   currentPage?: number;
   pageSize?: number;
 }

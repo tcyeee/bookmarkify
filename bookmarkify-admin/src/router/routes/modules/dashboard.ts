@@ -128,6 +128,18 @@ const routes: RouteRecordRaw[] = [
     path: '/website',
     children: [
       {
+        // 站点→页面的下钻视图。与下面那张纯站点平表是**增量关系**，不是替代：
+        // 「所有抓取失败的页面」这类跨站点的问题不属于任何单一站点，从这里永远看不到，
+        // 那种工作流依然要走「书签管理 › 书签管理」的页面平表
+        name: 'WebsiteExplorer',
+        path: '/website/explorer',
+        component: () => import('#/views/website/explorer/index.vue'),
+        meta: {
+          icon: 'carbon:tree-view-alt',
+          title: '站点与页面',
+        },
+      },
+      {
         name: 'AllWebsites',
         path: '/website/all',
         component: () => import('#/views/website/all/index.vue'),

@@ -18,6 +18,14 @@ interface ISiteService : IService<SiteEntity> {
     fun adminListAll(params: SiteSearchParams): IPage<SiteAdminVO>
 
     /**
+     * 单个站点的后台视图，回填内容与 [adminListAll] 的一行完全一致。
+     *
+     * 给站点/页面合并视图用：URL 上带着 `siteId` 直接进来时，那个站点未必落在左侧列表的
+     * 当前分页里，摘要条不能只能靠列表命中。找不到返回 null（站点可能已被清理）。
+     */
+    fun adminDetail(siteId: String): SiteAdminVO?
+
+    /**
      * 按 host 获取或创建站点。并发插入同一 host 时，落败的一方捕获唯一键冲突后回查已存在记录，
      * 保证「一域名一行」。
      */

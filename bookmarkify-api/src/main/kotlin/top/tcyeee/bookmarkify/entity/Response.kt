@@ -266,6 +266,11 @@ data class BookmarkAdminVO(
     var id: String,
     @field:Schema(description = "书签根域名") var urlHost: String,        // sfz.uzuzuz.com.cn
     @field:Schema(description = "路径URL(不带参数)") var urlPath: String? = null,         // /test/info
+    /* query 与 fragment 是 canonical 四元组的一部分，不是可省的细节：少了它们，
+     * `/watch?v=A` 与 `/watch?v=B` 在后台是**同一行**，而拆开这两者正是 DeepLinkSplitRepair
+     * 干的事。站点下钻列表整列都是同域同路径的深链，没有这两个字段就完全无法区分。 */
+    @field:Schema(description = "规范化后的查询参数，无参数为空串") var urlQuery: String = "",
+    @field:Schema(description = "路由型 fragment(#/… / #!…)，页内锚点不存") var urlFragment: String = "",
     @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
 
     /* 基础信息 */
@@ -383,8 +388,19 @@ data class SiteAdminVO(
     @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
     @field:Schema(description = "最近更新时间") var updateTime: LocalDateTime? = null,
 
-    /* 下面两块靠批量回填，不来自 site 表本身 */
+    /* 下面三块靠批量回填，不来自 site 表本身 */
     @field:Schema(description = "该站点下已收录的页面数") var pageCount: Int = 0,
+    /**
+     * 该站点下页面按抓取状态的分布，`pageCount` 就是它的和。
+     *
+     * 存在的理由：光有 `pageCount` 只能回答「这个站有多大」，回答不了「这个站烂不烂」——
+     * 而后台列表的用途从来是后者。有了分布，站点行才能画出健康分段条、才能按异常数排序，
+     * 也才谈得上「不下钻就知道要不要下钻」。
+     *
+     * 与 `pageCount` 出自**同一条** `group by (site_id, parse_status)`，不额外增加查询。
+     */
+    @field:Schema(description = "该站点下页面按抓取状态的分布(键为 ParseStatusEnum)")
+    var pageStatusCounts: Map<ParseStatusEnum, Int> = emptyMap(),
     @field:Schema(description = "该站点的全部图标资产(favicon/logo，已签名)") var assets: List<SiteAssetAdminVO> = emptyList(),
 ) {
     constructor(entity: SiteEntity) : this(
@@ -407,6 +423,17 @@ data class SiteAdminVO(
         createTime = entity.createTime,
         updateTime = entity.updateTime,
     )
+
+    /**
+     * 写入按状态分布的页面统计，并把 [pageCount] 同步成它的和。
+     *
+     * 两个字段必须一起赋值，否则会出现「总数 8 但分布加起来是 5」这种自相矛盾的行 ——
+     * 分开赋值就是迟早会漏一个，所以这里不提供只改其一的入口。
+     */
+    fun applyPageStats(counts: Map<ParseStatusEnum, Int>) {
+        pageStatusCounts = counts
+        pageCount = counts.values.sum()
+    }
 }
 
 /** 管理后台某展示模式下的图标设置 */
