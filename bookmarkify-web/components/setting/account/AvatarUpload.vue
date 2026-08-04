@@ -7,7 +7,7 @@
         :show-icon-fallback="showAccountIcon"
         class="transition duration-200 group-hover:brightness-[0.7]" />
       <div
-        class="absolute inset-0 flex items-center justify-center gap-4 rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-500 group-hover:opacity-100">
+        class="absolute inset-0 flex items-center justify-center gap-4 rounded-full bg-black/40 text-white reveal-on-hover transition-opacity duration-500">
         <button
           type="button"
           class="flex items-center justify-center transition-transform hover:scale-110 disabled:opacity-50"

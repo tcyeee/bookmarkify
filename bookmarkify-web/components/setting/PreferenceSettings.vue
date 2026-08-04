@@ -81,6 +81,19 @@
           </button>
         </div>
 
+        <!-- 主题过去只有命令面板（Cmd+K）能切，触屏上根本打不开；这里是它唯一的可见入口 -->
+        <div class="flex flex-wrap items-start gap-3 py-4">
+          <div class="flex-1 space-y-1 min-w-[220px]">
+            <div class="text-sm font-semibold">{{ $t('preferenceSettings.theme.label') }}</div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ $t('preferenceSettings.theme.desc') }}</p>
+          </div>
+          <select v-model="themeMode" class="cy-input cy-input-sm w-44">
+            <option value="system">{{ $t('preferenceSettings.theme.system') }}</option>
+            <option value="light">{{ $t('preferenceSettings.theme.light') }}</option>
+            <option value="dark">{{ $t('preferenceSettings.theme.dark') }}</option>
+          </select>
+        </div>
+
         <div class="flex flex-wrap items-start gap-3 py-4">
           <div class="flex-1 space-y-1 min-w-[220px]">
             <div class="text-sm font-semibold">{{ $t('preferenceSettings.language.label') }}</div>
@@ -113,9 +126,18 @@ import {
   type UserPreference,
 } from '@typing'
 import { usePreferenceStore } from '@stores/preference.store'
+import { useThemeStore, type ThemeMode } from '@stores/theme.store'
 
 const preferenceStore = usePreferenceStore()
 const { preference } = storeToRefs(preferenceStore)
+
+// 主题是设备级的本地偏好，不走 preferenceForm 那套「攒够改动再 PUT 到服务端」的流程，
+// 直接写 store（持久化到 localStorage）即可，所以不参与 preferenceDirty 的脏检查
+const themeStore = useThemeStore()
+const themeMode = computed<ThemeMode>({
+  get: () => themeStore.mode,
+  set: (mode) => themeStore.setMode(mode),
+})
 
 // @nuxtjs/i18n 通过 declare module 'vue-i18n' 扩展 Composer 添加 locales/setLocale，
 // 但该模块增强在本项目的 vue-tsc 全局类型解析下未生效，故此处显式声明扩展后的类型。

@@ -19,10 +19,10 @@
       target="_blank"
       rel="noopener noreferrer"
       draggable="false"
-      class="flex items-center gap-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
+      class="group flex items-center gap-2 py-1.5 pr-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
       :style="bookmarkIndentStyle"
       @click="recordOpen(node)"
-      @contextmenu.prevent="onContextMenu($event, node)">
+      @contextmenu.prevent="openMenu($event.x, $event.y, node)">
       <BookmarkLogo :value="node.typeApp" :size="20" />
       <span
         class="text-sm truncate"
@@ -33,6 +33,14 @@
         ">
         {{ node.typeApp.title || node.typeApp.urlBase }}
       </span>
+      <!-- 触屏没有右键，这个按钮是同一份菜单的第二个触发器（桌面上悬停才显形，观感不变） -->
+      <button
+        type="button"
+        class="ml-auto shrink-0 reveal-on-hover p-1 -m-1 text-slate-400 hover:text-primary transition-opacity"
+        aria-label="书签操作"
+        @click.stop.prevent="openMenuFromButton($event, node)">
+        <Icon icon="mdi:dots-horizontal" class="size-4" />
+      </button>
     </a>
 
     <div
@@ -60,6 +68,7 @@ const props = defineProps<{ node: UserLayoutNodeVO; depth: number }>()
 const emit = defineEmits<{ edit: [node: UserLayoutNodeVO] }>()
 
 const bookmarkStore = useBookmarkStore()
+const { moveWithin, moveToFolder, positionOf, hasMoveTargets } = useBookmarkMove()
 const children = computed(() =>
   props.node.type === HomeItemType.BOOKMARK_DIR ? bookmarkStore.childrenOf(props.node.id) : [],
 )
@@ -103,7 +112,8 @@ async function togglePinned(node: UserLayoutNodeVO) {
   }
 }
 
-function onContextMenu(e: MouseEvent, node: UserLayoutNodeVO) {
+/** 右键与行尾 ⋯ 共用同一份菜单定义 —— 复制一份的话，以后加菜单项必然漏改一处 */
+function openMenu(x: number, y: number, node: UserLayoutNodeVO) {
   if (!node.typeApp) return
   ContextMenu.showContextMenu({
     items: [
@@ -118,10 +128,26 @@ function onContextMenu(e: MouseEvent, node: UserLayoutNodeVO) {
         icon: h(Icon, { icon: 'mdi:view-grid-outline', class: 'size-4' }),
         onClick: () => goSimilar(node),
       },
-      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), onClick: () => delOne(node) },
+      // 以下三项是拖拽在触屏/键盘下的替代路径 —— 拖拽用的是 HTML5 drag-and-drop，
+      // 手机上根本不会触发，没有这三项手机用户无法整理书签
+      { label: '上移', icon: h(Icon, { icon: 'mdi:arrow-up', class: 'size-4' }), divided: true, disabled: positionOf(node).isFirst, onClick: () => moveWithin(node, -1) },
+      { label: '下移', icon: h(Icon, { icon: 'mdi:arrow-down', class: 'size-4' }), disabled: positionOf(node).isLast, onClick: () => moveWithin(node, 1) },
+      {
+        label: '移动到…',
+        icon: h(Icon, { icon: 'mdi:folder-move-outline', class: 'size-4' }),
+        hidden: !hasMoveTargets.value,
+        onClick: () => moveToFolder(node),
+      },
+      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), divided: true, onClick: () => delOne(node) },
     ],
-    x: e.x,
-    y: e.y,
+    x,
+    y,
   })
+}
+
+/** 按钮触发时用按钮自身的位置，而不是点击坐标 —— 后者在触屏上会把菜单顶到手指底下 */
+function openMenuFromButton(e: MouseEvent, node: UserLayoutNodeVO) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  openMenu(rect.right, rect.bottom, node)
 }
 </script>

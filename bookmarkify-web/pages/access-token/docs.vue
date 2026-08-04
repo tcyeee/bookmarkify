@@ -1,9 +1,10 @@
 <template>
-  <div class="flex h-screen w-full flex-col">
+  <!-- h-dvh 而非 h-screen：内层是 overflow-y-auto 的滚动容器，用 100vh 会让容器比可视区高出一条地址栏，底部内容永远滚不出来 -->
+  <div class="flex h-dvh w-full flex-col">
     <CommonHeader />
     <div class="flex-1 overflow-y-auto bg-white dark:bg-slate-900">
       <div class="max-w-3xl mx-auto px-4 py-6 text-slate-900 dark:text-slate-100">
-        <div class="flex items-start justify-between gap-4">
+        <div class="flex flex-wrap items-start justify-between gap-2">
           <button type="button" class="cy-btn cy-btn-ghost cy-btn-sm" @click="navigateTo('/setting')">
             <Icon icon="mdi:arrow-left-box" class="size-4" />
             {{ $t('back') }}

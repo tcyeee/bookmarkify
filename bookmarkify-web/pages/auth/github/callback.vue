@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-screen w-screen items-center justify-center text-white/70">
+  <div class="flex h-dvh w-full items-center justify-center text-white/70">
     <p>{{ message }}</p>
   </div>
 </template>

@@ -88,9 +88,9 @@
               :href="externalHref(item.typeApp!.urlFull)"
               target="_blank"
               rel="noopener noreferrer"
-              class="flex items-center gap-3 py-2 px-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
+              class="group flex items-center gap-3 py-2 px-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
               @click="recordOpen(item)"
-              @contextmenu.prevent="onMyResultContextMenu($event, item)">
+              @contextmenu.prevent="openMyResultMenu($event.x, $event.y, item)">
               <BookmarkLogo :value="item.typeApp!" :size="20" />
               <div class="flex flex-col overflow-hidden flex-1">
                 <span
@@ -104,6 +104,14 @@
                 </span>
                 <span class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ item.typeApp!.urlBase }}</span>
               </div>
+              <!-- 触屏没有右键，这个按钮是同一份菜单的第二个触发器 -->
+              <button
+                type="button"
+                class="shrink-0 reveal-on-hover p-1 -m-1 text-slate-400 hover:text-primary transition-opacity"
+                aria-label="书签操作"
+                @click.stop.prevent="openMyResultMenuFromButton($event, item)">
+                <Icon icon="mdi:dots-horizontal" class="size-4" />
+              </button>
             </a>
           </div>
 
@@ -264,6 +272,7 @@ interface BookmarkSearchVO {
 }
 
 const bookmarkStore = useBookmarkStore()
+const { moveToFolder, hasMoveTargets } = useBookmarkMove()
 const { $track } = useNuxtApp()
 
 const isLoadingBookmarks = ref(false)
@@ -490,7 +499,8 @@ async function toggleMyResultPinned(item: UserLayoutNodeVO) {
   }
 }
 
-function onMyResultContextMenu(e: MouseEvent, item: UserLayoutNodeVO) {
+/** 右键与行尾 ⋯ 共用同一份菜单定义 —— 复制一份的话，以后加菜单项必然漏改一处 */
+function openMyResultMenu(x: number, y: number, item: UserLayoutNodeVO) {
   if (!item.typeApp) return
   ContextMenu.showContextMenu({
     items: [
@@ -500,11 +510,23 @@ function onMyResultContextMenu(e: MouseEvent, item: UserLayoutNodeVO) {
         icon: h(Icon, { icon: item.typeApp.pinned ? 'mdi:pin-off' : 'mdi:pin', class: 'size-4' }),
         onClick: () => toggleMyResultPinned(item),
       },
-      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), onClick: () => delMyResult(item) },
+      {
+        label: '移动到…',
+        icon: h(Icon, { icon: 'mdi:folder-move-outline', class: 'size-4' }),
+        hidden: !hasMoveTargets.value,
+        onClick: () => moveToFolder(item),
+      },
+      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), divided: true, onClick: () => delMyResult(item) },
     ],
-    x: e.x,
-    y: e.y,
+    x,
+    y,
   })
+}
+
+/** 按钮触发时用按钮自身的位置，而不是点击坐标 —— 后者在触屏上会把菜单顶到手指底下 */
+function openMyResultMenuFromButton(e: MouseEvent, item: UserLayoutNodeVO) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  openMyResultMenu(rect.right, rect.bottom, item)
 }
 
 // ── 修改书签弹窗 ──
