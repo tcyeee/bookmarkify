@@ -4,39 +4,47 @@
       'fixed top-0 z-10 w-full transition-transform duration-300 backdrop-blur bg-white/80 dark:bg-slate-950/80 border-b border-white/20 dark:border-slate-800 text-gray-900 dark:text-slate-100',
       { '-translate-y-full': isHeaderHidden },
     ]" />
-  <div class="bg-gray-100 text-gray-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen pt-28 flex flex-col transition-colors">
+  <div
+    class="bg-gray-100 text-gray-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen pt-20 md:pt-28 flex flex-col transition-colors">
     <div class="flex-1">
-      <div class="mx-auto w-full px-4 sm:px-6 lg:px-8" :style="containerStyle">
-        <div class="flex items-start gap-6 lg:gap-8 pb-[10vh]">
+      <div class="mx-auto w-full px-3 sm:px-6 lg:px-8" :style="containerStyle">
+        <div class="flex flex-col md:flex-row md:items-start gap-4 md:gap-6 lg:gap-8 pb-[10vh]">
+          <!-- 窄屏下侧边栏放不下（240px 侧栏 + 间距会把正文挤到 80px 左右），改成横向滚动的标签条 -->
           <aside
             :class="[
-              'sticky self-start w-60 sm:w-64 lg:w-72 shrink-0 space-y-6 transition-[top] duration-200 ease-out',
+              'w-full md:w-64 lg:w-72 shrink-0 space-y-3 md:space-y-6 md:sticky md:self-start transition-[top] duration-200 ease-out',
             ]"
             :style="asideStyle">
             <NuxtLink to="/" class="block w-full">
               <div
-                class="cy-btn w-full cy-btn-xl cy-btn-ghost bg-white dark:bg-slate-900 dark:border-slate-700 rounded-xl text-lg transition-colors">
+                class="cy-btn w-full cy-btn-sm md:cy-btn-xl cy-btn-ghost bg-white dark:bg-slate-900 dark:border-slate-700 rounded-xl text-base md:text-lg transition-colors">
                 {{ $t('settingLayout.back') }}
               </div>
             </NuxtLink>
 
             <!-- 侧边栏 -->
-            <div class="p-6 bg-white dark:bg-slate-900 dark:border dark:border-slate-800 rounded-2xl shadow-sm transition-colors">
+            <div
+              class="p-2 md:p-6 bg-white dark:bg-slate-900 dark:border dark:border-slate-800 rounded-xl md:rounded-2xl shadow-sm transition-colors">
               <ul
                 ref="tabListRef"
-                class="relative flex flex-col gap-3 bg-white dark:bg-slate-900 w-full text-gray-500 dark:text-slate-400 text-lg font-medium select-none overflow-hidden transition-colors">
+                class="setting-tabs relative flex flex-row md:flex-col gap-1 md:gap-3 bg-white dark:bg-slate-900 w-full text-gray-500 dark:text-slate-400 text-base md:text-lg font-medium select-none overflow-x-auto md:overflow-hidden transition-colors">
+                <!-- 滑块只在竖排下成立（它按 Y 轴平移），横排标签条改用各自的选中底色 -->
                 <span
-                  class="absolute left-0 right-0 rounded-lg bg-gray-100 dark:bg-slate-800 transition-[transform,height] duration-250 ease-out will-change-transform pointer-events-none"
+                  class="hidden md:block absolute left-0 right-0 rounded-lg bg-gray-100 dark:bg-slate-800 transition-[transform,height] duration-250 ease-out will-change-transform pointer-events-none"
                   :style="indicatorStyle"
                   aria-hidden="true" />
-                <li v-for="tab in tabs" :key="tab.value" class="relative z-0">
+                <li v-for="tab in tabs" :key="tab.value" class="relative z-0 shrink-0 md:shrink">
                   <a
                     :ref="setTabRef(tab.value)"
                     @click="selectOne(tab.value)"
-                    class="relative z-10 flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-200 ease-out hover:text-gray-800 hover:dark:text-slate-100"
-                    :class="sysStore.settingTabIndex === tab.value ? 'cy-menu-active text-gray-900 dark:text-slate-100' : ''"
+                    class="relative z-10 flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg whitespace-nowrap transition-colors duration-200 ease-out hover:text-gray-800 hover:dark:text-slate-100"
+                    :class="
+                      sysStore.settingTabIndex === tab.value
+                        ? 'cy-menu-active bg-gray-100 dark:bg-slate-800 md:bg-transparent md:dark:bg-transparent text-gray-900 dark:text-slate-100'
+                        : ''
+                    "
                     :aria-current="sysStore.settingTabIndex === tab.value ? 'page' : undefined">
-                    <Icon :icon="tab.icon" class="shrink-0 size-[22px]" />
+                    <Icon :icon="tab.icon" class="shrink-0 size-5 md:size-[22px]" />
                     <span class="leading-6">{{ tab.label }}</span>
                   </a>
                 </li>
@@ -44,7 +52,7 @@
             </div>
           </aside>
 
-          <main class="flex-1 min-w-0">
+          <main class="w-full flex-1 min-w-0">
             <NuxtPage
               class="rounded-xl min-h-[70vh] bg-white dark:bg-slate-900 dark:border dark:border-slate-800 transition-colors" />
           </main>
@@ -151,3 +159,14 @@ watch(
   }
 )
 </script>
+
+<style scoped>
+/* 窄屏标签条横向滚动：留着滚动条会在标签下方压出一条灰杠，手势本身已足够表达可滚动 */
+.setting-tabs {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.setting-tabs::-webkit-scrollbar {
+  display: none;
+}
+</style>

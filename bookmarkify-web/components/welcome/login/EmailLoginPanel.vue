@@ -39,11 +39,11 @@
           maxlength="4"
           class="absolute inset-0 z-10 h-full w-full cursor-text opacity-0"
           @input="onCodeInput" />
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 sm:gap-3">
           <div
             v-for="i in 4"
             :key="i"
-            class="flex h-12 w-12 items-center justify-center rounded-xl border-2 text-xl font-bold text-white transition-all duration-200"
+            class="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-xl border-2 text-xl font-bold text-white transition-all duration-200"
             :class="
               form.code.length === i - 1
                 ? 'border-indigo-400 ring-2 ring-indigo-400/25 bg-indigo-400/5'
@@ -96,7 +96,8 @@ import { useAuthStore } from '@stores/auth.store'
 const emit = defineEmits<{ (e: 'success'): void; (e: 'step', step: number): void }>()
 
 const INPUT_CLS =
-  'rounded-xl border border-white/10 bg-white/8 px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition-all duration-200 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-400/20'
+  // text-base sm:text-sm —— iOS Safari 对 font-size < 16px 的输入框在聚焦时会自动放大整页，放大后页面留在偏移状态
+  'rounded-xl border border-white/10 bg-white/8 px-4 py-2.5 text-base sm:text-sm text-white placeholder:text-white/30 outline-none transition-all duration-200 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-400/20'
 const BTN_CLS =
   'flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50'
 const BTN_STYLE = 'background: linear-gradient(to right, #0ea5e9, #6366f1, #a855f7)'

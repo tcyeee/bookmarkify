@@ -1,9 +1,9 @@
 <template>
-  <div class="min-h-screen w-screen flex flex-col">
+  <div class="min-h-screen w-full overflow-x-hidden flex flex-col">
     <div class="flex-1">
-      <!-- 第一屏 -->
+      <!-- 第一屏。用 svh 而非 vh：移动端 100vh 按「地址栏收起后」的高度算，底部的向下箭头会被地址栏压在屏幕外 -->
       <div
-        class="welcome-hero relative w-full h-screen pb-16 flex flex-col items-center justify-between overflow-hidden text-white">
+        class="welcome-hero relative w-full h-svh pb-10 sm:pb-16 flex flex-col items-center justify-between overflow-hidden text-white">
         <!-- 背景光晕 -->
         <div class="absolute inset-0 pointer-events-none">
           <div class="halo halo-1" />
@@ -15,15 +15,15 @@
         <FloatingBookmarks />
 
         <!-- 文案 -->
-        <div class="relative z-10 flex-1 flex flex-col items-center justify-center gap-4 text-center px-6 select-none">
-          <p class="text-sm uppercase tracking-[0.4em] text-white/60">Bookmarkify</p>
-          <h1 class="text-4xl md:text-5xl font-semibold leading-tight drop-shadow">管理、分享你的应用书签</h1>
-          <p class="max-w-2xl text-base md:text-lg text-white/80">集中收藏应用、工具与灵感，探索互联网更多可能</p>
+        <div class="relative z-10 flex-1 flex flex-col items-center justify-center gap-3 sm:gap-4 text-center px-5 sm:px-6 select-none">
+          <p class="text-xs sm:text-sm uppercase tracking-[0.3em] sm:tracking-[0.4em] text-white/60">Bookmarkify</p>
+          <h1 class="text-3xl sm:text-4xl md:text-5xl font-semibold leading-tight drop-shadow">管理、分享你的应用书签</h1>
+          <p class="max-w-2xl text-sm sm:text-base md:text-lg text-white/80">集中收藏应用、工具与灵感，探索互联网更多可能</p>
 
           <!-- 开始使用按钮 -->
           <div
             @click="isLoggedIn ? navigateTo('/') : (showLoginDialog = true)"
-            class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-15 cursor-pointer select-none">
+            class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-6 sm:px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-10 sm:mt-15 cursor-pointer select-none">
             <ShimmerText
               :shimmerWidth="100"
               class="inline-flex dark:text-black/50! items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 text-lg">
@@ -43,14 +43,14 @@
         <div
           @click="handleScroll"
           class="relative z-10 animate-bounce flex flex-col items-center gap-5 cursor-pointer select-none">
-          <Icon icon="mdi:arrow-down-bold" class="size-10 text-white/80" />
+          <Icon icon="mdi:arrow-down-bold" class="size-8 sm:size-10 text-white/80" />
         </div>
       </div>
 
       <!-- 划动显示内容 -->
       <section
         ref="featureSection"
-        class="relative px-6 py-16 md:py-24 bg-linear-to-b from-white via-white to-slate-50 text-slate-900 transition-colors dark:from-slate-950 dark:via-slate-950/90 dark:to-slate-950 dark:text-slate-100">
+        class="relative px-4 sm:px-6 py-12 sm:py-16 md:py-24 bg-linear-to-b from-white via-white to-slate-50 text-slate-900 transition-colors dark:from-slate-950 dark:via-slate-950/90 dark:to-slate-950 dark:text-slate-100">
         <UiScrollReveal v-slot="{ isVisible }" class="max-w-3xl flex flex-col mx-auto justify-center">
           <h2
             :class="{ 'translate-y-8 opacity-0': !isVisible }"
@@ -70,38 +70,38 @@
             <div class="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2 md:gap-y-8">
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-250 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <Icon icon="mdi:content-save" class="size-10 text-current" />
+                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-5 py-6 sm:px-6 sm:py-8 shadow-sm transition-[transform,opacity] delay-250 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
+                <Icon icon="mdi:content-save" class="size-8 sm:size-10 text-current" />
 
-                <h1 class="font-medium text-2xl">一键收藏任意页面</h1>
+                <h1 class="font-medium text-xl sm:text-2xl">一键收藏任意页面</h1>
 
-                <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">
+                <p class="line-clamp-2 text-neon-wb text-base sm:text-lg dark:text-slate-200">
                   使用扩展或快捷键秒存网址，自动抓取标题、图标与简介。
                 </p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-500 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <Icon icon="mdi:magnify" class="size-10 text-current" />
+                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-5 py-6 sm:px-6 sm:py-8 shadow-sm transition-[transform,opacity] delay-500 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
+                <Icon icon="mdi:magnify" class="size-8 sm:size-10 text-current" />
 
-                <h1 class="font-medium text-2xl">智能分类与搜索</h1>
-                <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">
+                <h1 class="font-medium text-xl sm:text-2xl">智能分类与搜索</h1>
+                <p class="line-clamp-2 text-neon-wb text-base sm:text-lg dark:text-slate-200">
                   标签、文件夹与 AI 分类建议，模糊搜索让常用应用随手可得。
                 </p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-750 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <Icon icon="mdi:checkbox-marked" class="size-10 text-current" />
-                <h1 class="font-medium text-2xl">书签活性检测</h1>
-                <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">自动检测书签是否有效，及时更新书签状态。</p>
+                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-5 py-6 sm:px-6 sm:py-8 shadow-sm transition-[transform,opacity] delay-750 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
+                <Icon icon="mdi:checkbox-marked" class="size-8 sm:size-10 text-current" />
+                <h1 class="font-medium text-xl sm:text-2xl">书签活性检测</h1>
+                <p class="line-clamp-2 text-neon-wb text-base sm:text-lg dark:text-slate-200">自动检测书签是否有效，及时更新书签状态。</p>
               </div>
               <div
                 :class="{ 'translate-y-8 opacity-0': !isVisible, 'delay-(--delay)': isVisible }"
-                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-6 py-8 shadow-sm transition-[transform,opacity] delay-1000 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
-                <Icon icon="mdi:cloud" class="size-10 text-current" />
-                <h1 class="font-medium text-2xl">分享与发现</h1>
-                <p class="line-clamp-2 text-neon-wb text-lg dark:text-slate-200">
+                class="space-y-3 rounded-2xl border border-slate-200 bg-white/80 px-5 py-6 sm:px-6 sm:py-8 shadow-sm transition-[transform,opacity] delay-1000 duration-500 dark:border-white/10 dark:bg-white/5 dark:shadow-none backdrop-blur">
+                <Icon icon="mdi:cloud" class="size-8 sm:size-10 text-current" />
+                <h1 class="font-medium text-xl sm:text-2xl">分享与发现</h1>
+                <p class="line-clamp-2 text-neon-wb text-base sm:text-lg dark:text-slate-200">
                   公开或私密分享收藏夹，浏览社区精选书签，一键加入自己的库。
                 </p>
               </div>
@@ -113,7 +113,7 @@
 
     <!-- 登录弹窗 -->
     <dialog ref="loginDialogRef" class="cy-modal">
-      <div class="cy-modal-box welcome-login-modal-box relative max-w-[440px] w-full">
+      <div class="cy-modal-box welcome-login-modal-box relative w-[calc(100%-1.5rem)] max-w-[440px]">
         <button
           @click="showLoginDialog = false"
           class="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-white/40 hover:bg-white/10 hover:text-white/80 transition-all duration-200">
@@ -130,7 +130,7 @@
     <Transition name="fade-up">
       <div
         v-if="showBackToTop"
-        class="fixed bottom-28 right-6 z-50 rounded-full hover:scale-110 transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 cursor-pointer select-none"
+        class="fixed bottom-20 right-4 sm:bottom-28 sm:right-6 z-50 rounded-full hover:scale-110 transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 cursor-pointer select-none"
         aria-label="回到顶部"
         @click="backToTop">
         <Icon icon="mdi:arrow-up-circle" class="size-10 text-gray-400" />
@@ -260,7 +260,10 @@ const backToTop = () => {
 /* 登录弹窗深色玻璃态覆盖 */
 .welcome-login-modal-box {
   border-radius: 20px;
-  overflow: hidden;
+  /* 不能用 overflow:hidden —— 矮屏（横屏手机、小屏机的验证码步骤）下内容会超出弹窗高度，
+     hidden 会把「确认登录」直接裁掉且无法滚动到 */
+  overflow-y: auto;
+  max-height: calc(100dvh - 2rem);
   background: rgba(11, 18, 32, 0.88);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -269,8 +272,14 @@ const backToTop = () => {
     0 0 0 1px rgba(255, 255, 255, 0.04) inset,
     0 25px 60px -12px rgba(0, 0, 0, 0.7),
     0 0 80px -20px rgba(99, 102, 241, 0.2);
-  padding: 28px 28px 32px;
+  padding: 24px 20px 28px;
   color: inherit;
+}
+
+@media (min-width: 640px) {
+  .welcome-login-modal-box {
+    padding: 28px 28px 32px;
+  }
 }
 
 @keyframes haloDrift {

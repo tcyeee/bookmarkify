@@ -1,13 +1,15 @@
 <template>
-  <div class="flex h-screen w-full flex-col">
+  <!-- h-dvh 而非 h-screen：内层是 overflow-y-auto 的滚动容器，用 100vh 会让容器比可视区高出
+       一条地址栏，底部书签永远滚不出来 -->
+  <div class="flex h-dvh w-full flex-col">
     <CommonHeader />
     <div class="flex-1 overflow-y-auto bg-white dark:bg-slate-900">
       <div class="max-w-6xl mx-auto px-4 py-6">
         <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">全部书签</h1>
 
-        <div class="flex items-center gap-3 mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-6">
           <label
-            class="cy-input flex items-center gap-2 flex-1"
+            class="cy-input flex items-center gap-2 w-full sm:flex-1"
             :class="query ? 'cy-input-primary' : ''">
             <Icon icon="mdi:magnify" class="size-4 text-slate-400 dark:text-slate-500 shrink-0" />
             <input
@@ -23,14 +25,20 @@
               ✕
             </button>
           </label>
-          <button type="button" class="cy-btn cy-btn-primary cy-btn-sm shrink-0" @click="openAddBookmark">
-            <Icon icon="mdi:plus" class="size-4" />
-            新增书签
-          </button>
-          <button type="button" class="cy-btn cy-btn-outline cy-btn-sm shrink-0" @click="openCreateFolderPicker">
-            <Icon icon="mdi:folder-plus-outline" class="size-4" />
-            新建文件夹
-          </button>
+          <!-- sm:contents 让这层包裹在宽屏下消失，两个按钮重新变成外层 flex 的直接子项 -->
+          <div class="flex items-center gap-2 sm:contents">
+            <button type="button" class="cy-btn cy-btn-primary cy-btn-sm flex-1 sm:flex-none shrink-0" @click="openAddBookmark">
+              <Icon icon="mdi:plus" class="size-4" />
+              新增书签
+            </button>
+            <button
+              type="button"
+              class="cy-btn cy-btn-outline cy-btn-sm flex-1 sm:flex-none shrink-0"
+              @click="openCreateFolderPicker">
+              <Icon icon="mdi:folder-plus-outline" class="size-4" />
+              新建文件夹
+            </button>
+          </div>
         </div>
 
         <template v-if="!query">
@@ -302,8 +310,10 @@ const columnCount = computed(() => Math.max(1, Math.min(maxColumnCount.value, fo
 
 // 用 grid 而非 flex：轨道宽度由 minmax(0, 420px) 决定，与内容无关，
 // 各列必定等宽（flex 项目的 min-width:auto 会被超长行撑开，导致列宽不一致）
+// 上限写成 min(420px, 100%) 而非 420px：非弹性轨道会取到它的 max 值，窄屏下 420px 的轨道
+// 直接把 343px 宽的容器撑出横向滚动条
 const folderGridStyle = computed(() => ({
-  gridTemplateColumns: `repeat(${columnCount.value}, minmax(0, 420px))`,
+  gridTemplateColumns: `repeat(${columnCount.value}, minmax(0, min(420px, 100%)))`,
 }))
 
 // 按「已放入子项数量」贪心分配到最短的一列，模拟瀑布流的高度均衡效果
