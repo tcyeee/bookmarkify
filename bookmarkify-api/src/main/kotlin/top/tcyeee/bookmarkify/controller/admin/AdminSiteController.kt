@@ -2,7 +2,6 @@ package top.tcyeee.bookmarkify.controller.admin
 
 import cn.dev33.satoken.annotation.SaCheckRole
 import com.baomidou.mybatisplus.core.metadata.IPage
-import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -37,11 +36,13 @@ class AdminSiteController(
     /**
      * 单个站点。合并视图带着 `?siteId=` 直接进来时，那个站点未必在左侧列表的当前分页里。
      *
-     * 站点不存在返回 404 而不是空对象：合并视图据此把 URL 上的陈旧 siteId 清掉，
-     * 给一个字段全空的壳只会让它当成"有这么个站，只是什么都没抓到"。
+     * 站点不存在时返回 `data: null`，**不是** HTTP 404：本项目全站走 `ResultWrapper` 信封，
+     * 而 [GlobalExceptionHandler.beforeBodyWrite][top.tcyeee.bookmarkify.config.exception.GlobalExceptionHandler]
+     * 会把空 body 一律包成 `ok=true`，于是 `ResponseEntity.notFound()` 发出去的是
+     * 「HTTP 404 + `{ok:true, code:0}`」—— 状态码说没找到、信封说成功，前端拦截器按信封
+     * 判定则读成成功、按状态码判定则弹一个没有 msg 的通用错误提示。null 让两边一致，
+     * 调用方判空即可，也和「取不到」与「请求失败」必须分开这件事对上。
      */
     @GetMapping("/{siteId}")
-    fun detail(@PathVariable siteId: String): ResponseEntity<SiteAdminVO> =
-        siteService.adminDetail(siteId)?.let { ResponseEntity.ok(it) }
-            ?: ResponseEntity.notFound().build()
+    fun detail(@PathVariable siteId: String): SiteAdminVO? = siteService.adminDetail(siteId)
 }
