@@ -29,4 +29,7 @@ export default defineNuxtPlugin(async () => {
   // 刷新即失效。偏偏"加完书签立刻 F5"这个最常见的动作必然落在上面那条「缓存新鲜、跳过拉取」的
   // 分支上——不在这里补挂，那些格子就没有任何人看着，只能干等一条可能早就发过了的 WebSocket 推送。
   bookmarkStore.armPendingWatches()
+  // 同理，导入完成提示的 45 分钟超时兜底是纯时间戳比较——标签页全程关闭期间没有任何 nodes
+  // 变化事件会触发 checkImportBatches，水合后必须主动补一次，否则超时判定要等到下一次全量拉取
+  bookmarkStore.checkImportBatches()
 })
