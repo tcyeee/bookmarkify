@@ -67,6 +67,7 @@ import top.tcyeee.bookmarkify.config.event.BookmarkParseEvent
 import top.tcyeee.bookmarkify.config.event.BookmarkScreenshotEvent
 import top.tcyeee.bookmarkify.server.IBookmarkCategoryService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
+import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.utils.*
 import java.time.Duration
 import java.time.LocalDateTime
@@ -90,6 +91,7 @@ class BookmarkServiceImpl(
     private val siteDisplayPrefService: SiteDisplayPrefService,
     private val siteService: ISiteService,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
+    private val userLayoutNodeService: IUserLayoutNodeService,
     private val layoutNodeFunctionMapper: LayoutNodeFunctionMapper,
     private val bookmarkCategoryService: IBookmarkCategoryService,
     private val adminUserViewAssembler: AdminUserViewAssembler,
@@ -1885,14 +1887,21 @@ class BookmarkServiceImpl(
         // 抓取已结束，下面两处写入（重绑 userLink + 更新节点类型）需原子提交，放进短事务。
         // 节点找不到不是异常：抓取要花几十秒，这期间用户完全可能把还在转圈的书签删掉。
         // 原先抛 E999 只会在日志里留下一条误导性的错误堆栈，实际什么都不用做。
-        val layoutNode: UserLayoutNodeEntity = txTemplate.execute {
-            layoutNodeMapper.selectById(layoutNodeId)
-                ?.apply { type = NodeTypeEnum.BOOKMARK }
-                ?.also {
-                    bookmarkUserLinkService.resetPageId(uid, userLinkId, entity.id)
-                    layoutNodeMapper.updateById(it)
-                }
-        } ?: run {
+        val layoutNode: UserLayoutNodeEntity? = try {
+            txTemplate.execute {
+                layoutNodeMapper.selectById(layoutNodeId)
+                    ?.apply { type = NodeTypeEnum.BOOKMARK }
+                    ?.also {
+                        bookmarkUserLinkService.resetPageId(uid, userLinkId, entity.id)
+                        layoutNodeMapper.updateById(it)
+                    }
+            }
+        } catch (e: DuplicateKeyException) {
+            // 事务已整体回滚，占位行仍是 page_id='LOADING'，节点仍是 BOOKMARK_LOADING
+            discardDuplicatePlaceholder(uid, userLinkId, layoutNodeId, entity.id, e)
+            return
+        }
+        if (layoutNode == null) {
             log.debug("[parseAndResetUserItem] 布局节点已被删除，放弃推送: nodeId=$layoutNodeId, uid=$uid")
             return
         }
@@ -2278,6 +2287,52 @@ class BookmarkServiceImpl(
     private fun forgiveDispatchAttempt(userLinkId: String) {
         runCatching { bookmarkUserLinkMapper.resetDispatchAttempts(userLinkId) }
             .onFailure { log.warn("[forgiveDispatchAttempt] 重试计数清零失败(忽略): userLinkId=$userLinkId, err=${it.message}") }
+    }
+
+    /**
+     * 导入的占位抓完之后，发现它指向的页面**这个用户已经收藏过了** —— 丢弃这条多余的占位。
+     *
+     * 这是 E126 的语义迟到地落在导入路径上。`addOne` 早就有两道防线（[assertNotAlreadyLinked]
+     * 前置查、[insertNodeAndLink] 兜 `uk_bookmark_uid_page` 唯一键），但导入路径的绑定不是
+     * INSERT 而是 [IBookmarkUserLinkService.resetPageId] 这条 UPDATE：写占位行的时候
+     * `page_id` 还是 `'LOADING'`，重不重复要等抓完拿到 canonical id 才知道，前置查根本无从查起。
+     * 于是唯一键在这里是**唯一**的防线，而它原先没人接。
+     *
+     * 后果不是"报个错"那么轻：异常从这里冒到 [BookmarkParseEventListener] 的 runCatching 被吞掉，
+     * 节点原样留在 BOOKMARK_LOADING，下一轮 [drainStuckLoading] 又把它捞出来重投，再撞同一个
+     * 唯一键 —— 一个没有出口的循环，按 DISPATCH_LOCK_TTL 每 5 分钟刷一屏堆栈。最终由
+     * `dispatch_attempts` 耗尽收场，但那条路径 ([finishNodeWithoutBookmark]) 是给「这个网址
+     * 永远抓不成书签」准备的，用在这里等于把一条**完全正常、只是重复**的记录降级成无源磁贴：
+     * 用户桌面上于是有两个同名格子，其中一个没图标没标题。2026-08-04 线上就是这个状态。
+     *
+     * 正确的终局是让重复的那个消失，跟 `addOne` 撞到 E126 时不留下任何东西一致。已经存在的那条
+     * 书签是先到的，原样保留。
+     *
+     * 删除必须连节点带关联行一起，且推一次整树重置：这条占位此刻正在用户桌面上转圈，只删库不
+     * 推送的话，那个格子会一直转到用户手动刷新为止 —— 比留个降级磁贴还糟。[SocketMsgType.HOME_ITEM_UPDATE]
+     * 在这里用不了，它只能表达"某个节点变成了什么"，表达不了"某个节点没了"。
+     */
+    private fun discardDuplicatePlaceholder(
+        uid: String, userLinkId: String, layoutNodeId: String, pageId: String, cause: DuplicateKeyException
+    ) {
+        // 用插值而非占位符：ServiceImpl 自带的 org.apache.ibatis.logging.Log 把全局 log 扩展
+        // 遮蔽掉了，那个接口既没有 info() 也没有占位符重载（见 bookmarkify-api/CLAUDE.md › 日志）
+        log.warn("[parseAndResetUserItem] 导入占位与既有书签重复，丢弃占位: uid=$uid, userLinkId=$userLinkId, pageId=$pageId, err=${cause.message}")
+        runCatching {
+            txTemplate.execute {
+                // 按 (nodeId, uid) 删关联行，而不是按 userLinkId 直删：与 UserLayoutNodeServiceImpl
+                // 的删除路径用同一个 uid 收窄的助手，越权删不到别人的行
+                bookmarkUserLinkService.deleteOneByNodeId(layoutNodeId, uid)
+                layoutNodeMapper.deleteById(layoutNodeId)
+            }
+        }.onFailure {
+            // 删不掉就退回原有的终结方式：留个降级磁贴，总好过继续无限重投刷屏
+            log.warn("[parseAndResetUserItem] 丢弃重复占位失败，退回无源收口: userLinkId=$userLinkId, err=${it.message}")
+            runCatching { finishNodeWithoutBookmark(uid, userLinkId, layoutNodeId) }
+            return
+        }
+        runCatching { SocketUtils.homeLayoutRefresh(uid, userLayoutNodeService.layout(uid)) }
+            .onFailure { log.warn("[parseAndResetUserItem] 丢弃重复占位后推送失败(忽略): uid=$uid, err=${it.message}") }
     }
 
     /**
