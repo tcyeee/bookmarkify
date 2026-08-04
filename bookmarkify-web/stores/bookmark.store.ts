@@ -43,7 +43,7 @@ export const useBookmarkStore = defineStore('homeItems', {
   }),
 
   getters: {
-    // 文件夹节点即时填充 children，供 cell/Folder.vue 预览图与文件夹浮层使用
+    // 文件夹节点即时填充 children，供 pages/index.vue 的文件夹卡片渲染子项使用
     rootNodes(state): Array<UserLayoutNodeVO> {
       return (state.order[ROOT_KEY] ?? [])
         .map((id) => {

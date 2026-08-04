@@ -30,8 +30,8 @@ This document defines the specialized agent roles for working on the Bookmarkify
 
 **Key files to understand first:**
 - `app.vue` — Root component structure
-- `layouts/launch.vue` — Main launchpad layout (background rendering logic)
-- `components/launchpad/cell/` — All bookmark cell type implementations
+- `pages/index.vue` — Main bookmark page (search, pinned grid, folder cards)
+- `components/BookmarkFolderCard.vue` / `components/BookmarkTreeRow.vue` — Folder card and its rows (drag-and-drop lives here)
 - `components/common/Header.vue` — Global header with auth state
 - `components/common/CommandPalette.vue` — Cmd+K search interface
 
@@ -121,7 +121,7 @@ This document defines the specialized agent roles for working on the Bookmarkify
 - `assets/css/app.css` — Tailwind setup, DaisyUI themes, custom font
 - `assets/css/common.scss` — Global SCSS utilities, command dialog styles
 - `tailwind.config.ts` — DaisyUI plugin config with `cy-` prefix
-- `layouts/launch.vue` — Background image/gradient rendering
+- `components/setting/background/Preview.vue` — Background preview rendering
 - `components/setting/background/` — Background configuration UI
 
 ---

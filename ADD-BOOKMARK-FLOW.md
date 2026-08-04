@@ -53,7 +53,8 @@ bookmarkParseExecutor（8~32 线程，队列 500）
 ### 1.1 入口
 
 `components/launchpad/AddOneDialog.vue` 是唯一的单条添加入口，由 `sysStore.addBookmarkDialogVisible` 打开，触发点有四处：
-`AddBookmarkFab.vue`、`CommandPalette.vue`、`SettingsModal.vue`、`pages/index.vue`。
+`CommandPalette.vue`、`pages/index.vue`（「新增书签」按钮）。
+（原先还有 `AddBookmarkFab.vue` 与 `SettingsModal.vue` 两处，它们属于已废弃的 launchpad 界面，早已无人引用，于 2026-08-04 随其余死代码一并删除。）
 
 对话框同时承载两个动作：
 
