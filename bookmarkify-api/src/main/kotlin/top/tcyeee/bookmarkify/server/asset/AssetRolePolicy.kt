@@ -6,6 +6,7 @@ import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
+import java.time.LocalDateTime
 
 /**
  * 把 scrapper 报告的**事实**（[AssetExtractor]，这张图从哪个标签拿到的）映射成书签鸭的
@@ -62,6 +63,15 @@ object AssetRolePolicy {
     /** 认定"图标足够大，可以撑起大图展示"的最小边长（CSS 像素）。 */
     const val TILE_MIN_SIZE = 128
 
+    /**
+     * 站点图标最多陈旧到什么程度，[divergesFromSite] 还敢据此下"这一页是另一个产品"的结论。
+     *
+     * 60 天 = 内容重抓周期（30 天）的两倍。首页每轮重抓都会整体替换站点图标，所以一个还
+     * 有人收藏首页的站点永远落在这个窗口里；超出说明这份图标快照久未验证，此时零交集更
+     * 可能是站点换了图标而不是页面换了产品。
+     */
+    private const val SITE_ICON_MAX_AGE_DAYS = 60L
+
     /** 未知出处一律按社交图之外的最低档处理，不至于让新枚举把整条流程打挂。 */
     fun classify(extractor: AssetExtractor): Pair<AssetRole, AssetQuality> =
         TABLE[extractor] ?: (AssetRole.FAVICON to AssetQuality.DEGRADED)
@@ -104,18 +114,42 @@ object AssetRolePolicy {
      * 或该张取回失败时 `contentHash` 为空，此时无从比较，一律返回 false 走原有行为
      * （宁可两个产品共用图标，也不要凭空把图标钉死在页面上）。
      *
+     * ## 站点图标必须是新鲜的
+     *
+     * 「零交集」有**两个**可能的解释，字节本身分不开它们：
+     *
+     * 1. 这一页是同域下的另一个产品（本方法要抓的）；
+     * 2. **站点换了图标**，而库里那份还是旧的。
+     *
+     * 第 2 种不是假想：深链抓取从不刷新 SITE 行（[SiteAssetWriter.fillMissingAssets] 在站点
+     * 已有图标时整批跳过），所以一次改版之后、首页被重抓之前，该域名下**每一条**深链都与
+     * 陈旧的 SITE 行零交集，于是每一页都把图标钉死在自己身上 —— 一页一套图标，正是站点层
+     * 要消除的重复。TILE 下还更糟：借来的单张图标是 DEGRADED，`shouldFallbackToMonogram`
+     * 会让这些磁贴直接退成首字母色块，而站点其实有一张正确且 TRUSTED 的 LOGO。
+     *
+     * 所以要求站点图标在 [SITE_ICON_MAX_AGE_DAYS] 之内被抓到过。超出就认为"分不清"，
+     * 按本方法一贯的保守取向返回 false。代价是老站点上真正的多产品域名会漏判，
+     * 而漏判只是回到分层前的共用图标，误判则是把整站的图标打散。
+     *
      * @param siteIcons 站点当前已有的 FAVICON/LOGO 行
      * @param pageIcons 本次抓取从这一个页面声明里投影出来的 FAVICON/LOGO 行
+     * @param now 判定基准时刻，仅供测试注入
      */
     fun divergesFromSite(
         siteIcons: List<SiteAssetEntity>,
         pageIcons: List<SiteAssetEntity>,
+        now: LocalDateTime = LocalDateTime.now(),
     ): Boolean {
-        val siteHashes = siteIcons.filter { it.renderable() }.mapNotNull { it.contentHash }.toSet()
+        val usableSiteIcons = siteIcons.filter { it.renderable() }
+        val siteHashes = usableSiteIcons.mapNotNull { it.contentHash }.toSet()
         if (siteHashes.isEmpty()) return false
         val pageHashes = pageIcons.filter { it.renderable() }.mapNotNull { it.contentHash }.toSet()
         if (pageHashes.isEmpty()) return false
-        return siteHashes.intersect(pageHashes).isEmpty()
+        if (siteHashes.intersect(pageHashes).isNotEmpty()) return false
+
+        // 取最新的一张：只要站点图标集里有任何一张是近期抓到的，这份快照就还能代表"站点现在长什么样"
+        val freshest = usableSiteIcons.maxOfOrNull { it.fetchedAt } ?: return false
+        return freshest.isAfter(now.minusDays(SITE_ICON_MAX_AGE_DAYS))
     }
 
     /**
@@ -202,8 +236,19 @@ object AssetRolePolicy {
             DisplayMode.LIST -> listOf(AssetRole.FAVICON, AssetRole.LOGO)
         }
 
+        // 页面自有图标一旦存在就**整体**接管这个书签，筛选必须发生在按 role 分流**之前**。
+        // 放进循环里就变成了"逐 role 接管"：页面往往只拥有其中一个 role —— 只声明了一个
+        // `<link rel=icon>` 的深链，那张图会被 assignRoles 的借用逻辑改写成 LOGO，于是它
+        // 根本没有 PAGE 层的 FAVICON。此时 LIST 模式先找 FAVICON，页面侧空，就回落到了
+        // 站点 favicon —— 渲染出隔壁产品的图标，正是这条链路要防的那个结果。
+        //
+        // 但必须先收敛到 roleOrder 里的图标角色再筛：SOCIAL/SCREENSHOT 按 ownerTypeOf 恒为
+        // PAGE 层，把它们一起喂进去的话，任何一张社交图都会让 preferPageOwned 把整个池子
+        // 缩成"只有社交图"，图标一张不剩、这里直接返回 null。
+        val pool = preferPageOwned(usable.filter { it.role in roleOrder })
+
         for (role in roleOrder) {
-            val candidates = preferPageOwned(usable.filter { it.role == role })
+            val candidates = pool.filter { it.role == role }
             if (candidates.isEmpty()) continue
             val best = when (mode) {
                 // 大图要尽量大：先可信度，再尺寸
@@ -251,15 +296,19 @@ object AssetRolePolicy {
     }
 
     /**
-     * 同一 role 内，**页面自己的图标压过站点图标**。
+     * **页面自己的图标整体压过站点图标**，跨 role 一次性决定。
      *
      * 只有 [divergesFromSite] 判定"这一页跟本站点不是一套"时，才会有 PAGE 层的
      * FAVICON/LOGO 行存在（见 `SiteAssetIngestor.assignOwner`）。既然那条判定已经确认过
      * 字节与站点毫无交集，这里就不该再让两者按尺寸/可信度去竞争 —— 站点图标可能又大又
      * TRUSTED，一比就把页面自己的那张挤掉，整条链路白做。
      *
+     * **必须在按 role 分流之前调用。** 页面通常只拥有 FAVICON/LOGO 其中之一（见 [resolve]
+     * 里的注释），按 role 分别筛选时另一个 role 就会悄悄回落到站点资产。
+     *
      * 返回的是**筛选**而不是排序：混在一起排序仍会让站点图标在页面图标不可渲染时悄悄胜出，
-     * 而那种情况下宁可走首字母色块，也好过挂一张属于隔壁产品的图标。
+     * 而那种情况下宁可走首字母色块，也好过挂一张属于隔壁产品的图标。同理，页面只有 LOGO 时
+     * LIST 模式宁可用那张偏大的 LOGO，也不用站点那张尺寸正好但属于别的产品的 favicon。
      */
     private fun preferPageOwned(candidates: List<SiteAssetEntity>): List<SiteAssetEntity> {
         val pageOwned = candidates.filter { it.ownerType == AssetOwnerType.PAGE }
