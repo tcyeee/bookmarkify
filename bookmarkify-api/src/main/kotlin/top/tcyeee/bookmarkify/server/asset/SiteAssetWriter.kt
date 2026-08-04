@@ -94,6 +94,7 @@ class SiteAssetWriter(
 
         val (siteAssets, pageAssets) = p.assets.partition { it.ownerType == AssetOwnerType.SITE }
 
+        dropStalePageIcons(pageId, pageAssets)
         replaceAssets(AssetOwnerType.PAGE, pageId, pageAssets)
         if (isRootPage) {
             replaceAssets(AssetOwnerType.SITE, siteId, siteAssets)
@@ -222,6 +223,42 @@ class SiteAssetWriter(
      *
      * 增量合并没有意义 —— 页面改版后旧图标可能已经 404，留着只会让选取策略挑到死链。
      */
+    /**
+     * 本次抓取判定这一页**不再与站点发散**时，删掉上一轮留下的 PAGE 层图标。
+     *
+     * 为什么不能交给 [replaceAssets]：它的 `projected.isEmpty()` 守卫是按「抓取偶发少返回
+     * 一次不该让图片凭空消失」写的，那条理由对 SOCIAL/SCREENSHOT 成立 —— 站点某次没吐
+     * `og:image`，留着上一张是更好的降级。但对 PAGE 层图标不成立：图标为空不是"这次没抓到"，
+     * 而是 [AssetRolePolicy.divergesFromSite] 给出的一个**肯定结论** ——「这一页现在和站点
+     * 是同一套图标」。两种语义共用一个守卫，后果是页面只要发散过一次，那批 PAGE 图标就
+     * 再也删不掉：本次 `pageAssets` 只剩 SOCIAL，而页面若连 `og:image` 都没有就是空集，
+     * 守卫直接 early-return。此后 [AssetRolePolicy.preferPageOwned] 会一直优先那批陈旧图标，
+     * 连站点后来正常换图都盖不过去。
+     *
+     * 只删 FAVICON/LOGO，绝不碰 SOCIAL/SCREENSHOT —— 那条守卫对它们是对的。
+     */
+    private fun dropStalePageIcons(pageId: String, projectedPageAssets: List<SiteAssetEntity>) {
+        if (pageId.isBlank()) return
+        // 本次仍然发散：图标交给 replaceAssets 的整体替换，这里不插手
+        if (projectedPageAssets.any { it.role in ICON_ROLES }) return
+
+        val stale = assetsOf(AssetOwnerType.PAGE, pageId).filter { it.role in ICON_ROLES }
+        if (stale.isEmpty()) return
+
+        siteAssetMapper.delete(
+            KtQueryWrapper(SiteAssetEntity::class.java)
+                .eq(SiteAssetEntity::ownerType, AssetOwnerType.PAGE)
+                .eq(SiteAssetEntity::ownerId, pageId)
+                .`in`(SiteAssetEntity::role, ICON_ROLES)
+        )
+        log.info(
+            "[SiteAssetWriter] 该页已不再与站点发散，清理页面级图标: pageId={}, removed={}",
+            pageId, stale.size
+        )
+        // 与整体替换一致：这批行没了之后对应的 OSS 对象可能失去最后一个引用者
+        scheduleOrphanCleanup(pageId, stale.mapNotNull { it.storageUrl?.trim()?.takeIf(String::isNotEmpty) }.toSet())
+    }
+
     private fun replaceAssets(ownerType: AssetOwnerType, ownerId: String, projected: List<SiteAssetEntity>) {
         if (ownerId.isBlank()) return
         val existing = assetsOf(ownerType, ownerId)
@@ -409,5 +446,8 @@ class SiteAssetWriter(
          * 是什么时候开始抓不到的」。再多就只是在为一年前的 HTML 付存储费了。
          */
         private const val SNAPSHOT_RETAIN_PER_BOOKMARK = 3
+
+        /** 图标类角色。PAGE 层里只有这两个是「发散判定」的产物，SOCIAL/SCREENSHOT 天然属于页面。 */
+        private val ICON_ROLES = listOf(AssetRole.FAVICON, AssetRole.LOGO)
     }
 }

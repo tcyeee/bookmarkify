@@ -6,6 +6,7 @@ import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
+import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -469,6 +470,111 @@ class AssetRolePolicyTest {
             DisplayMode.TILE,
         )
         assertEquals("aaa", assertNotNull(chosen).contentHash, "同为站点图标时仍按尺寸选")
+    }
+
+    /**
+     * 页面往往**只拥有一个 role**，另一个 role 绝不能悄悄回落到站点图标。
+     *
+     * 这正是发散页面的常态：一个只声明了单个 `<link rel=icon>` 的深链，那张图会被
+     * [AssetRolePolicy.assignRoles] 的第三遍借用逻辑改写成 LOGO，于是它根本没有 PAGE 层的
+     * FAVICON。若 preferPageOwned 按 role 分别生效，LIST 模式先找 FAVICON、页面侧为空，
+     * 就会挑中站点 favicon —— 渲染出隔壁产品的图标，整条链路的目的落空。
+     */
+    @Test
+    fun `a page owning only a LOGO still never falls back to the site favicon`() {
+        val chosen = AssetRolePolicy.resolve(
+            listOf(
+                siteIcon("aaa", role = AssetRole.FAVICON, size = 64),
+                pageIcon("bbb", role = AssetRole.LOGO, size = 256)
+                    .apply { ownerType = AssetOwnerType.PAGE },
+            ),
+            // LIST 的 roleOrder 是 FAVICON→LOGO，页面侧恰好缺的就是排在前面的那个
+            DisplayMode.LIST,
+        )
+        assertEquals("bbb", assertNotNull(chosen).contentHash, "宁可用偏大的页面 LOGO，也不用隔壁产品的 favicon")
+    }
+
+    /** 反方向同理：页面只有 FAVICON 时，TILE 也不该退回站点的 LOGO */
+    @Test
+    fun `a page owning only a FAVICON still never falls back to the site logo`() {
+        val chosen = AssetRolePolicy.resolve(
+            listOf(
+                siteIcon("aaa", role = AssetRole.LOGO, size = 512),
+                pageIcon("bbb", role = AssetRole.FAVICON, size = 64)
+                    .apply { ownerType = AssetOwnerType.PAGE },
+            ),
+            DisplayMode.TILE,
+        )
+        assertEquals("bbb", assertNotNull(chosen).contentHash)
+    }
+
+    /**
+     * 社交图不能把图标池饿死。
+     *
+     * SOCIAL/SCREENSHOT 按 [AssetRolePolicy.ownerTypeOf] **恒为** PAGE 层，所以"页面自有资产
+     * 优先"这条筛选必须先收敛到图标角色再生效。否则任何一张 og:image 都会让候选集缩成
+     * "只有社交图"，图标一张不剩，[AssetRolePolicy.resolve] 直接返回 null —— 所有带社交图的
+     * 普通书签会集体退成首字母色块。
+     */
+    @Test
+    fun `a page-owned social image does not starve the icon pool`() {
+        val chosen = AssetRolePolicy.resolve(
+            listOf(
+                siteIcon("aaa", role = AssetRole.FAVICON, size = 64),
+                roled(AssetRole.SOCIAL, 1200).apply { ownerType = AssetOwnerType.PAGE },
+            ),
+            DisplayMode.LIST,
+        )
+        assertEquals("aaa", assertNotNull(chosen).contentHash, "社交图不参与图标选取，站点 favicon 照常胜出")
+    }
+
+    /**
+     * 站点图标太旧时不敢下发散结论。
+     *
+     * 「零交集」有两个解释：这一页是另一个产品，或者**站点换了图标而库里那份是旧的**。
+     * 深链抓取从不刷新 SITE 行，所以一次改版之后该域名下每一条深链都与陈旧的 SITE 行零交集；
+     * 若照判，整站图标会被逐页打散——正是站点层要消除的重复。
+     */
+    @Test
+    fun `stale site icons cannot establish divergence`() {
+        val now = LocalDateTime.of(2026, 8, 4, 12, 0)
+        assertFalse(
+            AssetRolePolicy.divergesFromSite(
+                siteIcons = listOf(siteIcon("aaa").apply { fetchedAt = now.minusDays(120) }),
+                pageIcons = listOf(pageIcon("bbb")),
+                now = now,
+            ),
+            "站点图标已 120 天没验证过，零交集更可能是站点换了图标",
+        )
+    }
+
+    /** 反向守卫：新鲜的站点图标照常能判出发散，别把闸门收得连正常情况都过不去 */
+    @Test
+    fun `fresh site icons still establish divergence`() {
+        val now = LocalDateTime.of(2026, 8, 4, 12, 0)
+        assertTrue(
+            AssetRolePolicy.divergesFromSite(
+                siteIcons = listOf(siteIcon("aaa").apply { fetchedAt = now.minusDays(3) }),
+                pageIcons = listOf(pageIcon("bbb")),
+                now = now,
+            )
+        )
+    }
+
+    /** 只要图标集里有**任意一张**是近期抓到的，这份快照就还能代表"站点现在长什么样" */
+    @Test
+    fun `one freshly fetched site icon is enough to trust the whole set`() {
+        val now = LocalDateTime.of(2026, 8, 4, 12, 0)
+        assertTrue(
+            AssetRolePolicy.divergesFromSite(
+                siteIcons = listOf(
+                    siteIcon("aaa").apply { fetchedAt = now.minusDays(300) },
+                    siteIcon("ccc").apply { fetchedAt = now.minusDays(2) },
+                ),
+                pageIcons = listOf(pageIcon("bbb")),
+                now = now,
+            )
+        )
     }
 
     companion object {
