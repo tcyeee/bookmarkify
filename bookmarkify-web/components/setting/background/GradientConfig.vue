@@ -23,7 +23,7 @@
         </span>
           <div
             v-if="!preset.isSystem"
-            class="pointer-events-none absolute inset-x-1 bottom-1 flex items-center justify-center gap-2 rounded-md bg-slate-900/35 px-2 py-1 text-white opacity-0 shadow-sm backdrop-blur group-hover:opacity-100">
+            class="pointer-events-none absolute inset-x-1 bottom-1 flex items-center justify-center gap-2 rounded-md bg-slate-900/35 px-2 py-1 text-white reveal-on-hover shadow-sm backdrop-blur transition-opacity">
             <button
               type="button"
               class="pointer-events-auto inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/85 text-slate-700 shadow transition hover:bg-white disabled:opacity-60 disabled:cursor-not-allowed"

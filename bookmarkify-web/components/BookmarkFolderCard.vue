@@ -22,7 +22,7 @@
       <span v-if="children.length" class="text-xs text-slate-400 dark:text-slate-500">({{ children.length }})</span>
       <button
         type="button"
-        class="ml-auto shrink-0 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-primary dark:hover:text-primary transition-colors"
+        class="ml-auto shrink-0 reveal-on-hover text-slate-400 hover:text-primary dark:hover:text-primary transition-opacity transition-colors"
         title="更多操作"
         @click="openMenu">
         <Icon icon="mdi:dots-vertical" class="size-4" />

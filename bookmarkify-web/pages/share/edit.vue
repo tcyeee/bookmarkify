@@ -1,5 +1,6 @@
 <template>
-  <div class="flex h-screen w-full flex-col">
+  <!-- h-dvh 而非 h-screen：内层是 overflow-y-auto 的滚动容器，用 100vh 会让容器比可视区高出一条地址栏，底部内容永远滚不出来 -->
+  <div class="flex h-dvh w-full flex-col">
     <CommonHeader />
     <div class="flex-1 overflow-y-auto bg-white dark:bg-slate-900">
       <div class="max-w-2xl mx-auto px-4 py-6">
@@ -13,12 +14,12 @@
         <template v-if="!published">
           <!-- 书签选择 -->
           <div class="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
-            <div class="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
+            <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-600 dark:text-slate-300">已选择 <span class="font-semibold text-primary">{{ checkedIds.size }}</span> 个书签</span>
               <input
                 v-model="filterQuery"
                 type="text"
-                class="cy-input cy-input-sm w-40"
+                class="cy-input cy-input-sm w-full sm:w-40"
                 placeholder="筛选书签..." />
             </div>
             <div class="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">

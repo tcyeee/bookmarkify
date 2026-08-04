@@ -44,6 +44,13 @@
       "label": "Afficher le bouton d'ajout",
       "desc": "Afficher le bouton « Ajouter » sur le bureau."
     },
+    "theme": {
+      "label": "Thème",
+      "desc": "Suivre le système, ou toujours utiliser le mode clair / sombre.",
+      "system": "Suivre le système",
+      "light": "Clair",
+      "dark": "Sombre"
+    },
     "language": {
       "label": "Langue",
       "desc": "Changer la langue de l'interface."

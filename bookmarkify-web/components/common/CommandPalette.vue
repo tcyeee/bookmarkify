@@ -78,7 +78,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { useMagicKeys, onKeyStroke } from '@vueuse/core'
+import { useMagicKeys, onKeyStroke, usePreferredDark } from '@vueuse/core'
 import { Command } from 'vue-command-palette'
 import {
   AuthStatusEnum,
@@ -90,6 +90,7 @@ import {
 } from '@typing'
 import { useAuthStore } from '@stores/auth.store'
 import { usePreferenceStore } from '@stores/preference.store'
+import { useThemeStore } from '@stores/theme.store'
 
 const sysStore = useSysStore()
 const authStore = useAuthStore()
@@ -416,16 +417,9 @@ function close() {
 }
 
 function toggleTheme() {
-  if (!import.meta.client) return
-  const body = document.body
-  const isDark = body.classList.contains('dark') || body.dataset.theme === 'dark'
-  if (isDark) {
-    body.classList.remove('dark')
-    body.dataset.theme = 'light'
-  } else {
-    body.classList.add('dark')
-    body.dataset.theme = 'dark'
-  }
+  // 改 store 而不是直接改 document.body：body 上的 class/data-theme 由 app.vue 的 useHead
+  // 统一渲染，手动改上去的值会被下一次求值盖掉，而且刷新即丢
+  useThemeStore().toggle(usePreferredDark().value)
 }
 
 function navigate(path: string) {

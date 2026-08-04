@@ -44,6 +44,13 @@
       "label": "Show Desktop Add Entry",
       "desc": "Show the \"Add\" entry button on the desktop."
     },
+    "theme": {
+      "label": "Theme",
+      "desc": "Follow the system setting, or always use light / dark.",
+      "system": "Follow system",
+      "light": "Light",
+      "dark": "Dark"
+    },
     "language": {
       "label": "Language",
       "desc": "Switch the interface display language."

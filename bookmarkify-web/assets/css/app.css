@@ -25,3 +25,36 @@ html {
   font-family: 'Jersey10';
   src: url('../fonts/Jersey10-Regular.ttf') format('truetype');
 }
+
+/* iOS Safari 会在聚焦 font-size < 16px 的输入框时自动放大整页，且失焦后不还原 ——
+   页面从此停在一个偏移的缩放态。这是输入框字号的问题，不是布局问题，所以修在这里而不是
+   逐个组件加 `text-base sm:text-sm`：全站有几十个 cy-input-sm / text-sm 的输入框和下拉，
+   逐个改必然漏，而且以后每加一个都要记得改。 */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* 「悬停才出现」的次要操作入口（行尾的 ⋯、卡片上的浮层按钮）。
+   不能写成 `opacity-0 group-hover:opacity-100` —— 触屏没有 hover，那等于永远看不见。
+   本项目里 Tailwind 的 hover: 变体编译成裸 `:hover`（并没有自动包一层 hover 媒体查询，
+   全站唯一的 `@media (hover: hover)` 来自 DaisyUI 的 .cy-btn），所以还会更糟：
+   tap 产生的黏滞 :hover 让按钮在第一次点击之后才出现，第一下像是没反应。
+   正确的做法是把「隐藏」本身关进 (hover: hover) —— 默认可见，只有真有指针设备时才藏起来。 */
+.reveal-on-hover {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .reveal-on-hover {
+    opacity: 0;
+  }
+
+  .group:hover .reveal-on-hover,
+  .reveal-on-hover:focus-visible {
+    opacity: 1;
+  }
+}
