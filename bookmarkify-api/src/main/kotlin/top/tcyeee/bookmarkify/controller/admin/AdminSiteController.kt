@@ -2,6 +2,9 @@ package top.tcyeee.bookmarkify.controller.admin
 
 import cn.dev33.satoken.annotation.SaCheckRole
 import com.baomidou.mybatisplus.core.metadata.IPage
+import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -30,4 +33,15 @@ class AdminSiteController(
     @PostMapping("/all")
     fun listAll(@RequestBody params: SiteSearchParams): IPage<SiteAdminVO> =
         siteService.adminListAll(params)
+
+    /**
+     * 单个站点。合并视图带着 `?siteId=` 直接进来时，那个站点未必在左侧列表的当前分页里。
+     *
+     * 站点不存在返回 404 而不是空对象：合并视图据此把 URL 上的陈旧 siteId 清掉，
+     * 给一个字段全空的壳只会让它当成"有这么个站，只是什么都没抓到"。
+     */
+    @GetMapping("/{siteId}")
+    fun detail(@PathVariable siteId: String): ResponseEntity<SiteAdminVO> =
+        siteService.adminDetail(siteId)?.let { ResponseEntity.ok(it) }
+            ?: ResponseEntity.notFound().build()
 }

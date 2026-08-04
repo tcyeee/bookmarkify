@@ -82,7 +82,17 @@ data class AdminLoginParams(val account: String, val password: String)
 data class AccountLoginParams(val account: String, val password: String)
 data class ChangePasswordParams(val oldPassword: String, val newPassword: String)
 
-data class BookmarkSearchParams(var name: String?, var status: ParseStatusEnum?) : PageBean() {
+data class BookmarkSearchParams(
+    var name: String?,
+    var status: ParseStatusEnum?,
+    /**
+     * 只看该站点下的页面（站点→页面的层级下钻）。
+     *
+     * 刻意不复用 [name] 里那条 `like(urlHost)`：模糊匹配是子串匹配，用 `qq.com` 下钻会把
+     * `xxqq.com.cn` 一并捞进来 —— 下钻要的是精确的父子关系，不是搜索。
+     */
+    @field:Schema(description = "只看该站点下的页面(精确匹配 site_id)") var siteId: String? = null,
+) : PageBean() {
     fun toWrapper(): Wrapper<PageEntity> {
         val query = KtQueryWrapper(PageEntity::class.java)
         if (!name.isNullOrBlank()) {
@@ -94,6 +104,14 @@ data class BookmarkSearchParams(var name: String?, var status: ParseStatusEnum?)
             }
         }
         if (status != null) query.eq(PageEntity::parseStatus, status)
+        // 排序只加在下钻分支上：站点内按路径排，/a /b /c 相邻才看得出这个站的结构。
+        // 全量列表刻意维持原样不排 —— 那是几十万行的全表分页，给它加一个无索引支撑的
+        // ORDER BY 是拿一次排序换一个这里根本没人要的顺序。
+        if (!siteId.isNullOrBlank()) {
+            query.eq(PageEntity::siteId, siteId)
+                .orderByAsc(PageEntity::urlPath)
+                .orderByAsc(PageEntity::urlQuery)
+        }
         return query
     }
 }

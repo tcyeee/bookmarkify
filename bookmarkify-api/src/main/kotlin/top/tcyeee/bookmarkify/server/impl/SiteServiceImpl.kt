@@ -14,6 +14,7 @@ import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
+import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.SiteLockedField
 import top.tcyeee.bookmarkify.mapper.PageMapper
 import top.tcyeee.bookmarkify.mapper.SiteAssetMapper
@@ -40,8 +41,8 @@ class SiteServiceImpl(
 
         // 回填失败不该拖垮整个列表：这两块都是「看着方便」的补充信息，站点主表字段才是必需的
         runCatching {
-            val counts = pageCountBySite(siteIds)
-            page.records.forEach { vo -> vo.pageCount = counts[vo.id] ?: 0 }
+            val stats = pageStatsBySite(siteIds)
+            page.records.forEach { vo -> vo.applyPageStats(stats[vo.id].orEmpty()) }
         }.onFailure { logger.warn("[adminListAll] 页面数回填失败(忽略): ${it.message}") }
 
         runCatching {
@@ -52,24 +53,49 @@ class SiteServiceImpl(
         return page
     }
 
+    override fun adminDetail(siteId: String): SiteAdminVO? {
+        val entity = getById(siteId) ?: return null
+        val vo = SiteAdminVO(entity)
+        val ids = listOf(siteId)
+        // 与列表同样的宽容策略：回填不上就少显示两块，不该让整个摘要条打不开
+        runCatching { vo.applyPageStats(pageStatsBySite(ids)[siteId].orEmpty()) }
+            .onFailure { logger.warn("[adminDetail] 页面数回填失败(忽略): ${it.message}") }
+        runCatching { vo.assets = toAssetVOs(assetsBySite(ids)[siteId].orEmpty()) }
+            .onFailure { logger.warn("[adminDetail] 站点图标回填失败(忽略): ${it.message}") }
+        return vo
+    }
+
     /**
-     * siteId → 该站点下的页面数。一条 `group by` 走 `idx_page_site`，逐行 count 就是 N+1。
+     * siteId → 该站点下页面按抓取状态的分布。一条 `group by` 走 `idx_page_site`，
+     * 逐行 count 就是 N+1。
+     *
+     * 按 `(site_id, parse_status)` 而不是只按 `site_id` 分组：多出来的这一维是免费的
+     * （同一次扫描、同一个索引），换来的是站点行能回答「这个站烂不烂」而不只是「这个站多大」。
+     * 总数由各状态求和得到，不需要第二条查询。
      *
      * 走 `selectMaps` 而不是把结果映射回实体：这是投影查询，[PageEntity] 是没有无参构造的
      * data class，接残缺列会在运行时抛 `No constructor found`（同 [SiteAssetResolver.siteIdOf]）。
      */
-    private fun pageCountBySite(siteIds: List<String>): Map<String, Int> = pageMapper.selectMaps(
-        // 聚合列只能走字符串版 QueryWrapper —— KtQueryWrapper.select 只收属性引用，
-        // 表达不了 `count(1)`。列名是本文件写死的常量，不含任何请求输入。
-        QueryWrapper<PageEntity>()
-            .select("site_id", "count(1) as cnt")
-            .`in`("site_id", siteIds)
-            .groupBy("site_id")
-    ).mapNotNull { row ->
-        val siteId = row.entries.firstOrNull { it.key.equals("site_id", true) }?.value?.toString()
-        val count = row.entries.firstOrNull { it.key.equals("cnt", true) }?.value?.toString()?.toIntOrNull()
-        if (siteId.isNullOrBlank() || count == null) null else siteId to count
-    }.toMap()
+    private fun pageStatsBySite(siteIds: List<String>): Map<String, Map<ParseStatusEnum, Int>> =
+        pageMapper.selectMaps(
+            // 聚合列只能走字符串版 QueryWrapper —— KtQueryWrapper.select 只收属性引用，
+            // 表达不了 `count(1)`。列名是本文件写死的常量，不含任何请求输入。
+            QueryWrapper<PageEntity>()
+                .select("site_id", "parse_status", "count(1) as cnt")
+                .`in`("site_id", siteIds)
+                .groupBy("site_id", "parse_status")
+        ).mapNotNull { row ->
+            fun col(name: String) = row.entries.firstOrNull { it.key.equals(name, true) }?.value
+            val siteId = col("site_id")?.toString()
+            val count = col("cnt")?.toString()?.toIntOrNull()
+            // 库里出现枚举里没有的状态值(历史脏数据/回滚)时跳过这一格而不是让整次回填炸掉：
+            // 少画一段健康条，好过整列页面数变成 0
+            val status = col("parse_status")?.toString()
+                ?.let { raw -> ParseStatusEnum.entries.firstOrNull { it.name == raw } }
+            if (siteId.isNullOrBlank() || count == null || status == null) null
+            else Triple(siteId, status, count)
+        }.groupBy({ it.first }, { it.second to it.third })
+            .mapValues { (_, pairs) -> pairs.toMap() }
 
     /** siteId → 该站点的图标资产。只取 SITE 层：社交图与截图挂在页面上，不属于域名。 */
     private fun assetsBySite(siteIds: List<String>): Map<String, List<SiteAssetEntity>> =
