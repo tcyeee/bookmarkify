@@ -51,7 +51,7 @@ Copy `.env.example` to `.env`:
 Every visitor gets a session via `POST /auth/track` — no login required. Guest sessions "upgrade" by verifying phone or email. The auth plugin (`plugins/auth.ts`) restores the session on page load, then reconnects WebSocket and re-fetches user + bookmark data. `middleware/auth.ts` redirects unauthenticated users to `/welcome`. Token is sent via the **`satoken`** HTTP header (not `Authorization`).
 
 ### Tree-based bookmark layout
-Bookmarks are a `UserLayoutNodeVO[]` tree in `bookmark.store.ts`. Node types (see `typing/enum.ts` `HomeItemType`): `BOOKMARK`, `BOOKMARK_DIR`, `FUNCTION`, `BOOKMARK_LOADING` (placeholder while the backend parses the URL). `components/launch/LaunchItem.vue` dispatches each node to the right cell component under `components/launchpad/cell/`.
+Bookmarks are a `UserLayoutNodeVO[]` tree in `bookmark.store.ts`. Node types (see `typing/enum.ts` `HomeItemType`): `BOOKMARK`, `BOOKMARK_DIR`, `FUNCTION`, `BOOKMARK_LOADING` (placeholder while the backend parses the URL). `pages/index.vue` renders `BOOKMARK` / `BOOKMARK_DIR` (via `BookmarkFolderCard` → `BookmarkTreeRow`) and `BOOKMARK_LOADING`. **`FUNCTION` has no renderer** — its cell was part of the launchpad board that the rewrite orphaned and `2026-08-04` deleted; a `FUNCTION` node reaching the client renders as nothing. The type stays in the wire contract (`UserLayoutNodeVO.typeFuc`).
 
 ### WebSocket-driven live updates
 After the user adds a URL, the backend parses the page asynchronously (Spring `ApplicationEvent` + `@Async`, in-process — not a message queue) and pushes the result back. `stores/websocket.store.ts` connects to `{wsBase}/ws?token={token}`, pings every 5s, and reconnects with exponential backoff (1s → 30s, max 5 attempts).
@@ -87,7 +87,7 @@ All API calls go through the static `http` class in `server/apis/http.ts`. Endpo
 - Components should not duplicate API error toasts; the client handles them centrally
 
 ### Background rendering & preferences
-`preference.store.ts` drives grid cell size (60/80/100px), gap mode, page-turn behavior, title visibility, and link-open target. Background images are converted to DataURL and cached in `localStorage` for instant paint; gradients are pure CSS `linear-gradient` (no image files). Background rendering happens in `layouts/launch.vue`.
+`preference.store.ts` drives grid cell size (60/80/100px), gap mode, page-turn behavior, title visibility, and link-open target. Background images are converted to DataURL and cached in `localStorage` for instant paint; gradients are pure CSS `linear-gradient` (no image files). Background rendering happens in `layouts/setting.vue` / `components/setting/background/Preview.vue`; the old full-screen launchpad background (`layouts/launch.vue`) was deleted as dead code on 2026-08-04.
 
 ### OAuth login (Google + GitHub)
 The site is a static SPA with no server, so both flows run entirely client-side. **Google** (`composables/useGoogleOAuth.ts`): classic OAuth2 implicit flow (`response_type=id_token`) — full-page redirect to Google, credential returns via URL hash to `pages/auth/google/callback.vue`, `state`/`nonce` round-tripped through `sessionStorage` (not usable for a popup since implicit-flow redirects can't reliably `postMessage` cross-origin before unload). **GitHub** (`composables/useGithubOAuth.ts`): authorization-code flow via a popup window — `pages/auth/github/callback.vue` `postMessage`s the code back to the opener (checked against `location.origin` and a `state` value), and the caller exchanges it through the backend. Callback pages are the only consumers of these composables.
@@ -96,7 +96,6 @@ The site is a static SPA with no server, so both flows run entirely client-side.
 `components/setting/BookmarkManage.vue` uploads a browser bookmark file: `bookmarksUploadPreview()` first (server returns per-item `isDuplicate`, matched on the **canonical** URL quadruple, not on the raw string), the user unchecks what to skip, then `bookmarksUpload(file, skipUrls)` returns the created nodes — folders plus `BOOKMARK_LOADING` placeholders. Those go into the tree via `bookmarkStore.addImportLoadingBatch()`, and each loading node registers a 60s `watchForResolution()` fallback. The backend deliberately does **not** publish parse events for an import (it would flood the parse pool); its `drainStuckLoading()` sweep picks the placeholder rows up in batches, so results trickle back over WebSocket. There is no aggregate progress UI — an earlier `importProgress.store.ts` + `ImportProgressNotice.vue` pair was removed in `fc66cb23`.
 
 ### Layouts
-- `launch.vue` — main app (background + launchpad)
 - `setting.vue` — settings sidebar
 - `explore.vue` — `/welcome` landing
 - `default.vue` — pass-through
