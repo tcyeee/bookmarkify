@@ -169,11 +169,14 @@ data class BookmarkSearchVO(
     @field:Schema(description = "书签标题") var title: String? = null,
     @field:Schema(description = "图标信息") var logo: BookmarkLogoShowVO = BookmarkLogoShowVO(),
 ) {
-    constructor(entity: PageEntity, resolved: SiteAssetResolver.ResolvedLogo?) : this(
+    // 搜索现在只在 site 层匹配（见 BookmarkServiceImpl.search），appName 权威值随之改读
+    // site.shortName（而不是过渡期字段 PageEntity.appName）——两者本应一致，但站点信息
+    // 是首页抓取权威写入的，比某条深链残留的旧值更可信。
+    constructor(entity: PageEntity, site: SiteEntity, resolved: SiteAssetResolver.ResolvedLogo?) : this(
         id = entity.id,
         urlHost = entity.urlHost,
         urlScheme = entity.urlScheme,
-        appName = entity.appName,
+        appName = site.shortName,
         title = entity.title,
         logo = BookmarkLogoShowVO.from(resolved),
     )
