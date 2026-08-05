@@ -159,7 +159,7 @@
           <div v-else class="max-h-[28rem] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
             <label
               v-for="item in displayItems"
-              :key="item.layoutNodeId ?? item.bookmarkUserLinkId"
+              :key="item.layoutNodeId ?? item.bookmarkId"
               class="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
               <input
                 type="checkbox"
@@ -500,7 +500,7 @@ function toggleSelectAll() {
 }
 
 function recordOpen(item: t.BookmarkShow) {
-  bookmarksRecordOpen(item.bookmarkUserLinkId).catch(() => {})
+  bookmarksRecordOpen(item.bookmarkId).catch(() => {})
 }
 
 async function deleteOne(item: t.BookmarkShow) {
@@ -571,15 +571,16 @@ async function fetchAllByFilter(kind: CleanupKind): Promise<t.BookmarkShow[]> {
   return all
 }
 
-// 重复判定与后端一致：同一个 bookmarkId(同一站点链接)被本用户添加了多次。
-// duplicatesOnly 下后端按 (bookmarkId, createTime) 升序返回，故每组第一条即最早添加的那条。
+// 重复判定与后端一致：同一个 pageId(同一站点链接)被本用户添加了多次。
+// duplicatesOnly 下后端按 (pageId, createTime) 升序返回，故每组第一条即最早添加的那条。
+// 分组键必须是 pageId：bookmarkId 是本用户的关联ID，每行都不同，按它分组永远分不出重复。
 function planDuplicateCleanup(items: t.BookmarkShow[]): { groupCount: number; removeIds: string[] } {
   const groups = new Map<string, t.BookmarkShow[]>()
   for (const item of items) {
-    if (!item.bookmarkId || !item.layoutNodeId) continue
-    const list = groups.get(item.bookmarkId)
+    if (!item.pageId || !item.layoutNodeId) continue
+    const list = groups.get(item.pageId)
     if (list) list.push(item)
-    else groups.set(item.bookmarkId, [item])
+    else groups.set(item.pageId, [item])
   }
 
   const removeIds: string[] = []

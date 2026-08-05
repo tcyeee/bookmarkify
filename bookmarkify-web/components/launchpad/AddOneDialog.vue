@@ -118,11 +118,12 @@ const searchResults = ref<any[]>([])
 const isSearching = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
 
-// 当前用户已持有的 canonical bookmarkId 集合
-const ownedBookmarkIds = computed(() => {
+// 当前用户已持有的 canonical pageId 集合。比对对象是 BookmarkSearchVO.id，那也是 page.id；
+// 用 bookmarkId(本用户的关联ID) 去比会永远不相等，判重形同虚设。
+const ownedPageIds = computed(() => {
   const ids = new Set<string>()
   for (const node of Object.values(bookmarkStore.nodes)) {
-    if (node.typeApp?.bookmarkId) ids.add(node.typeApp.bookmarkId)
+    if (node.typeApp?.pageId) ids.add(node.typeApp.pageId)
   }
   return ids
 })
@@ -149,7 +150,7 @@ const handleSearch = useDebounceFn(async (val: string) => {
     const res = await bookmarksSearch(val)
     // 剔除自己已经收藏过的：后端现在会拒绝重复关联，不过滤的话这些条目点下去只能得到一个错误提示。
     // pages/index.vue 的搜索结果一直是这么过滤的，这里之前漏了。
-    searchResults.value = (res || []).filter((item: any) => !ownedBookmarkIds.value.has(item.id))
+    searchResults.value = (res || []).filter((item: any) => !ownedPageIds.value.has(item.id))
   } catch (e) {
     console.error(e)
   } finally {
@@ -207,7 +208,7 @@ function addOne() {
     data.notice = '你输入的网址看起来有点怪...'
     return
   }
-  // 本地已有就不必往返一次再等后端弹 E126——同一份判断搜索结果那边一直在做（ownedBookmarkIds），
+  // 本地已有就不必往返一次再等后端弹 E126——同一份判断搜索结果那边一直在做（ownedPageIds），
   // 只有直接粘贴网址这条路以前漏了。漏判无所谓，后端仍是判重的唯一权威。
   const inputKey = canonicalUrlKey(data.input)
   if (inputKey && ownedUrlKeys.value.has(inputKey)) {

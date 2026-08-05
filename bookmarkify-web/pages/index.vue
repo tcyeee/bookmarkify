@@ -561,11 +561,12 @@ const myResults = computed<UserLayoutNodeVO[]>(() => {
   })
 })
 
-// 用户已持有的书签 id 集合，用于从「建议书签」中排除已添加的项
-const ownedBookmarkIds = computed(() => {
+// 用户已持有的 canonical pageId 集合，用于从「建议书签」中排除已添加的项。
+// 必须是 pageId：BookmarkSearchVO.id 就是 page.id，拿 bookmarkId(本用户关联ID) 去比永远不相等。
+const ownedPageIds = computed(() => {
   const ids = new Set<string>()
   for (const node of Object.values(bookmarkStore.nodes)) {
-    if (node.type === HomeItemType.BOOKMARK && node.typeApp?.bookmarkId) ids.add(node.typeApp.bookmarkId)
+    if (node.type === HomeItemType.BOOKMARK && node.typeApp?.pageId) ids.add(node.typeApp.pageId)
   }
   return ids
 })
@@ -581,7 +582,7 @@ const fetchSuggestions = useDebounceFn(async (q: string) => {
     const res = await bookmarksSearch(q)
     // 忽略过期请求的结果
     if (q !== query.value.trim()) return
-    suggestResults.value = ((res as BookmarkSearchVO[]) || []).filter((item) => !ownedBookmarkIds.value.has(item.id))
+    suggestResults.value = ((res as BookmarkSearchVO[]) || []).filter((item) => !ownedPageIds.value.has(item.id))
   } catch (e) {
     console.error(e)
   } finally {
@@ -614,7 +615,7 @@ async function linkSuggested(item: BookmarkSearchVO) {
 
 function recordOpen(item: UserLayoutNodeVO) {
   if (!item.typeApp) return
-  bookmarksRecordOpen(item.typeApp.bookmarkUserLinkId).catch(() => {})
+  bookmarksRecordOpen(item.typeApp.bookmarkId).catch(() => {})
 }
 
 // ── 「我的书签」搜索结果右键菜单：修改 / 删除 ──
@@ -637,7 +638,7 @@ async function toggleMyResultPinned(item: UserLayoutNodeVO) {
   if (!item.typeApp) return
   const next = !item.typeApp.pinned
   try {
-    await bookmarksPin(item.typeApp.bookmarkUserLinkId, next)
+    await bookmarksPin(item.typeApp.bookmarkId, next)
     bookmarkStore.setPinnedLocal(item.id, next)
     useToastStore().success(next ? '已置顶' : '已取消置顶')
   } catch (error) {
@@ -692,11 +693,11 @@ function openEditModal(node: UserLayoutNodeVO) {
   editDialogRef.value?.showModal()
 
   // 封面是锦上添花：拿不到就当没有，不弹错、不挡住改标题这件正事
-  const linkId = node.typeApp.bookmarkUserLinkId
+  const linkId = node.typeApp.bookmarkId
   bookmarksCover(linkId)
     .then((url) => {
       // 用户可能已经关掉弹窗又点开了另一条，晚到的响应不能盖到新的上面
-      if (editingNode.value?.typeApp?.bookmarkUserLinkId === linkId) editCover.value = url
+      if (editingNode.value?.typeApp?.bookmarkId === linkId) editCover.value = url
     })
     .catch(() => {})
 }
@@ -713,7 +714,7 @@ async function saveEdit() {
   editSaving.value = true
   try {
     const res = await bookmarksUpdate({
-      linkId: node.typeApp.bookmarkUserLinkId,
+      linkId: node.typeApp.bookmarkId,
       title: editForm.title.trim(),
       description: editForm.description.trim(),
     })

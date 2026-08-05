@@ -38,8 +38,12 @@ export interface BookmarkLogo {
 
 // 书签详情（后端 BookmarkShow）
 export interface BookmarkShow {
+  // canonical 页面记录ID（后端 page.id）。判重/「已添加」比对用它，因为 BookmarkSearchVO.id 也是这个。
+  // 注意命名历史：三层重命名(3b0c102d)前它叫 bookmarkId，现在那个名字归下面那条了。
+  pageId: string
+  // 本用户与该页面的关联ID（后端 bookmark.id，旧表名 bookmark_user_link）。
+  // 打开计数(bookmarksRecordOpen)/置顶(bookmarksPin)/封面等按“用户的这一条”操作的接口都要它。
   bookmarkId: string
-  bookmarkUserLinkId: string
   title: string
   description: string
   urlFull: string
@@ -52,7 +56,7 @@ export interface BookmarkShow {
   isActivity: boolean
   createTime?: number
   paths?: Array<string>
-  // 用户桌面排布节点ID：批量删除(bookmarksDel)/创建集合(bookmarksCreateDir)等基于节点树的操作使用此ID，而非 bookmarkUserLinkId
+  // 用户桌面排布节点ID：批量删除(bookmarksDel)/创建集合(bookmarksCreateDir)等基于节点树的操作使用此ID，而非 bookmarkId
   layoutNodeId?: string | null
   folderId?: string | null
   folderName?: string | null

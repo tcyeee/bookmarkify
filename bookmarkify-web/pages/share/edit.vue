@@ -197,7 +197,7 @@ async function publish() {
   publishing.value = true
   try {
     const bookmarkUserLinkIds = [...checkedIds.value]
-      .map((id) => bookmarkStore.nodes[id]?.typeApp?.bookmarkUserLinkId)
+      .map((id) => bookmarkStore.nodes[id]?.typeApp?.bookmarkId)
       .filter(Boolean) as string[]
     const res = await shareCreate({
       bookmarkUserLinkIds,

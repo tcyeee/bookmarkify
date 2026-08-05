@@ -49,13 +49,13 @@ const bookmarkStore = useBookmarkStore()
 
 function recordOpen(node: UserLayoutNodeVO) {
   if (!node.typeApp) return
-  bookmarksRecordOpen(node.typeApp.bookmarkUserLinkId).catch(() => {})
+  bookmarksRecordOpen(node.typeApp.bookmarkId).catch(() => {})
 }
 
 async function unpinOne(node: UserLayoutNodeVO) {
   if (!node.typeApp) return
   try {
-    await bookmarksPin(node.typeApp.bookmarkUserLinkId, false)
+    await bookmarksPin(node.typeApp.bookmarkId, false)
     bookmarkStore.setPinnedLocal(node.id, false)
     useToastStore().success('已取消置顶')
   } catch (error) {
