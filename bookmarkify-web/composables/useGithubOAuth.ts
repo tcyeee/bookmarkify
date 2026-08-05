@@ -1,11 +1,33 @@
 // composables/useGithubOAuth.ts
 // 开 GitHub 授权弹窗，等回调页 postMessage 回 code，校验 state 与 origin 后 resolve。
 // 调用方（按钮/绑定弹窗）拿到 code 后自行决定走登录还是绑定 API。
+//
+// 移动端浏览器/微信内置浏览器对 window.open 弹窗支持不稳定(常被拦截或行为异常)，
+// 因此额外提供 redirectToGithubLogin：整页跳转，state 存 sessionStorage，
+// 回调页 pages/auth/github/callback.vue 检测到没有 window.opener 时按此流程校验并直接完成登录。
 const MSG_SOURCE = 'bookmarkify-github-oauth'
+const REDIRECT_STATE_KEY = 'bookmarkify-github-oauth-redirect-state'
 
 export function useGithubOAuth() {
   const config = useRuntimeConfig()
   const githubClientId = (config.public.githubClientId as string | undefined) || ''
+
+  function redirectToGithubLogin() {
+    if (!import.meta.client) return
+    if (!githubClientId) return
+
+    const redirectUri = `${location.origin}/auth/github/callback`
+    const state = Math.random().toString(36).slice(2) + Date.now().toString(36)
+    sessionStorage.setItem(REDIRECT_STATE_KEY, state)
+
+    const url =
+      `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(githubClientId)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&scope=${encodeURIComponent('read:user user:email')}` +
+      `&state=${encodeURIComponent(state)}`
+
+    location.href = url
+  }
 
   function requestGithubCode(): Promise<{ code: string; redirectUri: string }> {
     return new Promise((resolve, reject) => {
@@ -53,5 +75,7 @@ export function useGithubOAuth() {
     })
   }
 
-  return { githubClientId, requestGithubCode }
+  return { githubClientId, requestGithubCode, redirectToGithubLogin }
 }
+
+export const GITHUB_OAUTH_REDIRECT_STATE_KEY = REDIRECT_STATE_KEY

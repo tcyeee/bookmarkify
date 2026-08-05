@@ -15,14 +15,21 @@
 import IconMdiGithub from '~icons/mdi/github'
 import { useAuthStore } from '@stores/auth.store'
 
+// redirect: 整页跳转授权而非弹窗，供移动端登录页使用（弹窗在移动端浏览器/内置浏览器中不可靠）。
+// 该模式下登录动作在回调页 pages/auth/github/callback.vue 内完成，success 事件不会触发。
+const props = defineProps<{ redirect?: boolean }>()
 const emit = defineEmits<{ (e: 'success'): void }>()
 
 const authStore = useAuthStore()
-const { githubClientId, requestGithubCode } = useGithubOAuth()
+const { githubClientId, requestGithubCode, redirectToGithubLogin } = useGithubOAuth()
 const loading = ref(false)
 
 async function onClick() {
   if (loading.value) return
+  if (props.redirect) {
+    redirectToGithubLogin()
+    return
+  }
   loading.value = true
   try {
     const { code, redirectUri } = await requestGithubCode()

@@ -22,7 +22,7 @@
 
           <!-- 开始使用按钮 -->
           <div
-            @click="isLoggedIn ? navigateTo('/') : (showLoginDialog = true)"
+            @click="isLoggedIn ? navigateTo('/') : handleStart()"
             class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-6 sm:px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-10 sm:mt-15 cursor-pointer select-none">
             <ShimmerText
               :shimmerWidth="100"
@@ -141,6 +141,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useMediaQuery } from '@vueuse/core'
 import FloatingBookmarks from '../components/welcome/FloatingBookmarks.vue'
 import UiScrollReveal from '../components/stunning/ScrollReveal.vue'
 import ShimmerText from '../components/stunning/ShimmerText.vue'
@@ -154,6 +155,13 @@ const authStore = useAuthStore()
 const isLoggedIn = computed(() => authStore.authStatus === AuthStatusEnum.AUTHED)
 const showLoginDialog = ref(false)
 const loginDialogRef = ref<HTMLDialogElement | null>(null)
+
+// 桌面弹窗登录在移动端体验很差(横屏/矮屏时验证码步骤局促),移动端改跳专门的全屏登录页 /login
+const isMobile = useMediaQuery('(max-width: 640px)')
+function handleStart() {
+  if (isMobile.value) navigateTo('/login')
+  else showLoginDialog.value = true
+}
 
 watch(showLoginDialog, (visible) => {
   if (!loginDialogRef.value) return
