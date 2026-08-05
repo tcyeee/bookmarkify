@@ -15,9 +15,12 @@ export const bookmarksSearch = (name: string) => http.post<Array<any>>(`/bookmar
 // addOne 会创建 bookmark/user_layout_node/bookmark_user_link 三张表的写入，改用 POST 承载（与 bookmarksSearch 一致的写法：
 // query string 传参 + POST 方法），避免 GET 请求被浏览器预取/代理缓存/爬虫意外重放触发非预期写操作
 export const bookmarksAddOne = (url: string) => http.post<t.UserLayoutNodeVO>(`/bookmark/addOne?url=${encodeURIComponent(url)}`)
-// 与 addOne 同理：linkOne 也会写 user_layout_node + bookmark_user_link 两张表，改用 POST 承载
-export const bookmarksLinkOne = (bookmarkId: string) =>
-  http.post<t.UserLayoutNodeVO>(`/bookmark/linkOne?bookmarkId=${encodeURIComponent(bookmarkId)}`)
+// 与 addOne 同理：linkOne 也会写 user_layout_node + bookmark_user_link 两张表，改用 POST 承载。
+// 参数名是 pageId 而不是 bookmarkId：后端要的是 canonical 页面记录的 id（搜索结果 BookmarkSearchVO.id
+// 就是 PageEntity.id），"bookmark" 在重命名后专指用户与页面的关联行。名字写错时 Spring 会因缺必填参数
+// 抛异常、被兜成 E999「服务器繁忙」，看不出是参数问题。
+export const bookmarksLinkOne = (pageId: string) =>
+  http.post<t.UserLayoutNodeVO>(`/bookmark/linkOne?pageId=${encodeURIComponent(pageId)}`)
 export const bookmarksSort = (params: Record<string, number>) => http.post<boolean>('/bookmark/sort', params)
 export const bookmarksDel = (params: Array<string>) => http.post<boolean>('/bookmark/delete', params)
 export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post<t.BookmarkShow>('/bookmark/update', params)

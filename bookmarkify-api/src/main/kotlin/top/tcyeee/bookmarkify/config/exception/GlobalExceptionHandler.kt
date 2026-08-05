@@ -11,9 +11,12 @@ import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.http.server.ServerHttpRequest
 import org.springframework.http.server.ServerHttpResponse
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+import org.springframework.web.multipart.support.MissingServletRequestPartException
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.config.result.ResultWrapper.Companion.error
@@ -70,6 +73,20 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
                 error(ErrorType.E102, "字段 ${fieldError.field} 校验错误: ${fieldError.defaultMessage}")
             }
 
+            // 请求根本没通过参数绑定就被挡下，责任在调用方而非服务端。此前它们一路落到 else 分支，
+            // 于是「前端把 query 参数名写错了」和「服务端真的炸了」都返回 E999「服务器繁忙」，
+            // 还各自带一份完整栈打进 log.error —— 排查时既看不出是哪个参数，也污染错误告警。
+            // 典型现场：/bookmark/linkOne 的参数在 bookmark→page 重命名后叫 pageId，前端仍发
+            // bookmarkId，报出来的却是「服务器繁忙」。
+            is MissingServletRequestParameterException ->
+                badRequest("缺少必填参数: ${e.parameterName}", e, request)
+
+            is MissingServletRequestPartException ->
+                badRequest("缺少必填文件: ${e.requestPartName}", e, request)
+
+            is MethodArgumentTypeMismatchException ->
+                badRequest("参数 ${e.name} 类型错误，期望 ${e.requiredType?.simpleName ?: "?"}", e, request)
+
             is RedisCommandTimeoutException -> print(ErrorType.E203, e, request)
             else -> print(ErrorType.E999, e, request)
         }
@@ -86,6 +103,19 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
     private fun print(type: ErrorType, e: Exception, request: HttpServletRequest): ResultWrapper {
         log.error("Σ(oﾟдﾟoﾉ)  {} | [{}] {}", request.requestURI, type.name, e.message, e)
         return error(type)
+    }
+
+    /**
+     * 参数绑定失败：调用方的错，不是服务端故障。
+     *
+     * 因此 warn 且**不打栈** —— 栈全在 Spring 内部，对定位毫无帮助，而 error + 栈会让这类
+     * 前端笔误混进真实故障的告警里。真正有用的是「哪个接口、哪个参数、实际发了什么」，
+     * 所以带上完整 query string；具体原因同时回给前端，不再是笼统的「服务器繁忙」。
+     */
+    private fun badRequest(detail: String, e: Exception, request: HttpServletRequest): ResultWrapper {
+        val uri = request.requestURI + (request.queryString?.let { "?$it" } ?: "")
+        log.warn("[参数错误] {} {} | {} | {}", request.method, uri, detail, e.javaClass.simpleName)
+        return error(ErrorType.E102, detail)
     }
 
     /**

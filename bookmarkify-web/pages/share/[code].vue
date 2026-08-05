@@ -32,12 +32,12 @@
       <div v-else class="rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
         <a
           v-for="item in data.bookmarks"
-          :key="item.bookmarkUserLinkId"
+          :key="item.bookmarkId"
           :href="externalHref(item.urlFull)"
           target="_blank"
           rel="noopener noreferrer"
           class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-          @click="bookmarksRecordOpen(item.bookmarkUserLinkId).catch(() => {})">
+          @click="bookmarksRecordOpen(item.bookmarkId).catch(() => {})">
           <BookmarkLogo :value="item" :size="20" />
           <div class="flex flex-col overflow-hidden flex-1">
             <span class="text-sm text-slate-700 dark:text-slate-200 truncate">{{ item.title || item.urlBase }}</span>

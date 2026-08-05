@@ -78,7 +78,7 @@ const bookmarkIndentStyle = computed(() => ({ paddingLeft: `${props.depth * 1.25
 
 function recordOpen(node: UserLayoutNodeVO) {
   if (!node.typeApp) return
-  bookmarksRecordOpen(node.typeApp.bookmarkUserLinkId).catch(() => {})
+  bookmarksRecordOpen(node.typeApp.bookmarkId).catch(() => {})
 }
 
 async function delOne(node: UserLayoutNodeVO) {
@@ -104,7 +104,7 @@ async function togglePinned(node: UserLayoutNodeVO) {
   if (!node.typeApp) return
   const next = !node.typeApp.pinned
   try {
-    await bookmarksPin(node.typeApp.bookmarkUserLinkId, next)
+    await bookmarksPin(node.typeApp.bookmarkId, next)
     bookmarkStore.setPinnedLocal(node.id, next)
     useToastStore().success(next ? '已置顶' : '已取消置顶')
   } catch (error) {

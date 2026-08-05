@@ -139,16 +139,6 @@ const routes: RouteRecordRaw[] = [
           title: '页面管理',
         },
       },
-      {
-        // 站点→页面的下钻视图。与上面两张平表是**增量关系**，不是替代
-        name: 'WebsiteExplorer',
-        path: '/website/explorer',
-        component: () => import('#/views/website/explorer/index.vue'),
-        meta: {
-          icon: 'carbon:tree-view-alt',
-          title: '站点与页面',
-        },
-      },
     ],
   },
   {
