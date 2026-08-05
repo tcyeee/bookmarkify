@@ -1,7 +1,7 @@
 <template>
   <!-- h-dvh 而非 h-screen：内层是 overflow-y-auto 的滚动容器，用 100vh 会让容器比可视区高出
        一条地址栏，底部书签永远滚不出来 -->
-  <div class="flex h-dvh w-full flex-col">
+  <div class="flex h-dvh w-full flex-col select-none">
     <CommonHeader />
     <div class="flex-1 overflow-y-auto bg-white dark:bg-slate-900">
       <div class="max-w-6xl mx-auto px-4 py-6">
@@ -58,12 +58,12 @@
               <div class="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-2">置顶</div>
               <PinnedBookmarkGrid :nodes="bookmarkStore.pinnedNodes" @edit="openEditModal" />
             </div>
-            <div class="grid justify-center gap-4" :style="folderGridStyle">
+            <div ref="folderGridRef" class="grid justify-center gap-4" :style="folderGridStyle">
               <div v-for="(column, i) in folderColumns" :key="i" class="flex flex-col gap-4 min-w-0">
                 <div
                   v-for="folder in column"
                   :key="folder.id"
-                  :ref="(el) => setFolderCardEl(folder.id, el as Element | null)"
+                  :data-folder-card-id="folder.id"
                   class="relative transition-opacity"
                   :class="{ 'opacity-40': draggingFolderId === folder.id }">
                   <span
@@ -361,11 +361,10 @@ const folderColumns = computed(() => {
 // 提交后交给 folderColumns 按新顺序重新分栏。
 // 与 BookmarkFolderCard.vue 内部「拖书签」是两套独立的 dropTarget：靠 source.data.kind 互斥
 // （该文件里的行/卡片级 dropTarget 都已排除 kind === 'folder-card' 的来源）。
-const folderCardEls = new Map<string, HTMLElement>()
-function setFolderCardEl(id: string, el: Element | null) {
-  if (el) folderCardEls.set(id, el as HTMLElement)
-  else folderCardEls.delete(id)
-}
+// 卡片元素按 data 属性现查，不维护 id→el 的 Map：瀑布流重排会让一张卡片在两列之间「卸载+挂载」，
+// 而 Vue 的 patch 按列序推进，卡片从右列挪到左列时是「先挂载新元素、后卸载旧元素」，两次 ref 回调
+// 的净效果是把刚存进去的条目删掉，那张卡片从此既不能拖也不能被放。同 BookmarkFolderCard 里查行的写法。
+const folderGridRef = ref<HTMLElement | null>(null)
 
 const draggingFolderId = ref<string | null>(null)
 const dropTargetFolderId = ref<string | null>(null)
@@ -415,19 +414,21 @@ let folderMonitorCleanup: (() => void) | null = null
 
 function registerFolderDnd() {
   folderDndCleanup?.()
+  folderDndCleanup = null
+  const root = folderGridRef.value
+  if (!root) return
   const disposers: Array<() => void> = []
-  for (const card of folderCards.value) {
-    const el = folderCardEls.get(card.id)
-    if (!el) continue
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>('[data-folder-card-id]'))) {
+    const id = el.dataset.folderCardId!
     // 根目录卡片是合成分组、不是真实节点，不可被拖动，但仍可作为放置目标（见 decideFolderDrop）
-    if (!card.isRoot) {
+    if (id !== ROOT_CARD_ID) {
       const handle = el.querySelector<HTMLElement>('[data-folder-handle]')
       if (handle) {
         disposers.push(
           draggable({
             element: handle,
-            getInitialData: () => ({ kind: 'folder-card', id: card.id }),
-            onDragStart: () => (draggingFolderId.value = card.id),
+            getInitialData: () => ({ kind: 'folder-card', id }),
+            onDragStart: () => (draggingFolderId.value = id),
             onDrop: resetFolderDrag,
           }),
         )
@@ -436,15 +437,15 @@ function registerFolderDnd() {
     disposers.push(
       dropTargetForElements({
         element: el,
-        canDrop: ({ source }) => source.data.kind === 'folder-card' && source.data.id !== card.id,
-        getData: () => ({ kind: 'folder-card', id: card.id }),
+        canDrop: ({ source }) => source.data.kind === 'folder-card' && source.data.id !== id,
+        getData: () => ({ kind: 'folder-card', id }),
         onDrag: ({ location }) => {
           if (location.current.dropTargets[0]?.element !== el) return
-          dropTargetFolderId.value = card.id
+          dropTargetFolderId.value = id
           dropFolderMode.value = classifyFolderDrop(el, location.current.input.clientY)
         },
         onDragLeave: () => {
-          if (dropTargetFolderId.value === card.id) {
+          if (dropTargetFolderId.value === id) {
             dropTargetFolderId.value = null
             dropFolderMode.value = null
           }
@@ -472,10 +473,10 @@ function registerFolderMonitor() {
   })
 }
 
-watch(
-  () => folderCards.value.map((c) => c.id).join(','),
-  () => nextTick(registerFolderDnd),
-)
+// 同时盯住网格元素本身：搜索时整个网格被 v-else 卸载，清空搜索词后卡片 id 列表原封不动，
+// 只盯 id 列表的话不会重新注册，拖拽句柄全指向已经脱离文档的旧元素——表现为「搜过一次之后
+// 文件夹就拖不动了」。骨架屏/空态切回来也是同一条路径。
+watch([folderGridRef, () => folderCards.value.map((c) => c.id).join(',')], () => nextTick(registerFolderDnd))
 onMounted(() =>
   nextTick(() => {
     registerFolderDnd()
@@ -728,3 +729,12 @@ async function saveEdit() {
   }
 }
 </script>
+
+<style scoped>
+/* 根节点的 select-none 会连输入框里的文字一起锁死（Safari 上尤其明显：光标能进去，但选不中、
+   双击选词失效），表单元素必须单独放行。用 :deep 是因为文件夹重命名的输入框在子组件里。 */
+:deep(input),
+:deep(textarea) {
+  user-select: text;
+}
+</style>
