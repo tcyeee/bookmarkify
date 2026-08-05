@@ -18,9 +18,11 @@ export default defineNuxtRouteMiddleware((to, from) => {
   const consolePage = '/'
   // 受限页面列表
   const restrictPageList = ['/', '/setting', '/bookmark/similar', '/share/edit', '/access-token/docs']
+  // 仅访客可访问的页面(引导页、移动端登录页):已登录则没有停留的理由
+  const guestOnlyPageList = ['/welcome', '/login']
 
   // 访问受限页面但未登录,跳转到引导页
   if (restrictPageList.includes(to.path) && !isAuthed) return navigateTo(welcomePage)
-  // 访问引导页且已登录,跳转到首页
-  if (to.path === welcomePage && isAuthed) return navigateTo(consolePage)
+  // 访问仅访客页面且已登录,跳转到首页
+  if (guestOnlyPageList.includes(to.path) && isAuthed) return navigateTo(consolePage)
 })
