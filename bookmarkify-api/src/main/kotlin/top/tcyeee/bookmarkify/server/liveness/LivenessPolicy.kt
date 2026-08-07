@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server.liveness
 
+import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import java.time.LocalDateTime
 
@@ -104,13 +105,30 @@ object LivenessPolicy {
         }
     }
 
-    // ────── 退避曲线 ──────
+    // ────── 判死的确认门槛 ──────
 
     /**
-     * 退避的指数上限。24h 的基础间隔配上 2^4 = 16 倍，最长约 16 天一次；
-     * 再往上拉长意义不大——[ARCHIVE_AFTER_FAILURES] 会先把这条记录移出候选池。
+     * 「探测失败到这个次数，才可以把书签落成失活」。
+     *
+     * ## 为什么单次失败不足以判死
+     *
+     * 一次 `HEAD` 探测失败的成因里，只有一部分是「站点真的没了」：目标服务重启、我方机房出口
+     * 抖动、CDN 换节点、对端限流到把连接直接断掉，都会产生一次一模一样的失败。而判死是有
+     * **用户可见后果**的（书签变灰、`isActivity=false`），拿单次证据去做这个动作，等价于把
+     * 我方网络的每一次打嗝广播给所有用户。
+     *
+     * 要求连续 N 次的代价很小：这 N 次之间隔着退避曲线，期间书签对用户照常显示为可用，
+     * 唯一的损失是「真死的站点晚几天变灰」——而那本来就没有时效性。
+     *
+     * [required] 由管理员配置（`deadConfirmFailures`，默认 3）。传 0 或负数按 1 处理，
+     * 也就是退回「一次失败即判死」，而不是变成永远判不了死。
+     *
+     * @param consecutiveFail **本次结论已经计入之后**的连续失败次数
      */
-    private const val MAX_BACKOFF_EXPONENT = 4
+    fun confirmsDead(consecutiveFail: Int, required: Int): Boolean =
+        consecutiveFail >= required.coerceAtLeast(1)
+
+    // ────── 退避曲线 ──────
 
     /** 无结论时的重试间隔：故障多半是分钟级到小时级的，1 小时后再看一眼即可。 */
     private const val UNKNOWN_RETRY_HOURS = 1L
@@ -128,20 +146,49 @@ object LivenessPolicy {
      * [consecutiveFail] 传**本次结论已经计入之后**的值（失败则已 +1，成功则已归零）。
      * [PingOutcome.UNKNOWN] 不参与退避：那是我方链路的问题，不该记在站点账上，
      * 否则一次抓取服务故障就能把全表推到退避曲线的末端，之后半个月都不再复查。
+     *
+     * 退避的三个参数（基数 / 倍数 / 上限）全部来自 [BookmarkLivenessConfigValue]。整体传配置
+     * 而不是散着传四五个 Int：这几个值之间是有约束的（上限不能小于基数），拆成位置参数之后
+     * 调用方传反了不会有任何编译期提示，而算错的后果——某一批记录再也不被复查——是静默的。
      */
     fun nextCheckAt(
         now: LocalDateTime,
         outcome: PingOutcome,
         consecutiveFail: Int,
-        activeIntervalHours: Int,
-        abnormalIntervalHours: Int,
+        config: BookmarkLivenessConfigValue,
     ): LocalDateTime = when (outcome) {
-        PingOutcome.ALIVE -> now.plusHours(activeIntervalHours.toLong())
+        PingOutcome.ALIVE -> now.plusHours(config.activeCheckIntervalHours.toLong().coerceAtLeast(1))
         PingOutcome.UNKNOWN -> now.plusHours(UNKNOWN_RETRY_HOURS)
-        PingOutcome.DEAD -> {
-            val exponent = (consecutiveFail - 1).coerceIn(0, MAX_BACKOFF_EXPONENT)
-            now.plusHours(abnormalIntervalHours.toLong() shl exponent)
+        PingOutcome.DEAD -> now.plusHours(backoffHours(consecutiveFail, config))
+    }
+
+    /**
+     * 第 [consecutiveFail] 次失败对应的重试间隔（小时）。
+     *
+     * 写成循环而不是 `base * multiplier.pow(n)`：`consecutiveFail` 是从库里读出来的，
+     * 历史数据里出现一个很大的值并非不可能，而幂运算会直接溢出成负数——那算出来的
+     * `next_check_at` 落在过去，这条记录会永久占据候选队列的队头，把后面的全部饿死
+     * （与 `protectSchedule` 防的是同一类事故）。逐次相乘并在触顶时立刻返回，
+     * 无论传进来什么值都不会越过上限。
+     */
+    private fun backoffHours(consecutiveFail: Int, config: BookmarkLivenessConfigValue): Long {
+        val base = config.abnormalCheckIntervalHours.toLong().coerceAtLeast(1)
+        // 上限配得比基数还小时以基数为准：宁可退化成固定间隔，也不能因为一个配置笔误
+        // 让所有死站点变成每小时重探一次
+        val cap = config.abnormalMaxIntervalHours.toLong().coerceAtLeast(base)
+        // 倍数取 1 即固定间隔；小于 1 没有语义，按 1 处理
+        val multiplier = config.abnormalBackoffMultiplier.toLong().coerceAtLeast(1)
+        // 倍数为 1 时曲线是平的，下面的循环永远碰不到"触顶即返回"那道出口，
+        // 于是 consecutiveFail 有多大就空转多少次 —— 而这是在巡检线程上跑的
+        if (multiplier == 1L) return base.coerceAtMost(cap)
+        // 理论上 DEAD 一定伴随 fail>=1，但这里不该依赖调用方的纪律
+        val steps = (consecutiveFail - 1).coerceAtLeast(0)
+        var hours = base
+        repeat(steps) {
+            if (hours >= cap) return cap
+            hours *= multiplier
         }
+        return hours.coerceAtMost(cap)
     }
 
     /** 连续失败次数是否已经到了该归档的程度。 */

@@ -651,14 +651,24 @@ class BookmarkServiceImpl(
             } else {
                 val reason = when (outcome) {
                     PingOutcome.ALIVE -> "ping 成功且内容未过期，仅推进下次检查时间"
-                    PingOutcome.DEAD -> "ping 失败，标记 UNREACHABLE"
+                    // 连续失败攒够 deadConfirmFailures 次才真的落 UNREACHABLE，见 persistProbeResult。
+                    // 次数分两种取法，与那里的判据保持一致：本轮实际探过的用本页计数（那里
+                    // advanceSchedule 之后才 +1，所以这里 +1 才是本轮的值），站点层短路出来的
+                    // 用域名计数（本页的计数按设计不再增长，打印它只会误导排查）
+                    PingOutcome.DEAD -> {
+                        val n = if (evidence.directlyProbed) bookmark.consecutiveFail + 1
+                        else evidence.siteConsecutiveFail
+                        "ping 失败(${if (evidence.directlyProbed) "本页第 $n 次" else "域名第 $n 次"})，" +
+                            "达 ${config.deadConfirmFailures} 次方判失活"
+                    }
                     // 无结论绝不能落库成 UNREACHABLE：那正是「一次抓取服务故障洗掉一批健康书签」的成因
                     PingOutcome.UNKNOWN -> "探测无结论，只做短退避"
                 }
                 log.debug("[livenessCheckStaleBookmarks] $reason: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}")
                 persistProbeResult(
                     bookmark, outcome, config,
-                    markUnreachable = outcome == PingOutcome.DEAD,
+                    // 这条巡检管的是 SUCCESS，是全系统唯一有资格把书签改判为失活的地方
+                    mayConfirmDeath = true,
                     evidence = evidence,
                 )
             }
@@ -1017,9 +1027,25 @@ class BookmarkServiceImpl(
         siteMap: Map<String, SiteEntity>,
         recovery: Map<String, PingOutcome>,
     ) = runCatching {
-        // 站点层短路时探到的"域名已恢复"，先落回来
-        recovery.filterValues { it == PingOutcome.ALIVE }.keys
-            .forEach { siteService.recordLiveness(it, alive = true) }
+        // 站点层短路时对根地址的那次探测，两个方向都要落回来。
+        //
+        // ⚠️ **DEAD 也必须落，这是站点连续失败次数唯一的推进来源。** 下面的 needRootProbe 刻意
+        // 跳过已经判死的域名（它们的根地址 recovery 刚探过，不必重复），于是一旦某域名判死，
+        // 它就再也不会走到 siteVerdict 那条分支 —— 只回落 ALIVE 的话，`site.consecutiveFail`
+        // 会**永久冻结**在判死那一刻的值。而站点层短路出来的页面，其判失活与归档判据读的
+        // 正是这个计数（见 persistProbeResult：它们自己的 consecutiveFail 按设计不再增长），
+        // 计数冻住就等于那批页面既到不了失活门槛、也到不了归档门槛，于是每轮都被重新选中、
+        // 永久占据 `ORDER BY next_check_at ASC LIMIT n` 的队头，把真正该复查的记录饿死。
+        //
+        // 这次探测是对根地址的**直接**探测，是真证据，本来就该计数；UNKNOWN 除外——那是
+        // 我方链路的问题，不能记在站点账上（与 advanceSchedule 里同一条界线）。
+        recovery.forEach { (siteId, outcome) ->
+            when (outcome) {
+                PingOutcome.ALIVE -> siteService.recordLiveness(siteId, alive = true)
+                PingOutcome.DEAD -> siteService.recordLiveness(siteId, alive = false)
+                PingOutcome.UNKNOWN -> {}
+            }
+        }
 
         val bySite = probed.filter { it.first.siteId.isNotBlank() }
             .groupBy { it.first.siteId }
@@ -1104,8 +1130,7 @@ class BookmarkServiceImpl(
             now = now,
             outcome = outcome,
             consecutiveFail = consecutiveFail,
-            activeIntervalHours = config.activeCheckIntervalHours,
-            abnormalIntervalHours = config.abnormalCheckIntervalHours,
+            config = config,
         )
     }
 
@@ -1173,19 +1198,46 @@ class BookmarkServiceImpl(
     }
 
     /**
-     * 落成「这个站点抓不到」：不可用、UNREACHABLE、记下原因、计入连续失败走退避。
+     * 落成「这个站点抓不到」：记下原因、计入连续失败走退避，**够次数了才**真的判失活。
      *
      * ⚠️ 只用于**目标站点**的失败。「我方抓取服务不可用」(E307) 绝不能走到这里——那种情况必须
      * 保持 PENDING 不收口，否则用户桌面上那个节点会脱离 BOOKMARK_LOADING、也就脱离
      * drainStuckLoading 的重投递范围，之后即使抓取成功也没有任何机制会把结果回传给它。
      * 判据见 [isScrapperUnavailable]，每个调用点都在进来之前先挡了一道。
+     *
+     * ## 为什么这里也要过判失活门槛
+     *
+     * 「抓取失败」同样是一次检查不通过，而其中一条路径完全绕开了巡检那侧的门槛：
+     * [livenessCheckStaleBookmarks] ping 通了、发现内容过期(30 天)、投递重新抓取，
+     * 而这一次抓取只要失败（超时、被反爬拒一次），书签立刻变灰 —— 一个**活得好好的**站点，
+     * 被负责保护它的那条巡检亲手判死，且只用了一次失败。
+     *
+     * 判据取「这条记录原本是不是 SUCCESS」，不需要把调用场景一路透传下来：
+     * - 原本 SUCCESS：它此前抓成功过，这次失败更可能是偶发，攒够 `deadConfirmFailures` 次
+     *   才收口。在此之前保留原有的标题与图标——用户看到的是旧内容，而不是一个灰掉的磁贴。
+     * - 原本 PENDING（新添加、导入）：从未成功过，必须就地收口给出终态，
+     *   否则用户桌面上那个 LOADING 节点没有着落。这也是判失活门槛唯一的例外。
      */
     private fun PageEntity.markParseUnreachable(errMsg: String?) = apply {
-        isActivity = false
-        parseStatus = ParseStatusEnum.UNREACHABLE
-        parseErrMsg = errMsg
+        // 之前抓成功过的记录，这一次失败不足以推翻它
+        val provenGood = parseStatus == ParseStatusEnum.SUCCESS
+        val config = bookmarkLivenessConfigService.getConfig()
         updateTime = LocalDateTime.now()
-        scheduleAfterParseFailure()
+        // 先推进调度：consecutiveFail 在这里 +1，下面的门槛判定要用推进之后的值
+        scheduleAfterParseFailure(config)
+        if (!provenGood || LivenessPolicy.confirmsDead(consecutiveFail, config.deadConfirmFailures)) {
+            isActivity = false
+            parseStatus = ParseStatusEnum.UNREACHABLE
+            // 刻意只在真正判失活时才写错误原因：SUCCESS 必然伴随空 parseErrMsg 是这几个
+            // 字段之间的约束（见下面那段注释），留一条错误信息在一条 SUCCESS 记录上，
+            // 后台看到的就是「可用的书签却挂着报错」。失败现场另有去处 ——
+            // recordScrapeFailure 落了完整快照，consecutive_fail 记了次数
+            parseErrMsg = errMsg
+        } else log.warn(
+            "[markParseUnreachable] 抓取失败但此前可用(第 $consecutiveFail 次，" +
+                "达 ${config.deadConfirmFailures} 次方判失活)，保留原有内容: " +
+                "pageId=$id, urlHost=$urlHost, err=$errMsg"
+        )
     }
 
     /**
@@ -1195,7 +1247,8 @@ class BookmarkServiceImpl(
      * （[persistProbeResult]）负责。解析失败而 ping 仍然通得过，说明站点活着、只是我方抓不动，
      * 那种情况值得继续按最长退避间隔偶尔重试，而不是就地判死。
      */
-    private fun PageEntity.scheduleAfterParseFailure() = advanceSchedule(PingOutcome.DEAD)
+    private fun PageEntity.scheduleAfterParseFailure(config: BookmarkLivenessConfigValue) =
+        advanceSchedule(PingOutcome.DEAD, config = config)
 
     /**
      * 抓取结果落库前，把管理员手工锁定的字段还原成人工值。
@@ -1215,12 +1268,17 @@ class BookmarkServiceImpl(
     /**
      * 把一次纯探测（没有抓取内容）的结论落库：只动调度列，必要时再改状态。
      *
-     * [markUnreachable] 由调用方给出，表示「这条记录本轮**刚刚**从可用变成失联」，
-     * 只有 SUCCESS 那条巡检会传 true。归档则与它无关：
+     * [mayConfirmDeath] 由调用方给出，表示「这条巡检**有资格**把记录从可用改判为失联」，
+     * 只有 SUCCESS 那条巡检会传 true（UNREACHABLE 巡检里记录本来就已经是失联了）。
+     * 有资格不等于就这么办：还要 [LivenessPolicy.confirmsDead] 点头，也就是连续失败次数
+     * 已经攒够 `deadConfirmFailures` 次。**单次探测失败不判死**——一次机房出口抖动
+     * 不该让一批好端端的书签在用户桌面上集体变灰。
+     *
+     * 归档与上面两者都无关：
      *
      * 连续失败累计到阈值就转 [ParseStatusEnum.ARCHIVED]，这条记录从两个巡检任务的候选池里彻底
      * 移出（各自只认 UNREACHABLE / SUCCESS），不再无休止地每半个月 ping 一个早就没了的域名。
-     * **失败次数是在 UNREACHABLE 巡检里一轮轮累积起来的，而那条路径的 markUnreachable 恒为 false**
+     * **失败次数是在 UNREACHABLE 巡检里一轮轮累积起来的，而那条路径的 mayConfirmDeath 恒为 false**
      * ——所以归档判定必须独立于它，否则永远只在「首次失联」那一刻检查阈值（那时计数才 1），
      * 归档实际上一次都不会发生。
      *
@@ -1230,18 +1288,20 @@ class BookmarkServiceImpl(
         bookmark: PageEntity,
         outcome: PingOutcome,
         config: BookmarkLivenessConfigValue,
-        markUnreachable: Boolean = false,
+        mayConfirmDeath: Boolean = false,
         evidence: ProbeEvidence = ProbeEvidence.DIRECT,
     ) {
         bookmark.advanceSchedule(outcome, config = config, directlyProbed = evidence.directlyProbed)
-        val archived = outcome == PingOutcome.DEAD && when {
-            evidence.directlyProbed -> LivenessPolicy.shouldArchive(bookmark.consecutiveFail)
-            // 站点层短路的页面本轮没被探测，它的 consecutiveFail 已经不再增长（见 advanceSchedule），
-            // 于是永远够不到归档阈值。归档改由**域名**的连续失败次数决定 —— 那来自根地址的
-            // 真实探测，是这条路径上唯一的新证据。少了这一支，一个域名下上千个页面会永远
-            // 停在候选池里，每轮吃掉 LIMIT 名额，把真正该复查的记录挤出去
-            else -> LivenessPolicy.shouldArchive(evidence.siteConsecutiveFail)
-        }
+        // 判死与归档看的是同一份「连续失败次数」，取法也必须一致：
+        // 站点层短路的页面本轮没被探测，它的 consecutiveFail 已经不再增长（见 advanceSchedule），
+        // 于是永远够不到任何阈值。这一支改由**域名**的连续失败次数供证 —— 那来自根地址的
+        // 真实探测，是这条路径上唯一的新证据。少了它，一个域名下上千个页面会永远
+        // 停在候选池里，每轮吃掉 LIMIT 名额，把真正该复查的记录挤出去
+        val failures =
+            if (evidence.directlyProbed) bookmark.consecutiveFail else evidence.siteConsecutiveFail
+        val archived = outcome == PingOutcome.DEAD && LivenessPolicy.shouldArchive(failures)
+        val markUnreachable = mayConfirmDeath && outcome == PingOutcome.DEAD &&
+            LivenessPolicy.confirmsDead(failures, config.deadConfirmFailures)
         val update = ktUpdate().eq(PageEntity::id, bookmark.id)
             .set(PageEntity::lastCheckAt, bookmark.lastCheckAt)
             .set(PageEntity::nextCheckAt, bookmark.nextCheckAt)

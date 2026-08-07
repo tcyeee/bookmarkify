@@ -18,11 +18,5 @@ class AdminBookmarkLivenessConfigController(
 
     @PostMapping("/save")
     fun save(@RequestBody params: BookmarkLivenessConfigUpdateParams): BookmarkLivenessConfigVO =
-        BookmarkLivenessConfigVO(
-            bookmarkLivenessConfigService.updateConfig(
-                params.activeCheckIntervalHours,
-                params.abnormalCheckIntervalHours,
-                params.contentRefreshIntervalDays,
-            )
-        )
+        BookmarkLivenessConfigVO(bookmarkLivenessConfigService.updateConfig(params.toValue()))
 }

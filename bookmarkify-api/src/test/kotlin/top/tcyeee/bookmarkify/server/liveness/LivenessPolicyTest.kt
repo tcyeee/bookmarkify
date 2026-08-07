@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.server.liveness
 
+import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import java.time.LocalDateTime
 import kotlin.test.Test
@@ -139,12 +140,15 @@ class LivenessPolicyTest {
 
     private val now: LocalDateTime = LocalDateTime.of(2026, 7, 30, 12, 0)
 
-    private fun nextCheck(outcome: PingOutcome, consecutiveFail: Int) = LivenessPolicy.nextCheckAt(
+    private fun nextCheck(
+        outcome: PingOutcome,
+        consecutiveFail: Int,
+        config: BookmarkLivenessConfigValue = BookmarkLivenessConfigValue(),
+    ) = LivenessPolicy.nextCheckAt(
         now = now,
         outcome = outcome,
         consecutiveFail = consecutiveFail,
-        activeIntervalHours = 168,
-        abnormalIntervalHours = 24,
+        config = config,
     )
 
     @Test
@@ -180,6 +184,93 @@ class LivenessPolicyTest {
     fun `失败次数异常为0时退化为基础间隔而不是崩掉`() {
         // 理论上 DEAD 一定伴随 fail>=1，但这里不该依赖调用方的纪律
         assertEquals(now.plusHours(24), nextCheck(PingOutcome.DEAD, 0))
+    }
+
+    @Test
+    fun `叠加倍数可配：取 3 时按三倍增长`() {
+        val config = BookmarkLivenessConfigValue(
+            abnormalCheckIntervalHours = 2,
+            abnormalBackoffMultiplier = 3,
+            abnormalMaxIntervalHours = 1000,
+        )
+        assertEquals(now.plusHours(2), nextCheck(PingOutcome.DEAD, 1, config))
+        assertEquals(now.plusHours(6), nextCheck(PingOutcome.DEAD, 2, config))
+        assertEquals(now.plusHours(18), nextCheck(PingOutcome.DEAD, 3, config))
+        assertEquals(now.plusHours(54), nextCheck(PingOutcome.DEAD, 4, config))
+    }
+
+    @Test
+    fun `叠加倍数取 1 即固定间隔，不退避`() {
+        val config = BookmarkLivenessConfigValue(
+            abnormalCheckIntervalHours = 6,
+            abnormalBackoffMultiplier = 1,
+            abnormalMaxIntervalHours = 384,
+        )
+        listOf(1, 2, 5, 9).forEach {
+            assertEquals(now.plusHours(6), nextCheck(PingOutcome.DEAD, it, config), "fail=$it")
+        }
+    }
+
+    @Test
+    fun `最长间隔封顶，且不因失败次数极大而溢出`() {
+        val config = BookmarkLivenessConfigValue(
+            abnormalCheckIntervalHours = 24,
+            abnormalBackoffMultiplier = 4,
+            abnormalMaxIntervalHours = 100,
+        )
+        assertEquals(now.plusHours(24), nextCheck(PingOutcome.DEAD, 1, config))
+        assertEquals(now.plusHours(96), nextCheck(PingOutcome.DEAD, 2, config))
+        // 第三次本该 384，被上限截到 100
+        assertEquals(now.plusHours(100), nextCheck(PingOutcome.DEAD, 3, config))
+        // 这条是真正的回归点：幂运算写法在这里会溢出成负数，算出一个过去的时间点，
+        // 那条记录会永久占据候选队列的队头把后面的全部饿死
+        assertEquals(now.plusHours(100), nextCheck(PingOutcome.DEAD, Int.MAX_VALUE, config))
+    }
+
+    @Test
+    fun `倍数为 1 时失败次数极大也立刻返回，不在巡检线程上空转`() {
+        val config = BookmarkLivenessConfigValue(
+            abnormalCheckIntervalHours = 6,
+            abnormalBackoffMultiplier = 1,
+            abnormalMaxIntervalHours = 384,
+        )
+        // 平坦曲线碰不到「触顶即返回」那道出口，没有这条快速返回就会空转 20 亿次
+        assertEquals(now.plusHours(6), nextCheck(PingOutcome.DEAD, Int.MAX_VALUE, config))
+    }
+
+    @Test
+    fun `上限配得比基数还小时退化为基数，而不是缩短到每小时重探`() {
+        val config = BookmarkLivenessConfigValue(
+            abnormalCheckIntervalHours = 24,
+            abnormalMaxIntervalHours = 1,
+        )
+        assertEquals(now.plusHours(24), nextCheck(PingOutcome.DEAD, 1, config))
+        assertEquals(now.plusHours(24), nextCheck(PingOutcome.DEAD, 5, config))
+    }
+
+    // ────── 判死的确认门槛 ──────
+
+    @Test
+    fun `连续三次失败才判失活`() {
+        assertFalse(LivenessPolicy.confirmsDead(consecutiveFail = 1, required = 3))
+        assertFalse(LivenessPolicy.confirmsDead(consecutiveFail = 2, required = 3))
+        assertTrue(LivenessPolicy.confirmsDead(consecutiveFail = 3, required = 3))
+        assertTrue(LivenessPolicy.confirmsDead(consecutiveFail = 7, required = 3))
+    }
+
+    @Test
+    fun `门槛为 0 或负数时退回单次判死，而不是永远判不了死`() {
+        listOf(0, -1).forEach {
+            assertTrue(LivenessPolicy.confirmsDead(consecutiveFail = 1, required = it), "required=$it")
+        }
+        // 还没有任何一次失败时仍然不判死
+        assertFalse(LivenessPolicy.confirmsDead(consecutiveFail = 0, required = 0))
+    }
+
+    @Test
+    fun `默认门槛必须小于归档阈值，否则失活状态永不出现`() {
+        // 归档先于判失活发生的话，「失活书签重试巡检」按 UNREACHABLE 选候选就永远选不到东西
+        assertTrue(BookmarkLivenessConfigValue().deadConfirmFailures < LivenessPolicy.ARCHIVE_AFTER_FAILURES)
     }
 
     @Test
