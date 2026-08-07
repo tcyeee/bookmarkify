@@ -4,7 +4,6 @@ import cn.hutool.core.bean.BeanUtil
 import cn.hutool.core.util.IdUtil
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
-import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.AiCallScene
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
@@ -31,25 +30,8 @@ data class AdminGridConfigVO(
     @field:Schema(description = "列配置(宽度/隐藏/排序)") val storeData: Any? = null,
 )
 
-data class BookmarkLivenessConfigVO(
-    @field:Schema(description = "已激活书签检测频率(小时)") val activeCheckIntervalHours: Int,
-    @field:Schema(description = "异常书签的初次重试间隔(小时)") val abnormalCheckIntervalHours: Int,
-    @field:Schema(description = "重试间隔的叠加倍数，1 表示固定间隔不退避") val abnormalBackoffMultiplier: Int,
-    @field:Schema(description = "最长重试间隔(小时)") val abnormalMaxIntervalHours: Int,
-    @field:Schema(description = "连续多少次探测失败才判定失活") val deadConfirmFailures: Int,
-    @field:Schema(description = "内容重新抓取间隔(天)") val contentRefreshIntervalDays: Int,
-    @field:Schema(description = "失活网站最大重试次数，到达后不再巡检") val maxRetryFailures: Int,
-) {
-    constructor(value: BookmarkLivenessConfigValue) : this(
-        activeCheckIntervalHours = value.activeCheckIntervalHours,
-        abnormalCheckIntervalHours = value.abnormalCheckIntervalHours,
-        abnormalBackoffMultiplier = value.abnormalBackoffMultiplier,
-        abnormalMaxIntervalHours = value.abnormalMaxIntervalHours,
-        deadConfirmFailures = value.deadConfirmFailures,
-        contentRefreshIntervalDays = value.contentRefreshIntervalDays,
-        maxRetryFailures = value.maxRetryFailures,
-    )
-}
+// 书签巡检配置的出参直接用 BookmarkLivenessConfigValue —— 纯 admin 端点，没有要藏的字段，
+// 单独一份 VO 只是把每个字段再抄一遍，外加一份漏一行也不报错的手写映射。
 
 data class BookmarkShow(
     @field:Schema(description = "关联书签ID") var pageId: String? = null,
@@ -576,6 +558,32 @@ data class ScrapperCallLogVO(
         BeanUtil.copyProperties(entity, this)
     }
 }
+
+/**
+ * 系统配置的一次变更。
+ *
+ * [changes] 是服务端算好的逐字段差异，不是让前端自己去比两份 JSON：一次保存提交的是整份配置，
+ * 而人真正想知道的是「这次动了哪一项」。整份原文仍然一并下发（[oldValue] / [newValue]），
+ * 供差异不够用时兜底 —— 比如配置类改过字段名，此时逐字段比对会把它显示成一删一增。
+ */
+data class ConfigChangeLogVO(
+    @field:Schema(description = "记录ID") val id: String,
+    @field:Schema(description = "配置键") val configKey: String,
+    @field:Schema(description = "本次真正变化的字段") val changes: List<ConfigFieldChangeVO>,
+    @field:Schema(description = "是否该组配置的首次写入(此前库中没有这一行)") val initial: Boolean,
+    @field:Schema(description = "改动前整份JSON") val oldValue: String? = null,
+    @field:Schema(description = "改动后整份JSON") val newValue: String,
+    @field:Schema(description = "操作管理员ID") val operatorId: String? = null,
+    @field:Schema(description = "操作当时的管理员昵称") val operatorName: String? = null,
+    @field:Schema(description = "发生时间") val createTime: LocalDateTime,
+)
+
+/** 一个字段的前后取值；[oldValue] 为 null 且 [initial] 时表示这一项此前不存在 */
+data class ConfigFieldChangeVO(
+    @field:Schema(description = "字段名(配置类的属性名)") val field: String,
+    @field:Schema(description = "旧值(JSON 标量的字符串形式)") val oldValue: String? = null,
+    @field:Schema(description = "新值") val newValue: String? = null,
+)
 
 /** 管理后台展示的第三方 AI 调用日志条目 */
 data class AiCallLogVO(

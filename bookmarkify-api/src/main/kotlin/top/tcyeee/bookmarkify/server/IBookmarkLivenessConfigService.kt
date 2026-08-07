@@ -3,7 +3,12 @@ package top.tcyeee.bookmarkify.server
 import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
 
 interface IBookmarkLivenessConfigService {
-    /** 查询全局书签活性检查频率配置，不存在时返回默认值 */
+    /**
+     * 查询全局书签活性检查频率配置，不存在或库中值不可用时返回默认值。
+     *
+     * 走进程内缓存（见 [top.tcyeee.bookmarkify.server.config.JsonConfigAccessor]），
+     * 逐条调用是安全的，不必再为了省查询把配置一层层往下传。
+     */
     fun getConfig(): BookmarkLivenessConfigValue
 
     /**

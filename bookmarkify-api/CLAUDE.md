@@ -171,7 +171,24 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 | `sweep_log` | One row per **sweep round** — candidates/backlog/outcome counts/deferred/breaker reason. The sweep's only SLI; see "Liveness sweeps" |
 | `ai_call_log` | One row per DeepSeek call, **including request/response bodies** — see below |
 | `system_config` | Generic key-value config (JSON), e.g. the liveness sweep intervals |
+| `config_change_log` | One row per write to `system_config` — key, full old/new JSON, operator id + name snapshot. Not purged (writes are monthly) |
 | `category` / `page_category` | Category dictionary + bookmark↔category links |
+
+### Adding a group of admin-tunable settings
+
+Everything in `system_config` goes through `JsonConfigAccessor<T>` (`server/config/`): one key → one JSON blob → one typed config object. A new group needs exactly three things — a data class, `fallback()`, `validate()` — plus a 10-line controller. Do **not** hand-roll another `getValue(key) → readValue → runCatching` service; three rules are baked into the accessor and each one is invisible when violated:
+
+- **Every field must have a default.** API and admin deploy on separate path-filtered pipelines, so a version-skew window is guaranteed. API ships first → the older admin bundle POSTs JSON without the new field → without a default, Jackson fails and the settings page cannot save *at all* during that window. Defaults also backfill fields absent from older stored rows.
+- **`get()` is cached in-process** (`AtomicReference`, refreshed by `update()`), so callers may read per-record. This deliberately replaced a "read once per sweep round and thread it down through the call chain" convention: the compiler never enforced it, and violating it just meant a few hundred extra `system_config` round-trips with no symptom. **The cache is per-JVM** — going multi-instance means adding Redis invalidation here, and only here.
+- **`validate()` runs on read too**, falling back to defaults (+`warn`) when the stored value violates it. Cross-field invariants are the whole reason config validation exists, and `system_config` is a table someone can edit with psql; validating writes only means a hand-edited value goes live silently, surfacing as "this status never occurs" rather than as an error.
+
+- **Every write is audited into `config_change_log`**, from inside `update()` — full old and new JSON, plus the admin's id and a snapshot of their nickname. Old value is re-read from the database rather than taken from the cache: the cache may be holding a fallback (stored value unparseable or invariant-violating), and the audit answers "what was this row", not "what was the process using". The insert is wrapped in `runCatching` (a `warn`, never a failed save), which is also what lets the table be created after the API ships — at the cost of losing that window's evidence.
+
+One config group = **one** class. The wire types are the stored type: `BookmarkLivenessConfigValue` is the DTO, the request body and the response. A separate VO/Params pair buys nothing on an admin-only endpoint where the fields are identical, and costs a hand-written mapping in which a missing line does not fail — it just pins that field to its default forever (the same silent-default trap as `BeanUtil.copyProperties`, see root `CLAUDE.md`).
+
+The admin reads the audit at `POST /admin/config-change-log/all` (系统管理 › 系统配置 › 变更记录). The per-field diff is computed server-side by `ConfigDiff` — a save submits the *whole* config, so without it every row reads as "everything changed"; the union of top-level keys is compared, so a field added or removed by a release still shows up as a change. Raw old/new JSON ships alongside it for when the diff is not enough.
+
+Covered by `JsonConfigAccessorTest` and `ConfigDiffTest`.
 
 ### DeepSeek calls go through one door
 

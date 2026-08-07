@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.core.conditions.Wrapper
 import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.config.result.PageBean
-import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.AiCallScene
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
@@ -33,32 +32,8 @@ data class AdminGridConfigSaveParams(
     @field:Schema(description = "列配置(vxe-table CustomStoreData)") val storeData: Any? = null,
 )
 
-/**
- * 后三项带默认值，与 [BookmarkLivenessConfigValue] 的默认值一致。
- *
- * 不是图省事：API 与后台是两条独立的部署流水线（各自按路径过滤触发），必然存在一段版本错配窗口。
- * API 先上线时，旧的后台包提交的 JSON 里没有这三个字段——没有默认值的话 Jackson 会直接反序列化
- * 失败，那段窗口里巡检配置页**一次都保存不了**。给了默认值，旧后台提交的就是"这三项维持默认"。
- */
-data class BookmarkLivenessConfigUpdateParams(
-    @field:Schema(description = "已激活书签检测频率(小时)") val activeCheckIntervalHours: Int,
-    @field:Schema(description = "异常书签的初次重试间隔(小时)") val abnormalCheckIntervalHours: Int,
-    @field:Schema(description = "重试间隔的叠加倍数，1 表示固定间隔不退避") val abnormalBackoffMultiplier: Int = 2,
-    @field:Schema(description = "最长重试间隔(小时)") val abnormalMaxIntervalHours: Int = 384,
-    @field:Schema(description = "连续多少次探测失败才判定失活") val deadConfirmFailures: Int = 3,
-    @field:Schema(description = "内容重新抓取间隔(天)") val contentRefreshIntervalDays: Int,
-    @field:Schema(description = "失活网站最大重试次数，到达后不再巡检") val maxRetryFailures: Int = 10,
-) {
-    fun toValue() = BookmarkLivenessConfigValue(
-        activeCheckIntervalHours = activeCheckIntervalHours,
-        abnormalCheckIntervalHours = abnormalCheckIntervalHours,
-        abnormalBackoffMultiplier = abnormalBackoffMultiplier,
-        abnormalMaxIntervalHours = abnormalMaxIntervalHours,
-        deadConfirmFailures = deadConfirmFailures,
-        contentRefreshIntervalDays = contentRefreshIntervalDays,
-        maxRetryFailures = maxRetryFailures,
-    )
-}
+// 书签巡检配置的入参直接用 BookmarkLivenessConfigValue —— 它与出参、与存库的结构完全一致，
+// 单独一份 Params 只是把每个字段再抄一遍。字段默认值的部署理由搬去了那个类的 KDoc。
 
 data class BackSettingParams(
     @field:Schema(description = "背景类型：GRADIENT / IMAGE") val type: BackgroundType,
@@ -231,6 +206,17 @@ data class ScrapperCallLogSearchParams(
         }
         success?.let { query.eq(ScrapperCallLogEntity::success, it) }
         return query.orderByDesc(ScrapperCallLogEntity::createTime)
+    }
+}
+
+/** 管理后台系统配置变更记录查询入参 */
+data class ConfigChangeLogSearchParams(
+    @field:Schema(description = "只看某一组配置(system_config.config_key)") var configKey: String? = null,
+) : PageBean() {
+    fun toWrapper(): Wrapper<ConfigChangeLogEntity> {
+        val query = KtQueryWrapper(ConfigChangeLogEntity::class.java)
+        if (!configKey.isNullOrBlank()) query.eq(ConfigChangeLogEntity::configKey, configKey)
+        return query.orderByDesc(ConfigChangeLogEntity::createTime)
     }
 }
 
