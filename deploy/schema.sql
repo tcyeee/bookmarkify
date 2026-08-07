@@ -194,6 +194,21 @@ CREATE TABLE public.category (
 
 
 --
+-- Name: config_change_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.config_change_log (
+    id character varying(64) NOT NULL,
+    config_key character varying(128) NOT NULL,
+    old_value text,
+    new_value text NOT NULL,
+    operator_id character varying(64),
+    operator_name character varying(200),
+    create_time timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: layout_node_function; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -602,6 +617,14 @@ ALTER TABLE ONLY public.category
 
 
 --
+-- Name: config_change_log config_change_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.config_change_log
+    ADD CONSTRAINT config_change_log_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: layout_node_function layout_node_function_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -845,6 +868,13 @@ CREATE INDEX idx_bookmark_page ON public.bookmark USING btree (page_id) WHERE (d
 --
 
 CREATE INDEX idx_bookmark_uid_live ON public.bookmark USING btree (uid, page_id) WHERE (deleted = false);
+
+
+--
+-- Name: idx_config_change_log_key_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_config_change_log_key_time ON public.config_change_log USING btree (config_key, create_time DESC);
 
 
 --

@@ -20,6 +20,23 @@ export interface BookmarkLivenessConfigVO {
   maxRetryFailures: number;
 }
 
+/**
+ * 字段名 → 中文名与单位，给「变更记录」把 `maxRetryFailures: 10 → 5` 显示成人话用。
+ *
+ * 与设置页各行的 label 是同一套措辞，改一处时记得改另一处 —— 刻意没有让设置行也从这里取：
+ * 那会把每项配置的 label/单位/说明拆到两个文件里，而设置行的价值恰恰在于这些文案就写在控件旁边。
+ * 这里对不上只是变更记录里的措辞变旧，不影响任何行为。
+ */
+export const LIVENESS_FIELD_LABELS: Record<string, { label: string; unit: string }> = {
+  abnormalBackoffMultiplier: { label: '重试叠加倍数', unit: '倍' },
+  abnormalCheckIntervalHours: { label: '初次重试间隔', unit: '小时' },
+  abnormalMaxIntervalHours: { label: '最长重试间隔', unit: '小时' },
+  activeCheckIntervalHours: { label: '已激活书签的检测频率', unit: '小时' },
+  contentRefreshIntervalDays: { label: '内容重新抓取间隔', unit: '天' },
+  deadConfirmFailures: { label: '判定失活所需连续失败次数', unit: '次' },
+  maxRetryFailures: { label: '失活网站最大重试次数', unit: '次' },
+};
+
 /** 获取全局书签巡检配置 */
 export async function getBookmarkLivenessConfigApi() {
   return requestClient.post<BookmarkLivenessConfigVO>('/admin/bookmark-liveness-config');

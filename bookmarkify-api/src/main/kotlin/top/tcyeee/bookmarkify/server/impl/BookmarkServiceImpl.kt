@@ -1103,18 +1103,20 @@ class BookmarkServiceImpl(
      * 就停在旧值上，要么被每轮重复选中，要么再也不被选中。
      *
      * 刻意不碰 `updateTime` —— 那是「记录最近修改时间」，由真正改了内容的调用方自己写。
+     *
+     * 配置在这里自己读：[IBookmarkLivenessConfigService.getConfig] 走进程内缓存，逐条调用不再有代价。
+     * 此前它是一个「默认自己读、批量巡检必须显式传本轮那份」的参数——省的是几百次
+     * `system_config` 往返，代价是一条编译器不管、违反了也没有任何症状的口头约定。
      */
     private fun PageEntity.advanceSchedule(
         outcome: PingOutcome,
         contentRefreshed: Boolean = false,
-        // 默认自己去读：解析链路一次只处理一条书签，多一次查询无所谓。批量巡检必须显式传入
-        // 本轮已经读好的那份，否则每条记录都要多一次 system_config 往返
-        config: BookmarkLivenessConfigValue = bookmarkLivenessConfigService.getConfig(),
         // 本轮结论是否来自对**这个页面**的实际探测。站点层短路出来的 DEAD 是上一轮结论的复用，
         // 不是新证据 —— 它已经被排除在熔断样本之外（见 pingSweepExclusively），
         // 失败计数这一侧却一直漏着，理由完全相同
         directlyProbed: Boolean = true,
     ) {
+        val config = bookmarkLivenessConfigService.getConfig()
         val now = LocalDateTime.now()
         lastCheckAt = now
         if (contentRefreshed) lastParseAt = now
@@ -1227,7 +1229,7 @@ class BookmarkServiceImpl(
         val config = bookmarkLivenessConfigService.getConfig()
         updateTime = LocalDateTime.now()
         // 先推进调度：consecutiveFail 在这里 +1，下面的门槛判定要用推进之后的值
-        scheduleAfterParseFailure(config)
+        scheduleAfterParseFailure()
         if (!provenGood || LivenessPolicy.confirmsDead(consecutiveFail, config.deadConfirmFailures)) {
             isActivity = false
             parseStatus = ParseStatusEnum.UNREACHABLE
@@ -1250,8 +1252,7 @@ class BookmarkServiceImpl(
      * （[persistProbeResult]）负责。解析失败而 ping 仍然通得过，说明站点活着、只是我方抓不动，
      * 那种情况值得继续按最长退避间隔偶尔重试，而不是就地判死。
      */
-    private fun PageEntity.scheduleAfterParseFailure(config: BookmarkLivenessConfigValue) =
-        advanceSchedule(PingOutcome.DEAD, config = config)
+    private fun PageEntity.scheduleAfterParseFailure() = advanceSchedule(PingOutcome.DEAD)
 
     /**
      * 抓取结果落库前，把管理员手工锁定的字段还原成人工值。
@@ -1294,7 +1295,7 @@ class BookmarkServiceImpl(
         mayConfirmDeath: Boolean = false,
         evidence: ProbeEvidence = ProbeEvidence.DIRECT,
     ) {
-        bookmark.advanceSchedule(outcome, config = config, directlyProbed = evidence.directlyProbed)
+        bookmark.advanceSchedule(outcome, directlyProbed = evidence.directlyProbed)
         // 判死与归档看的是同一份「连续失败次数」，取法也必须一致：
         // 站点层短路的页面本轮没被探测，它的 consecutiveFail 已经不再增长（见 advanceSchedule），
         // 于是永远够不到任何阈值。这一支改由**域名**的连续失败次数供证 —— 那来自根地址的

@@ -1,35 +1,52 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
-import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
+import top.tcyeee.bookmarkify.mapper.ConfigChangeLogMapper
+import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.server.IBookmarkLivenessConfigService
 import top.tcyeee.bookmarkify.server.ISystemConfigService
+import top.tcyeee.bookmarkify.server.config.JsonConfigAccessor
 import top.tcyeee.bookmarkify.server.liveness.LivenessPolicy
+
+/**
+ * key 名是历史遗留：值里如今还装着归档阈值和内容重抓间隔，早已不只是 "frequency"。
+ * 改名要配一条数据迁移，收益仅是好看，暂不改。
+ */
+private const val CONFIG_KEY = "bookmark_liveness_check_frequency"
 
 @Service
 class BookmarkLivenessConfigServiceImpl(
-    private val systemConfigService: ISystemConfigService,
+    systemConfigService: ISystemConfigService,
     // Hutool 的 JSONUtil.toBean 走 JavaBean 反射(无参构造 + setter)，
     // 而这里的配置值是 Kotlin 全 val 的 data class，两者都没有，必须用带 kotlin module 的 Jackson。
-    private val objectMapper: ObjectMapper,
-) : IBookmarkLivenessConfigService {
+    objectMapper: ObjectMapper,
+    configChangeLogMapper: ConfigChangeLogMapper,
+    userMapper: UserMapper,
+) : IBookmarkLivenessConfigService,
+    JsonConfigAccessor<BookmarkLivenessConfigValue>(
+        CONFIG_KEY,
+        BookmarkLivenessConfigValue::class.java,
+        systemConfigService,
+        objectMapper,
+        configChangeLogMapper,
+        userMapper,
+    ) {
 
-    override fun getConfig(): BookmarkLivenessConfigValue {
-        val raw = systemConfigService.getValue(CONFIG_KEY) ?: return BookmarkLivenessConfigValue()
-        return runCatching { objectMapper.readValue<BookmarkLivenessConfigValue>(raw) }
-            .getOrElse {
-                // 配置读坏不该让整个管理页 500，退回默认值即可，管理员重新保存一次就能修正。
-                log.warn("[getConfig] 解析书签活性检查配置失败, 使用默认值: raw=$raw, err=${it.message}")
-                BookmarkLivenessConfigValue()
-            }
-    }
+    override fun getConfig(): BookmarkLivenessConfigValue = get()
 
-    override fun updateConfig(value: BookmarkLivenessConfigValue): BookmarkLivenessConfigValue {
+    override fun updateConfig(value: BookmarkLivenessConfigValue): BookmarkLivenessConfigValue = update(value)
+
+    override fun fallback() = BookmarkLivenessConfigValue()
+
+    /**
+     * 单字段的下限之外，真正重要的是三条**跨字段**关系——它们是逐项控件在前端表达不了的那部分，
+     * 违反了也不会报错，只会让某个状态永远不出现。每条的后果写在对应分支上。
+     */
+    override fun validate(value: BookmarkLivenessConfigValue) {
         if (value.activeCheckIntervalHours < 1 || value.abnormalCheckIntervalHours < 1) {
             throw CommonException(ErrorType.E102, "检测频率必须大于等于 1 小时")
         }
@@ -74,11 +91,5 @@ class BookmarkLivenessConfigServiceImpl(
         if (value.contentRefreshIntervalDays * 24 < value.activeCheckIntervalHours) {
             throw CommonException(ErrorType.E102, "内容重新抓取间隔不能短于已激活书签检测频率")
         }
-        systemConfigService.setValue(CONFIG_KEY, objectMapper.writeValueAsString(value))
-        return value
-    }
-
-    companion object {
-        private const val CONFIG_KEY = "bookmark_liveness_check_frequency"
     }
 }
