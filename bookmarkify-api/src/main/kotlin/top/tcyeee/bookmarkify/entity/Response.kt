@@ -33,12 +33,18 @@ data class AdminGridConfigVO(
 
 data class BookmarkLivenessConfigVO(
     @field:Schema(description = "已激活书签检测频率(小时)") val activeCheckIntervalHours: Int,
-    @field:Schema(description = "异常书签检测频率(小时)") val abnormalCheckIntervalHours: Int,
+    @field:Schema(description = "异常书签的初次重试间隔(小时)") val abnormalCheckIntervalHours: Int,
+    @field:Schema(description = "重试间隔的叠加倍数，1 表示固定间隔不退避") val abnormalBackoffMultiplier: Int,
+    @field:Schema(description = "最长重试间隔(小时)") val abnormalMaxIntervalHours: Int,
+    @field:Schema(description = "连续多少次探测失败才判定失活") val deadConfirmFailures: Int,
     @field:Schema(description = "内容重新抓取间隔(天)") val contentRefreshIntervalDays: Int,
 ) {
     constructor(value: BookmarkLivenessConfigValue) : this(
         activeCheckIntervalHours = value.activeCheckIntervalHours,
         abnormalCheckIntervalHours = value.abnormalCheckIntervalHours,
+        abnormalBackoffMultiplier = value.abnormalBackoffMultiplier,
+        abnormalMaxIntervalHours = value.abnormalMaxIntervalHours,
+        deadConfirmFailures = value.deadConfirmFailures,
         contentRefreshIntervalDays = value.contentRefreshIntervalDays,
     )
 }
