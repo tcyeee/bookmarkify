@@ -270,13 +270,30 @@ class LivenessPolicyTest {
     @Test
     fun `默认门槛必须小于归档阈值，否则失活状态永不出现`() {
         // 归档先于判失活发生的话，「失活书签重试巡检」按 UNREACHABLE 选候选就永远选不到东西
-        assertTrue(BookmarkLivenessConfigValue().deadConfirmFailures < LivenessPolicy.ARCHIVE_AFTER_FAILURES)
+        val default = BookmarkLivenessConfigValue()
+        assertTrue(default.deadConfirmFailures < default.maxRetryFailures)
     }
 
     @Test
-    fun `归档阈值`() {
-        assertFalse(LivenessPolicy.shouldArchive(LivenessPolicy.ARCHIVE_AFTER_FAILURES - 1))
-        assertTrue(LivenessPolicy.shouldArchive(LivenessPolicy.ARCHIVE_AFTER_FAILURES))
+    fun `归档阈值来自配置`() {
+        assertFalse(LivenessPolicy.shouldArchive(consecutiveFail = 9, maxRetryFailures = 10))
+        assertTrue(LivenessPolicy.shouldArchive(consecutiveFail = 10, maxRetryFailures = 10))
+        // 管理员调小之后立刻生效，不需要发版
+        assertTrue(LivenessPolicy.shouldArchive(consecutiveFail = 3, maxRetryFailures = 3))
+        assertFalse(LivenessPolicy.shouldArchive(consecutiveFail = 2, maxRetryFailures = 3))
+    }
+
+    @Test
+    fun `配置坏掉时归档阈值取下限，而不是把整张表一轮归档`() {
+        // 归档没有自动撤销路径（唯一出口是有人重新添加该网址），所以一个 0 / 负数
+        // 绝不能被当真——那会让本轮每一条探测失败的记录当场归档
+        listOf(0, -1, 1).forEach { bad ->
+            assertFalse(
+                LivenessPolicy.shouldArchive(consecutiveFail = 1, maxRetryFailures = bad),
+                "maxRetryFailures=$bad 时单次失败不该归档",
+            )
+        }
+        assertTrue(LivenessPolicy.shouldArchive(consecutiveFail = 2, maxRetryFailures = 0))
     }
 
     // ────── 域名级活性：防的是"局部证据推出全局结论" ──────

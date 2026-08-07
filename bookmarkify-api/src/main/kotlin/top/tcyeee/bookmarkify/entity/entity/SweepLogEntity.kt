@@ -23,7 +23,13 @@ import java.time.LocalDateTime
 @TableName("sweep_log")
 data class SweepLogEntity(
     @TableId val id: String = IdUtil.fastUUID(),
-    /** 哪个巡检任务（retryUnreachableBookmarks / livenessCheckStaleBookmarks / reviveArchivedBookmarks） */
+    /**
+     * 哪个巡检任务（retryUnreachableBookmarks / livenessCheckStaleBookmarks）。
+     *
+     * 历史数据里还会出现 `reviveArchivedBookmarks`——那条每天一轮的归档复活探测已于
+     * 2026-08-07 移除（归档改为终态，出口换成「有用户重新添加该网址」）。旧行仍要能正常展示，
+     * 所以后台的标签映射保留了它。
+     */
     val taskLabel: String,
     /** 本轮实际处理的候选数（已按 LIMIT 截断、已过滤掉非域名类型） */
     val candidates: Int,

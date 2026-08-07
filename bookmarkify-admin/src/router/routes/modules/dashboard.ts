@@ -49,15 +49,6 @@ const routes: RouteRecordRaw[] = [
           title: '用户自定义书签集',
         },
       },
-      {
-        name: 'BookmarkPingLog',
-        path: '/bookmark/ping-log',
-        component: () => import('#/views/bookmark/ping-log/index.vue'),
-        meta: {
-          icon: 'carbon:cloud-logging',
-          title: '书签检查配置',
-        },
-      },
     ],
   },
   {
@@ -165,6 +156,29 @@ const routes: RouteRecordRaw[] = [
         meta: {
           icon: 'carbon:workspace',
           title: '用户行为管理',
+        },
+      },
+    ],
+  },
+  {
+    meta: {
+      icon: 'lucide:settings',
+      // 放在最后：这里是调参的地方，不是日常干活的地方
+      order: 100,
+      title: '系统管理',
+    },
+    name: 'System',
+    path: '/system',
+    children: [
+      {
+        // 全局参数集中在一页，按设置块分组。此前它们借住在「书签管理 > 书签检查配置」下，
+        // 那条路由的 path 还是 /bookmark/ping-log —— 配置和巡检日志被当成了同一件事
+        name: 'SystemConfig',
+        path: '/system/config',
+        component: () => import('#/views/system/config/index.vue'),
+        meta: {
+          icon: 'carbon:settings-adjust',
+          title: '系统配置',
         },
       },
     ],

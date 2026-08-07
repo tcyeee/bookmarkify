@@ -48,13 +48,22 @@ class BookmarkLivenessConfigServiceImpl(
         if (value.abnormalMaxIntervalHours < value.abnormalCheckIntervalHours) {
             throw CommonException(ErrorType.E102, "最长重试间隔不能短于初次重试间隔")
         }
+        // 到达即彻底停止巡检，且没有任何定时任务能把它捞回来（唯一的出口是新用户添加该网址），
+        // 所以下限卡在 MIN_MAX_RETRY_FAILURES：配成 1 意味着第一次探测失败就永久放弃，
+        // 而单次失败连判失活都不够格（见 deadConfirmFailures），更不该够格判死刑
+        if (value.maxRetryFailures < LivenessPolicy.MIN_MAX_RETRY_FAILURES) {
+            throw CommonException(
+                ErrorType.E102,
+                "失活网站最大重试次数必须大于等于 ${LivenessPolicy.MIN_MAX_RETRY_FAILURES}"
+            )
+        }
         // 1 表示「探一次不通就判失活」，是退回旧行为，允许。
         // 上界必须小于归档阈值：配得比它还大，记录会在判失活之前先被归档，
         // 于是「失活」这个状态永远不会出现，而失活书签重试巡检正是按它选候选的
-        if (value.deadConfirmFailures < 1 || value.deadConfirmFailures >= LivenessPolicy.ARCHIVE_AFTER_FAILURES) {
+        if (value.deadConfirmFailures < 1 || value.deadConfirmFailures >= value.maxRetryFailures) {
             throw CommonException(
                 ErrorType.E102,
-                "判定失活的连续失败次数必须在 1 ~ ${LivenessPolicy.ARCHIVE_AFTER_FAILURES - 1} 之间"
+                "判定失活的连续失败次数必须在 1 ~ ${value.maxRetryFailures - 1} 之间(需小于最大重试次数)"
             )
         }
         // 重新抓取一次的代价远高于一次 HEAD 探测（可能拉起无头浏览器、下载图片、传 OSS），

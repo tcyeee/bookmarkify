@@ -186,6 +186,9 @@ class ApiServiceImpl(
             // 单列存不下全部，完整信息在 scrape_snapshot 里
             source = scrapeResponse.meta?.sources?.get("title")?.extractor?.name,
             cached = scrapeResponse.fetch.fromCache,
+            // 请求发的是 render.mode=AUTO，到底走了 Layer 1 / Layer 2 / 站点 API 只有 scrapper 知道。
+            // 这跟 source 是两件事：被反爬拦下后由站点 API 救回来的页面，source 仍可能是 html
+            layerUsed = scrapeResponse.fetch.layerUsed.name,
         )
         return scrapeResponse
     }
@@ -198,6 +201,7 @@ class ApiServiceImpl(
         httpStatus: Int?,
         source: String? = null,
         cached: Boolean? = null,
+        layerUsed: String? = null,
         errorMsg: String? = null,
     ) {
         runCatching {
@@ -209,6 +213,7 @@ class ApiServiceImpl(
                     httpStatus = httpStatus,
                     source = source,
                     cached = cached,
+                    layerUsed = layerUsed,
                     durationMs = System.currentTimeMillis() - startedAt,
                     errorMsg = errorMsg?.take(500),
                 )

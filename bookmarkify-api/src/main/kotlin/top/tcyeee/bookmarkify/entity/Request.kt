@@ -47,6 +47,7 @@ data class BookmarkLivenessConfigUpdateParams(
     @field:Schema(description = "最长重试间隔(小时)") val abnormalMaxIntervalHours: Int = 384,
     @field:Schema(description = "连续多少次探测失败才判定失活") val deadConfirmFailures: Int = 3,
     @field:Schema(description = "内容重新抓取间隔(天)") val contentRefreshIntervalDays: Int,
+    @field:Schema(description = "失活网站最大重试次数，到达后不再巡检") val maxRetryFailures: Int = 10,
 ) {
     fun toValue() = BookmarkLivenessConfigValue(
         activeCheckIntervalHours = activeCheckIntervalHours,
@@ -55,6 +56,7 @@ data class BookmarkLivenessConfigUpdateParams(
         abnormalMaxIntervalHours = abnormalMaxIntervalHours,
         deadConfirmFailures = deadConfirmFailures,
         contentRefreshIntervalDays = contentRefreshIntervalDays,
+        maxRetryFailures = maxRetryFailures,
     )
 }
 

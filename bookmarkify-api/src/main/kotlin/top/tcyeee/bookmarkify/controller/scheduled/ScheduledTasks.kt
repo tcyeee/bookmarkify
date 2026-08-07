@@ -74,13 +74,10 @@ class ScheduledTasks(
     @Scheduled(cron = "0 0 * * * ?")
     fun livenessCheckStaleBookmarks() = bookmarkService.livenessCheckStaleBookmarks()
 
-    /**
-     * 放在凌晨 2 点：与两个整点/半点的小时级巡检彻底错开，且这批记录按定义已经两个多月
-     * 探不通，什么时候复活探测都不影响任何人。
-     */
-    @Description("每天凌晨 2 点复活探测已归档的书签：ping 通则重新抓取，让归档不再是没有出口的终态")
-    @Scheduled(cron = "0 0 2 * * ?")
-    fun reviveArchivedBookmarks() = bookmarkService.reviveArchivedBookmarks()
+    // 「每天凌晨 2 点复活探测已归档书签」这条任务已移除。归档现在是终态：它由管理员配置的
+    // 「失活网站最大重试次数」触发，到达即彻底停止巡检。出口改为按需——有新用户添加该网址时
+    // 就地重置重试次数并重新检查（BookmarkServiceImpl.reviveOnAdd）。定时复活的成本是永久的
+    // （再也不会回来的域名每 30 天照样吃一次探测和一个 LIMIT 名额），收益却随时间趋近于零。
 
     @Description("每天凌晨 3 点清理过期的活性探测日志，避免这张只增不减的表无限膨胀")
     @Scheduled(cron = "0 0 3 * * ?")

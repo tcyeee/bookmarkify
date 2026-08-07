@@ -13,6 +13,11 @@ export interface BookmarkLivenessConfigVO {
   contentRefreshIntervalDays: number;
   /** 连续多少次探测失败才判定失活：单次失败可能只是我方出口抖了一下 */
   deadConfirmFailures: number;
+  /**
+   * 失活网站最大重试次数：连续失败到这个数就归档，**此后不再有任何定时任务碰它**。
+   * 唯一的复活入口是有用户重新添加该网址（就地清零重试次数并重新检查）。
+   */
+  maxRetryFailures: number;
 }
 
 /** 获取全局书签巡检配置 */

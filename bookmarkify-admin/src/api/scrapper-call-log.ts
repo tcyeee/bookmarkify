@@ -8,6 +8,8 @@ export interface ScrapperCallLogVO {
   httpStatus?: number | null;
   source?: string | null;
   cached?: boolean | null;
+  /** 实际抓取层：HTTP=Layer1 普通 HTTP，HEADLESS=Layer2 无头浏览器，SITE_API=站点官方 API 救援；失败时为空 */
+  layerUsed?: string | null;
   durationMs: number;
   errorMsg?: string | null;
   createTime: string;

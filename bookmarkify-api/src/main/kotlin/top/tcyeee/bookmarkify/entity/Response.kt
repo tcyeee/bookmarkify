@@ -38,6 +38,7 @@ data class BookmarkLivenessConfigVO(
     @field:Schema(description = "最长重试间隔(小时)") val abnormalMaxIntervalHours: Int,
     @field:Schema(description = "连续多少次探测失败才判定失活") val deadConfirmFailures: Int,
     @field:Schema(description = "内容重新抓取间隔(天)") val contentRefreshIntervalDays: Int,
+    @field:Schema(description = "失活网站最大重试次数，到达后不再巡检") val maxRetryFailures: Int,
 ) {
     constructor(value: BookmarkLivenessConfigValue) : this(
         activeCheckIntervalHours = value.activeCheckIntervalHours,
@@ -46,6 +47,7 @@ data class BookmarkLivenessConfigVO(
         abnormalMaxIntervalHours = value.abnormalMaxIntervalHours,
         deadConfirmFailures = value.deadConfirmFailures,
         contentRefreshIntervalDays = value.contentRefreshIntervalDays,
+        maxRetryFailures = value.maxRetryFailures,
     )
 }
 
@@ -560,6 +562,7 @@ data class ScrapperCallLogVO(
     @field:Schema(description = "HTTP状态码") var httpStatus: Int? = null,
     @field:Schema(description = "命中来源") var source: String? = null,
     @field:Schema(description = "是否命中scrapper缓存") var cached: Boolean? = null,
+    @field:Schema(description = "实际抓取层：HTTP/HEADLESS/SITE_API") var layerUsed: String? = null,
     @field:Schema(description = "耗时(ms)") var durationMs: Long = 0,
     @field:Schema(description = "错误信息") var errorMsg: String? = null,
     @field:Schema(description = "调用时间") var createTime: LocalDateTime = LocalDateTime.now(),
