@@ -57,6 +57,8 @@ export interface SweepHealthVO {
 export const SWEEP_TASK_LABELS: Record<string, string> = {
   livenessCheckStaleBookmarks: '存活巡检',
   retryUnreachableBookmarks: '失联重试',
+  // 该任务已于 2026-08-07 移除（归档改为终态，复活入口改为「有用户重新添加该网址」）。
+  // 保留映射是为了让历史 sweep_log 行仍能显示中文名，而不是退化成一个方法名。
   reviveArchivedBookmarks: '归档复活',
 };
 

@@ -17,17 +17,39 @@ pub struct ScrapeCache {
     headless_futile: Cache<String, ()>,
 }
 
-/// 无头熔断的存活时间。
+/// 无头熔断的默认存活时间：24 小时。
 ///
 /// 比 60s 的 URL 负缓存长得多，因为两者防的不是一件事：负缓存防的是同一条 URL 被
 /// 反复重试，而这里防的是**同一个站点的成千上万条 URL 各自启动一次 Chrome**。B 站
 /// 一个账号下能有几百条 `/video/BVxxx`，全量重抓时若每条都试一次无头，在 1GB 的容器
 /// 里就是几百次 Chrome 启停 —— 站点拒的是我们这台机器，不是那条 URL，第一次就该
 /// 得出结论并记住它。
-const HEADLESS_FUTILE_TTL_SECS: u64 = 900;
+///
+/// ## 为什么从 900s 提到 24h
+///
+/// 900s 是照着「一次全量重抓」的时间尺度定的，而线上真实的重复请求**不是**那个形态。
+/// 2026-08-07 查生产 `scrapper_call_log`（449 次调用 / 249 个 URL）：重复调用几乎全部
+/// 由 API 侧的定时巡检驱动，`retryUnreachableBookmarks` 每小时半点一轮、
+/// `livenessCheckStaleBookmarks` 每小时整点一轮，同一个 host 的重试间隔是**小时级**的。
+/// 15 分钟的熔断在这个节奏下每次都已经过期，等于不存在：`console.cloud.tencent.com`
+/// 7 次调用 7 次失败、每次平均 28.6s，全部耗在一个必然打不开的登录墙 SPA 上。
+///
+/// 24h 覆盖住所有小时级巡检，同时保证站点恢复后最多一天就会被重新尝试。仍然只在内存里，
+/// 容器重启即清空 —— 那正好充当一个手动的复位手段。
+const DEFAULT_HEADLESS_FUTILE_TTL_SECS: u64 = 86_400;
+
+/// 熔断 TTL 必须覆盖住调用方的巡检周期，否则它每次都已经过期，等于不存在。
+///
+/// 编译期断言而不是单元测试：这是一条关于**默认常量取值**的约束，测试里写成 `assert!`
+/// 会被 clippy 认出是恒真表达式，而它真正该拦的是有人日后把这个数字改小 —— 那应该
+/// 编译不过，而不是等到某次跑测试才发现。
+const _: () = assert!(
+    DEFAULT_HEADLESS_FUTILE_TTL_SECS >= 3600,
+    "默认熔断 TTL 必须覆盖住小时级巡检，否则同一个 host 每小时都要再启一次 Chrome"
+);
 
 impl ScrapeCache {
-    /// 创建一个新的 `ScrapeCache` 实例。
+    /// 创建一个新的 `ScrapeCache` 实例，无头熔断取 [`DEFAULT_HEADLESS_FUTILE_TTL_SECS`]。
     ///
     /// # 参数
     /// - `ttl_secs`：缓存条目的存活时间（秒）。超过该时间后条目自动失效。
@@ -44,11 +66,27 @@ impl ScrapeCache {
                 .max_capacity(1_000)
                 .time_to_live(Duration::from_secs(60))
                 .build(),
-            headless_futile: Cache::builder()
-                .max_capacity(1_000)
-                .time_to_live(Duration::from_secs(HEADLESS_FUTILE_TTL_SECS))
-                .build(),
+            headless_futile: Self::build_futile(DEFAULT_HEADLESS_FUTILE_TTL_SECS),
         }
+    }
+
+    /// 覆盖无头熔断的 TTL（秒）。
+    ///
+    /// 做成 builder 而不是给 [`Self::new`] 加一个参数：熔断 TTL 该配多长，取决于**调用方的
+    /// 巡检节奏**（见 [`DEFAULT_HEADLESS_FUTILE_TTL_SECS`]），与抓取结果缓存的时效性是两件
+    /// 无关的事，两个同类型的 `u64` 挤在一个参数列表里迟早会被传反 —— 而传反了不会报错，
+    /// 只会让熔断静默失效。
+    #[must_use]
+    pub fn with_headless_futile_ttl(mut self, secs: u64) -> Self {
+        self.headless_futile = Self::build_futile(secs);
+        self
+    }
+
+    fn build_futile(secs: u64) -> Cache<String, ()> {
+        Cache::builder()
+            .max_capacity(1_000)
+            .time_to_live(Duration::from_secs(secs))
+            .build()
     }
 
     /// 查询指定 URL 的缓存结果。
@@ -276,6 +314,17 @@ mod tests {
                 .is_headless_futile("http://www.bilibili.com/video/BV1")
                 .await
         );
+    }
+
+    /// 熔断 TTL 得是**可配的**，才谈得上按部署的巡检节奏去调。
+    ///
+    /// 默认值本身的下限由文件顶部的编译期断言把守。这里管的是另一半：builder 真的把
+    /// 那个值接进去了 —— 传参没接上不会报错，只会让熔断静默退回默认值。
+    #[tokio::test]
+    async fn headless_futile_ttl_is_configurable() {
+        let cache = ScrapeCache::new(3600).with_headless_futile_ttl(1);
+        cache.mark_headless_futile("https://example.com/a").await;
+        assert!(cache.is_headless_futile("https://example.com/b").await);
     }
 
     /// 要不要截图是**产物形态**的差异，不能共用一个键。

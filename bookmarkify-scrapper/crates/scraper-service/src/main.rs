@@ -87,8 +87,16 @@ async fn main() {
     let timeout_secs: u64 = env_or("REQUEST_TIMEOUT_SECS", 10);
     let headless_timeout_secs: u64 = env_or("HEADLESS_TIMEOUT_SECS", 30);
     let headless_idle_wait_secs: u64 = env_or("HEADLESS_IDLE_WAIT_SECS", 10);
-    let cache_ttl_secs: u64 = env_or("CACHE_TTL_SECS", 3600);
-    let cache = Arc::new(ScrapeCache::new(cache_ttl_secs));
+    // 默认 6h 而不是 1h：线上的重复请求几乎全部由 API 侧的**小时级**定时巡检驱动
+    // （整点一轮活性巡检、半点一轮失活重试），1h 的 TTL 在这个节奏下每次都刚好过期。
+    // 2026-08-07 查生产 scrapper_call_log：449 次调用只覆盖 249 个 URL，即 200 次是重复抓取，
+    // 而缓存命中只有 2 次（0.4%）—— 这个缓存当时等于不存在，只在占内存。
+    // 上调不影响新鲜度：内容重新抓取的周期是 30 天，一份 6 小时前的结果与刚抓的没有区别。
+    let cache_ttl_secs: u64 = env_or("CACHE_TTL_SECS", 21_600);
+    let headless_futile_ttl_secs: u64 = env_or("HEADLESS_FUTILE_TTL_SECS", 86_400);
+    let cache = Arc::new(
+        ScrapeCache::new(cache_ttl_secs).with_headless_futile_ttl(headless_futile_ttl_secs),
+    );
     let port: u16 = env_or("PORT", 3000);
 
     if headless_idle_wait_secs >= headless_timeout_secs {

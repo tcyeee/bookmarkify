@@ -103,5 +103,18 @@ class ParseLock(private val redis: StringRedisTemplate) {
          * 重复 ping、重复写日志。锁走 Redis 而不是进程内标志，顺带把多实例部署也挡住了。
          */
         fun sweep(taskLabel: String) = "sweep:$taskLabel"
+
+        /**
+         * 「这个页面截不出图」的抑制 key。
+         *
+         * 与 [dispatch] 同一个用法：**不主动释放，靠 TTL 退避**。截图是全系统最贵的一次调用
+         * （强制无头、对端 Chrome 全局串行、我方截图池单线程），而 `captureScreenshot` 的
+         * 跳过条件是「已经有截图资产」—— 失败时它什么也不写，于是这个条件对失败页面**永远
+         * 不成立**，每一轮内容重抓都要为同一个截不出图的页面再付一次 30s。
+         *
+         * 2026-08-07 查生产：297 个页面里只有 66 个有截图，其余每轮都会重试一次。
+         * 成功时调用方会主动释放它（此后由资产存在性接管），所以留下的必然是失败。
+         */
+        fun screenshot(pageId: String) = "screenshot:$pageId"
     }
 }

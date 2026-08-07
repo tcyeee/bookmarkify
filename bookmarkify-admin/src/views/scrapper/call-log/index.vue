@@ -116,6 +116,32 @@ function onFaviconError(event: Event) {
   if (img.src !== FALLBACK_FAVICON) img.src = FALLBACK_FAVICON;
 }
 
+/**
+ * 抓取层展示映射。这一列回答的是"页面是用什么手段弄回来的"，和"来源"列（元数据从哪个标签取的）
+ * 是两件事：被反爬拦下、由站点官方 API 救回来的页面，来源仍可能是 html。
+ */
+const LAYER_META: Record<string, { desc: string; text: string; type: "info" | "success" | "warning" }> = {
+  HEADLESS: {
+    desc: "Layer 2：普通 HTTP 抓不动（反爬 403/406/412），改用无头 Chrome 渲染后再解析",
+    text: "Layer 2",
+    type: "warning",
+  },
+  HTTP: {
+    desc: "Layer 1：普通 HTTP 抓取，绝大多数站点走这条路",
+    text: "Layer 1",
+    type: "success",
+  },
+  SITE_API: {
+    desc: "两层都被拒（拒的是机房出口 IP），元数据取自站点自己的公开 API；HTTP 状态码记的是页面那次被拒的码，不是 200",
+    text: "站点 API",
+    type: "info",
+  },
+};
+
+function layerMetaOf(row: ScrapperCallLogVO) {
+  return row.layerUsed ? LAYER_META[row.layerUsed] : undefined;
+}
+
 /** 来源枚举释义，鼠标悬浮在"来源"表头时展示 */
 const SOURCE_LEGEND: Array<[string, string]> = [
   ["og", "命中 Open Graph 标签(og:title/og:description/og:image)，优先级最高"],
@@ -143,6 +169,12 @@ const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
     { field: "url", title: "请求URL", minWidth: 240, showOverflow: "tooltip" },
     { field: "success", title: "结果", width: 90, slots: { default: "success" } },
     { field: "httpStatus", title: "HTTP状态", width: 100 },
+    {
+      field: "layerUsed",
+      title: "抓取层",
+      width: 100,
+      slots: { default: "layerUsed", header: "layerHeader" },
+    },
     { field: "source", title: "来源", width: 120, slots: { header: "sourceHeader" } },
     { field: "cached", title: "缓存命中", width: 100, slots: { default: "cached" } },
     { field: "durationMs", title: "耗时(ms)", width: 100 },
@@ -219,6 +251,33 @@ const [Grid, gridApi] = useVbenVxeGrid({
             />
             <span class="truncate">{{ row.urlHost }}</span>
           </span>
+        </template>
+        <template #layerHeader="{ column }">
+          <ElTooltip placement="top">
+            <template #content>
+              <div class="max-w-md space-y-1 text-xs leading-relaxed">
+                <div class="font-medium">实际抓取层(scrapper 请求发的是 AUTO，由它决定走哪层)</div>
+                <div v-for="[key, meta] in Object.entries(LAYER_META)" :key="key">
+                  <span class="font-mono">{{ meta.text }}</span>
+                  ：{{ meta.desc }}
+                </div>
+                <div class="text-gray-300">抓取失败时该列为空</div>
+              </div>
+            </template>
+            <span class="cursor-help underline decoration-dotted underline-offset-4">
+              {{ column.title }}
+            </span>
+          </ElTooltip>
+        </template>
+        <template #layerUsed="{ row }">
+          <ElTooltip v-if="layerMetaOf(row)" :content="layerMetaOf(row)!.desc" placement="top">
+            <ElTag :type="layerMetaOf(row)!.type" size="small">
+              {{ layerMetaOf(row)!.text }}
+            </ElTag>
+          </ElTooltip>
+          <!-- 认不出的枚举值原样显示，别让新增的抓取层在后台变成一个空格 -->
+          <span v-else-if="row.layerUsed">{{ row.layerUsed }}</span>
+          <span v-else>-</span>
         </template>
         <template #sourceHeader="{ column }">
           <ElTooltip placement="top">

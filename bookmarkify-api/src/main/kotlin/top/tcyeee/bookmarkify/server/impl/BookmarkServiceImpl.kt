@@ -676,46 +676,49 @@ class BookmarkServiceImpl(
     }
 
     /**
-     * 复活探测：每天捞一批 [ParseStatusEnum.ARCHIVED] 的记录，ping 通就重新抓取。
+     * 归档记录的**唯一**复活入口：有用户来添加这个网址，就地把重试次数清零并重新检查一次。
      *
-     * ## 为什么必须有这个任务
+     * ## 为什么出口是「有人添加」而不是「过了 N 天」
      *
-     * 归档此前是一个**没有出口的终态**：两个常规巡检分别只认 SUCCESS 与 UNREACHABLE，
-     * `checkAll` 只认 PENDING，于是一条记录一旦归档，除非管理员手动点刷新，否则永远
-     * 不会再被碰一次。而通往归档的证据链上是有可能出错的 —— 域名临时改了 DNS、
-     * 机房出口被目标站点拉黑一段时间、我方连续几轮判断失误，都足以把一个健在的站点
-     * 连同它下面所有页面送进去。让一个自动流程能把记录推进不可逆终态，却不给同样自动的
-     * 出口，这个不对称本身就是设计缺陷。
+     * 归档必须有出口——通往它的证据链是自动且可能出错的（域名临时改了 DNS、机房出口被目标站点
+     * 拉黑一段时间、我方连续几轮判断失误），让一个自动流程能把记录推进终态却不给出口，
+     * 这个不对称本身就是设计缺陷。但出口不必是定时的：此前那条每天一轮的复活探测，成本是
+     * **永久**的（一个再也不会回来的域名，每 30 天照样吃一次探测和一个 `LIMIT` 名额），
+     * 收益却随时间趋近于零——归档意味着已经连续失败到了配置的上限。
      *
-     * 频率取每天一次、批量取得很小：归档记录按定义是"两个多月都没通过"的，它们恢复
-     * 与否没有任何时效压力，这个任务的存在只是为了保证**存在一条回来的路**。
+     * 「现在有人正要收藏它」是强得多的复活信号，而且不花任何空转成本：没人添加的死站点
+     * 一次也不探，有人添加的立刻就探。
+     *
+     * 清零 [PageEntity.consecutiveFail] 是必需的，不能只改状态：归档阈值看的就是这个计数，
+     * 不清零的话下一轮巡检第一次失败就又满足 `shouldArchive`，等于压根没复活过。
+     * 状态改回 PENDING 而不是 UNREACHABLE，是为了让 [checkAll] 也能兜住它——这条记录
+     * 接下来要走的是完整解析链路，和一条全新书签没有区别。
      */
-    @Async(AsyncConfig.BOOKMARK_SWEEP_EXECUTOR)
-    override fun reviveArchivedBookmarks() {
-        val config = bookmarkLivenessConfigService.getConfig()
-        pingSweep(
-            taskLabel = "reviveArchivedBookmarks",
-            statusFilter = ParseStatusEnum.ARCHIVED,
-            configuredIntervalHours = (ARCHIVE_RECHECK_DAYS * 24).toInt(),
-            batchSize = REVIVE_ARCHIVED_BATCH_SIZE,
-            // 已手动认证的不重抓（与另两个巡检一致），但 ping 结果照样值得记录
-            triggeredParseOf = { bookmark, outcome -> outcome == PingOutcome.ALIVE && !bookmark.verifyFlag },
-        ) { bookmark, outcome, triggeredParse, _ ->
-            if (triggeredParse) {
-                // 抓取成功会走 markParseSucceeded 写回 SUCCESS，这条记录就此回到常规巡检的候选池
-                log.warn("[reviveArchivedBookmarks] 归档站点重新可达，触发重新抓取: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}")
-            } else {
-                // 仍然不通：只把游标推到下一个复活探测周期。**不走 persistProbeResult** ——
-                // 那会继续累加 consecutiveFail 并按退避曲线算 next_check_at，而归档记录的
-                // 退避早已到顶，再累加只是让这个数字无意义地涨下去
-                runCatching {
-                    ktUpdate().eq(PageEntity::id, bookmark.id)
-                        .set(PageEntity::lastCheckAt, LocalDateTime.now())
-                        .set(PageEntity::nextCheckAt, LocalDateTime.now().plusDays(ARCHIVE_RECHECK_DAYS))
-                        .update()
-                }.onFailure { log.warn("[reviveArchivedBookmarks] 游标推进失败: pageId=${bookmark.id}, err=${it.message}") }
-            }
+    private fun PageEntity.reviveOnAdd() {
+        if (parseStatus != ParseStatusEnum.ARCHIVED) return
+        log.warn("[reviveOnAdd] 归档记录被重新添加，重置重试次数并重新检查: pageId=$id, urlHost=$urlHost, 原连续失败=$consecutiveFail")
+        runCatching {
+            ktUpdate().eq(PageEntity::id, id)
+                .set(PageEntity::parseStatus, ParseStatusEnum.PENDING)
+                .set(PageEntity::consecutiveFail, 0)
+                // 立刻到期：万一下面的解析链路没跑成，巡检也能马上接手，而不是又等一个周期
+                .set(PageEntity::nextCheckAt, LocalDateTime.now())
+                .set(PageEntity::updateTime, LocalDateTime.now())
+                .update()
+        }.onFailure {
+            log.warn("[reviveOnAdd] 重置失败，本次按原状态继续: pageId=$id, err=${it.message}")
+            return
         }
+        // 内存里的这份也要跟上：调用方紧接着就用它算 needParse / needRecheckOnAdd
+        parseStatus = ParseStatusEnum.PENDING
+        consecutiveFail = 0
+        // updateTime 置空是**必需**的，不是顺手清理。复活之后这一趟必须真的重抓一次，
+        // 而 needParse = checkFlag() || needRecheckOnAdd()：后者对 PENDING 恒为 false
+        // （PENDING 归 checkFlag 管），前者又是拿 updateTime 和 24h 比。于是「刚归档不久
+        // 又被添加」这条路上两个条件同时不成立，用户拿到的是一个不会被解析的空磁贴 ——
+        // 而这恰恰是最该重抓的情形。置空即 checkFlag() 返回 true，语义上也正确：
+        // 这条记录刚被重置成「从没解析过」的状态
+        updateTime = null
     }
 
     /**
@@ -1299,7 +1302,8 @@ class BookmarkServiceImpl(
         // 停在候选池里，每轮吃掉 LIMIT 名额，把真正该复查的记录挤出去
         val failures =
             if (evidence.directlyProbed) bookmark.consecutiveFail else evidence.siteConsecutiveFail
-        val archived = outcome == PingOutcome.DEAD && LivenessPolicy.shouldArchive(failures)
+        val archived = outcome == PingOutcome.DEAD &&
+            LivenessPolicy.shouldArchive(failures, config.maxRetryFailures)
         val markUnreachable = mayConfirmDeath && outcome == PingOutcome.DEAD &&
             LivenessPolicy.confirmsDead(failures, config.deadConfirmFailures)
         val update = ktUpdate().eq(PageEntity::id, bookmark.id)
@@ -1307,8 +1311,10 @@ class BookmarkServiceImpl(
             .set(PageEntity::nextCheckAt, bookmark.nextCheckAt)
             .set(PageEntity::consecutiveFail, bookmark.consecutiveFail)
         if (archived) {
-            // 归档不是终点，只是退出常规巡检。游标推到复活探测的周期上，
-            // 由 reviveArchivedBookmarks 每天捞一次 —— 见那个方法的说明
+            // 归档是**终态**：没有任何定时任务再选它（三条巡检各自只认 SUCCESS / UNREACHABLE /
+            // PENDING）。游标仍然要往前推一格而不是留在过去 —— 它不再被查询用到，但一个停在
+            // 几个月前的 next_check_at 会让后台的「下次检查」列读起来像是巡检卡住了。
+            // 复活的唯一入口是新用户添加该网址，见 reviveOnAdd
             update.set(
                 PageEntity::nextCheckAt,
                 LocalDateTime.now().plusDays(ARCHIVE_RECHECK_DAYS)
@@ -1809,6 +1815,17 @@ class BookmarkServiceImpl(
             return
         }
 
+        // 上面那道「已有截图就跳过」的闸门只拦得住**成功过**的页面：截不出图时下面什么也不写，
+        // 于是它对失败页面永远不成立，每一轮内容重抓都要为同一个页面再付一次 30s 的无头。
+        // 2026-08-07 查生产，297 个页面里只有 66 个有截图 —— 其余每轮全都在重试。
+        // 这道锁把「截不出来」这件事本身记下来，取 TTL 而非永久：站点改版、反爬策略调整、
+        // 我方无头链路修好，都可能让原本截不出的页面变得可截，一个永久标记会把这些永远挡在门外。
+        val futileKey = ParseLock.screenshot(pageId)
+        val futileToken = parseLock.acquire(futileKey, SCREENSHOT_FUTILE_TTL) ?: run {
+            log.debug("[captureScreenshot] 近期已确认截不出图，跳过(省一次无头): pageId=$pageId")
+            return
+        }
+
         // BYPASS 是必需的：scrapper 的缓存键含"要不要截图"，但正常抓取那份结果可能仍在
         // 有效期内，DEFAULT 会命中它并原样返回一个没有截图的响应。
         // extractAssets = false：页面声明的那些图主抓取已经落过库，再探测一轮只是白跑几十次 HTTP。
@@ -1832,7 +1849,12 @@ class BookmarkServiceImpl(
         }
 
         runCatching { siteAssetWriter.upsertScreenshot(pageId, url, response) }
-            .onSuccess { if (it) log.debug("[captureScreenshot] 封面已更新: pageId=$pageId") }
+            // 成功之后抑制标记就该让位：此后由「已有截图资产」那道闸门接管，它更准确
+            // （直接看落库结果），也不会在 TTL 到期后凭空放一次无头进来
+            .onSuccess {
+                parseLock.release(futileKey, futileToken)
+                if (it) log.debug("[captureScreenshot] 封面已更新: pageId=$pageId")
+            }
             .onFailure { log.warn("[captureScreenshot] 截图落库失败: pageId=$pageId, err=${it.message}") }
     }
 
@@ -2463,7 +2485,10 @@ class BookmarkServiceImpl(
      */
     private fun getOrCreateByUrl(urlWrapper: BookmarkUrlWrapper): PageEntity {
         val site = siteService.getOrCreateByHost(urlWrapper.urlHost, urlWrapper.urlScheme)
-        getByUrl(site.id, urlWrapper)?.let { return it }
+        // 复活判定放在这里而不是 addOne 里：这个方法是「有人现在要这个网址」的**唯一**入口
+        // （单条添加、批量导入、相似站点收录、管理端按 URL 建档都经过它），放在任一个调用方
+        // 都会漏掉其余几条，而漏掉的表现是"从别的入口添加归档站点，永远还是灰的"
+        getByUrl(site.id, urlWrapper)?.let { return it.also { p -> p.reviveOnAdd() } }
         return try {
             PageEntity(urlWrapper, site.id).also { save(it) }
         } catch (e: DuplicateKeyException) {
@@ -2532,11 +2557,16 @@ class BookmarkServiceImpl(
         private const val DUE_CLAUSE = "$DUE_CURSOR <= {0}"
         private const val RETRY_UNREACHABLE_BATCH_SIZE = 50
         private const val LIVENESS_CHECK_BATCH_SIZE = 200
-        // 复活探测的批量。取得小是刻意的：这批记录按定义已经两个多月探不通，恢复与否
-        // 没有任何时效压力，这个任务存在只是为了保证「有一条回来的路」，不是为了跑得快
-        private const val REVIVE_ARCHIVED_BATCH_SIZE = 50
-        // 归档记录多久复活探测一次。与退避曲线的顶端(abnormal × 16 ≈ 16 天)同量级，
-        // 略长一点，表示它已经不属于常规巡检的节奏了
+        /**
+         * 「这个页面截不出图」的抑制时长。
+         *
+         * 取得比内容重抓周期（默认 30 天）略长一点：目标是让**每一轮**内容重抓都跳过它，
+         * 取成 30 天整会卡在边界上，两者一前一后错开一点点就又放进去一次无头。
+         */
+        private val SCREENSHOT_FUTILE_TTL: Duration = Duration.ofDays(35)
+        // 归档时把调度游标往前推的幅度。归档后没有任何巡检会再选中这条记录（复活的唯一入口是
+        // 新用户添加该网址），所以这个值不影响任何查询——它只是不让后台的「下次检查」列
+        // 停在一个几个月前的时间点上，那读起来像是巡检卡住了
         private const val ARCHIVE_RECHECK_DAYS = 30L
         private const val MAX_IMPORT_BOOKMARK_COUNT = 2000
         // addOne 判重时最多回捞多少条「同域名的导入占位」做规范化比对（见 assertNotPendingImport）。

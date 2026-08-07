@@ -134,11 +134,13 @@ object LivenessPolicy {
     private const val UNKNOWN_RETRY_HOURS = 1L
 
     /**
-     * 连续失败到这个次数就归档：按 24h 起步的退避曲线算，累计已经探测了两个多月。
-     * 到这一步与其继续每半个月 ping 一次，不如移出候选池、交给管理员批量清理——
-     * 否则一年之后候选池最前面全是尸体，配合 LIMIT 会把真正该复查的记录挤掉。
+     * [BookmarkLivenessConfigValue.maxRetryFailures] 的下限。
+     *
+     * 归档必须发生在判失活**之后**：`deadConfirmFailures` 的下限是 1，所以这个数至少要是 2，
+     * 否则记录会在被标成 `UNREACHABLE` 之前先归档，而 `retryUnreachableBookmarks` 正是按
+     * 那个状态选候选的 —— 「失活」这个状态永远不会出现，那条巡检也就永远找不到候选。
      */
-    const val ARCHIVE_AFTER_FAILURES = 10
+    const val MIN_MAX_RETRY_FAILURES = 2
 
     /**
      * 下一次巡检的时间点。
@@ -191,8 +193,15 @@ object LivenessPolicy {
         return hours.coerceAtMost(cap)
     }
 
-    /** 连续失败次数是否已经到了该归档的程度。 */
-    fun shouldArchive(consecutiveFail: Int): Boolean = consecutiveFail >= ARCHIVE_AFTER_FAILURES
+    /**
+     * 连续失败次数是否已经到了该归档的程度，也就是「重试到头了」。
+     *
+     * [maxRetryFailures] 来自管理员配置。低于 [MIN_MAX_RETRY_FAILURES] 时按下限处理而不是
+     * 按传入值处理：这个函数是在巡检线程上按行调用的，配置读坏（JSON 解析失败退回默认值、
+     * 或历史上写进过一个 0）不该让整张表在一轮之内集体归档 —— 那个动作没有自动的撤销路径。
+     */
+    fun shouldArchive(consecutiveFail: Int, maxRetryFailures: Int): Boolean =
+        consecutiveFail >= maxRetryFailures.coerceAtLeast(MIN_MAX_RETRY_FAILURES)
 
     // ────── 站点（域名）级活性 ──────
 

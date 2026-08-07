@@ -42,4 +42,26 @@ data class BookmarkLivenessConfigValue(
      * 站点改版、换 logo 的节奏本来就是月级的。
      */
     val contentRefreshIntervalDays: Int = 30,
+    /**
+     * 失活网站的最大重试次数：连续失败累计到这个数，记录转入
+     * [ARCHIVED][top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum.ARCHIVED]，
+     * **此后不再有任何定时任务碰它**。
+     *
+     * 默认 10 ——按 24h 起步的退避曲线算，到这一步累计已经探测了两个多月。
+     *
+     * ## 为什么这个数必须可配
+     *
+     * 它决定的是「多久之后放弃一个站点」，而这条线该画在哪里完全取决于数据量和抓取预算：
+     * 几百条书签时多探几轮无所谓，几十万条时候选池最前面全是尸体，配合 `LIMIT` 会把真正
+     * 该复查的记录挤掉。此前它是 `LivenessPolicy` 里的一个 `const val`，改一次要重新发版。
+     *
+     * ## 到达之后为什么是真的停下
+     *
+     * 归档过去不是终态：`reviveArchivedBookmarks` 每 30 天还会把它捞起来 ping 一次，理由是
+     * 「自动的入口必须配一个自动的出口」。但那个出口的成本是永久的（一个再也不会回来的域名，
+     * 每 30 天照样吃一次探测和一个 `LIMIT` 名额），收益却近乎为零。现在换成一个**按需**的出口：
+     * 有新用户添加这个网址，就地重置计数并重新检查（见 `BookmarkServiceImpl.reviveOnAdd`）。
+     * 「有人正要收藏它」比「过了 30 天」是强得多的复活信号，且不花任何空转成本。
+     */
+    val maxRetryFailures: Int = 10,
 )
