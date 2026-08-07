@@ -425,8 +425,17 @@ function registerFolderDnd() {
       const handle = el.querySelector<HTMLElement>('[data-folder-handle]')
       if (handle) {
         disposers.push(
+          // ⚠️ draggable 的 element 必须是卡片外层 div，不能直接传把手。把手是 <Icon> 渲染出的
+          // <svg>，而 SVGElement 不是 HTMLElement：`draggable="true"` 是 HTML 全局属性，浏览器
+          // 只对 HTML 元素把它映射成 -webkit-user-drag，挂在 <svg> 上完全不生效，dragstart 根本
+          // 不会触发；退一步说即便触发了，element adapter 里也有一句
+          // `if (!(target instanceof HTMLElement)) return` 会把它丢掉。表现是文件夹卡片一动不动，
+          // 且控制台无任何报错。BookmarkTreeRow 的 <a draggable="false"> 是同一个坑的另一半。
+          // 限定「只能从把手起拖」改用 dragHandle 参数（它走 contains() 判定，SVG 可以）；
+          // 顺带把拖拽预览从 16px 的小图标变成整张卡片。
           draggable({
-            element: handle,
+            element: el,
+            dragHandle: handle,
             getInitialData: () => ({ kind: 'folder-card', id }),
             onDragStart: () => (draggingFolderId.value = id),
             onDrop: resetFolderDrag,
@@ -473,10 +482,14 @@ function registerFolderMonitor() {
   })
 }
 
-// 同时盯住网格元素本身：搜索时整个网格被 v-else 卸载，清空搜索词后卡片 id 列表原封不动，
-// 只盯 id 列表的话不会重新注册，拖拽句柄全指向已经脱离文档的旧元素——表现为「搜过一次之后
-// 文件夹就拖不动了」。骨架屏/空态切回来也是同一条路径。
-watch([folderGridRef, () => folderCards.value.map((c) => c.id).join(',')], () => nextTick(registerFolderDnd))
+// 盯 folderColumns 而不是卡片 id 列表：卡片元素是「按列」渲染的，一张卡片换列就是一次
+// 卸载 + 挂载，注册就此指向脱离文档的旧元素。而换列的触发条件里，id 列表大多没变——
+// 窗口跨 md/xl 断点（列数变）、某个文件夹增删一条书签（贪心分栏的高度变）都会重排分栏，
+// 只盯 id 列表这两种情况都收不到通知，表现是「刚往文件夹里拖了个书签，文件夹就拖不动了」。
+// folderColumns 每次求值都返回新数组，任何一次重算都会触发，同时覆盖了 id 列表变化本身。
+// 网格元素本身也一并盯住：搜索时整个网格被 v-else 卸载，清空搜索词后卡片 id 列表原封不动，
+// 表现为「搜过一次之后文件夹就拖不动了」。骨架屏/空态切回来也是同一条路径。
+watch([folderGridRef, folderColumns], () => nextTick(registerFolderDnd))
 onMounted(() =>
   nextTick(() => {
     registerFolderDnd()
