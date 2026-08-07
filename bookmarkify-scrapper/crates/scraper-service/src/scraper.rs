@@ -665,9 +665,19 @@ pub async fn probe(url: &reqwest::Url, client: &reqwest::Client) -> ProbeOutcome
         if validate_url_scheme(&current).is_err() {
             return ProbeOutcome::forbidden(method, redirects);
         }
+        // ⚠️ [`validate_target_host`] 返回**两种**语义相反的错误，必须分流：
+        // `ForbiddenTarget` 是"我们拒绝去连"（解析到内网/回环地址），而 DNS 解析不出来是
+        // `FetchFailed`，属于"站点连不上"——恰恰是判死最硬的证据。把后者一并报成 blocked
+        // 会让 API 侧按 [`ProbeOutcome::blocked`] 的约定判成 UNKNOWN，而 NXDOMAIN 的站点
+        // 正是失联重试那条巡检的候选主体，于是整轮无结论过半、活性巡检被自己熔断。
+        // 2026-08-08 线上就是这么断的：21/30 无结论里有 15 条是 DNS 消失的域名。
         if let Err(e) = validate_target_host(&current).await {
-            tracing::info!(url = %current, ?e, "probe rejected: forbidden target");
-            return ProbeOutcome::forbidden(method, redirects);
+            if matches!(e, ScrapeError::ForbiddenTarget(_)) {
+                tracing::info!(url = %current, ?e, "probe rejected: forbidden target");
+                return ProbeOutcome::forbidden(method, redirects);
+            }
+            tracing::info!(url = %current, ?e, "probe failed: host unresolvable");
+            return ProbeOutcome::transport_failure(method, redirects);
         }
 
         let sec_fetch_site = match &prev_origin {
@@ -1188,5 +1198,38 @@ mod tests {
             matches!(r, Err(ScrapeError::ForbiddenTarget(_))),
             "got {r:?}"
         );
+    }
+
+    /// 域名解析不出来是**站点的事实**，不是我方的安全决策。
+    ///
+    /// 这两个错误在 `validate_target_host` 里本来就是分开的，但 `probe` 曾经把
+    /// `Err(_)` 一律折成 `blocked = true`。后果不在这个服务里：API 侧按约定把
+    /// `blocked` 判成 UNKNOWN，而"失联重试"那条巡检的候选主体恰好就是 NXDOMAIN 的
+    /// 死域名，于是整轮无结论过半，活性巡检每半小时把自己熔断一次，且因为熔断分支
+    /// 不推进 `next_check_at`，同一批候选永远重选——2026-08-08 线上就是这么断的。
+    #[tokio::test]
+    async fn probe_reports_unresolvable_host_as_transport_failure_not_blocked() {
+        let _env = crate::env_guard().await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        // `.invalid` 由 RFC 6761 保留，保证永远解析不出地址
+        let url = reqwest::Url::parse("https://gone.invalid/some/page").unwrap();
+        let outcome = probe(&url, &reqwest::Client::new()).await;
+        assert!(!outcome.reachable, "got {outcome:?}");
+        assert!(
+            !outcome.blocked,
+            "DNS 解析失败被报成 blocked，API 侧会判成 UNKNOWN 而不是 DEAD: {outcome:?}"
+        );
+    }
+
+    /// 另一半：真正的 SSRF 拒绝仍然必须是 `blocked`，否则这条修复就把安全决策
+    /// 泄露成了"站点挂了"，与上面那个测试正好是同一条界线的两侧。
+    #[tokio::test]
+    async fn probe_still_reports_private_address_as_blocked() {
+        let _env = crate::env_guard().await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        let url = reqwest::Url::parse("http://127.0.0.1:8080/").unwrap();
+        let outcome = probe(&url, &reqwest::Client::new()).await;
+        assert!(outcome.blocked, "got {outcome:?}");
+        assert!(!outcome.reachable, "got {outcome:?}");
     }
 }
