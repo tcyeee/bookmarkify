@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { ShareSearchParams, UserShareAdminVO } from "#/api/share";
 
-import { defineAsyncComponent, reactive } from "vue";
+import { defineAsyncComponent, reactive, ref } from "vue";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
@@ -10,24 +10,16 @@ import { ElMessage, ElMessageBox } from "element-plus";
 
 import { getAdminShareListApi, takeDownShareApi } from "#/api/share";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
+import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
+
+import ShareDetailDialog from "./ShareDetailDialog.vue";
+import { SHARE_STATUS_META, shareStatusMeta } from "./shareStatus";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
     import("element-plus/es/components/card/index"),
     import("element-plus/es/components/card/style/css"),
   ]).then(([res]) => res.ElCard),
-);
-const ElForm = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/form/index"),
-    import("element-plus/es/components/form/style/css"),
-  ]).then(([res]) => res.ElForm),
-);
-const ElFormItem = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/form/index"),
-    import("element-plus/es/components/form/style/css"),
-  ]).then(([res]) => res.ElFormItem),
 );
 const ElInput = defineAsyncComponent(() =>
   Promise.all([
@@ -74,6 +66,13 @@ const gridOptions: VxeGridProps<UserShareAdminVO> = {
     { field: "bookmarkCount", title: "书签数", width: 90 },
     { field: "status", title: "状态", width: 120, slots: { default: "status" } },
     {
+      field: "rejectReason",
+      title: "提示信息",
+      minWidth: 200,
+      showOverflow: "tooltip",
+      formatter: ({ cellValue }) => cellValue || "-",
+    },
+    {
       field: "expireTime",
       title: "过期时间",
       width: 180,
@@ -85,7 +84,8 @@ const gridOptions: VxeGridProps<UserShareAdminVO> = {
       width: 180,
       formatter: ({ cellValue }) => formatDateTime(cellValue),
     },
-    { title: "操作", width: 120, slots: { default: "actions" } },
+    // 操作列必须有 field：行点击要靠它把这一列排除在「打开详情」之外
+    { field: "rowActions", title: "操作", width: 120, slots: { default: "actions" } },
   ],
   toolbarConfig: { custom: true, refresh: true },
   pagerConfig: {},
@@ -104,16 +104,24 @@ const gridOptions: VxeGridProps<UserShareAdminVO> = {
   },
 };
 
-const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
+// ── 详情弹窗 ────────────────────────────────────────────────────────────────
+const detailVisible = ref(false);
+const detailRow = ref<null | UserShareAdminVO>(null);
 
-function handleSearch() {
-  gridApi.reload();
+function handleCellClick({ row, column }: { column: any; row: UserShareAdminVO }) {
+  if (column?.field === "rowActions") return;
+  detailRow.value = row;
+  detailVisible.value = true;
 }
-function handleReset() {
-  searchForm.uid = "";
-  searchForm.status = "";
-  gridApi.reload();
-}
+
+// 行点击必须走 gridEvents：Grid 包装组件的根节点是个 div，模板上写 @cell-click 只会
+// 作为原生监听落到那个 div 上（DOM 没有 cell-click 事件），内层 VxeGrid 收不到
+const [Grid, gridApi] = useVbenVxeGrid({
+  gridOptions,
+  gridEvents: { cellClick: handleCellClick },
+});
+
+const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
 
 async function handleTakeDown(row: UserShareAdminVO) {
   try {
@@ -127,6 +135,8 @@ async function handleTakeDown(row: UserShareAdminVO) {
   }
   await takeDownShareApi(row.id);
   ElMessage.success("已强制下架");
+  // 下架后弹窗里那份状态就过期了，直接关掉；重开一次拿到的是新状态
+  detailVisible.value = false;
   await gridApi.query();
 }
 </script>
@@ -139,35 +149,25 @@ async function handleTakeDown(row: UserShareAdminVO) {
           <span>用户自定义书签集</span>
         </div>
       </template>
-      <div class="mb-4">
-        <ElForm :inline="true" :model="searchForm">
-          <ElFormItem label="用户ID">
-            <ElInput v-model="searchForm.uid" placeholder="分享人用户ID" clearable />
-          </ElFormItem>
-          <ElFormItem label="状态">
-            <ElSelect v-model="searchForm.status" placeholder="全部状态" clearable style="width: 160px">
-              <ElOption label="正常" value="NORMAL" />
-              <ElOption label="到期下架" value="EXPIRED" />
-              <ElOption label="管理员下架" value="ADMIN_TAKEDOWN" />
-              <ElOption label="未通过审核" value="REVIEW_REJECTED" />
-            </ElSelect>
-          </ElFormItem>
-          <ElFormItem>
-            <ElButton type="primary" @click="handleSearch">搜索</ElButton>
-            <ElButton class="ml-2" @click="handleReset">重置</ElButton>
-          </ElFormItem>
-        </ElForm>
-      </div>
-      <Grid>
+      <FilterBar class="mb-4" @reset="reset">
+        <FilterItem label="用户ID" width="240px">
+          <ElInput v-model="searchForm.uid" placeholder="分享人用户ID" clearable />
+        </FilterItem>
+        <FilterItem label="状态">
+          <ElSelect v-model="searchForm.status" placeholder="全部状态" clearable>
+            <ElOption
+              v-for="[value, meta] in Object.entries(SHARE_STATUS_META)"
+              :key="value"
+              :label="meta.label"
+              :value="value" />
+          </ElSelect>
+        </FilterItem>
+      </FilterBar>
+      <Grid class="clickable-rows">
         <template #status="{ row }">
-          <ElTag v-if="row.status === 'NORMAL'" type="success" size="small">正常</ElTag>
-          <ElTag v-else-if="row.status === 'EXPIRED'" type="info" size="small">到期下架</ElTag>
-          <ElTag v-else-if="row.status === 'ADMIN_TAKEDOWN'" type="danger" size="small">管理员下架</ElTag>
-          <template v-else-if="row.status === 'REVIEW_REJECTED'">
-            <ElTag type="warning" size="small" :title="row.rejectReason || undefined">未通过审核</ElTag>
-            <div v-if="row.rejectReason" class="mt-1 text-xs text-gray-400">{{ row.rejectReason }}</div>
-          </template>
-          <ElTag v-else type="info" size="small">{{ row.status || "未知" }}</ElTag>
+          <ElTag :type="shareStatusMeta(row.status).type" size="small">
+            {{ shareStatusMeta(row.status).label }}
+          </ElTag>
         </template>
         <template #actions="{ row }">
           <ElButton
@@ -180,5 +180,14 @@ async function handleTakeDown(row: UserShareAdminVO) {
         </template>
       </Grid>
     </ElCard>
+
+    <ShareDetailDialog v-model="detailVisible" :row="detailRow" @takedown="handleTakeDown" />
   </Page>
 </template>
+
+<style scoped>
+/* 整行可点开详情，光标要说明这件事 —— 否则唯一能发现它的方法是乱点 */
+.clickable-rows :deep(.vxe-body--row) {
+  cursor: pointer;
+}
+</style>

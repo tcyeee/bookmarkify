@@ -56,6 +56,13 @@ enum class ErrorType(var msg: String) {
     // 数量异常时代表有人在探测，值得单独筛出来看
     E308("该网址指向内网地址，已拒绝访问"),
 
+    // 抓取目标不是域名(localhost / 127.0.0.1 / 裸 IP)，我方主动不去抓。
+    // 与 E308 分开：那是"解析到内网"的安全决策，这是"这个目标压根不是网站"的业务判断——
+    // 一个公网裸 IP 既不指向内网、也没有任何可抓的东西。
+    // 与 E304 分开：那是"站点打不开"(站点的事实)，这是"我们不去打开它"(我方的决定)，
+    // 混在一起会让这类书签被当成失联而反复重试。见 ScrapeTargetGuard
+    E309("该网址不是域名(本机或 IP 地址)，不做抓取"),
+
     /* 不提示,也不在前端报错的部分 */
     // 保留但**已无人抛出**：握手鉴权失败改为 return false + 401(AuthHandshakeInterceptor.reject)。
     // 从 beforeHandshake 抛异常会被 Spring 包成 HandshakeFailureException 冒到 DispatcherServlet

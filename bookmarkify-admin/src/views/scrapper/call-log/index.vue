@@ -8,8 +8,10 @@ import { formatDateTime } from "@vben/utils";
 
 import { getAdminScrapperCallLogListApi } from "#/api/scrapper-call-log";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
+import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
 
 import BookmarkDetailDialog from "#/views/bookmark/BookmarkDetailDialog.vue";
+import { isScrapableUrl, LINK_TYPE_REASON, linkTypeOfUrl } from "#/views/bookmark/linkType";
 import SweepBreakerAlert from "#/views/scrapper/SweepBreakerAlert.vue";
 
 import ScrapeResultDialog from "./ScrapeResultDialog.vue";
@@ -19,20 +21,6 @@ const ElCard = defineAsyncComponent(() =>
     import("element-plus/es/components/card/index"),
     import("element-plus/es/components/card/style/css"),
   ]).then(([res]) => res.ElCard)
-);
-
-const ElForm = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/form/index"),
-    import("element-plus/es/components/form/style/css"),
-  ]).then(([res]) => res.ElForm)
-);
-
-const ElFormItem = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/form/index"),
-    import("element-plus/es/components/form/style/css"),
-  ]).then(([res]) => res.ElFormItem)
 );
 
 const ElInput = defineAsyncComponent(() =>
@@ -87,8 +75,21 @@ const parseDialogVisible = ref(false);
 const parseUrl = ref("");
 
 function handleRetry(row: ScrapperCallLogVO) {
+  // 本机/IP 地址重试多少次都是同一个结果：后端与 scrapper 都会直接拒绝(E309 /
+  // FORBIDDEN_TARGET)。按钮已经禁用，这里再挡一道，防止有人从别处调进来
+  if (!canRetry(row)) return;
   parseUrl.value = row.url;
   parseDialogVisible.value = true;
+}
+
+/** 这条日志能不能重试：只有域名目标可以，本机/IP 目标重试必然再失败一次 */
+function canRetry(row: ScrapperCallLogVO) {
+  return isScrapableUrl(row.url);
+}
+
+/** 不可重试时的悬浮说明，直接告诉管理员为什么这条没得点 */
+function retryBlockedReason(row: ScrapperCallLogVO) {
+  return `${LINK_TYPE_REASON[linkTypeOfUrl(row.url)]}，我方不抓取这类地址`;
 }
 
 // ── 书签详情弹窗：日志表只存了抓过哪个地址，没有书签 ID，交给弹窗按域名+路径反查 ──
@@ -101,13 +102,21 @@ function handleCellClick({ row, column }: { row: ScrapperCallLogVO; column: any 
   detailVisible.value = true;
 }
 
-// 日志表未存 favicon，直接按域名取站点根目录的 favicon.ico，加载失败时换成兜底地球图标
+// 兜底地球图标。内联 data URI 而非引用文件，保证它自身永远不会再发一次请求
 const FALLBACK_FAVICON = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`
 )}`;
 
-function faviconOf(urlHost: string) {
-  return urlHost ? `https://${urlHost}/favicon.ico` : FALLBACK_FAVICON;
+/**
+ * 图标只认后端下发的 `faviconUrl`（我方 OSS 签名地址），拿不到就用本地兜底图。
+ *
+ * **不要**改回按域名拼 `https://${row.urlHost}/favicon.ico`。这个页面上失效域名的密度最高
+ * ——域名打不开才会有失败日志——那样等于让管理员的浏览器挨个去连一批连我们的抓取服务都
+ * 拒掉的站点：产品发出的请求不干净（管理员公网 IP 直接暴露给第三方），控制台还会被超时和
+ * 证书错误刷屏，把真正的报错埋掉。图标为空本身就是有效信息：我方从没抓到过这个站的图标。
+ */
+function faviconOf(row: ScrapperCallLogVO) {
+  return row.faviconUrl || FALLBACK_FAVICON;
 }
 
 function onFaviconError(event: Event) {
@@ -150,16 +159,6 @@ const SOURCE_LEGEND: Array<[string, string]> = [
   ["html", "以上均未命中，回退到 <title> 标签与 meta[name=description]"],
   ["headless", "普通 HTTP 抓取失败，由无头浏览器渲染后抓取，并附带页面截图"],
 ];
-
-function handleSearch() {
-  gridApi.reload();
-}
-
-function handleReset() {
-  searchForm.urlHost = "";
-  searchForm.success = undefined;
-  gridApi.reload();
-}
 
 const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
   id: "admin-scrapper-call-log",
@@ -211,6 +210,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions,
   gridEvents: { cellClick: handleCellClick },
 });
+
+const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
 </script>
 
 <template>
@@ -223,28 +224,22 @@ const [Grid, gridApi] = useVbenVxeGrid({
           <span>Scrapper 调用日志</span>
         </div>
       </template>
-      <div class="mb-4">
-        <ElForm :inline="true" :model="searchForm">
-          <ElFormItem label="域名">
-            <ElInput v-model="searchForm.urlHost" placeholder="urlHost 模糊搜索" clearable />
-          </ElFormItem>
-          <ElFormItem label="状态">
-            <ElSelect v-model="searchForm.success" placeholder="全部" clearable style="width: 120px">
-              <ElOption label="成功" :value="true" />
-              <ElOption label="失败" :value="false" />
-            </ElSelect>
-          </ElFormItem>
-          <ElFormItem>
-            <ElButton type="primary" @click="handleSearch">搜索</ElButton>
-            <ElButton class="ml-2" @click="handleReset">重置</ElButton>
-          </ElFormItem>
-        </ElForm>
-      </div>
+      <FilterBar class="mb-4" @reset="reset">
+        <FilterItem label="域名" width="240px">
+          <ElInput v-model="searchForm.urlHost" placeholder="urlHost 模糊匹配" clearable />
+        </FilterItem>
+        <FilterItem label="状态" width="120px">
+          <ElSelect v-model="searchForm.success" placeholder="全部" clearable>
+            <ElOption label="成功" :value="true" />
+            <ElOption label="失败" :value="false" />
+          </ElSelect>
+        </FilterItem>
+      </FilterBar>
       <Grid>
         <template #urlHost="{ row }">
           <span class="inline-flex items-center justify-end gap-1.5">
             <img
-              :src="faviconOf(row.urlHost)"
+              :src="faviconOf(row)"
               alt=""
               class="h-4 w-4 shrink-0 rounded-sm object-contain"
               @error="onFaviconError"
@@ -297,7 +292,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
           </ElTooltip>
         </template>
         <template #action="{ row }">
-          <ElButton v-if="!row.success" link type="primary" size="small" @click.stop="handleRetry(row)">
+          <ElTooltip v-if="!row.success && !canRetry(row)" :content="retryBlockedReason(row)" placement="top">
+            <span class="cursor-not-allowed text-xs text-gray-400">不重试</span>
+          </ElTooltip>
+          <ElButton v-else-if="!row.success" link type="primary" size="small" @click.stop="handleRetry(row)">
             重试
           </ElButton>
           <span v-else>-</span>

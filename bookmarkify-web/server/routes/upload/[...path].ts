@@ -8,7 +8,7 @@ import { existsSync } from 'fs'
  * 访问路径：/upload/avatar/xxx/xxx.jpg
  * 实际文件：项目根目录/upload/avatar/xxx/xxx.jpg
  * 
- * 生产环境使用外部文件服务：https://file.bookmarkify.cc
+ * 生产环境使用外部文件服务：https://cdn.bookmarkify.cc
  */
 export default defineEventHandler(async (event) => {
     // 仅在开发环境生效

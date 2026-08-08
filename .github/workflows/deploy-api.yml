@@ -115,6 +115,8 @@ jobs:
             OSS_ACCESS_KEY_ID=$OSS_ACCESS_KEY_ID
             OSS_ACCESS_KEY_SECRET=$OSS_ACCESS_KEY_SECRET
             OSS_BUCKET=$OSS_BUCKET
+            OSS_PROXY_DOMAIN=$OSS_PROXY_DOMAIN
+            OSS_PROXY_TOKEN=$OSS_PROXY_TOKEN
             BOOKMARKIFY_GITHUB_CLIENT_SECRET=$BOOKMARKIFY_GITHUB_CLIENT_SECRET
             BOOKMARKIFY_SCRAPPER_AUTH_TOKEN=$BOOKMARKIFY_SCRAPPER_AUTH_TOKEN
             EOF
@@ -157,6 +159,10 @@ jobs:
           OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
           OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+          # 自建缓存代理。两者都留空即关闭该特性，行为与改造前完全一致 —— 所以 secret 没配好
+          # 也不会把部署搞坏，只是省不到钱。
+          OSS_PROXY_DOMAIN: ${{ vars.OSS_PROXY_DOMAIN }}
+          OSS_PROXY_TOKEN: ${{ secrets.OSS_PROXY_TOKEN }}
           BOOKMARKIFY_GITHUB_CLIENT_SECRET: ${{ secrets.BOOKMARKIFY_GITHUB_CLIENT_SECRET }}
           # Shared secret sent as `Authorization: Bearer <token>` to bookmarkify-scrapper's
           # /scrape and /ping. Must match the scrapper container's SCRAPER_AUTH_TOKEN

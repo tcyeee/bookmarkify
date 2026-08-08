@@ -7,6 +7,7 @@ import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.OssObjectEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
+import top.tcyeee.bookmarkify.entity.entity.SiteEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
@@ -14,6 +15,7 @@ import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.mapper.PageMapper
 import top.tcyeee.bookmarkify.mapper.SiteAssetMapper
 import top.tcyeee.bookmarkify.mapper.SiteDisplayPrefMapper
+import top.tcyeee.bookmarkify.mapper.SiteMapper
 import top.tcyeee.bookmarkify.server.IOssObjectService
 import top.tcyeee.bookmarkify.utils.OssUtils
 
@@ -33,6 +35,7 @@ class SiteAssetResolver(
     private val siteAssetMapper: SiteAssetMapper,
     private val siteDisplayPrefMapper: SiteDisplayPrefMapper,
     private val bookmarkMapper: PageMapper,
+    private val siteMapper: SiteMapper,
     private val ossObjectService: IOssObjectService,
 ) {
 
@@ -112,9 +115,16 @@ class SiteAssetResolver(
         val ref = ledgerRow?.objectKey
             ?: asset.storageUrl?.takeIf { it.isNotBlank() }
             ?: asset.resolvedUrl.takeIf { it.isNotBlank() }
-        // 截图 key 按页面 URL 寻址、会被后续补抓覆盖，所以**不能**当不可变对象签长效链接。
+        // 可变性必须**逐对象**判，不能按"封面"这个用途一刀切。截图 key 按页面 URL 寻址、会被
+        // 后续补抓原地覆盖，确实不能签长效链接；但同样当封面用的 SOCIAL/OG 图是内容寻址的，
+        // 字节永不改变。以前这里不分青红皂白全走短有效期，等于让**全站字节最大的一类资产**
+        // 每小时换一次 URL、每小时全量回源一次 —— 而账本行的 immutable 早就能把两者分开。
         // 源站直连地址会被 signAsset 原样返回（外链签名反而会破坏它），无需在此分流
-        return OssUtils.signCover(ref, mime = ledgerRow?.mime ?: asset.mime)
+        return OssUtils.signCover(
+            ref,
+            mime = ledgerRow?.mime ?: asset.mime,
+            immutable = ledgerRow?.immutable == true,
+        )
     }
 
     /** 单个书签的封面。列表场景请用 [resolveCoverBatch]，避免 N+1。 */
@@ -329,21 +339,37 @@ class SiteAssetResolver(
         mode: DisplayMode,
         objectByFileId: Map<String, OssObjectEntity>,
         onHotlink: () -> Unit,
+    ): String? = signedOssUrl(asset, mode, objectByFileId)
+    // 没落到我们自己的 OSS（抓取时只做了 PROBE，或那张图当时下载失败），只能给源站直连
+    // 地址。这是降级路径：源站防盗链、改版 404、境外站点不可达都会直接砸到用户脸上
+        ?: asset.resolvedUrl.takeIf { it.isNotBlank() }?.also {
+            log.debug(
+                "[presentUrl] 资产未落 OSS，回退源站直连: ownerType={}, ownerId={}, role={}, url={}",
+                asset.ownerType, asset.ownerId, asset.role, it
+            )
+            onHotlink()
+        }
+
+    /**
+     * 只认我方 OSS 的签名地址；这张图没落 OSS 就返回 null，**绝不回退源站直连**。
+     *
+     * 与 [presentUrl] 的区别只在缺图时的行为，而这个区别是有调用方专门要的：后台那些
+     * 「顺带显示个图标」的场景（如 scrapper 调用日志列表）宁可显示本地兜底图，也不能让
+     * 浏览器去请求外站 —— 那会把管理员的 IP 暴露给一批我们自己都抓不动的站点，并在控制台
+     * 刷出成片的超时/证书报错。前台书签渲染则相反：热链再差也好过用户看到空白，所以它走
+     * [presentUrl]，代价记在 `hotlinked` 计数里。
+     */
+    private fun signedOssUrl(
+        asset: SiteAssetEntity,
+        mode: DisplayMode,
+        objectByFileId: Map<String, OssObjectEntity>,
     ): String? {
         // file_id 优先：它是与存储层解耦后的正式来源。storage_url 只作为兜底 ——
         // 覆盖迁移尚未回填的行、以及改造前写入的完整 URL 存量
         val ledgerRow = asset.fileId?.let { objectByFileId[it] }
         val storage = ledgerRow?.objectKey
             ?: asset.storageUrl?.takeIf { it.isNotBlank() }
-        // 没落到我们自己的 OSS（抓取时只做了 PROBE，或那张图当时下载失败），只能给源站直连
-        // 地址。这是降级路径：源站防盗链、改版 404、境外站点不可达都会直接砸到用户脸上
-            ?: return asset.resolvedUrl.takeIf { it.isNotBlank() }?.also {
-                log.debug(
-                    "[presentUrl] 资产未落 OSS，回退源站直连: ownerType={}, ownerId={}, role={}, url={}",
-                    asset.ownerType, asset.ownerId, asset.role, it
-                )
-                onHotlink()
-            }
+            ?: return null
 
         // storage 可能是 object key（新契约）或存量的完整 URL，signAsset 统一处理这两种形态。
         // 内容寻址的对象字节永不改变，签长效链接换缓存命中率（回源一次要付一次 OSS 图片处理费）
@@ -355,5 +381,49 @@ class SiteAssetResolver(
             mime = ledgerRow?.mime ?: asset.mime,
             isVector = asset.isVector,
         )
+    }
+
+    /**
+     * 按**域名**取站点图标的签名地址 —— 全类唯一不以 pageId 为入口的方法。
+     *
+     * 存在的理由是调用方手上真的只有一个域名字符串：`scrapper_call_log` 记的是一次抓取动作，
+     * 抓失败时压根不存在对应的 page 行，自然也没有 pageId。此前后台就是因为没有这个入口，
+     * 在前端拼了 `https://<host>/favicon.ico` 直连外站。
+     *
+     * 只查 [AssetOwnerType.SITE] 层：域名能确定的就到站点为止，PAGE 层资产属于某个具体页面，
+     * 用它来代表整个域名是错的。取图顺序复用 [DisplayMode.LIST]（FAVICON → LOGO，按 64px
+     * 挑最合适的一张），因为调用方就是列表里的 16px 小图标。
+     *
+     * @return host → 签名地址；该域名没有站点图标、或图标未落 OSS 时**不出现在结果里**，
+     *   调用方据此走自己的本地兜底图
+     */
+    fun siteFaviconByHost(hosts: Collection<String>): Map<String, String> {
+        val wanted = hosts.filter { it.isNotBlank() }.distinct()
+        if (wanted.isEmpty()) return emptyMap()
+
+        val siteIdByHost = siteMapper.selectMaps(
+            KtQueryWrapper(SiteEntity::class.java)
+                .select(SiteEntity::id, SiteEntity::host)
+                .`in`(SiteEntity::host, wanted)
+        ).mapNotNull { row ->
+            val id = row.column("id")
+            val host = row.column("host")
+            if (id.isNullOrBlank() || host.isNullOrBlank()) null else host to id
+        }.toMap()
+        if (siteIdByHost.isEmpty()) return emptyMap()
+
+        val assetsBySite = siteAssetMapper.selectList(
+            KtQueryWrapper(SiteAssetEntity::class.java)
+                .eq(SiteAssetEntity::ownerType, AssetOwnerType.SITE)
+                .`in`(SiteAssetEntity::ownerId, siteIdByHost.values.distinct())
+                .`in`(SiteAssetEntity::role, listOf(AssetRole.FAVICON, AssetRole.LOGO))
+        ).groupBy { it.ownerId }
+        val objectByFileId = objectsOf(assetsBySite.values.flatten())
+
+        return siteIdByHost.mapNotNull { (host, siteId) ->
+            val chosen = AssetRolePolicy.resolve(assetsBySite[siteId].orEmpty(), DisplayMode.LIST)
+                ?: return@mapNotNull null
+            signedOssUrl(chosen, DisplayMode.LIST, objectByFileId)?.let { host to it }
+        }.toMap()
     }
 }

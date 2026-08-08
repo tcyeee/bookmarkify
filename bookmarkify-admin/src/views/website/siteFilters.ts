@@ -9,29 +9,26 @@ import type { SiteSearchParams } from "#/api/site";
  */
 export type SiteFilters = Omit<
   SiteSearchParams,
-  "currentPage" | "pageSize" | "sortAsc" | "sortField"
+  "currentPage" | "linkType" | "pageSize" | "sortAsc" | "sortField"
 > & {
   /** ElDatePicker 的区间值，提交前拆成 createTimeStart / createTimeEnd */
   createRange?: [string, string];
+  /** 放开默认的 linkType=DOMAIN 限制，把 localhost / 纯 IP / 未归类的站点也列出来 */
+  includeNonDomain?: boolean;
 };
 
 /** 全不筛的初始值。**每次调用返回新对象** —— 共享一份会让两个视图的筛选栏互相串改。 */
 export function createSiteFilters(): SiteFilters {
   return {
     keyword: "",
-    linkType: undefined,
     nsfw: undefined,
     alive: undefined,
     verifyFlag: undefined,
     brandNameEmpty: undefined,
     minConsecutiveFail: undefined,
     createRange: undefined,
+    includeNonDomain: undefined,
   };
-}
-
-/** 就地重置（保持同一个 reactive 对象的引用，v-model 绑定才不会断） */
-export function resetSiteFilters(filters: SiteFilters) {
-  Object.assign(filters, createSiteFilters());
 }
 
 /**
@@ -43,7 +40,14 @@ export function resetSiteFilters(filters: SiteFilters) {
 export function toSiteSearchParams(filters: SiteFilters): SiteSearchParams {
   return {
     keyword: filters.keyword || undefined,
-    linkType: filters.linkType,
+    // 后台默认只看真实网站。localhost / 纯 IP / 未归类的地址一律不抓取，站点行上的品牌名、
+    // 图标、活性全是空的 —— 它们既不需要人工过，也没法人工过，留在表里只是噪音。
+    //
+    // 但这不能是**唯一**的取值：这类书签在用户桌面上真实存在，用户报「我那条
+    // 192.168.0.73:8192 坏了」时，后台必须还能把它查出来 —— 否则连"它是什么类型、
+    // 因此不参与抓取"这个结论都无处得出。折叠区里给一个默认关闭的开关，
+    // 平时不占版面，需要时能放开。
+    linkType: filters.includeNonDomain ? undefined : "DOMAIN",
     nsfw: filters.nsfw,
     alive: filters.alive,
     verifyFlag: filters.verifyFlag,
@@ -67,19 +71,11 @@ export function countAdvancedFilters(filters: SiteFilters): number {
     filters.brandNameEmpty,
     filters.minConsecutiveFail,
     filters.createRange,
+    // 放开范围同样要有痕迹：表里凭空多出一批没有图标没有品牌名的行，
+    // 不标出来的话看起来像抓取集体失败了
+    filters.includeNonDomain || undefined,
   ].filter((v) => v !== undefined && v !== null).length;
 }
-
-/** 链接类型的展示元数据。`as const` 保住键的字面量类型，别让它退化成 string */
-export const LINK_TYPE_META = {
-  DOMAIN: { label: "域名", tip: "正常网站地址，会抓取标题/图标", type: "success" },
-  LOCAL: { label: "本地", tip: "localhost / 127.0.0.1 / ::1，不会被抓取", type: "info" },
-  IP: { label: "IP", tip: "纯 IP 地址，不会被抓取", type: "warning" },
-  OTHER: { label: "其他", tip: "未归类", type: "info" },
-} as const satisfies Record<
-  NonNullable<SiteSearchParams["linkType"]>,
-  { label: string; tip: string; type: "danger" | "info" | "success" | "warning" }
->;
 
 /** 站点级人工锁定字段的中文名 */
 export const SITE_LOCKED_FIELD_LABEL = {

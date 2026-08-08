@@ -18,6 +18,7 @@ import { Page } from "@vben/common-ui";
 import { ElMessage } from "element-plus";
 
 import { scrapeDebugApi } from "#/api/scrapper";
+import { isScrapableUrl, LINK_TYPE_REASON, linkTypeOfUrl } from "#/views/bookmark/linkType";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
@@ -219,6 +220,14 @@ async function run() {
   }
   // 回车直接抓取时输入框还没失焦，这里补一次，保证展示的和发出去的一致
   form.url = normalizeUrl(form.url);
+  // 本机/IP 目标后端会直接拒(E309)，scrapper 也会拒(FORBIDDEN_TARGET)。在这里说清楚，
+  // 比让人对着一条 403 猜"是不是调试页配错了参数"要好
+  if (!isScrapableUrl(form.url)) {
+    const reason = LINK_TYPE_REASON[linkTypeOfUrl(form.url)];
+    errorMsg.value = `${reason}，我方不抓取这类地址`;
+    ElMessage.warning(errorMsg.value);
+    return;
+  }
   loading.value = true;
   result.value = null;
   previews.value = { assets: [], screenshot: null };

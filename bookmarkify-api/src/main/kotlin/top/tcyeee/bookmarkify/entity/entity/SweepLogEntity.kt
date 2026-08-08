@@ -33,14 +33,38 @@ data class SweepLogEntity(
     val taskLabel: String,
     /** 本轮实际处理的候选数（已按 LIMIT 截断、已过滤掉非域名类型） */
     val candidates: Int,
-    /** 到期候选的总数，**不含** LIMIT。持续大于 candidates 说明检测间隔配置已经追不上数据量 */
+    /**
+     * 到期候选的总数，**不含** LIMIT，也**不含**非域名类型的过滤。
+     *
+     * 判断「检测间隔配置追不上数据量」要拿它和 [batchSize] 比，**不能**和 [candidates] 比：
+     * 后者还额外扣掉了本地地址/IP 这类压根不该探测的记录，于是只要本轮到期的记录里混进一条
+     * 这样的书签，`backlog > candidates` 就恒成立 —— 后台曾据此常亮橙色告警。
+     */
     val backlog: Long,
+    /**
+     * 本轮的单次处理上限（`LIMIT`），即 `backlog` 该拿来对比的那个阈值。
+     *
+     * 落库而不是在后台里写死：两个巡检任务的上限不同（50 / 200），且它以后会变成配置项，
+     * 而一条历史轮次记录该按**当时**的上限来判读。null 是 2026-08-08 之前的历史行。
+     */
+    val batchSize: Int? = null,
     /** 真正发起了探测的条数 */
     val probed: Int,
     /** 被站点层短路、直接复用上一轮站点结论的条数 */
     val shortCircuited: Int,
+    /**
+     * 短路的那部分里结论为 DEAD 的条数；其余是 UNKNOWN（根地址探测无结论），不会有 ALIVE
+     * ——根地址通了的域名会回到逐页探测的路径，计入 [probed]。
+     *
+     * 存在的理由：[deadCount] / [unknownCount] 统计的是「本轮探测 + 短路复用」的合计，而
+     * `breakerReason` 的分母只有真正探测过的那部分。没有这个数，后台既没法还原熔断看到的比例，
+     * 也没法告诉运维「失联 180」里有多少只是上一轮站点结论的复用。null 是历史行。
+     */
+    val shortCircuitedDead: Int? = null,
     val aliveCount: Int,
+    /** 判定失联的条数，**含**站点层短路复用的结论；其中短路的部分见 [shortCircuitedDead] */
     val deadCount: Int,
+    /** 无结论的条数，**含**站点层短路复用的结论 */
     val unknownCount: Int,
     /** 触发了重新抓取的条数 */
     val triggeredParse: Int,

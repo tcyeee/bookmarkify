@@ -17,6 +17,10 @@ export const overridesPreferences = defineOverridesPreferences({
     companySiteLink: 'https://bookmarkify.cc',
     date: '2026',
   },
+  navigation: {
+    // 关闭手风琴模式，允许侧边栏同时展开多个子菜单
+    accordion: false,
+  },
   tabbar: {
     enable: false,
   },

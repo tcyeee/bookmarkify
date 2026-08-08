@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { SiteAdminVO } from "#/api/site";
+import type { SiteAdminVO, SiteLinkType } from "#/api/site";
 
 import { reactive, ref } from "vue";
 import { useRouter } from "vue-router";
@@ -10,29 +10,23 @@ import { formatDateTime } from "@vben/utils";
 import { ElButton, ElCard, ElLink, ElTag } from "#/adapter/element";
 import { abnormalPageCount, getSiteListApi } from "#/api/site";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
+import { useAutoSearch } from "#/components/filter-bar";
 
 import BookmarkAssetCell from "#/views/bookmark/BookmarkAssetCell.vue";
+import { LINK_TYPE_LABEL } from "#/views/bookmark/linkType";
 import { assetByRole } from "#/views/bookmark/siteAsset";
 
+import { PAGE_STATUS_META, PAGE_STATUS_ORDER } from "../pageStatus";
 import SiteEditDialog from "../SiteEditDialog.vue";
 import SiteFilterBar from "../SiteFilterBar.vue";
 import SiteHealthBar from "../SiteHealthBar.vue";
 import {
   createSiteFilters,
-  LINK_TYPE_META,
   SITE_LOCKED_FIELD_LABEL,
   toSiteSearchParams,
 } from "../siteFilters";
 
 const searchForm = reactive(createSiteFilters());
-
-function handleSearch() {
-  gridApi.reload();
-}
-
-function handleReset() {
-  gridApi.reload();
-}
 
 const router = useRouter();
 
@@ -81,7 +75,6 @@ const gridOptions: VxeGridProps<SiteAdminVO> = {
     { field: "host", title: "域名", minWidth: 220, sortable: true, slots: { default: "host" } },
     { field: "brandName", title: "站点全名", minWidth: 160, slots: { default: "brandName" } },
     { field: "shortName", title: "短名", minWidth: 120, slots: { default: "shortName" } },
-    { field: "linkType", title: "类型", width: 90, slots: { default: "linkType" } },
     // 页面数只回答「这个站有多大」，健康条才回答「这个站烂不烂」——后台要的是后者
     { field: "pageCount", title: "页面数", width: 110, slots: { default: "pageCount" } },
     { field: "pageHealth", title: "页面健康", minWidth: 140, slots: { default: "pageHealth" } },
@@ -104,6 +97,54 @@ const gridOptions: VxeGridProps<SiteAdminVO> = {
       sortable: true,
       formatter: ({ cellValue }) => formatDateTime(cellValue),
     },
+
+    // ── 以下默认隐藏，走工具栏「列自定义」按需打开 ──
+    //
+    // `site` 表的字段在这里是**全量**下发的，默认全开会让表宽到没法看。取舍标准只有一条：
+    // 日常「批量过一遍站点」用不用得上。
+    { field: "scheme", title: "协议", width: 90, visible: false },
+    // 默认筛选是 linkType=DOMAIN，这一列整列都会是「域名」——只有在折叠区里打开
+    // 「非域名站点」之后它才有信息量，所以默认隐藏而不是删掉：删掉的话放开范围后
+    // 多出来的那批行看起来只是"抓取失败"，看不出它们本来就不参与抓取
+    {
+      field: "linkType",
+      title: "类型",
+      width: 100,
+      visible: false,
+      formatter: ({ cellValue }) => LINK_TYPE_LABEL[cellValue as SiteLinkType] ?? "-",
+    },
+    // 短名→全名→域名 的兜底结果。它与上面三列不是重复：前台磁贴上实际印的就是这个值，
+    // 「为什么这个磁贴显示的是域名」只有对着它才答得出来
+    { field: "displayName", title: "展示名", minWidth: 160, visible: false },
+    // nsfwReason 平时只做上面 NSFW 列的悬浮文案；判定可疑时需要能整列扫过去
+    { field: "nsfwReason", title: "NSFW 理由", minWidth: 180, visible: false, slots: { default: "nsfwReason" } },
+    {
+      field: "nextCheckAt",
+      title: "下次巡检",
+      width: 180,
+      visible: false,
+      formatter: ({ cellValue }) => (cellValue ? formatDateTime(cellValue) : "-"),
+    },
+    {
+      field: "updateTime",
+      title: "更新时间",
+      width: 180,
+      sortable: true,
+      visible: false,
+      formatter: ({ cellValue }) => (cellValue ? formatDateTime(cellValue) : "-"),
+    },
+    { field: "id", title: "站点ID", minWidth: 200, visible: false },
+    // 健康条把分布画出来了，但画不出精确数字，也没法按某一种状态排序。这四列是同一份
+    // pageStatusCounts 的数值形态，纯前端派生，不多花一次查询
+    ...PAGE_STATUS_ORDER.map((status) => ({
+      field: `pageCount${status}`,
+      title: `${PAGE_STATUS_META[status].label}页面数`,
+      width: 120,
+      align: "right" as const,
+      visible: false,
+      formatter: ({ row }: { row: SiteAdminVO }) => String(row.pageStatusCounts?.[status] ?? 0),
+    })),
+
     {
       field: "rowActions",
       title: "操作",
@@ -133,6 +174,8 @@ const gridOptions: VxeGridProps<SiteAdminVO> = {
 };
 
 const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
+
+const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
 </script>
 
 <template>
@@ -142,16 +185,11 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
         <div class="flex items-center justify-between">
           <span>站点管理</span>
           <span class="text-xs text-gray-400">
-            站点层：一个域名一行。同域名下的具体页面在「网站管理 › 页面管理」里看
+            站点层：一个域名一行，只列域名类站点。同域名下的具体页面在「网站管理 › 页面管理」里看
           </span>
         </div>
       </template>
-      <SiteFilterBar
-        v-model="searchForm"
-        class="mb-4"
-        @search="handleSearch"
-        @reset="handleReset"
-      />
+      <SiteFilterBar v-model="searchForm" class="mb-4" @reset="reset" />
       <Grid>
         <template #favicon="{ row }">
           <BookmarkAssetCell :src="assetByRole(row.assets, 'FAVICON')?.url" />
@@ -171,16 +209,6 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
         <template #shortName="{ row }">
           <span v-if="row.shortName">{{ row.shortName }}</span>
           <span v-else class="text-gray-400">-</span>
-        </template>
-        <template #linkType="{ row }">
-          <ElTag
-            :type="LINK_TYPE_META[row.linkType]?.type ?? 'info'"
-            size="small"
-            disable-transitions
-            :title="LINK_TYPE_META[row.linkType]?.tip"
-          >
-            {{ LINK_TYPE_META[row.linkType]?.label ?? row.linkType }}
-          </ElTag>
         </template>
         <template #pageCount="{ row }">
           <div class="page-count">
@@ -213,6 +241,11 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
           <ElTag v-if="row.nsfw" type="danger" size="small" :title="row.nsfwReason">NSFW</ElTag>
           <span v-else-if="!row.nsfwReason" class="text-gray-400" title="尚未做过 NSFW 判定">未判定</span>
           <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #nsfwReason="{ row }">
+          <!-- CLEAN = 判过且干净；为空 = 还没判过。两者不能都显示成 "-" -->
+          <span v-if="row.nsfwReason" :title="row.nsfwReason">{{ row.nsfwReason }}</span>
+          <span v-else class="text-gray-400" title="尚未做过 NSFW 判定">未判定</span>
         </template>
         <template #verifyFlag="{ row }">
           <ElTag

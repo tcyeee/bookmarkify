@@ -47,6 +47,14 @@
           <span v-else-if="data.input" class="text-amber-500 font-semibold">请检查链接格式</span>
         </div>
 
+        <!-- 本地/IP 地址：能加，但加进来不会有标题和图标，先说清楚 -->
+        <div
+          v-if="localOrIpNotice"
+          class="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <span class="icon--earth icon-size-16 shrink-0 mt-0.5" />
+          <span>{{ localOrIpNotice }}</span>
+        </div>
+
         <transition name="fade">
           <div v-if="data.notice" class="cy-chat cy-chat-start">
             <div class="cy-chat-bubble shadow-sm">{{ data.notice }}</div>
@@ -104,7 +112,7 @@
 import { bookmarksAddOne, bookmarksLinkOne, bookmarksSearch } from '@api'
 import type { UserLayoutNodeVO } from '@typing'
 import { useBookmarkStore } from '@stores/bookmark.store'
-import { canonicalUrlKey, isBookmarkableUrl } from '@utils'
+import { canonicalUrlKey, isBookmarkableUrl, isScrapableUrl } from '@utils'
 import { useDebounceFn } from '@vueuse/core'
 
 const sysStore = useSysStore()
@@ -260,6 +268,21 @@ function checkInput() {
   if (data.urlIsTrue) data.notice = undefined
   handleSearch(data.input)
 }
+
+/**
+ * 本地 / IP 地址：**能收藏，但不会被抓取**。
+ *
+ * 这类网址（`localhost:5173`、`192.168.1.5:8080`，以及公网裸 IP）后端一律不抓，所以它们
+ * 永远没有标题和图标，桌面上只会是一个通用圆圈。不提前说明的话，用户加完只会觉得
+ * "怎么加了个空的"，然后反复删掉重加 —— 而重加多少次结果都一样。
+ *
+ * 提示而不是拦截：收藏自己本地的开发服务、家里 NAS 的管理页，本来就是正当用法。
+ */
+const localOrIpNotice = computed(() =>
+  data.input && data.urlIsTrue && !isScrapableUrl(data.input)
+    ? '这是本地 / IP 地址，我们不会抓取它的标题和图标，添加后显示为通用图标'
+    : '',
+)
 
 function selectBookmark(item: any) {
   if (submitting.value) return

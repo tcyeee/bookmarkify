@@ -7,7 +7,7 @@ import type { UserFile } from '@typing'
  */
 function getFileServiceBaseUrl(env?: String): string {
   const localUrl = '/upload'
-  const onlineUrl = 'https://file.bookmarkify.cc'
+  const onlineUrl = 'https://cdn.bookmarkify.cc'
   if (env) return env === 'LOCAL' ? localUrl : onlineUrl
 
   const isDev = process.env.NODE_ENV === 'development' || process.env.NUXT_ENV === 'development'

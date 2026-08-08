@@ -422,6 +422,18 @@ class SiteAssetWriter(
         sitePageMetaMapper.selectById(pageId) ?: PageMetaEntity(pageId = pageId)
 
     /**
+     * 批量读取文字元数据，键为 pageId。
+     *
+     * 与 [pageMetaOf] 的区别不只是条数：**没有行的页面不会出现在结果里**，而不是补一个空实例。
+     * 后台列表要区分「抓过、但站点没声明描述」和「从来没抓成功过」，补空实例会把后者伪装成前者。
+     * 一条 `in` 查询，避免整页逐行查库。
+     */
+    fun pageMetaOfBatch(pageIds: Collection<String>): Map<String, PageMetaEntity> {
+        if (pageIds.isEmpty()) return emptyMap()
+        return sitePageMetaMapper.selectBatchIds(pageIds).associateBy { it.pageId }
+    }
+
+    /**
      * 收敛 `scrape_snapshot`：每个书签只留最近 [SNAPSHOT_RETAIN_PER_BOOKMARK] 份。
      *
      * 这是全库唯一一张只写不读、又没有任何清理、还带 GIN 索引存整份 jsonb 响应的表：

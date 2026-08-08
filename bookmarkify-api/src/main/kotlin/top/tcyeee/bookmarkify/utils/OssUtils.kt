@@ -6,7 +6,9 @@ import com.aliyun.oss.OSS
 import org.springframework.web.multipart.MultipartFile
 import com.aliyun.oss.OSSClientBuilder
 import com.aliyun.oss.model.GeneratePresignedUrlRequest
+import com.aliyun.oss.model.GetObjectRequest
 import com.aliyun.oss.model.ListObjectsV2Request
+import com.aliyun.oss.model.OSSObject
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
@@ -41,6 +43,12 @@ class OssUtils {
     private lateinit var domainName: String
 
     /**
+     * 自建缓存代理的域名。留空 = 关闭该特性，一切按签名直连 OSS 走（见 [initProxyDomain]）。
+     */
+    @Value("\${bookmarkify.aliyun.oss.proxy-domain:}")
+    private var proxyDomainName: String = ""
+
+    /**
      * 初始化OSS客户端及域名配置
      */
     @PostConstruct
@@ -49,7 +57,8 @@ class OssUtils {
         ossClient = OSSClientBuilder().build(endpoint, accessKeyId, accessKeySecret)
         bucket = bucketName
         initDomain(endpoint, domainName, bucketName)
-        log.debug("[init] OSS客户端初始化完成, domain={}", domain)
+        initProxyDomain(proxyDomainName)
+        log.debug("[init] OSS客户端初始化完成, domain={}, proxyDomain={}", domain, proxyDomain)
     }
 
     /**
@@ -68,6 +77,24 @@ class OssUtils {
         private lateinit var bucket: String
         private lateinit var domain: String
         private lateinit var customDomain: String
+
+        /**
+         * 自建缓存代理的根地址（形如 `https://cdn.bookmarkify.cc`），空串表示未启用。
+         *
+         * 不用 lateinit：这东西缺省就该是"关闭"，而不是"没初始化就炸"。[initDomain] 是被单测
+         * 直接调用的，跟着加一个必须初始化的字段会让那些用例全红。
+         */
+        private var proxyDomain: String = ""
+
+        /**
+         * 代理挂载的路径前缀。对应 nginx 里那个 `location ^~ /oss/`。
+         *
+         * 用前缀而不是直接挂域名根下，是为了让这层能寄生在**任何一个已有 vhost** 上而不跟它
+         * 打架 —— 首发就是挂在 `bookmarkify.cc` 上（那里的 `location /` 是 Nuxt 静态站）。
+         * 日后若把 `cdn.bookmarkify.cc` 从 OSS 迁到我方 nginx，这个前缀同样让"代理"与
+         * "签名地址原样透传给 OSS"两条路可以共存于一个域名下。
+         */
+        const val OSS_PROXY_PATH: String = "/oss"
 
         /** 常规对象的签名有效期。key 可能被覆盖写，所以不能签太久 */
         const val DEFAULT_TTL_MILLIS: Long = 3600 * 1000
@@ -129,6 +156,47 @@ class OssUtils {
         }
 
         /**
+         * 把目标宽高翻译成 OSS 的 `image/resize` 处理参数；两边都没给则返回 null（不处理）。
+         *
+         * **宽高都给 = 要精确尺寸**（图标是方的），用 `m_fill` 填充裁剪；
+         * **只给一边 = 要"限到这个宽/高、比例不动"**，用 `m_lfit`。页面封面走后者 —— 拿
+         * `m_fill` 把 1280×720 裁成 640×640 会砍掉两侧各一半，正好毁掉"这个页面长什么样"
+         * 这个唯一用途。
+         *
+         * 抽成公开函数是因为现在有两个消费者：签名直连那条路（[signWithResize]）和缓存代理
+         * 回源那条路（`InternalAssetController`）。同一个 key 在两条路上必须缩出**逐字节相同**
+         * 的图，否则切换开关时全站图片会集体变一次样；各写一份迟早会漂。
+         */
+        fun resizeStyle(width: Int?, height: Int?): String? {
+            val w = width?.takeIf { it > 0 }
+            val h = height?.takeIf { it > 0 }
+            if (w == null && h == null) return null
+            return buildString {
+                append("image/resize,").append(if (w != null && h != null) "m_fill" else "m_lfit")
+                w?.let { append(",w_").append(it) }
+                h?.let { append(",h_").append(it) }
+            }
+        }
+
+        /**
+         * 直接取回一个对象的字节流，可选带图片处理。**缓存代理回源专用。**
+         *
+         * 走 SDK 而不是签个 URL 再自己 HTTP 拉一遍：SDK 手里就有 AK，私有桶本来就读得动，
+         * 于是整条链路不需要给桶加任何 Bucket Policy —— 这正是选这个方案的理由。
+         *
+         * 失败返回 null 而不是抛：调用方要把它翻译成 HTTP 状态码，而 nginx 那边对 4xx/5xx
+         * 只缓存 1 分钟，一次抽风不会被钉死。
+         */
+        fun fetchObject(objectKey: String, process: String? = null): OSSObject? =
+            runCatching {
+                ossClient.getObject(GetObjectRequest(bucket, objectKey).apply {
+                    if (!process.isNullOrBlank()) this.process = process
+                })
+            }.onFailure {
+                log.warn("[fetchObject] 读取失败: key={}, process={}, err={}", objectKey, process, it.message)
+            }.getOrNull()
+
+        /**
          * 解析配置生成访问域名（支持自定义域名）
          */
         fun initDomain(endpoint: String, domainConfig: String, bucketName: String) {
@@ -146,6 +214,42 @@ class OssUtils {
                 customDomain = ""
                 log.debug("[initDomain] 使用默认OSS域名: domain={}", domain)
             }
+        }
+
+        /**
+         * 配置自建缓存代理的根地址。空配置 = 关闭，[signAsset] 一律签直连 OSS 的链接。
+         */
+        fun initProxyDomain(config: String) {
+            val v = config.trim().removeSuffix("/")
+            proxyDomain = when {
+                v.isBlank() -> ""
+                v.startsWith("http://") || v.startsWith("https://") -> v
+                else -> "https://$v"
+            }
+            log.debug("[initProxyDomain] config={}, proxyDomain={}", config, proxyDomain)
+        }
+
+        /**
+         * 拼一条走自建缓存代理的地址：**没有签名，因而永不变化**。
+         *
+         * 这正是它存在的全部意义。签名链接哪怕做了窗口对齐，URL 仍会随窗口滚动而改变，于是
+         * 浏览器缓存每个窗口失效一次、每次失效都要回源 —— 而回源的每一次都是一笔按次计费的
+         * OSS GET 请求 + 一次图片处理。去掉签名之后 URL 逐字节恒定，浏览器可以 `immutable`
+         * 缓存一年，重复访问产生的 OSS 请求数是 **0**，连打到自家 nginx 的请求都没有。
+         *
+         * 安全模型随之从"签名限时"换成"key 不可猜"：能路由到这里的只有 [OssObjectEntity.immutable]
+         * 为真的对象，其 key 要么是 `sha256(字节)`、要么是随机 UUID，都是 128 bit 以上的熵，
+         * 猜不出来。桶本身仍是 private-read，nginx 是唯一被授权的读取方。这个取舍是有意的，
+         * 别把可枚举的 key（例如自增 id、用户名）接进这条路径。
+         *
+         * 尺寸以 `w`/`h` 明文传出，由 nginx 侧的**白名单**翻译成 `x-oss-process`。白名单
+         * 必须与本类实际签发的尺寸保持一致，否则那一档会退化成原图直出（能看，只是没缩放）——
+         * 刻意做成这个方向的降级：漏配的代价是多下几 KB，而不是一张碎图。
+         */
+        private fun proxyUrl(key: String, width: Int?, height: Int?): String = buildString {
+            append(proxyDomain).append(OSS_PROXY_PATH).append('/').append(key)
+            val params = listOfNotNull(width?.let { "w=$it" }, height?.let { "h=$it" })
+            if (params.isNotEmpty()) append('?').append(params.joinToString("&"))
         }
 
         /**
@@ -192,6 +296,17 @@ class OssUtils {
             val processable = canImageProcess(mime, isVector, key)
             val w = size?.takeIf { it > 0 && processable }
             val h = height?.takeIf { it > 0 && processable }
+
+            // 启用自建缓存代理时，不可变对象改走代理：URL 不含签名，因而永不变化，浏览器可以
+            // 缓存一年，OSS 侧每个 (key,尺寸) 一辈子只被读一次、只被处理一次。
+            // **只放不可变对象过去**是这条分支唯一的安全前提 —— 代理下发的
+            // `Cache-Control: immutable` 是不可撤销的承诺，一个会被原地覆盖的 key（截图走的
+            // SOURCE_URL 寻址）走到这里，改动会被浏览器和 nginx 一起钉死，且没有任何办法让
+            // 已发出去的 URL 失效。可变对象继续走签名直连，短有效期在那边是**有用**的。
+            if (immutable && proxyDomain.isNotBlank()) {
+                return proxyUrl(key, w, h).also { log.debug("[signAsset] 走缓存代理: {}", it) }
+            }
+
             val ttl = if (immutable) IMMUTABLE_TTL_MILLIS else DEFAULT_TTL_MILLIS
             return runCatching { signWithResize(key, w, h, ttl) }
                 .onFailure { log.warn("[signAsset] 签名失败, 回退原值: ref={}, err={}", raw, it.message) }
@@ -205,8 +320,12 @@ class OssUtils {
          * 不能这么处理 —— 一张 1280×720 的截图被裁成 640×640，等于把两侧砍掉一半，正好毁掉
          * "这个页面长什么样"这个唯一的用途。这里只给 `w_`，让高度按原始比例缩放。
          */
-        fun signCover(ref: String?, width: Int = COVER_WIDTH, mime: String? = null): String? =
-            signAsset(ref, size = width, mime = mime, height = null)
+        fun signCover(
+            ref: String?,
+            width: Int = COVER_WIDTH,
+            mime: String? = null,
+            immutable: Boolean = false,
+        ): String? = signAsset(ref, size = width, mime = mime, height = null, immutable = immutable)
 
 
         /**
@@ -215,10 +334,18 @@ class OssUtils {
          */
         fun ownOssObjectKey(parsedUrl: java.net.URL): String? {
             val host = parsedUrl.host?.lowercase()?.takeIf { it.isNotBlank() } ?: return null
-            val ownHosts = listOfNotNull(customDomain.takeIf { it.isNotBlank() }, domain)
-                .mapNotNull { runCatching { URI(it).host?.lowercase() }.getOrNull() }
+            // 代理域名也算"自己家"：一条代理地址若被回灌进来（存量 storage_url、或前端把签好的
+            // 地址原样传回），要能还原出 key，而不是被当成外链原样返回
+            val ownHosts = listOfNotNull(
+                customDomain.takeIf { it.isNotBlank() },
+                proxyDomain.takeIf { it.isNotBlank() },
+                domain,
+            ).mapNotNull { runCatching { URI(it).host?.lowercase() }.getOrNull() }
             if (host !in ownHosts) return null
-            return parsedUrl.path.removePrefix("/").substringBefore("?").takeIf { it.isNotBlank() }
+            return parsedUrl.path.removePrefix("/")
+                .removePrefix("${OSS_PROXY_PATH.removePrefix("/")}/")
+                .substringBefore("?")
+                .takeIf { it.isNotBlank() }
         }
 
         private fun upload(inputStream: InputStream, path: String) =
@@ -303,20 +430,12 @@ class OssUtils {
                     // 所以真正的判断在 signAsset 里按 mime 做 —— 这里只保护还在按扩展名命名的路径
                     // (如 defaultImgBacById、resizeAndSignImg)。
                     val processable = canImageProcess(mime = null, objectName = objectName)
-                    val hasWidth = width?.let { it > 0 } == true
-                    val hasHeight = height?.let { it > 0 } == true
-                    if (processable && (hasWidth || hasHeight)) {
-                        // 宽高都给了 = 调用方要的是精确尺寸（图标是方的），用 m_fill 填充裁剪；
-                        // 只给一边 = 要的是"限到这个宽/高，比例不动"，用 m_lfit。页面封面走的
-                        // 是后者 —— 拿 m_fill 把 1280×720 裁成 640×640 会砍掉两侧一半画面，
-                        // 正好毁掉"这个页面长什么样"这个唯一用途。
-                        val mode = if (hasWidth && hasHeight) "m_fill" else "m_lfit"
-                        val style = StringBuilder("image/resize,").append(mode)
-                        width?.takeIf { it > 0 }?.let { style.append(",w_$it") }
-                        height?.takeIf { it > 0 }?.let { style.append(",h_$it") }
-                        this.process = style.toString()
-                        log.debug("[signWithResize] 添加缩放样式: process={}", style)
-                    }
+                    resizeStyle(width, height)
+                        ?.takeIf { processable }
+                        ?.let {
+                            this.process = it
+                            log.debug("[signWithResize] 添加缩放样式: process={}", it)
+                        }
                 }
 
                 val url = ossClient.generatePresignedUrl(request)

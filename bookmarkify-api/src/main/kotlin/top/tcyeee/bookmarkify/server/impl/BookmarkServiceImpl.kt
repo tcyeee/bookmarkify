@@ -821,8 +821,10 @@ class BookmarkServiceImpl(
                     taskLabel = taskLabel,
                     candidates = 0,
                     backlog = totalBacklog,
+                    batchSize = batchSize,
                     probed = 0,
                     shortCircuited = 0,
+                    shortCircuitedDead = 0,
                     aliveCount = 0,
                     deadCount = 0,
                     unknownCount = 0,
@@ -930,8 +932,10 @@ class BookmarkServiceImpl(
                 taskLabel = taskLabel,
                 candidates = candidates.size,
                 backlog = totalBacklog,
+                batchSize = batchSize,
                 probed = actuallyProbed.size,
                 shortCircuited = shortCircuited.size,
+                shortCircuitedDead = shortCircuited.count { it.second == PingOutcome.DEAD },
                 aliveCount = probed.count { it.second == PingOutcome.ALIVE },
                 deadCount = probed.count { it.second == PingOutcome.DEAD },
                 unknownCount = probed.count { it.second == PingOutcome.UNKNOWN },
@@ -1439,6 +1443,12 @@ class BookmarkServiceImpl(
                     .map { CategoryVO(it.id, it.slug, it.name, it.color) }
             }
         }.onFailure { log.warn("[adminListAll] 分类回填失败(忽略): ${it.message}") }
+        // 抓取原样的元数据（走了哪一层、HTTP 状态码、字段级出处…）。一条 in 查询，缺行的
+        // 页面保持 null —— 「从没抓成功过」与「抓过但站点没声明」在后台是两个结论
+        runCatching {
+            val metaMap = siteAssetWriter.pageMetaOfBatch(page.records.map { it.id })
+            page.records.forEach { vo -> vo.pageMeta = metaMap[vo.id]?.let(::PageMetaAdminVO) }
+        }.onFailure { log.warn("[adminListAll] 页面元数据回填失败(忽略): ${it.message}") }
         runCatching { fillOwners(page.records) }
             .onFailure { log.warn("[adminListAll] 收录者回填失败(忽略): ${it.message}") }
         return page
@@ -1519,6 +1529,25 @@ class BookmarkServiceImpl(
     private fun Throwable.isScrapperUnavailable(): Boolean =
         this is CommonException && errorType == ErrorType.E307
 
+    /**
+     * 我方**主动拒绝**去抓：目标不是域名(E309，裸 IP / localhost)，或目标指向内网(E308)。
+     *
+     * 与 [isScrapperUnavailable] 一样"不是站点的错"，因此同样不能落成 UNREACHABLE ——
+     * `http://192.168.0.73:8192/` 那类书签在用户自己的网络里活得好好的，把我方的一个
+     * 策略决定写成"失联"，用户看到的是自家服务被判了死刑。
+     *
+     * 处置方向却相反：抓取服务不可用是"稍后重来"，这个是"永远不会抓"，所以不该重试、
+     * 也不该保留 PENDING。具体怎么收口按调用方分两种：
+     *
+     * - **人触发的**（后台的检测活性/重新获取/重抓资产）原样抛出，让管理员看到拒绝的理由；
+     * - **异步链路上的**（[parseByApi]）就地标成 SUCCESS 收口，与 [parseBookmarkExclusively]
+     *   里那道非域名前置过滤同一套处置。这里抛出反而有害：异步路径上没有人接，异常会一路
+     *   冒泡到 [parseAndNotice] 的 runCatching，被它当成"未预期异常"写成 UNREACHABLE ——
+     *   绕一圈回到本方法要防的那个结果。
+     */
+    private fun Throwable.isRefusedTarget(): Boolean =
+        this is CommonException && (errorType == ErrorType.E308 || errorType == ErrorType.E309)
+
     override fun adminCheckLiveness(pageId: String): BookmarkLivenessVO {
         val bookmark = baseMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
         log.debug("[adminCheckLiveness] 管理员触发书签活性检测: pageId=$pageId, rawUrl=${bookmark.rawUrl}")
@@ -1543,8 +1572,10 @@ class BookmarkServiceImpl(
                 )
             },
             onFailure = { e ->
-                if (e.isScrapperUnavailable()) {
-                    log.warn("[adminCheckLiveness] 抓取服务不可用，不改动书签状态: pageId=$pageId, err=${e.message}")
+                // 我方不可用、或我方拒绝抓这个目标——两者都不是站点的事实，不改动书签状态，
+                // 原样抛给管理员看理由（拒绝的文案里写了拒的是什么、为什么）
+                if (e.isScrapperUnavailable() || e.isRefusedTarget()) {
+                    log.warn("[adminCheckLiveness] 未实际检测，不改动书签状态: pageId=$pageId, err=${e.message}")
                     throw e
                 }
                 recordScrapeFailure(bookmark, e, startedAt)
@@ -1605,8 +1636,8 @@ class BookmarkServiceImpl(
                 log.debug("[adminRefresh] 更新成功: pageId=$pageId, title=${bookmark.title}")
             },
             onFailure = { e ->
-                if (e.isScrapperUnavailable()) {
-                    log.warn("[adminRefresh] 抓取服务不可用，不改动书签状态: pageId=$pageId, err=${e.message}")
+                if (e.isScrapperUnavailable() || e.isRefusedTarget()) {
+                    log.warn("[adminRefresh] 未实际抓取，不改动书签状态: pageId=$pageId, err=${e.message}")
                     throw e
                 }
                 recordScrapeFailure(bookmark, e, startedAt)
@@ -1687,8 +1718,9 @@ class BookmarkServiceImpl(
                 BookmarkAssetRefetchVO(success = true, scrapedAssetCount = count, bookmark = adminDetail(pageId))
             },
             onFailure = { e ->
-                // 抓取服务本身不可用要如实报错，不能伪装成"这个站没有图"
-                if (e.isScrapperUnavailable()) throw e
+                // 抓取服务本身不可用、或我方拒绝抓这个目标，都要如实报错，
+                // 不能伪装成"这个站没有图"——那两种情况我方连试都没试过
+                if (e.isScrapperUnavailable() || e.isRefusedTarget()) throw e
                 recordScrapeFailure(bookmark, e, startedAt)
                 log.debug("[adminRefetchAssets] 抓取失败: pageId=$pageId, err=${e.message}")
                 BookmarkAssetRefetchVO(
@@ -2240,6 +2272,22 @@ class BookmarkServiceImpl(
                     log.warn("[parseByApi] 抓取服务不可用，保留待抓取状态: pageId=${bookmark.id}, err=${e.message}")
                     return@fold bookmark
                 }
+                // 我方**主动拒绝**抓这个目标（E309 非域名 / E308 内网）。同样不是站点的事实，
+                // 落成 UNREACHABLE 就是拿我方的一个策略决定给用户自家的服务判死刑 —— 见
+                // isRefusedTarget。处置与 parseBookmarkExclusively 里那道非域名前置过滤完全
+                // 一致：标成 SUCCESS 收口成普通磁贴，前端渲染统一的圆圈图标，不落失败快照
+                // （那记录的是"这个站点抓不到"，而我方压根没去抓）。
+                //
+                // 能走到这里说明前置过滤没拦住：它看的是 page.url_host 经 classifyLinkType 的
+                // 结论，而这里看的是 raw_url 经 ScrapeTargetGuard 的结论，两条提取路径不同。
+                // 这属于不该发生的不一致，所以是 warn 而不是 debug。
+                if (e.isRefusedTarget()) {
+                    log.warn(
+                        "[parseByApi] 目标被拒绝抓取，按非域名书签收口: " +
+                            "pageId=${bookmark.id}, rawUrl=${bookmark.rawUrl}, urlHost=${bookmark.urlHost}, err=${e.message}"
+                    )
+                    return@fold bookmark.markParseSucceeded().also { baseMapper.insertOrUpdate(it) }
+                }
                 log.debug("[parseByApi] API 调用失败: pageId=${bookmark.id}, err=${e.message}")
                 // 失败也留快照：只把书签标成 UNREACHABLE 的话，事后只知道"抓不到"，
                 // 不知道抓的是哪个 URL、报了什么错、耗了多久。persistFailure 一直没人调用
@@ -2330,6 +2378,11 @@ class BookmarkServiceImpl(
             vo.categories = bookmarkCategoryService.categoriesOf(listOf(pageId))[pageId]
                 .orEmpty().map { CategoryVO(it.id, it.slug, it.name, it.color) }
         }.onFailure { log.warn("[adminDetail] 分类回填失败(忽略): ${it.message}") }
+
+        // 与列表口径一致：缺行就是 null，不补空实例
+        runCatching {
+            vo.pageMeta = siteAssetWriter.pageMetaOfBatch(listOf(pageId))[pageId]?.let(::PageMetaAdminVO)
+        }.onFailure { log.warn("[adminDetail] 页面元数据回填失败(忽略): ${it.message}") }
 
         return vo
     }

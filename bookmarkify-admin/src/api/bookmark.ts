@@ -1,3 +1,5 @@
+// 与 site.ts 互相引用，但两边都是 `import type`：类型导入在编译期就被抹掉，不构成运行时循环
+import type { SiteLinkType } from '#/api/site';
 import type { UserAdminVO } from '#/api/user-manage';
 
 import { requestClient } from '#/api/request';
@@ -80,8 +82,57 @@ export interface SiteDisplayPref {
   monogram: boolean;
 }
 
+/**
+ * 最近一次抓取留下的页面元数据（`page_meta` 一行一页）。
+ *
+ * 与 {@link BookmarkEntity.title} / `description` 不是重复：主表那两列是**当前生效值**，
+ * 可能已被管理员手工改过并加锁；这里是**抓取原样**，外加主表根本没有的抓取事实
+ * （走的哪一层、HTTP 状态码、canonical、语言、主题色、字段级出处）。
+ *
+ * 整个对象为空表示这一页**从来没有抓成功过** —— 与「抓过但站点没声明描述」是两个结论，
+ * 所以后端缺行时给 `undefined` 而不是补一个各字段为空的壳。
+ */
+export interface PageMetaVO {
+  /** 抓取到的页面标题（未经人工覆盖） */
+  title?: string;
+  /** 抓取到的页面描述（未经人工覆盖） */
+  description?: string;
+  /** 本页声明的站点名（og:site_name） */
+  siteName?: string;
+  /** 本页声明的站点短名（manifest.short_name） */
+  siteShortName?: string;
+  /** 页面自己声明的 canonical 地址 */
+  canonicalUrl?: string;
+  /** 页面语言（html lang） */
+  lang?: string;
+  /** 主题色（meta theme-color） */
+  themeColor?: string;
+  /**
+   * 各字段出处的 JSON 原文，形如
+   * `{"title":{"extractor":"OG","rawKey":"og:title"}}`。
+   */
+  metaSources?: string;
+  /** 实际抓取层：HTTP=直接取回；HEADLESS=退到了无头浏览器 */
+  fetchLayer?: string;
+  /** 抓取时目标站返回的 HTTP 状态码 */
+  httpStatus?: number;
+  /** 疑似反爬挑战页，内容不可靠 */
+  antiCrawler: boolean;
+  /** 本次抓取时间 */
+  fetchedAt?: string;
+  /** 该行更新时间 */
+  updateTime?: string;
+}
+
 export interface BookmarkEntity {
   id: string;
+  /**
+   * 所属站点ID。
+   *
+   * 页面层的一半信息其实挂在站点上（品牌名/图标/NSFW/域名活性），这是把两张表接起来的
+   * 唯一钥匙 —— 用 urlHost 反查是子串/冗余副本，不是主键。
+   */
+  siteId: string;
   urlHost: string;
   urlPath?: string;
   /**
@@ -95,6 +146,12 @@ export interface BookmarkEntity {
   /** 路由型 fragment（`#/…` / `#!…`），页内锚点不存 */
   urlFragment?: string;
   urlScheme: string;
+  /**
+   * 链接类型。**非 `DOMAIN` 的书签不参与抓取**（后端 ScrapeTargetGuard 直接拒绝），
+   * 因此它们的标题/图标/元数据永远为空 —— 那不是抓取失败，是我方主动不抓。
+   * 后台据此收起对这类书签无意义的展示与操作，见 `views/bookmark/linkType.ts`。
+   */
+  linkType?: SiteLinkType;
   appName?: string;
   title?: string;
   description?: string;
@@ -136,6 +193,9 @@ export interface BookmarkEntity {
   consecutiveFail?: number;
   /** 被人工锁定、不会被自动抓取覆盖的字段 */
   lockedFields?: BookmarkLockedField[];
+
+  /** 最近一次抓取留下的原样元数据；从未抓成功过时为空 */
+  pageMeta?: PageMetaVO;
 }
 
 /** 管理员手工改过、自动抓取不允许覆盖的字段 */
@@ -151,6 +211,13 @@ export interface BookmarkSearchParams {
    * `xxqq.com.cn` 一并捞进来。下钻要的是精确的父子关系，不是搜索。
    */
   siteId?: string;
+  /**
+   * 按所属站点的链接类型过滤。
+   *
+   * 类型是站点层的事实（`site.link_type`），页面表里没有这一列 —— 所以它必须由服务端做：
+   * 拿到 20 行再在前端筛掉本地/IP，分页总数和页码都会对不上。
+   */
+  linkType?: SiteLinkType;
   currentPage?: number;
   pageSize?: number;
 }

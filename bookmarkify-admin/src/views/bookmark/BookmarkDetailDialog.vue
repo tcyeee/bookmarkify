@@ -23,6 +23,18 @@ import { createIngestSocket, type IngestSocketHandle } from "#/api/similarIngest
 import BookmarkAssetCell from "./BookmarkAssetCell.vue";
 import BookmarkIcon from "./BookmarkIcon.vue";
 import {
+  isScrapableType,
+  LINK_TYPE_LABEL,
+  LINK_TYPE_REASON,
+  linkTypeOfUrl,
+} from "./linkType";
+import {
+  FETCH_LAYER_META,
+  formatMetaSources,
+  httpStatusType,
+  metaNeedsAttention,
+} from "./pageMeta";
+import {
   BOOKMARK_LOCKED_FIELD_LABEL,
   DISPLAY_MODE_LABEL,
   EXTRACTOR_LEGEND,
@@ -133,10 +145,17 @@ const current = computed<BookmarkEntity | null>(
   () => props.bookmark ?? resolved.value,
 );
 
+/**
+ * 完整地址。**query 与 fragment 必须带上** —— 它们是 canonical 四元组的后半截，
+ * 少了它们 `/watch?v=A` 与 `/watch?v=B` 的详情弹窗会显示成同一个地址，而拆开这两者
+ * 正是后端 DeepLinkSplitRepair 干的事。库里这两列不含 `?` / `#`。
+ */
 const currentUrl = computed(() => {
   const row = current.value;
   if (!row) return "";
-  return `${row.urlScheme}://${row.urlHost}${row.urlPath ?? ""}`;
+  const query = row.urlQuery ? `?${row.urlQuery}` : "";
+  const fragment = row.urlFragment ? `#${row.urlFragment}` : "";
+  return `${row.urlScheme}://${row.urlHost}${row.urlPath ?? ""}${query}${fragment}`;
 });
 
 const dialogTitle = computed(() => {
@@ -144,6 +163,22 @@ const dialogTitle = computed(() => {
   if (!row) return "书签详情";
   return `书签详情 · ${row.appName || row.title || row.urlHost}`;
 });
+
+// ── 本机 / IP 书签：这条记录不参与抓取 ─────────────────────────────────────────
+//
+// `localhost:5173`、`192.168.0.73:8192`、`47.97.71.143:8001` 这类地址后端从不抓取
+// （ScrapeTargetGuard，E309），所以它们的标题、图标、page_meta、巡检游标**永远**是空的。
+// 照常把那些卡片摆出来，等于让管理员对着一屏"没抓到"去排查一个根本不存在的抓取失败，
+// 然后挨个去点重抓和活性检测——每一次都是一个注定被后端拒绝的请求。
+//
+// 判据优先用后端下发的 linkType（权威值），老数据/反查路径缺这一列时退回按 URL 现算。
+const linkType = computed(
+  () => current.value?.linkType ?? linkTypeOfUrl(currentUrl.value),
+);
+/** 这条书签会不会被抓取。false 时详情页收起全部与抓取相关的展示与操作 */
+const scrapable = computed(() => isScrapableType(linkType.value));
+const notScrapableReason = computed(() => LINK_TYPE_REASON[linkType.value]);
+const linkTypeLabel = computed(() => LINK_TYPE_LABEL[linkType.value]);
 
 async function lookup() {
   if (!props.lookupUrl) return;
@@ -217,7 +252,8 @@ const refetchingAssets = ref(false);
 
 async function refetchAssets() {
   const row = current.value;
-  if (!row) return;
+  // 后端会拒绝这类目标(E309)，前端不必先发一次请求再看它报错
+  if (!row || !scrapable.value) return;
   refetchingAssets.value = true;
   try {
     const res = await refetchBookmarkAssetsApi(row.id);
@@ -340,7 +376,7 @@ function resetLiveness() {
 
 async function checkLiveness() {
   const row = current.value;
-  if (!row) return;
+  if (!row || !scrapable.value) return;
   checkingLiveness.value = true;
   try {
     const result = await checkBookmarkLivenessApi(row.id);
@@ -380,13 +416,15 @@ watch(visible, (opened) => {
   if (props.bookmark) {
     resolved.value = null;
     editingCategoryIds.value = (props.bookmark.categories ?? []).map((c) => c.id);
-    loadSiblings();
+    // 非域名书签不展示「关联网站」，也就不必去查同域页面：localhost 下的"同域页面"
+    // 是别人机器上的另一个服务，摆在一起只会误导
+    if (scrapable.value) loadSiblings();
   } else {
     resolved.value = null;
     lookup().then(() => {
       if (!resolved.value) return;
       editingCategoryIds.value = (resolved.value.categories ?? []).map((c) => c.id);
-      loadSiblings();
+      if (scrapable.value) loadSiblings();
     });
   }
 });
@@ -424,6 +462,25 @@ const parseStatusMeta = computed(() => {
   );
 });
 
+// ── 抓取元数据（page_meta）──────────────────────────────────────────────────────
+const pageMeta = computed(() => current.value?.pageMeta);
+
+/**
+ * 抓取原样的标题/描述是否已经与主表当前生效值分叉。
+ *
+ * 分叉本身就是结论：要么这条被管理员手工改过（多半还带着字段锁），要么站点在上次抓取后
+ * 改了内容而主表那一列被锁住没跟上。不标出来的话，两个几乎一样的字符串摆在一起没人会去比。
+ */
+const titleDiverged = computed(() => {
+  const scraped = pageMeta.value?.title;
+  return !!scraped && scraped !== (current.value?.title ?? "");
+});
+
+const descriptionDiverged = computed(() => {
+  const scraped = pageMeta.value?.description;
+  return !!scraped && scraped !== (current.value?.description ?? "");
+});
+
 function formatBytes(bytes?: number) {
   if (!bytes && bytes !== 0) return "-";
   if (bytes < 1024) return `${bytes} B`;
@@ -436,7 +493,9 @@ function formatTime(value?: string) {
 }
 
 function siblingUrl(row: BookmarkEntity) {
-  return `${row.urlScheme}://${row.urlHost}${row.urlPath ?? ""}`;
+  const query = row.urlQuery ? `?${row.urlQuery}` : "";
+  const fragment = row.urlFragment ? `#${row.urlFragment}` : "";
+  return `${row.urlScheme}://${row.urlHost}${row.urlPath ?? ""}${query}${fragment}`;
 }
 
 // 各卡片内部的图片各成一组，放大后左右翻页只在同类图之间进行
@@ -462,6 +521,19 @@ const livenessImageUrls = computed(() => {
     </div>
 
     <div v-else class="detail-body space-y-4 pr-1 text-sm">
+      <!-- 非域名书签的说明条：把"为什么这页什么都没有"一次讲清楚，
+           省得管理员对着一屏空字段当成抓取故障去排查 -->
+      <div
+        v-if="!scrapable"
+        class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+      >
+        <div class="font-medium">{{ linkTypeLabel }}书签 · 不参与抓取</div>
+        <div class="mt-1 text-xs leading-relaxed">
+          {{ notScrapableReason }}。因此它没有标题、图标、页面元数据与巡检记录，
+          相关卡片与操作已收起 —— 这不是抓取失败。
+        </div>
+      </div>
+
       <!-- 卡片一：基础信息 -->
       <ElCard shadow="never" class="detail-card">
         <template #header>
@@ -481,6 +553,15 @@ const livenessImageUrls = computed(() => {
             <div class="flex flex-wrap justify-center gap-1">
               <ElTag :type="parseStatusMeta.type" size="small" :title="parseStatusMeta.tip">
                 {{ parseStatusMeta.label }}
+              </ElTag>
+              <!-- 状态标签旁边直接标出类型：这类书签的"成功"是「无需抓取」而不是「抓到了」 -->
+              <ElTag
+                v-if="!scrapable"
+                type="info"
+                size="small"
+                :title="notScrapableReason"
+              >
+                {{ linkTypeLabel }}·不抓取
               </ElTag>
               <ElTag v-if="current.antiCrawlerBlocked" type="warning" size="small">
                 反爬拦截
@@ -541,6 +622,11 @@ const livenessImageUrls = computed(() => {
               <span class="w-20 shrink-0 text-gray-500">书签 ID</span>
               <span class="flex-1 break-all text-gray-400">{{ current.id }}</span>
             </div>
+            <!-- 品牌名/图标/NSFW/域名活性都挂在站点上，站点 ID 是接上那一层的唯一钥匙 -->
+            <div class="flex">
+              <span class="w-20 shrink-0 text-gray-500">站点 ID</span>
+              <span class="flex-1 break-all text-gray-400">{{ current.siteId || "-" }}</span>
+            </div>
             <div v-if="current.parseErrMsg" class="flex">
               <span class="w-20 shrink-0 text-gray-500">错误信息</span>
               <span class="flex-1 break-all text-red-500">{{ current.parseErrMsg }}</span>
@@ -549,8 +635,9 @@ const livenessImageUrls = computed(() => {
         </div>
       </ElCard>
 
-      <!-- 卡片二：巡检调度 —— 回答「这条为什么还没被复查」「为什么一直没变」 -->
-      <ElCard shadow="never" class="detail-card">
+      <!-- 卡片二：巡检调度 —— 回答「这条为什么还没被复查」「为什么一直没变」。
+           非域名书签不进巡检队列（pingSweep 按 linkType 过滤掉了它们），这四个游标恒为空 -->
+      <ElCard v-if="scrapable" shadow="never" class="detail-card">
         <template #header>
           <span class="font-medium">巡检与人工锁</span>
         </template>
@@ -593,8 +680,162 @@ const livenessImageUrls = computed(() => {
         </div>
       </ElCard>
 
+      <!--
+        卡片二·五：抓取元数据（page_meta）
+
+        与上面的「标题/描述」不重复：那两个是**当前生效值**（可能被人工改过并加了锁），
+        这里是**抓取原样**，外加主表根本没有的抓取事实 —— 走的哪一层、站点回的什么状态码、
+        canonical 指向哪、每个字段各自从哪个标签取来的。
+        「标题为什么是这个」「这一页到底抓没抓通」只有对着这张卡片才答得出来。
+      -->
+      <ElCard v-if="scrapable" shadow="never" class="detail-card">
+        <template #header>
+          <div class="flex items-center gap-3">
+            <span class="font-medium">抓取元数据</span>
+            <!-- 抓回来了但内容可能不对：抓失败的话主表 parseStatus 早就是 UNREACHABLE 了 -->
+            <ElTag
+              v-if="metaNeedsAttention(pageMeta)"
+              type="warning"
+              size="small"
+              title="抓取层退到了无头浏览器、状态码非 2xx、或被判为反爬挑战页 —— 内容可能不可靠"
+            >
+              需关注
+            </ElTag>
+          </div>
+        </template>
+
+        <div v-if="!pageMeta" class="text-gray-400">
+          该页面从未抓取成功过（page_meta 里没有这一行）
+        </div>
+        <div v-else class="grid grid-cols-2 gap-x-6 gap-y-2">
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">抓取层</span>
+            <span class="flex-1">
+              <ElTag
+                v-if="pageMeta.fetchLayer"
+                :type="FETCH_LAYER_META[pageMeta.fetchLayer]?.type ?? 'info'"
+                size="small"
+                :title="FETCH_LAYER_META[pageMeta.fetchLayer]?.tip"
+              >
+                {{ FETCH_LAYER_META[pageMeta.fetchLayer]?.label ?? pageMeta.fetchLayer }}
+              </ElTag>
+              <span v-else class="text-gray-400">-</span>
+            </span>
+          </div>
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">HTTP 状态</span>
+            <span class="flex-1">
+              <ElTag
+                v-if="pageMeta.httpStatus"
+                :type="httpStatusType(pageMeta.httpStatus)"
+                size="small"
+              >
+                {{ pageMeta.httpStatus }}
+              </ElTag>
+              <span v-else class="text-gray-400">-</span>
+            </span>
+          </div>
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">反爬挑战页</span>
+            <span class="flex-1">
+              <ElTag
+                v-if="pageMeta.antiCrawler"
+                type="warning"
+                size="small"
+                title="抓取侧判定这一页是反爬挑战页，下面的标题/描述都可能是拦截页的文案"
+              >
+                是
+              </ElTag>
+              <span v-else class="text-gray-400">否</span>
+            </span>
+          </div>
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">抓取时间</span>
+            <span class="flex-1">{{ formatTime(pageMeta.fetchedAt) }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">页面语言</span>
+            <span class="flex-1">{{ pageMeta.lang || "-" }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">主题色</span>
+            <span class="flex-1">
+              <span
+                v-if="pageMeta.themeColor"
+                class="mr-1 inline-block h-3 w-3 rounded-sm border align-middle"
+                :style="{ backgroundColor: pageMeta.themeColor }"
+              />
+              {{ pageMeta.themeColor || "-" }}
+            </span>
+          </div>
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">站点名</span>
+            <span class="flex-1 break-all">{{ pageMeta.siteName || "-" }}</span>
+          </div>
+          <div class="flex">
+            <span class="w-24 shrink-0 text-gray-500">站点短名</span>
+            <span class="flex-1 break-all">{{ pageMeta.siteShortName || "-" }}</span>
+          </div>
+          <div class="col-span-2 flex">
+            <span class="w-24 shrink-0 text-gray-500">Canonical</span>
+            <a
+              v-if="pageMeta.canonicalUrl"
+              :href="pageMeta.canonicalUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex-1 break-all text-blue-500"
+            >
+              {{ pageMeta.canonicalUrl }}
+            </a>
+            <span v-else class="flex-1 text-gray-400">-</span>
+          </div>
+          <div class="col-span-2 flex">
+            <span class="w-24 shrink-0 text-gray-500">抓取标题</span>
+            <span class="flex-1 break-all">
+              {{ pageMeta.title || "-" }}
+              <ElTag
+                v-if="titleDiverged"
+                class="ml-1"
+                type="warning"
+                size="small"
+                title="与上面「基础信息」里当前生效的标题不一致 —— 多半是被人工改过（看下面的人工锁），也可能是站点改了内容而该字段被锁住没跟上"
+              >
+                与当前生效值不一致
+              </ElTag>
+            </span>
+          </div>
+          <div class="col-span-2 flex">
+            <span class="w-24 shrink-0 text-gray-500">抓取描述</span>
+            <span class="flex-1 break-all">
+              {{ pageMeta.description || "-" }}
+              <ElTag
+                v-if="descriptionDiverged"
+                class="ml-1"
+                type="warning"
+                size="small"
+                title="与上面「基础信息」里当前生效的描述不一致"
+              >
+                与当前生效值不一致
+              </ElTag>
+            </span>
+          </div>
+          <!-- 字段级出处：「这个标题是 og:title 来的还是 <title> 兜底来的」只有这里有 -->
+          <div class="col-span-2 flex">
+            <span class="w-24 shrink-0 text-gray-500">字段出处</span>
+            <span
+              v-if="pageMeta.metaSources"
+              class="flex-1 break-all"
+              :title="pageMeta.metaSources"
+            >
+              {{ formatMetaSources(pageMeta.metaSources) }}
+            </span>
+            <span v-else class="flex-1 text-gray-400">-</span>
+          </div>
+        </div>
+      </ElCard>
+
       <!-- 卡片三：分类 -->
-      <ElCard shadow="never" class="detail-card">
+      <ElCard v-if="scrapable" shadow="never" class="detail-card">
         <template #header>
           <span class="font-medium">分类</span>
         </template>
@@ -631,7 +872,7 @@ const livenessImageUrls = computed(() => {
       </ElCard>
 
       <!-- 卡片四：图片资产 —— 后台刻意展示**全部**声明的图，而不是选好的那一张 -->
-      <ElCard shadow="never" class="detail-card">
+      <ElCard v-if="scrapable" shadow="never" class="detail-card">
         <template #header>
           <div class="flex items-center gap-3">
             <span class="font-medium">图片资产（{{ (current.assets ?? []).length }}）</span>
@@ -715,7 +956,7 @@ const livenessImageUrls = computed(() => {
       </ElCard>
 
       <!-- 卡片五：显示设置 —— 大图/列表两种模式的取图优先级相反，所以按模式分行 -->
-      <ElCard shadow="never" class="detail-card">
+      <ElCard v-if="scrapable" shadow="never" class="detail-card">
         <template #header>
           <span class="font-medium">显示设置</span>
         </template>
@@ -759,7 +1000,7 @@ const livenessImageUrls = computed(() => {
       </ElCard>
 
       <!-- 卡片六：关联网站 —— 同域名下已收录的其它页面 + AI 推荐的相似站点 -->
-      <ElCard shadow="never" class="detail-card">
+      <ElCard v-if="scrapable" shadow="never" class="detail-card">
         <template #header>
           <div class="flex items-center gap-3">
             <span class="font-medium">关联网站</span>
@@ -943,7 +1184,13 @@ const livenessImageUrls = computed(() => {
     <template #footer>
       <!-- 调用方追加的页面专属操作（如图标平铺页的「图标设置」） -->
       <slot name="extra-actions" :bookmark="current" />
-      <ElButton :disabled="!current" :loading="checkingLiveness" @click="checkLiveness">
+      <!-- 非域名书签不给点：这次检测后端一定会拒（E309），点了只会弹一条报错 -->
+      <ElButton
+        :disabled="!current || !scrapable"
+        :loading="checkingLiveness"
+        :title="scrapable ? undefined : `${linkTypeLabel}不参与抓取，无法检测活性`"
+        @click="checkLiveness"
+      >
         检测活性
       </ElButton>
       <ElButton @click="visible = false">关闭</ElButton>

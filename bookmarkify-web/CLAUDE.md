@@ -134,7 +134,7 @@ Pinia stores, `@vueuse/core` composables, and Vue components are auto-imported b
 
 ## Notes
 
-- `public/upload/` and `server/routes/upload/[...path].ts` are dev-only static file proxies; production serves files from `https://file.bookmarkify.cc` (see `server/config/image.config.ts`).
+- `public/upload/` and `server/routes/upload/[...path].ts` are dev-only static file proxies; production serves files from `https://cdn.bookmarkify.cc` (see `server/config/image.config.ts`).
 - `pages/market.vue` is a stub; not yet implemented.
 - `AGENTS.md` documents per-domain agent roles (UI, state, API, styling, auth) with deeper conventions for each — useful when scoping a task to one area.
 - `api.md` describes the backend API surface this client consumes.
