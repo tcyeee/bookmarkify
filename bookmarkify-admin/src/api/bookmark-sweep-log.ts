@@ -14,13 +14,25 @@ export interface BookmarkSweepLogVO {
   taskLabel: string;
   /** 本轮实际处理的候选数（已按 LIMIT 截断） */
   candidates: number;
-  /** 到期候选总数，不含 LIMIT。持续大于 candidates 即说明检测间隔配置追不上数据量 */
+  /**
+   * 到期候选总数，不含 LIMIT，也不含非域名类型的过滤。
+   *
+   * 判断「检测间隔追不上数据量」要拿它和 `batchSize` 比，**不能**和 `candidates` 比：后者还扣掉了
+   * 本地地址/IP 这类不该探测的记录，只要本轮混进一条，`backlog > candidates` 就恒成立。
+   */
   backlog: number;
+  /** 本轮的单次处理上限（LIMIT），即 backlog 该对比的阈值。null = 2026-08-08 之前的历史行 */
+  batchSize: null | number;
+  /** 真正发起了探测的条数，也是熔断判据的分母 */
   probed: number;
   /** 被站点层短路、直接复用上一轮站点结论的条数 */
   shortCircuited: number;
+  /** 短路的那部分里结论为 DEAD 的条数（其余为 UNKNOWN，不会有 ALIVE）。null = 历史行 */
+  shortCircuitedDead: null | number;
   aliveCount: number;
+  /** 判定失联的条数，**含**站点层短路复用的结论；其中短路的部分见 shortCircuitedDead */
   deadCount: number;
+  /** 无结论的条数，**含**站点层短路复用的结论 */
   unknownCount: number;
   triggeredParse: number;
   /** 想重新抓取但因解析队列余量不足被推迟到下一轮的条数 */
@@ -61,6 +73,14 @@ export const SWEEP_TASK_LABELS: Record<string, string> = {
   // 保留映射是为了让历史 sweep_log 行仍能显示中文名，而不是退化成一个方法名。
   reviveArchivedBookmarks: '归档复活',
 };
+
+/**
+ * 已下线、只会出现在历史行里的巡检任务。
+ *
+ * 筛选下拉里仍要留着它（90 天保留期内还查得到那些轮次），但必须标出来 —— 否则一个已经不存在的
+ * 任务看上去和在跑的两个一模一样，「它怎么最近一条都没有」会被当成故障去查。
+ */
+export const SWEEP_TASK_RETIRED = new Set(['reviveArchivedBookmarks']);
 
 export async function getAdminSweepLogListApi(params: BookmarkSweepLogSearchParams) {
   return requestClient.post<PageResult<BookmarkSweepLogVO>>(

@@ -4,6 +4,7 @@ import type { WebsiteLivenessCheckResult } from "#/api/website";
 import { computed, defineAsyncComponent, ref, watch } from "vue";
 
 import { checkWebsiteLivenessApi } from "#/api/website";
+import { isScrapableUrl, LINK_TYPE_REASON, linkTypeOfUrl } from "#/views/bookmark/linkType";
 
 const props = defineProps<{
   /** 待重新解析的 URL */
@@ -35,19 +36,30 @@ const ElButton = defineAsyncComponent(() =>
 
 const loading = ref(false);
 const result = ref<null | WebsiteLivenessCheckResult>(null);
+/** 非空表示本次压根没发起抓取，值就是拒绝的理由 */
+const refusedReason = ref("");
 
 /** 打开对话框时自动发起一次解析；关闭时清空上一次结果 */
 watch(visible, (opened) => {
   if (opened) {
     result.value = null;
+    refusedReason.value = "";
     parse();
   } else {
     result.value = null;
+    refusedReason.value = "";
   }
 });
 
 async function parse() {
   if (!props.url) return;
+  // 本机/IP 地址后端会直接拒(E309)，别把一次注定失败的抓取发出去；
+  // 调用方(调用日志页)已经禁用了这类行的重试按钮，这里是第二道
+  if (!isScrapableUrl(props.url)) {
+    refusedReason.value = `${LINK_TYPE_REASON[linkTypeOfUrl(props.url)]}，我方不抓取这类地址`;
+    return;
+  }
+  refusedReason.value = "";
   loading.value = true;
   try {
     result.value = await checkWebsiteLivenessApi(props.url);
@@ -97,10 +109,26 @@ const rawJson = computed(() => {
     <div class="mb-3 flex items-center gap-2 text-sm">
       <span class="shrink-0 text-gray-500">URL</span>
       <span class="flex-1 break-all">{{ url }}</span>
-      <ElButton size="small" :loading="loading" @click="parse">重新解析</ElButton>
+      <ElButton
+        size="small"
+        :loading="loading"
+        :disabled="!!refusedReason"
+        @click="parse"
+      >
+        重新解析
+      </ElButton>
     </div>
 
-    <div v-if="loading" class="py-10 text-center text-sm text-gray-400">解析中…</div>
+    <!-- 拒绝抓取：说清楚是「我方不抓」而不是「抓了但失败」，否则看着像一次故障 -->
+    <div
+      v-if="refusedReason"
+      class="rounded border border-amber-200 bg-amber-50 px-3 py-4 text-sm leading-relaxed text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+    >
+      <div class="font-medium">该地址不参与抓取</div>
+      <div class="mt-1 text-xs">{{ refusedReason }}。本次没有发起任何抓取请求。</div>
+    </div>
+
+    <div v-else-if="loading" class="py-10 text-center text-sm text-gray-400">解析中…</div>
 
     <div v-else-if="result" class="flex flex-col gap-4 lg:flex-row">
       <!-- 左：带样式的信息 -->

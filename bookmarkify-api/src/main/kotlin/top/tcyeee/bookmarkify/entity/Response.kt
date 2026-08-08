@@ -23,6 +23,7 @@ import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 import top.tcyeee.bookmarkify.server.asset.BookmarkDisplayPolicy
 import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
 import top.tcyeee.bookmarkify.utils.OssUtils
+import top.tcyeee.bookmarkify.utils.WebsiteParser
 import java.time.LocalDateTime
 
 data class AdminGridConfigVO(
@@ -257,6 +258,14 @@ data class UserLayoutNodeVO(
 
 data class BookmarkAdminVO(
     var id: String,
+    /**
+     * 所属站点ID。
+     *
+     * 页面层的一半信息其实挂在站点上（品牌名/图标/NSFW/域名活性），后台看一行页面时
+     * 「它属于哪个站」是唯一能把两张表接起来的钥匙 —— 不下发就只能拿 urlHost 去猜，
+     * 而 host 是可以重复指向同一站点的冗余副本，不是主键。
+     */
+    @field:Schema(description = "所属站点ID") var siteId: String = "",
     @field:Schema(description = "书签根域名") var urlHost: String,        // sfz.uzuzuz.com.cn
     @field:Schema(description = "路径URL(不带参数)") var urlPath: String? = null,         // /test/info
     /* query 与 fragment 是 canonical 四元组的一部分，不是可省的细节：少了它们，
@@ -265,6 +274,15 @@ data class BookmarkAdminVO(
     @field:Schema(description = "规范化后的查询参数，无参数为空串") var urlQuery: String = "",
     @field:Schema(description = "路由型 fragment(#/… / #!…)，页内锚点不存") var urlFragment: String = "",
     @field:Schema(description = "书签基础HTTP协议") var urlScheme: String, // http or https
+    /**
+     * 链接类型。由 `urlHost` 现算，**不在 BeanUtil 拷贝范围内**（`page` 表没有这一列）。
+     *
+     * 后台靠它把「这条书签根本不会被抓取」这件事说明白：非 DOMAIN 的书签（localhost、
+     * 裸 IP）从来没有、也永远不会有标题/图标/元数据，详情页上那些空字段不是抓取失败，
+     * 是我方主动不抓（见 [top.tcyeee.bookmarkify.utils.ScrapeTargetGuard]）。不下发这一列，
+     * 后台就只能拿这些书签当"抓取失败"处理，管理员会一遍遍去点重抓。
+     */
+    @field:Schema(description = "链接类型(域名/本地/IP/其他)，非域名不参与抓取") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
 
     /* 基础信息 */
     @field:Schema(description = "书签简称") var appName: String? = null,
@@ -299,6 +317,16 @@ data class BookmarkAdminVO(
     @field:Schema(description = "下次巡检时间") var nextCheckAt: LocalDateTime? = null,
     @field:Schema(description = "连续探测失败次数") var consecutiveFail: Int = 0,
     @field:Schema(description = "被人工锁定、不会被自动抓取覆盖的字段") var lockedFields: List<PageLockedField> = emptyList(),
+
+    /**
+     * 最近一次抓取留下的页面元数据（`page_meta` 一行）。
+     *
+     * 与上面的 `title` / `description` 不是重复：主表那两列是**当前生效值**，可能被管理员
+     * 手工改过并加了锁；这里是**抓取原样**，加上主表根本没有的抓取事实（走的哪一层、
+     * HTTP 状态码、canonical、语言、主题色、字段级出处）。「标题为什么是这个」「这页到底
+     * 抓没抓通」只有对着这份才答得出来。抓取从未成功过的页面为 null。
+     */
+    @field:Schema(description = "最近一次抓取的页面元数据(page_meta)") var pageMeta: PageMetaAdminVO? = null,
 ) {
     constructor(entity: PageEntity) : this(
         id = entity.id,
@@ -310,7 +338,51 @@ data class BookmarkAdminVO(
         // 交给 BeanUtil 硬转会抛异常，把整个后台详情接口带下去。
         BeanUtil.copyProperties(entity, this, "lockedFields")
         lockedFields = entity.lockedFieldSet.toList()
+        // page 表没有 link_type 这一列，BeanUtil 拷不到，必须显式算。
+        // 漏了这一句不会报错，字段只会永远停在 OTHER —— 正是 CLAUDE.md 里记着的那个坑
+        linkType = WebsiteParser.classifyLinkType(entity.urlHost)
     }
+}
+
+/**
+ * 管理后台的页面元数据视图（`page_meta` 一行一页）。
+ *
+ * 这张表此前完全没有对外出口：抓取往里写，谁也不读。后果是后台能看到"标题是什么"，
+ * 却看不到"这个标题是从 og:title 来的还是从 <title> 兜底来的"、"这一页是 HTTP 直取还是
+ * 退到了无头浏览器"、"抓的时候服务端回的是 200 还是 403" —— 而排查抓取质量问题需要的
+ * 恰好是后面这些。
+ */
+data class PageMetaAdminVO(
+    @field:Schema(description = "抓取到的页面标题(未经人工覆盖)") var title: String? = null,
+    @field:Schema(description = "抓取到的页面描述(未经人工覆盖)") var description: String? = null,
+    @field:Schema(description = "本页声明的站点名(og:site_name)") var siteName: String? = null,
+    @field:Schema(description = "本页声明的站点短名(manifest.short_name)") var siteShortName: String? = null,
+    @field:Schema(description = "页面自己声明的 canonical 地址") var canonicalUrl: String? = null,
+    @field:Schema(description = "页面语言(html lang)") var lang: String? = null,
+    @field:Schema(description = "主题色(meta theme-color)") var themeColor: String? = null,
+    /** 原样下发的 JSON 字符串：形如 `{"title":{"extractor":"OG","rawKey":"og:title"}}`。 */
+    @field:Schema(description = "各字段出处(JSON 原文)") var metaSources: String? = null,
+    @field:Schema(description = "实际抓取层 HTTP/HEADLESS") var fetchLayer: String? = null,
+    @field:Schema(description = "抓取时目标站返回的 HTTP 状态码") var httpStatus: Int? = null,
+    @field:Schema(description = "疑似反爬挑战页,内容不可靠") var antiCrawler: Boolean = false,
+    @field:Schema(description = "本次抓取时间") var fetchedAt: LocalDateTime? = null,
+    @field:Schema(description = "该行更新时间") var updateTime: LocalDateTime? = null,
+) {
+    constructor(entity: PageMetaEntity) : this(
+        title = entity.title,
+        description = entity.description,
+        siteName = entity.siteName,
+        siteShortName = entity.siteShortName,
+        canonicalUrl = entity.canonicalUrl,
+        lang = entity.lang,
+        themeColor = entity.themeColor,
+        metaSources = entity.metaSources,
+        fetchLayer = entity.fetchLayer,
+        httpStatus = entity.httpStatus,
+        antiCrawler = entity.antiCrawler,
+        fetchedAt = entity.fetchedAt,
+        updateTime = entity.updateTime,
+    )
 }
 
 /**
@@ -548,6 +620,17 @@ data class ScrapperCallLogVO(
     @field:Schema(description = "耗时(ms)") var durationMs: Long = 0,
     @field:Schema(description = "错误信息") var errorMsg: String? = null,
     @field:Schema(description = "调用时间") var createTime: LocalDateTime = LocalDateTime.now(),
+    /**
+     * 该域名的站点图标（我方 OSS 签名地址）。
+     *
+     * 日志表本身不存图标，这一列是按 `urlHost` 反查站点资产补上的，为空是常态 ——
+     * 我方从没成功抓到过这个站的图标时就没有，前端应当落本地兜底图。
+     * **不要**在前端拿 host 拼 `https://<host>/favicon.ico` 来填这个空：那是直连外站。
+     *
+     * 注意它不参与上面的 [BeanUtil.copyProperties]（源实体没有这个属性），必须由
+     * 调用方显式赋值。
+     */
+    @field:Schema(description = "站点图标签名地址，我方无此站图标时为空") var faviconUrl: String? = null,
 ) {
     constructor(entity: ScrapperCallLogEntity) : this(
         id = entity.id,
@@ -702,6 +785,40 @@ data class UserShareAdminVO(
         createTime = entity.createTime,
     )
 }
+
+/**
+ * 管理后台分享详情里的单条书签。
+ *
+ * 刻意不直接下发 [BookmarkShow]：审核这件事要看的恰恰是它 `@JsonIgnore` 掉的 `nsfw` ——
+ * 那个字段对前台是内部判定，对后台是「这条分享为什么该拦」的唯一依据。
+ */
+data class ShareAdminBookmarkVO(
+    @field:Schema(description = "书签ID(bookmark.id)") var bookmarkId: String? = null,
+    @field:Schema(description = "页面ID(page.id)") var pageId: String? = null,
+    @field:Schema(description = "标题(按 TILE 模式解析后的最终文案)") var title: String? = null,
+    @field:Schema(description = "描述") var description: String? = null,
+    @field:Schema(description = "完整URL") var urlFull: String? = null,
+    @field:Schema(description = "图标签名地址；走首字母色块时为 null") var iconUrl: String? = null,
+    @field:Schema(description = "链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
+    @field:Schema(description = "站点是否被判定为疑似违规(NSFW)") var nsfw: Boolean = false,
+) {
+    constructor(show: BookmarkShow) : this(
+        bookmarkId = show.bookmarkId,
+        pageId = show.pageId,
+        title = show.title,
+        description = show.description,
+        urlFull = show.urlFull,
+        iconUrl = show.logo.url,
+        linkType = show.linkType,
+        nsfw = show.nsfw,
+    )
+}
+
+/** 管理后台分享详情：列表条目的全部字段 + 分享包含的书签 */
+data class ShareAdminDetailVO(
+    @field:Schema(description = "分享本身的信息") var share: UserShareAdminVO,
+    @field:Schema(description = "分享包含的全部书签(按分享内排序)") var bookmarks: List<ShareAdminBookmarkVO> = emptyList(),
+)
 
 /** 访问令牌列表条目(不含明文 token) */
 data class AccessTokenVO(

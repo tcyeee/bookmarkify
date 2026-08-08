@@ -35,6 +35,31 @@ export async function getAdminShareListApi(params: ShareSearchParams) {
   );
 }
 
+export interface ShareBookmarkVO {
+  bookmarkId?: string;
+  pageId?: string;
+  title?: string;
+  description?: string;
+  urlFull?: string;
+  /** 图标签名地址；走首字母色块时为 null */
+  iconUrl?: null | string;
+  linkType?: string;
+  /** 站点被判定为疑似违规 */
+  nsfw?: boolean;
+}
+
+export interface ShareDetailVO {
+  share: UserShareAdminVO;
+  bookmarks: ShareBookmarkVO[];
+}
+
+/** 查看某个分享的详情(含其包含的全部书签)；分享不存在时返回 null */
+export async function getAdminShareDetailApi(id: string) {
+  return requestClient.get<null | ShareDetailVO>('/admin/share/detail', {
+    params: { id },
+  });
+}
+
 /** 强制下架某个分享 */
 export async function takeDownShareApi(id: string) {
   return requestClient.post<boolean>(`/admin/share/takedown?id=${id}`);

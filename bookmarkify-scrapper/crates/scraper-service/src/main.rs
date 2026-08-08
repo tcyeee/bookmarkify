@@ -318,9 +318,11 @@ struct PingResponse {
     reachable: bool,
     /// 最终一跳的 HTTP 状态码；`reachable = false` 时为 null
     status: Option<u16>,
-    /// 被本服务的 SSRF 策略拒绝。**不是**关于站点的事实，API 侧据此判成"无结论"
+    /// 被本服务拒绝探测：SSRF 策略判定打向内网，或目标压根不是域名（裸 IP / localhost）。
+    /// 两者都**不是**关于站点的事实，API 侧据此判成"无结论"而非失联
     blocked: bool,
-    /// 实际用到的方法："HEAD"，或对 HEAD 不支持的服务器回退成的 "GET"
+    /// 实际用到的方法："HEAD"、对 HEAD 不支持的服务器回退成的 "GET"，
+    /// 或压根没探时的 "NONE"
     method: &'static str,
     /// 跟随了几跳重定向
     redirects: u8,
@@ -366,6 +368,36 @@ async fn ping_handler(State(state): State<AppState>, Json(body): Json<PingReques
     }
 
     let domain = url.host_str().unwrap_or(&body.url).to_string();
+
+    // 裸 IP / localhost 在探测之前就拒掉：探它没有意义（见 validate_target_is_domain）。
+    // 放在 probe 之前而不是让 SSRF 那层去挡，是因为 SSRF 只拦私有段 —— 一个公网裸 IP
+    // 会被放行并真的连过去，而它同样不是网站。
+    //
+    // ⚠️ **拒绝要报成 `blocked`，不能像 /scrape 那样回 403 `FORBIDDEN_TARGET`。**
+    // 两个服务各自独立发布，"新 scrapper + 老 API"的窗口必然存在，而线上那版 API 的
+    // `classifyScrapperError` 把 `FORBIDDEN_TARGET` 归进 E304「域名无法访问」，ping 路径
+    // 据此判 **DEAD** —— 那个窗口里每一条 localhost / IP 书签都会被标成失联，恰好是这整
+    // 条改动要防的事。改造前这类目标走的是「probe → SSRF 拦下 → `blocked: true`」，两版
+    // API 都读成 UNKNOWN，所以照原样报 `blocked` 就两个方向都不需要部署顺序（见
+    // `PingResponse`）。语义上也对得上：`blocked` 说的是"本服务拒绝了这次探测"，
+    // 而"这不是个网站"和"这打到内网"同属这一类，都不是关于站点的事实。
+    if scraper::validate_target_is_domain(&url).is_err() {
+        tracing::info!(domain, "ping rejected: not a domain target");
+        return Json(PingResponse {
+            reachable: false,
+            status: None,
+            blocked: true,
+            method: "NONE",
+            redirects: 0,
+            elapsed_ms: 0,
+            // 只有 reachable/blocked 都读不到的老版本才会看这个字段，而它只有活/死两态。
+            // 取 true 不是在断言这个地址活着，而是在这两个选项里挑不会造成损害的那个：
+            // false 会让那版 API 把书签标成失联，正是本分支要避免的
+            alive: true,
+        })
+        .into_response();
+    }
+
     tracing::info!(domain, "ping");
 
     // SSRF 校验在 `scraper::probe` 内部逐跳进行（含首跳）：共享客户端的 SsrfSafeResolver
@@ -456,10 +488,21 @@ async fn scrape_handler(
     };
 
     let start = Instant::now();
-    let domain = reqwest::Url::parse(&body.url)
-        .ok()
+    let parsed_url = reqwest::Url::parse(&body.url).ok();
+    let domain = parsed_url
+        .as_ref()
         .and_then(|u| u.host_str().map(str::to_string))
         .unwrap_or_else(|| body.url.clone());
+
+    // 裸 IP / localhost 在**任何**动作之前拒绝：不查缓存、不写负缓存、不发一个字节。
+    // 这类目标不是网站，抓回来的东西对书签没有价值，却要付一次完整取回加无头回退的代价。
+    // URL 解析不出来时不在这里管，交给下面既有的解析失败分支报 INVALID_URL。
+    if let Some(url) = parsed_url.as_ref() {
+        if let Err(e) = scraper::validate_target_is_domain(url) {
+            tracing::info!(domain, "scrape rejected: not a domain target");
+            return scrape_error_response(e, start.elapsed().as_millis() as u64);
+        }
+    }
 
     // 近期失败的 URL 直接拒绝，防止重复触发高开销的 headless 抓取
     if body.cache.mode != CacheMode::Bypass && state.cache.get_error(&body.url).await {
@@ -1857,15 +1900,22 @@ mod tests {
         assert_eq!(json["error"], "INVALID_URL");
     }
 
-    /// Regression test for an SSRF gap found in review: `ping_handler` used to rely
-    /// solely on the shared client's DNS-level `SsrfSafeResolver`, which is never
-    /// consulted for hosts that are already IP literals (hyper connects to those
-    /// directly) — so `"http://127.0.0.1:<port>/"` reached a real local listener
-    /// instead of being blocked. Verifies both that the target is reported as
-    /// not-alive AND that the local listener is never actually contacted, proving
-    /// it's blocked pre-flight rather than just refused for some other reason.
+    /// 回环字面量的 `/ping` 在**发起探测之前**就被 `validate_target_is_domain` 拒掉：
+    /// 报 200 + `blocked: true`，且本地监听器一个连接都收不到。
+    ///
+    /// 拒绝**不能**报成 403 `FORBIDDEN_TARGET`（`/scrape` 那边就是这么报的）：线上那版
+    /// API 把该错误码归进 E304「域名无法访问」，ping 路径据此判 DEAD，于是"新 scrapper +
+    /// 老 API"的发布窗口里所有 localhost / IP 书签会被标成失联。`blocked` 两版 API 都读成
+    /// 「无结论」，两个方向都不需要部署顺序 —— 见 [`PingResponse`]。
+    ///
+    /// 这条用例原本守的是另一件事（评审时发现的 SSRF 缺口：`ping_handler` 只依赖共享
+    /// 客户端的 `SsrfSafeResolver`，而 host 已是 IP 字面量时 DNS 环节整个被跳过，
+    /// `http://127.0.0.1:<port>/` 于是直达本地监听器）。那个缺口由 `probe` 内部的逐跳
+    /// 校验修好，覆盖它的用例现在是 [`probe_blocks_loopback_ip_literal_and_never_connects`]
+    /// —— 两条都要留着：这里守的是"裸 IP 根本不该进探测流程"，那里守的是"万一进了，
+    /// SSRF 那层仍然拦得住"。
     #[tokio::test]
-    async fn ping_blocks_loopback_ip_literal_and_never_connects() {
+    async fn ping_rejects_ip_literal_before_probing() {
         let _env = env_guard().await;
         std::env::remove_var("SSRF_ALLOW_PRIVATE");
 
@@ -1893,18 +1943,83 @@ mod tests {
         let (status, json) = call(app, req).await;
 
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(json["alive"], false);
-        // 关键的一条：被我方拦下必须报成 blocked，而不是"站点不可达"。API 侧据此
-        // 判成「无结论」而非「失联」—— 一个我方的安全决策不该给用户的书签判死
         assert_eq!(json["blocked"], true);
         assert_eq!(json["reachable"], false);
         assert!(json["status"].is_null());
+        // 老版本 API 只看这一个字段，且只有活/死两态。取 true 是为了不让它判死 ——
+        // 判死正是这条拒绝要避免的后果
+        assert_eq!(json["alive"], true);
+        assert_eq!(json["error"], serde_json::Value::Null);
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert_eq!(
             hits.load(Ordering::SeqCst),
             0,
             "loopback listener should never be contacted"
+        );
+    }
+
+    /// `localhost` 走的是主机名分支（不是 IP 字面量），同样必须在探测前被拒。
+    #[tokio::test]
+    async fn ping_rejects_localhost_hostname() {
+        let _env = env_guard().await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        let app = build_router(test_state(), 32);
+        let req = json_request(
+            "POST",
+            "/ping",
+            serde_json::json!({"url": "http://localhost:5173/"}),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["blocked"], true);
+        assert_eq!(json["reachable"], false);
+        assert_eq!(json["alive"], true);
+    }
+
+    /// 公网裸 IP 同样拒绝。这一条是本次改动的**核心**：SSRF 那层只拦私有段，
+    /// 它一直是放行的 —— 而 `http://47.97.71.143:8001/` 抓回来只会是一个登录页。
+    #[tokio::test]
+    async fn scrape_rejects_public_ip_literal() {
+        let _env = env_guard().await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        let app = build_router(test_state(), 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({"url": "http://47.97.71.143:8001/"}),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(json["error"], "FORBIDDEN_TARGET");
+        assert!(
+            json["detail"].as_str().unwrap_or_default().contains("IP"),
+            "detail 要说清拒绝的理由，调用方会把它原样透出给管理员"
+        );
+    }
+
+    /// 拒绝发生在负缓存之前：这类目标不该在任何缓存里占位。
+    #[tokio::test]
+    async fn scrape_rejects_localhost_without_touching_cache() {
+        let _env = env_guard().await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        let state = test_state();
+        let cache = Arc::clone(&state.cache);
+        let app = build_router(state, 32);
+        let req = json_request(
+            "POST",
+            "/scrape",
+            serde_json::json!({"url": "http://localhost:5000/"}),
+            None,
+        );
+        let (status, json) = call(app, req).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(json["error"], "FORBIDDEN_TARGET");
+        assert!(
+            !cache.get_error("http://localhost:5000/").await,
+            "被拒的目标不该写进负缓存"
         );
     }
 
@@ -2078,6 +2193,48 @@ mod tests {
         assert_eq!(json["method"], "GET", "复核过一次，所以最终方法是 GET");
 
         std::env::remove_var("SSRF_ALLOW_PRIVATE");
+    }
+
+    /// SSRF 缺口的原始回归用例，从 `/ping` 下沉到 [`scraper::probe`]：`/ping` 现在在
+    /// 更前面就用 `validate_target_is_domain` 把裸 IP 拒了，那道门会把这条命题挡在门外，
+    /// 于是它守不住"探测流程内部仍然拦得住回环地址"这件事 —— 而那才是原用例的价值。
+    ///
+    /// 缺口本身：共享客户端的 `SsrfSafeResolver` 只在需要解析主机名时才被咨询，host 已是
+    /// IP 字面量时 hyper 直接连过去。修法是 `probe` 逐跳自行校验（含首跳）。
+    #[tokio::test]
+    async fn probe_blocks_loopback_ip_literal_and_never_connects() {
+        let _env = env_guard().await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+
+        let hits = Arc::new(AtomicUsize::new(0));
+        let hits_clone = Arc::clone(&hits);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                hits_clone.fetch_add(1, Ordering::SeqCst);
+                use tokio::io::AsyncWriteExt;
+                let _ = socket
+                    .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n")
+                    .await;
+            }
+        });
+
+        let url = reqwest::Url::parse(&format!("http://{addr}/")).unwrap();
+        let outcome = scraper::probe(&url, &test_state().client).await;
+
+        // 被我方拦下必须报成 blocked，而不是"站点不可达"。API 侧据此判成「无结论」
+        // 而非「失联」—— 一个我方的安全决策不该给用户的书签判死
+        assert!(outcome.blocked);
+        assert!(!outcome.reachable);
+        assert!(outcome.status.is_none());
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(
+            hits.load(Ordering::SeqCst),
+            0,
+            "loopback listener should never be contacted"
+        );
     }
 
     /// 连不上时是 `reachable = false`，且**不带** blocked —— 与"我方拒绝去连"必须分开：

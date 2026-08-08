@@ -8,6 +8,7 @@ import { formatDateTime } from "@vben/utils";
 
 import { getAdminUserListApi } from "#/api";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
+import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
@@ -16,32 +17,11 @@ const ElCard = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElCard)
 );
 
-const ElForm = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/form/index"),
-    import("element-plus/es/components/form/style/css"),
-  ]).then(([res]) => res.ElForm)
-);
-
-const ElFormItem = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/form/index"),
-    import("element-plus/es/components/form/style/css"),
-  ]).then(([res]) => res.ElFormItem)
-);
-
 const ElInput = defineAsyncComponent(() =>
   Promise.all([
     import("element-plus/es/components/input/index"),
     import("element-plus/es/components/input/style/css"),
   ]).then(([res]) => res.ElInput)
-);
-
-const ElButton = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/button/index"),
-    import("element-plus/es/components/button/style/css"),
-  ]).then(([res]) => res.ElButton)
 );
 
 const ElTag = defineAsyncComponent(() =>
@@ -119,15 +99,7 @@ const gridOptions: VxeGridProps<UserAdminVO> = {
 
 const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
 
-function handleSearch() {
-  gridApi.reload();
-}
-
-function handleReset() {
-  searchForm.name = "";
-  searchForm.status = undefined;
-  gridApi.reload();
-}
+const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
 </script>
 
 <template>
@@ -138,24 +110,18 @@ function handleReset() {
           <span>全部用户</span>
         </div>
       </template>
-      <div class="mb-4">
-        <ElForm :inline="true" :model="searchForm">
-          <ElFormItem label="搜索">
-            <ElInput v-model="searchForm.name" placeholder="昵称 / 邮箱 / 手机号" clearable />
-          </ElFormItem>
-          <ElFormItem label="状态">
-            <ElSelect v-model="searchForm.status" placeholder="全部" clearable style="width: 120px">
-              <ElOption label="正常" value="NORMAL" />
-              <ElOption label="禁用" value="DISABLED" />
-              <ElOption label="已删除" value="DELETED" />
-            </ElSelect>
-          </ElFormItem>
-          <ElFormItem>
-            <ElButton type="primary" @click="handleSearch">搜索</ElButton>
-            <ElButton class="ml-2" @click="handleReset">重置</ElButton>
-          </ElFormItem>
-        </ElForm>
-      </div>
+      <FilterBar class="mb-4" @reset="reset">
+        <FilterItem label="关键字" width="240px">
+          <ElInput v-model="searchForm.name" placeholder="昵称 / 邮箱 / 手机号" clearable />
+        </FilterItem>
+        <FilterItem label="状态" width="120px">
+          <ElSelect v-model="searchForm.status" placeholder="全部" clearable>
+            <ElOption label="正常" value="NORMAL" />
+            <ElOption label="禁用" value="DISABLED" />
+            <ElOption label="已删除" value="DELETED" />
+          </ElSelect>
+        </FilterItem>
+      </FilterBar>
       <Grid>
         <template #role="{ row }">
           <ElTag v-if="row.role === 'ADMIN'" type="danger" size="small">

@@ -27,7 +27,7 @@ services:
       # --- File storage ---
       LOG_DIR: /opt/bookmarkify/logs
       FILE_UPLOAD_DIR: /opt/bookmarkify/file/
-      FILE_UPLOAD_PREFIX: https://file.bookmarkify.cc
+      FILE_UPLOAD_PREFIX: https://cdn.bookmarkify.cc
       # --- WeChat Work email API (secrets from .env) ---
       BOOKMARKIFY_WECHAT_WORK_CORPID: ${BOOKMARKIFY_WECHAT_WORK_CORPID}
       BOOKMARKIFY_WECHAT_WORK_CORPSECRET: ${BOOKMARKIFY_WECHAT_WORK_CORPSECRET}
@@ -37,6 +37,13 @@ services:
       BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
       BOOKMARKIFY_ALIYUN_OSS_BUCKET_NAME: ${OSS_BUCKET}
       BOOKMARKIFY_ALIYUN_OSS_DOMAIN: https://cdn.bookmarkify.cc
+      # --- 自建缓存代理（省掉按次计费的 OSS GET 与图片处理，详见 deploy/nginx/oss-cache-proxy.conf）---
+      # 留空 = 关闭，一切按签名直连 OSS。开启顺序不能反：nginx 那份 /oss/ 配置必须先装好并 reload，
+      # 先开这个开关会让全站图片 404。
+      BOOKMARKIFY_ALIYUN_OSS_PROXY_DOMAIN: ${OSS_PROXY_DOMAIN:-}
+      # nginx 回源 /internal/asset/** 时带的共享密钥。留空 = 该端点整体关闭（一律 404）。
+      # 必须与 nginx 里 proxy_set_header X-Internal-Token 的值一致。
+      BOOKMARKIFY_ALIYUN_OSS_PROXY_TOKEN: ${OSS_PROXY_TOKEN:-}
       # --- DeepSeek LLM (secret from .env) ---
       BOOKMARKIFY_DEEPSEEK_API_KEY: ${BOOKMARKIFY_DEEPSEEK_API_KEY}
       # --- Google 登录（Client ID 为公开值；国内服务器经同网络的 clash 容器代理访问 Google）---

@@ -187,6 +187,49 @@ impl reqwest::dns::Resolve for SsrfSafeResolver {
     }
 }
 
+/// 判断主机名是否属于「本机」这一族：`localhost` 本身，以及 RFC 6761 保留给它的
+/// `*.localhost` 子域。大小写不敏感，末尾的根点（`localhost.`）一并归一。
+pub fn is_localhost_name(host: &str) -> bool {
+    let name = host.trim_end_matches('.').to_ascii_lowercase();
+    name == "localhost" || name.ends_with(".localhost")
+}
+
+/// 抓取目标必须是一个**域名**：IP 字面量（不分公私网）与 `localhost` 一律拒绝。
+///
+/// 这一层跟 [`validate_target_host`] 的 SSRF 防护是两件事，别合并：
+///
+/// - SSRF 防护回答的是「这个地址会不会打到我方内网」，所以它只拦私有段，公网 IP 放行；
+/// - 这里回答的是「这个目标值不值得抓」。`http://47.97.71.143:8001/` 是别人内网服务
+///   暴露在公网的端口，我方抓回来的只会是一个登录页；`http://127.0.0.1:5000/` 指的是
+///   **抓取容器自己**，抓它毫无意义。两者都不是网站，抓取的产物（标题/图标/OG 图）
+///   对书签没有任何价值，却要付一次完整的取回 + 无头回退的代价。
+///
+/// 放在最前面（进缓存、进负缓存、进任何网络动作之前）是刻意的：这类目标不该在
+/// 缓存里占位，也不该在调用方的日志里留下一条"失败"记录 —— 它压根不该被请求。
+///
+/// 与 [`validate_target_host`] 共用 `SSRF_ALLOW_PRIVATE=1` 这个逃生开关：端到端测试
+/// 起在 `127.0.0.1:0` 上，两道检查必须由同一个开关一起放行，否则测试无从进行。
+pub fn validate_target_is_domain(url: &reqwest::Url) -> Result<(), ScrapeError> {
+    if std::env::var("SSRF_ALLOW_PRIVATE").ok().as_deref() == Some("1") {
+        return Ok(());
+    }
+    let host = url.host_str().ok_or(ScrapeError::InvalidUrl)?;
+    // host_str 对 IPv6 返回带方括号的字面量（`[::1]`），先剥掉才能 parse
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+
+    if let Ok(ip) = bare.parse::<std::net::IpAddr>() {
+        return Err(ScrapeError::ForbiddenTarget(format!(
+            "目标是 IP 地址而非域名，不予抓取: {ip}"
+        )));
+    }
+    if is_localhost_name(bare) {
+        return Err(ScrapeError::ForbiddenTarget(format!(
+            "目标是本机地址，不予抓取: {host}"
+        )));
+    }
+    Ok(())
+}
+
 /// 在发起任何网络请求前校验目标主机：解析 host 并拒绝指向私有/回环/链路本地的地址。
 /// 设置环境变量 `SSRF_ALLOW_PRIVATE=1` 可关闭检查（用于内网集成测试等可信场景）。
 pub async fn validate_target_host(url: &reqwest::Url) -> Result<(), ScrapeError> {
@@ -1186,6 +1229,66 @@ mod tests {
             matches!(r, Err(ScrapeError::ForbiddenTarget(_))),
             "got {r:?}"
         );
+    }
+
+    /// `validate_target_is_domain` 与 SSRF 的分工：前者拦"不是网站"，后者拦"打到内网"。
+    /// 公网裸 IP 只有前者拦得住 —— SSRF 那层对它一路放行，这正是本次要补的洞。
+    #[tokio::test]
+    async fn target_is_domain_rejects_every_ip_literal() {
+        let _env = crate::env_guard().await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        for raw in [
+            "http://127.0.0.1:5000/",    // 回环
+            "http://192.168.0.73:8192/", // 私网
+            "http://47.97.71.143:8001/", // 公网裸 IP：SSRF 那层放行，只有这里拦得住
+            "http://[::1]:8080/",        // IPv6 字面量带方括号
+        ] {
+            let url = reqwest::Url::parse(raw).unwrap();
+            assert!(
+                matches!(
+                    validate_target_is_domain(&url),
+                    Err(ScrapeError::ForbiddenTarget(_))
+                ),
+                "{raw} 应该被拒"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn target_is_domain_rejects_localhost_family_and_passes_real_domains() {
+        let _env = crate::env_guard().await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        for raw in [
+            "http://localhost:5173/",
+            "http://LOCALHOST/",
+            "http://api.localhost/",
+        ] {
+            let url = reqwest::Url::parse(raw).unwrap();
+            assert!(
+                matches!(
+                    validate_target_is_domain(&url),
+                    Err(ScrapeError::ForbiddenTarget(_))
+                ),
+                "{raw} 应该被拒"
+            );
+        }
+        // 判据必须是"整段主机名是 localhost"，而不是包含这个词：
+        // localhost.example.com 是一个再普通不过的公网域名
+        for raw in ["https://example.com/", "https://localhost.example.com/"] {
+            let url = reqwest::Url::parse(raw).unwrap();
+            assert!(validate_target_is_domain(&url).is_ok(), "{raw} 应该放行");
+        }
+    }
+
+    /// 逃生开关对两道检查必须同时生效：端到端测试起在 127.0.0.1 上，
+    /// 只放行其中一道等于测试跑不起来。
+    #[tokio::test]
+    async fn target_is_domain_honours_the_ssrf_escape_hatch() {
+        let _env = crate::env_guard().await;
+        std::env::set_var("SSRF_ALLOW_PRIVATE", "1");
+        let url = reqwest::Url::parse("http://127.0.0.1:8080/").unwrap();
+        assert!(validate_target_is_domain(&url).is_ok());
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
     }
 
     #[tokio::test]

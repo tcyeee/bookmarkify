@@ -85,6 +85,39 @@ export function isBookmarkableUrl(input?: string | null): boolean {
 }
 
 /**
+ * 这个网址会被抓取吗？**只有域名会。**
+ *
+ * `localhost:5173`、`127.0.0.1:5000`、`192.168.0.73:8192`、乃至公网裸 IP `47.97.71.143:8001`
+ * 一律不抓：前三者只在用户自己的网络里存在，服务器去连要么连到抓取容器自己、要么直接超时；
+ * 公网裸 IP 则是别人内网服务暴露出来的端口，抓回来只会是一个登录页。这三类都不是"网站"，
+ * 抓取的产物（标题/图标/OG 图）对书签没有任何价值。
+ *
+ * 这条规则的权威在后端（`ScrapeTargetGuard`，拒绝时报 E309），scrapper 侧还有第三道门。
+ * 前端这份**不是校验**——这类网址仍然可以正常收藏，只是不会有抓取结果。它存在的意义是
+ * 提前把"这条不会有标题和图标"说出来，否则用户加完一个 `localhost:5173` 只会看到一个
+ * 光秃秃的圆圈，以为是加错了或者系统坏了。
+ */
+export function isScrapableUrl(input?: string | null): boolean {
+  const raw = (input || '').trim()
+  if (!raw) return false
+  let hostname: string
+  try {
+    hostname = new URL(externalHref(raw)).hostname
+  } catch {
+    return false
+  }
+  // URL.hostname 对 IPv6 返回带方括号的字面量（`[::1]`）
+  const host = hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase()
+  if (!host) return false
+  if (host === 'localhost' || host.endsWith('.localhost')) return false
+  // IPv4 字面量（含公网 IP）
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false
+  // IPv6 字面量：含冒号且只由十六进制字符与冒号组成
+  if (host.includes(':') && /^[0-9a-f:]+$/.test(host)) return false
+  return host.includes('.')
+}
+
+/**
  * 把网址归一成一个可比较的键，用于**前端侧**的"这条我已经收藏过了"判断。
  *
  * 这不是后端那套 canonical 四元组的复刻，也不该是——真正的判重永远在后端（`assertNotAlreadyLinked`，

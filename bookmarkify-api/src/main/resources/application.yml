@@ -61,6 +61,17 @@ bookmarkify:
       access-key-secret: ${BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_SECRET}
       bucket-name: ${BOOKMARKIFY_ALIYUN_OSS_BUCKET_NAME}
       domain-name: ${BOOKMARKIFY_ALIYUN_OSS_DOMAIN} # 自定义域名 https://i.tcyeee.top
+      # 自建缓存代理的域名，例如 https://bookmarkify.cc。**留空 = 关闭**，一切按签名直连 OSS。
+      # 打开后，不可变对象（内容寻址 / 随机 UUID）改由 nginx 代理并下发不带签名的永久地址，
+      # 浏览器可缓存一年，OSS 侧每个 (key,尺寸) 只被读一次、只被处理一次。
+      # ⚠️ 打开之前 nginx 那份 /oss/ 配置必须先装好并 reload（见 deploy/nginx/oss-cache-proxy.conf）,
+      # 顺序不能反 —— 先开开关会让全站图片 404。回滚就是清空这一项后重启。
+      proxy-domain: ${BOOKMARKIFY_ALIYUN_OSS_PROXY_DOMAIN:}
+      # nginx 与本服务之间的共享密钥，保护 /internal/asset/** 这个回源入口。
+      # **留空 = 该端点整体关闭**（一律 404）—— 失败方向刻意选成"不通"而非"放行"：
+      # bookmarkify.cc 的 /api/ 规则会把 /api/** 整体转发到本服务，也就是说这个路径事实上
+      # 从公网够得到，漏配即放行等于把一个按次计费的接口裸露出去。
+      proxy-token: ${BOOKMARKIFY_ALIYUN_OSS_PROXY_TOKEN:}
   oss:
     # 对账时是否真的删除孤儿对象。默认关闭：对账本身只要跑起来就有价值（补上"桶里到底有什么"
     # 这个盲区），而删除不可逆——引用方收集逻辑漏一处，被删的就是用户头像。

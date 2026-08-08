@@ -13,6 +13,11 @@ export interface ScrapperCallLogVO {
   durationMs: number;
   errorMsg?: string | null;
   createTime: string;
+  /**
+   * 该域名的站点图标，后端按 urlHost 反查 site_asset 后签出的我方 OSS 地址。
+   * 为空表示我方从没抓到过这个站的图标 —— 此时用本地兜底图，不要去外站现抓。
+   */
+  faviconUrl?: null | string;
 }
 
 export interface ScrapperCallLogSearchParams {

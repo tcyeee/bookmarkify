@@ -73,8 +73,26 @@ data class OssObjectEntity(
      */
     val currentName: String get() = objectKey.substringAfterLast('/').substringBeforeLast('.')
 
-    /** 字节永不改变 —— 内容寻址的 key 由 sha256(字节) 得出，同一个 key 只可能是同一份内容 */
-    val immutable: Boolean get() = addressing == OssAddressing.CONTENT
+    /**
+     * 字节永不改变 —— 决定签发多长的有效期，进而决定浏览器与缓存代理能不能真的缓存住它。
+     *
+     * **判据是"这个 key 会不会被原地覆盖写"，不是"是不是内容寻址"。** 两者不等价，
+     * [OssAddressing.RANDOM] 就卡在这个缝里：它的 key 不由字节推导，但用户换一次头像就是
+     * 一个新 UUID、一个新 key，旧 key 的那份字节同样永不改变。判成 false 的代价是头像和
+     * 背景图白白吃 [OssUtils.DEFAULT_TTL_MILLIS] 的短有效期，URL 每小时换一次、每小时全量
+     * 回源一次，而每次回源都要付一次 GET 请求费和一次图片处理费。
+     *
+     * 真正会自我覆盖的只有 [OssAddressing.SOURCE_URL]（截图刻意保留这种寻址以让存储量有
+     * 上界），以及推导方式不可考的 [OssAddressing.LEGACY]。
+     *
+     * 写成穷尽的 `when` 而不是 `!= SOURCE_URL`：新增一种寻址方式时这里会**编译失败**，逼人
+     * 当场回答"它会不会被覆盖"。用黑名单的话新值默认落进 true，等于给一个可能被覆盖的 key
+     * 签发 24h 长效链接 —— 症状是用户改完头像后一整天还看到旧图，且没有任何报错可循。
+     */
+    val immutable: Boolean get() = when (addressing) {
+        OssAddressing.CONTENT, OssAddressing.RANDOM -> true
+        OssAddressing.SOURCE_URL, OssAddressing.LEGACY -> false
+    }
 
     /** 前端可直接用的限时签名地址；能否缩放由 signAsset 按 mime 判定（SVG/ICO 走原图直出） */
     fun signedUrl(size: Int): String? =

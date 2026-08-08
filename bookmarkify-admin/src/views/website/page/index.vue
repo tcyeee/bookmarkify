@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { BookmarkEntity, BookmarkSearchParams } from "#/api/bookmark";
-import type { SiteAdminVO } from "#/api/site";
+import type { SiteAdminVO, SiteLinkType } from "#/api/site";
 import type { UserAdminVO } from "#/api/user-manage";
 
 import { defineAsyncComponent, onMounted, reactive, ref } from "vue";
@@ -19,10 +19,22 @@ import {
 } from "#/api/bookmark";
 import { getSiteDetailApi } from "#/api/site";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
+import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
 
 import BookmarkAssetCell from "#/views/bookmark/BookmarkAssetCell.vue";
 import BookmarkDetailDialog from "#/views/bookmark/BookmarkDetailDialog.vue";
-import { faviconOf, logoOf, socialOf } from "#/views/bookmark/siteAsset";
+import { isScrapableType, LINK_TYPE_LABEL, LINK_TYPE_REASON } from "#/views/bookmark/linkType";
+import {
+  BOOKMARK_LOCKED_FIELD_LABEL,
+  faviconOf,
+  logoOf,
+  socialOf,
+} from "#/views/bookmark/siteAsset";
+import {
+  FETCH_LAYER_META,
+  formatMetaSources,
+  httpStatusType,
+} from "#/views/bookmark/pageMeta";
 import UserDetailDialog from "#/views/user/UserDetailDialog.vue";
 import UserIdentityCell from "#/views/user/UserIdentityCell.vue";
 
@@ -111,12 +123,18 @@ const scopedSiteId = ref(typeof route.query.siteId === "string" ? route.query.si
 /** 站点摘要只用于顶部那条范围提示；取不到不影响列表本身（列表只需要 id） */
 const scopedSite = ref<null | SiteAdminVO>(null);
 
-const searchForm = reactive<Pick<BookmarkSearchParams, "name" | "status">>({
+const searchForm = reactive<
+  Pick<BookmarkSearchParams, "name" | "status"> & {
+    /** 放开默认的 linkType=DOMAIN 限制，把本机 / IP / 未归类的页面也列出来 */
+    includeNonDomain?: boolean;
+  }
+>({
   name: "",
   // 从健康条某一段点进来时状态已经选好了，再让人手动选一次是白丢一次上下文
   status: statusOptions.some((o) => o.value === route.query.status)
     ? (route.query.status as BookmarkParseStatus)
     : undefined,
+  includeNonDomain: undefined,
 });
 
 /** 把当前的站点范围写回 URL：刷新、切 vben 页签回来都还在 */
@@ -184,6 +202,12 @@ function fullUrl(row: BookmarkEntity) {
 const refreshingMap = reactive<Record<string, boolean>>({});
 
 async function handleRefresh(row: BookmarkEntity) {
+  // 列表本身已按 linkType=DOMAIN 过滤，正常情况下这里不会遇到本机/IP 书签；
+  // 但过滤看的是**站点**的类型，而这道判断看的是这一页自己的地址，两者理论上可能不一致
+  if (!isScrapableType(row.linkType)) {
+    ElMessage.warning(`${LINK_TYPE_REASON[row.linkType ?? "OTHER"]}，我方不抓取这类地址`);
+    return;
+  }
   refreshingMap[row.id] = true;
   try {
     const updated = await refreshBookmarkApi(row.id);
@@ -236,16 +260,6 @@ function handleRowClick({ row, column }: { row: BookmarkEntity; column: any }) {
   detailVisible.value = true;
 }
 
-function handleSearch() {
-  gridApi.reload();
-}
-
-function handleReset() {
-  searchForm.name = "";
-  searchForm.status = undefined;
-  gridApi.reload();
-}
-
 const gridOptions: VxeGridProps<BookmarkEntity> = {
   id: "admin-website-page",
   columns: [
@@ -266,12 +280,125 @@ const gridOptions: VxeGridProps<BookmarkEntity> = {
     { field: "parseStatus", title: "状态", width: 140, slots: { default: "parseStatus" } },
     { field: "antiCrawlerBlocked", title: "反爬拦截", width: 90, slots: { default: "antiCrawlerBlocked" } },
     { field: "nsfw", title: "NSFW", width: 90, slots: { default: "nsfw" } },
+    { field: "categories", title: "分类", minWidth: 140, slots: { default: "categories" } },
+    { field: "lockedFields", title: "锁定字段", minWidth: 140, slots: { default: "lockedFields" } },
+    // 状态是 UNREACHABLE 时，「为什么」只有这一列答得出来
+    { field: "parseErrMsg", title: "失败原因", minWidth: 180, slots: { default: "parseErrMsg" } },
     {
       field: "updateTime",
       title: "更新时间",
       width: 200,
       formatter: ({ cellValue }) => formatDateTime(cellValue),
     },
+
+    // ── 以下默认隐藏，走工具栏「列自定义」按需打开 ──
+    //
+    // `page` / `page_meta` 两张表的字段在这里是**全量**下发的，默认全开会让表宽到没法看。
+    // 取舍标准只有一条：日常扫表要不要用到。诊断类（巡检游标、抓取层、HTTP 状态码、
+    // 字段级出处）平时是噪音，出问题时是唯一线索，所以留在这里而不是干脆不给。
+    { field: "urlScheme", title: "协议", width: 90, visible: false },
+    // 默认筛选是 linkType=DOMAIN，整列都会是「域名」；打开折叠区里的「非域名页面」之后
+    // 它才有信息量。默认隐藏而不是不给：否则放开范围后多出来的那批行看起来只是抓取失败
+    {
+      field: "linkType",
+      title: "类型",
+      width: 100,
+      visible: false,
+      formatter: ({ cellValue }) => LINK_TYPE_LABEL[cellValue as SiteLinkType] ?? "-",
+    },
+    // canonical 四元组的后半截：整列同域同路径的深链只有靠它们才分得开
+    { field: "urlQuery", title: "查询参数", minWidth: 160, visible: false, slots: { default: "urlQuery" } },
+    { field: "urlFragment", title: "Fragment", minWidth: 140, visible: false, slots: { default: "urlFragment" } },
+    { field: "siteId", title: "站点ID", minWidth: 200, visible: false },
+    { field: "id", title: "页面ID", minWidth: 200, visible: false },
+    // 页面级活性。与 parseStatus 不是一回事：抓取成功过、但这一页现在 404，两列会分叉
+    { field: "isActivity", title: "页面可达", width: 100, visible: false, slots: { default: "isActivity" } },
+    { field: "verifyFlag", title: "人工认证", width: 100, visible: false, slots: { default: "verifyFlag" } },
+    { field: "ownerCount", title: "收录人数", width: 100, align: "right", visible: false },
+    { field: "consecutiveFail", title: "连续失败", width: 100, align: "right", visible: false },
+    {
+      field: "lastParseAt",
+      title: "上次抓取成功",
+      width: 180,
+      visible: false,
+      formatter: ({ cellValue }) => (cellValue ? formatDateTime(cellValue) : "-"),
+    },
+    {
+      field: "lastCheckAt",
+      title: "上次探测",
+      width: 180,
+      visible: false,
+      formatter: ({ cellValue }) => (cellValue ? formatDateTime(cellValue) : "-"),
+    },
+    {
+      field: "nextCheckAt",
+      title: "下次巡检",
+      width: 180,
+      visible: false,
+      formatter: ({ cellValue }) => (cellValue ? formatDateTime(cellValue) : "-"),
+    },
+    {
+      field: "createTime",
+      title: "收录时间",
+      width: 180,
+      visible: false,
+      formatter: ({ cellValue }) => formatDateTime(cellValue),
+    },
+
+    // ── page_meta：最近一次抓取的原样元数据 ──
+    //
+    // 与上面的「标题/网站描述」不重复：主表那两列是**当前生效值**（可能被人工改过并加锁），
+    // 这里是抓取原样。两者不一致本身就是信息 —— 说明这条被人工干预过。
+    { field: "metaFetchLayer", title: "抓取层", width: 100, visible: false, slots: { default: "metaFetchLayer" } },
+    { field: "metaHttpStatus", title: "HTTP状态", width: 100, visible: false, slots: { default: "metaHttpStatus" } },
+    { field: "metaAntiCrawler", title: "元数据反爬", width: 110, visible: false, slots: { default: "metaAntiCrawler" } },
+    {
+      field: "metaTitle",
+      title: "抓取标题",
+      minWidth: 200,
+      visible: false,
+      formatter: ({ row }) => row.pageMeta?.title || "-",
+    },
+    {
+      field: "metaDescription",
+      title: "抓取描述",
+      minWidth: 200,
+      visible: false,
+      formatter: ({ row }) => truncate(row.pageMeta?.description) || "-",
+    },
+    {
+      field: "metaSiteName",
+      title: "站点名",
+      minWidth: 140,
+      visible: false,
+      formatter: ({ row }) => row.pageMeta?.siteName || "-",
+    },
+    {
+      field: "metaSiteShortName",
+      title: "站点短名",
+      minWidth: 120,
+      visible: false,
+      formatter: ({ row }) => row.pageMeta?.siteShortName || "-",
+    },
+    { field: "metaCanonicalUrl", title: "Canonical", minWidth: 220, visible: false, slots: { default: "metaCanonicalUrl" } },
+    {
+      field: "metaLang",
+      title: "语言",
+      width: 90,
+      visible: false,
+      formatter: ({ row }) => row.pageMeta?.lang || "-",
+    },
+    { field: "metaThemeColor", title: "主题色", width: 110, visible: false, slots: { default: "metaThemeColor" } },
+    // 「这个标题到底是 og:title 还是 <title> 兜底来的」——字段级出处只有这里有
+    { field: "metaSources", title: "字段出处", minWidth: 220, visible: false, slots: { default: "metaSources" } },
+    {
+      field: "metaFetchedAt",
+      title: "元数据抓取时间",
+      width: 180,
+      visible: false,
+      formatter: ({ row }) => (row.pageMeta?.fetchedAt ? formatDateTime(row.pageMeta.fetchedAt) : "-"),
+    },
+
     {
       field: "rowActions",
       title: "操作",
@@ -289,6 +416,11 @@ const gridOptions: VxeGridProps<BookmarkEntity> = {
           name: searchForm.name || undefined,
           status: searchForm.status || undefined,
           siteId: scopedSiteId.value || undefined,
+          // 后台默认只看真实网站：localhost / 纯 IP / 未归类的地址不会被抓取，永远是一行
+          // 空标题空图标的噪音，混在表里只会让「哪些页面抓失败了」变得更难看清。
+          // 但要留一条查得到的路：这类书签在用户桌面上真实存在，用户报「我那条
+          // 192.168.0.73:8192 坏了」时，后台得能把它翻出来看一眼类型
+          linkType: searchForm.includeNonDomain ? undefined : "DOMAIN",
           currentPage: page.currentPage,
           pageSize: page.pageSize,
         });
@@ -304,6 +436,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions,
   gridEvents: { cellClick: handleRowClick },
 });
+
+// 初始状态可能来自 URL（从站点健康条某一段点进来），「重置」要清空而不是把它填回去，
+// 所以基线显式给成"什么都不筛"
+const { reset } = useAutoSearch(searchForm, () => gridApi.reload(), {
+  initial: { name: "", status: undefined, includeNonDomain: undefined },
+});
 </script>
 
 <template>
@@ -313,7 +451,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <div class="flex items-center justify-between">
           <span>页面管理</span>
           <span class="text-xs text-gray-400">
-            页面层：一个具体地址一行。域名级的信息在「网站管理 › 站点管理」里看
+            页面层：一个具体地址一行，只列域名类站点下的页面。域名级的信息在「网站管理 › 站点管理」里看
           </span>
         </div>
       </template>
@@ -340,28 +478,31 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <ElButton link type="primary" @click="clearScope">查看全部页面</ElButton>
       </div>
 
-      <div class="search-bar mb-4">
-        <ElForm :model="searchForm" label-position="left" @submit.prevent="handleSearch">
-          <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
-            <ElFormItem label="搜索" class="!mb-0">
-              <ElInput v-model="searchForm.name" placeholder="名称 / 标题 / 描述 / 域名" clearable style="width: 240px" @keyup.enter="handleSearch" />
-            </ElFormItem>
-            <ElFormItem label="状态" class="!mb-0">
-              <ElSelectV2 v-model="searchForm.status" :options="statusOptions" placeholder="全部状态" clearable style="width: 160px">
-                <template #default="{ item }">
-                  <ElTag :type="item.type" size="small" disable-transitions>
-                    {{ item.label }}
-                  </ElTag>
-                </template>
-              </ElSelectV2>
-            </ElFormItem>
-            <ElFormItem class="!mb-0 ml-auto">
-              <ElButton type="primary" @click="handleSearch">搜索</ElButton>
-              <ElButton class="ml-2" @click="handleReset">重置</ElButton>
-            </ElFormItem>
-          </div>
-        </ElForm>
-      </div>
+      <FilterBar class="mb-4" :advanced-count="searchForm.includeNonDomain ? 1 : 0" @reset="reset">
+        <FilterItem label="关键字" width="240px">
+          <ElInput v-model="searchForm.name" placeholder="名称 / 标题 / 描述 / 域名" clearable />
+        </FilterItem>
+        <FilterItem label="状态">
+          <ElSelectV2 v-model="searchForm.status" :options="statusOptions" placeholder="全部状态" clearable>
+            <template #default="{ item }">
+              <ElTag :type="item.type" size="small" disable-transitions>
+                {{ item.label }}
+              </ElTag>
+            </template>
+          </ElSelectV2>
+        </FilterItem>
+
+        <template #advanced>
+          <FilterItem label="非域名页面" width="140px">
+            <ElSelectV2
+              v-model="searchForm.includeNonDomain"
+              :options="[{ label: '一并显示', value: true }]"
+              placeholder="不显示"
+              clearable
+            />
+          </FilterItem>
+        </template>
+      </FilterBar>
       <Grid>
         <template #favicon="{ row }">
           <BookmarkAssetCell :src="faviconOf(row)" />
@@ -432,11 +573,135 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <template #nsfw="{ row }">
           <ElTag v-if="row.nsfw" type="danger" size="small">NSFW</ElTag>
         </template>
+        <template #categories="{ row }">
+          <template v-if="row.categories?.length">
+            <ElTag
+              v-for="c in row.categories"
+              :key="c.id"
+              size="small"
+              class="mr-1"
+              disable-transitions
+              :color="c.color"
+            >
+              {{ c.name }}
+            </ElTag>
+          </template>
+          <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #lockedFields="{ row }">
+          <template v-if="row.lockedFields?.length">
+            <ElTag
+              v-for="f in row.lockedFields"
+              :key="f"
+              type="warning"
+              size="small"
+              class="mr-1"
+              disable-transitions
+            >
+              {{ BOOKMARK_LOCKED_FIELD_LABEL[f] ?? f }}
+            </ElTag>
+          </template>
+          <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #parseErrMsg="{ row }">
+          <span v-if="row.parseErrMsg" class="text-red-500" :title="row.parseErrMsg">
+            {{ truncate(row.parseErrMsg, 20) }}
+          </span>
+          <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #urlQuery="{ row }">
+          <span v-if="row.urlQuery" :title="row.urlQuery">{{ truncate(row.urlQuery, 24) }}</span>
+          <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #urlFragment="{ row }">
+          <span v-if="row.urlFragment" :title="row.urlFragment">
+            {{ truncate(row.urlFragment, 24) }}
+          </span>
+          <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #isActivity="{ row }">
+          <ElTag v-if="row.isActivity" type="success" size="small" disable-transitions>
+            可达
+          </ElTag>
+          <ElTag v-else type="danger" size="small" disable-transitions>不可达</ElTag>
+        </template>
+        <template #verifyFlag="{ row }">
+          <ElTag v-if="row.verifyFlag" type="success" size="small" disable-transitions>
+            已认证
+          </ElTag>
+          <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #metaFetchLayer="{ row }">
+          <ElTag
+            v-if="row.pageMeta?.fetchLayer"
+            :type="FETCH_LAYER_META[row.pageMeta.fetchLayer]?.type ?? 'info'"
+            size="small"
+            disable-transitions
+            :title="FETCH_LAYER_META[row.pageMeta.fetchLayer]?.tip"
+          >
+            {{ FETCH_LAYER_META[row.pageMeta.fetchLayer]?.label ?? row.pageMeta.fetchLayer }}
+          </ElTag>
+          <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #metaHttpStatus="{ row }">
+          <ElTag
+            v-if="row.pageMeta?.httpStatus"
+            :type="httpStatusType(row.pageMeta.httpStatus)"
+            size="small"
+            disable-transitions
+          >
+            {{ row.pageMeta.httpStatus }}
+          </ElTag>
+          <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #metaAntiCrawler="{ row }">
+          <ElTag
+            v-if="row.pageMeta?.antiCrawler"
+            type="warning"
+            size="small"
+            disable-transitions
+            title="抓取侧判定这一页是反爬挑战页，元数据内容不可靠"
+          >
+            反爬
+          </ElTag>
+          <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #metaCanonicalUrl="{ row }">
+          <ElLink
+            v-if="row.pageMeta?.canonicalUrl"
+            type="primary"
+            :href="row.pageMeta.canonicalUrl"
+            target="_blank"
+            rel="noopener"
+            :title="row.pageMeta.canonicalUrl"
+            @click.stop
+          >
+            {{ truncate(row.pageMeta.canonicalUrl, 30) }}
+          </ElLink>
+          <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #metaThemeColor="{ row }">
+          <span v-if="row.pageMeta?.themeColor" class="theme-color-cell">
+            <i class="theme-color-dot" :style="{ background: row.pageMeta.themeColor }" />
+            {{ row.pageMeta.themeColor }}
+          </span>
+          <span v-else class="text-gray-400">-</span>
+        </template>
+        <template #metaSources="{ row }">
+          <span
+            v-if="row.pageMeta?.metaSources"
+            :title="row.pageMeta.metaSources"
+          >
+            {{ truncate(formatMetaSources(row.pageMeta.metaSources), 30) }}
+          </span>
+          <span v-else class="text-gray-400">-</span>
+        </template>
         <template #actions="{ row }">
           <ElButton
             link
             type="primary"
             :loading="refreshingMap[row.id]"
+            :disabled="!isScrapableType(row.linkType)"
             @click.stop="handleRefresh(row)"
           >
             更新
@@ -508,10 +773,16 @@ const [Grid, gridApi] = useVbenVxeGrid({
   color: var(--el-color-primary);
 }
 
-.search-bar :deep(.el-form-item__label) {
-  height: 32px;
-  font-weight: 400 !important;
-  line-height: 32px;
-  color: var(--el-text-color-regular);
+.theme-color-cell {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.theme-color-dot {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 3px;
 }
 </style>

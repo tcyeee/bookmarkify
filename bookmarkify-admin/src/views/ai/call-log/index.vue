@@ -8,6 +8,7 @@ import { formatDateTime } from "@vben/utils";
 
 import { getAdminAiCallLogListApi } from "#/api/ai-call-log";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
+import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
 
 import AiCallDetailDialog from "./AiCallDetailDialog.vue";
 import { AI_SCENE_LABEL, AI_SCENE_LEGEND } from "./scene";
@@ -17,20 +18,6 @@ const ElCard = defineAsyncComponent(() =>
     import("element-plus/es/components/card/index"),
     import("element-plus/es/components/card/style/css"),
   ]).then(([res]) => res.ElCard)
-);
-
-const ElForm = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/form/index"),
-    import("element-plus/es/components/form/style/css"),
-  ]).then(([res]) => res.ElForm)
-);
-
-const ElFormItem = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/form/index"),
-    import("element-plus/es/components/form/style/css"),
-  ]).then(([res]) => res.ElFormItem)
 );
 
 const ElInput = defineAsyncComponent(() =>
@@ -52,13 +39,6 @@ const ElOption = defineAsyncComponent(() =>
     import("element-plus/es/components/select/index"),
     import("element-plus/es/components/select/style/css"),
   ]).then(([res]) => res.ElOption)
-);
-
-const ElButton = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/button/index"),
-    import("element-plus/es/components/button/style/css"),
-  ]).then(([res]) => res.ElButton)
 );
 
 const ElTag = defineAsyncComponent(() =>
@@ -88,17 +68,6 @@ const detailRow = ref<AiCallLogVO | null>(null);
 function handleCellClick({ row }: { row: AiCallLogVO }) {
   detailRow.value = row;
   detailVisible.value = true;
-}
-
-function handleSearch() {
-  gridApi.reload();
-}
-
-function handleReset() {
-  searchForm.subject = "";
-  searchForm.scene = undefined;
-  searchForm.success = undefined;
-  gridApi.reload();
 }
 
 const gridOptions: VxeGridProps<AiCallLogVO> = {
@@ -167,6 +136,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions,
   gridEvents: { cellClick: handleCellClick },
 });
+
+const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
 </script>
 
 <template>
@@ -178,33 +149,27 @@ const [Grid, gridApi] = useVbenVxeGrid({
           <span class="text-xs text-gray-400">记录与第三方 AI(DeepSeek) 的全部通讯，点击任意行查看完整 prompt 与响应</span>
         </div>
       </template>
-      <div class="mb-4">
-        <ElForm :inline="true" :model="searchForm">
-          <ElFormItem label="判定对象">
-            <ElInput v-model="searchForm.subject" placeholder="域名/标题 模糊搜索" clearable />
-          </ElFormItem>
-          <ElFormItem label="场景">
-            <ElSelect v-model="searchForm.scene" placeholder="全部" clearable style="width: 160px">
-              <ElOption
-                v-for="[value, label] in Object.entries(AI_SCENE_LABEL)"
-                :key="value"
-                :label="label"
-                :value="value"
-              />
-            </ElSelect>
-          </ElFormItem>
-          <ElFormItem label="状态">
-            <ElSelect v-model="searchForm.success" placeholder="全部" clearable style="width: 120px">
-              <ElOption label="成功" :value="true" />
-              <ElOption label="失败" :value="false" />
-            </ElSelect>
-          </ElFormItem>
-          <ElFormItem>
-            <ElButton type="primary" @click="handleSearch">搜索</ElButton>
-            <ElButton class="ml-2" @click="handleReset">重置</ElButton>
-          </ElFormItem>
-        </ElForm>
-      </div>
+      <FilterBar class="mb-4" @reset="reset">
+        <FilterItem label="判定对象" width="240px">
+          <ElInput v-model="searchForm.subject" placeholder="域名 / 标题" clearable />
+        </FilterItem>
+        <FilterItem label="场景">
+          <ElSelect v-model="searchForm.scene" placeholder="全部" clearable>
+            <ElOption
+              v-for="[value, label] in Object.entries(AI_SCENE_LABEL)"
+              :key="value"
+              :label="label"
+              :value="value"
+            />
+          </ElSelect>
+        </FilterItem>
+        <FilterItem label="状态" width="120px">
+          <ElSelect v-model="searchForm.success" placeholder="全部" clearable>
+            <ElOption label="成功" :value="true" />
+            <ElOption label="失败" :value="false" />
+          </ElSelect>
+        </FilterItem>
+      </FilterBar>
       <Grid>
         <template #sceneHeader="{ column }">
           <ElTooltip placement="top">

@@ -90,6 +90,13 @@ data class BookmarkSearchParams(
      * `xxqq.com.cn` 一并捞进来 —— 下钻要的是精确的父子关系，不是搜索。
      */
     @field:Schema(description = "只看该站点下的页面(精确匹配 site_id)") var siteId: String? = null,
+    /**
+     * 只看某一种链接类型的页面。
+     *
+     * 类型是**站点层**的事实（`site.link_type`），`page` 表里没有这一列 —— 它连 host 都只存了
+     * 一份 site.host 的只读冗余副本。所以这里只能按 site_id 做半连接，而不是加一个 eq。
+     */
+    @field:Schema(description = "链接类型(域名/本地/IP/其他)，按所属站点过滤") var linkType: BookmarkLinkType? = null,
 ) : PageBean() {
     fun toWrapper(): Wrapper<PageEntity> {
         val query = KtQueryWrapper(PageEntity::class.java)
@@ -102,6 +109,16 @@ data class BookmarkSearchParams(
             }
         }
         if (status != null) query.eq(PageEntity::parseStatus, status)
+        // 判据刻意写成「存在 site 行**且**类型不符才排除」，而不是更直觉的
+        // `site_id IN (SELECT id FROM site WHERE link_type = X)`：后者会把 site_id 指不到任何
+        // site 行的孤儿页面一并滤掉（空 site_id 确实存在，BookmarkServiceImpl 里另有一处
+        // `filter { siteId.isNotBlank() }` 防的就是它）。而后台每一处页面查询都写死了
+        // linkType=DOMAIN，于是那批数据本身就坏掉的行在「页面管理」里彻底消失 ——
+        // 恰恰是最该被管理员找到的一批。类型未知的不下结论，宁可留在表里。
+        // 拼进 SQL 的是枚举常量名，不是外部字符串，没有注入面；site 表是域名量级(远小于 page)。
+        linkType?.let {
+            query.notExists("SELECT 1 FROM site s WHERE s.id = page.site_id AND s.link_type <> '${it.name}'")
+        }
         // 排序只加在下钻分支上：站点内按路径排，/a /b /c 相邻才看得出这个站的结构。
         // 全量列表刻意维持原样不排 —— 那是几十万行的全表分页，给它加一个无索引支撑的
         // ORDER BY 是拿一次排序换一个这里根本没人要的顺序。

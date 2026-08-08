@@ -37,6 +37,7 @@ import top.tcyeee.bookmarkify.server.liveness.LivenessPolicy
 import top.tcyeee.bookmarkify.mapper.AiCallLogMapper
 import top.tcyeee.bookmarkify.mapper.ScrapperCallLogMapper
 import top.tcyeee.bookmarkify.server.IApiService
+import top.tcyeee.bookmarkify.utils.ScrapeTargetGuard
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 
 @Service
@@ -77,7 +78,13 @@ class ApiServiceImpl(
      */
     private fun classifyScrapperError(code: String?): ErrorType = when (code) {
         "INVALID_URL" -> ErrorType.E305                                          // URL 格式非法
-        "FORBIDDEN_TARGET", "FETCH_FAILED", "HEADLESS_FAILED", "TIMEOUT" -> ErrorType.E304 // 目标站点打不开
+        "FETCH_FAILED", "HEADLESS_FAILED", "TIMEOUT" -> ErrorType.E304           // 目标站点打不开
+        // 我方(scrapper 侧)拒绝去抓：内网地址，或目标不是域名而是裸 IP / localhost。
+        // 从 E304 里拆出来的——"站点打不开"是关于站点的结论，"我们不去打开它"是我方的决定，
+        // 混在一起时 ping 路径会把后者判成失联，等于用一个安全/业务决策给用户的书签判死。
+        // 正常情况下这个分支根本不该被走到：同一条规则在发请求之前就由 ScrapeTargetGuard
+        // 拦掉了，这里能命中说明两侧规则不一致(比如站点 302 到了一个 IP)，值得被看见
+        "FORBIDDEN_TARGET" -> ErrorType.E308
         // 负缓存命中(60s TTL)：这条 URL 刚刚抓失败过。它是**关于目标站点的事实**——scrapper
         // 只在取回阶段失败时写负缓存，且刻意排除了 INVALID_URL / FORBIDDEN_TARGET，所以命中
         // 即等价于"刚判过一次抓不到"。归进 else 的后果相当重：会被 isScrapperUnavailable()
@@ -132,6 +139,14 @@ class ApiServiceImpl(
 
     override fun scrape(domain: String, request: ScrapeRequest): ScrapeResponse {
         val url = request.url.takeIf { it.isNotBlank() } ?: buildUrl(domain)
+
+        // 抓取目标必须是域名。这道门放在这里而不是各个调用点：所有抓取——用户添加书签、
+        // 后台重新获取/一键更新/重抓资产/活性检测、截图补抓、调试抓取——都经过本方法，
+        // 而它们当中只有解析主链路自带链接类型过滤，其余六个入口一个都没有。
+        // 拒绝发生在**发请求之前**，因此不写 scrapper_call_log：那张表记的是"我方调用过
+        // scrapper"，本次根本没有调用，记一条失败反而会污染调用成功率。见 ScrapeTargetGuard
+        ScrapeTargetGuard.assertScrapable(url)
+
         val endpoint = "${scrapperConfig.baseUrl.trimEnd('/')}/scrape"
         val startedAt = System.currentTimeMillis()
 
@@ -488,6 +503,15 @@ class ApiServiceImpl(
         val targetUrl = buildUrl(url)
         val endpoint = "${scrapperConfig.baseUrl.trimEnd('/')}/ping"
 
+        // 非域名目标不探测。返回 UNKNOWN 而不是抛异常，也不是 DEAD：
+        // - 抛异常会炸掉整轮巡检（调用方在 CompletableFuture 里 join 这个结果）；
+        // - DEAD 是"站点挂了"这个**关于站点的结论**，而我方压根没探，没有资格下结论。
+        //   把"我们不去探"记成失联，会让这类书签在用户桌面上显示成失效。
+        if (!ScrapeTargetGuard.isScrapable(targetUrl)) {
+            log.warn("[pingWebsite] 目标不是域名(本机/IP)，跳过探测: url=$targetUrl")
+            return PingOutcome.UNKNOWN
+        }
+
         val httpResponse = runCatching {
             HttpUtil.createPost(endpoint)
                 .header("Content-Type", "application/json")
@@ -512,6 +536,14 @@ class ApiServiceImpl(
                 ErrorType.E305 -> {
                     log.warn("[pingWebsite] URL 非法，判定为不可达: url=$targetUrl")
                     PingOutcome.DEAD
+                }
+                // scrapper 拒绝去探（内网地址 / 非域名目标）：这是我方的决定，不是站点的事实，
+                // 没有资格判死。正常情况下走不到这里——本方法开头已经拦过一次同样的规则，而
+                // scrapper 侧的 /ping 也是以 200 + `blocked: true` 报拒绝（那样才不需要部署
+                // 顺序，见对端 PingResponse），不走这条非 2xx 分支。留着纯属兜底
+                ErrorType.E308 -> {
+                    log.warn("[pingWebsite] 抓取服务拒绝探测该目标，本次无结论: url=$targetUrl, code=$code")
+                    PingOutcome.UNKNOWN
                 }
                 // 鉴权失败 / 并发超限的 503 / 请求体契约不符 —— 全是我方的问题
                 else -> {

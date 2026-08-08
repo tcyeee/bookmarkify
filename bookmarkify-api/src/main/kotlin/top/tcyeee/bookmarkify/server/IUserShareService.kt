@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.ShareCreateParams
 import top.tcyeee.bookmarkify.entity.ShareSearchParams
+import top.tcyeee.bookmarkify.entity.ShareAdminDetailVO
 import top.tcyeee.bookmarkify.entity.SharePublicVO
 import top.tcyeee.bookmarkify.entity.ShareUpdateParams
 import top.tcyeee.bookmarkify.entity.UserShareAdminVO
@@ -29,6 +30,8 @@ interface IUserShareService : IService<UserShareEntity> {
     fun performAiReview(shareId: String)
     /** 管理端：分页查询全部分享 */
     fun adminListAll(params: ShareSearchParams): IPage<UserShareAdminVO>
+    /** 管理端：查看某个分享的详情(含其包含的全部书签)；不限状态，已下架/未过审的同样可查。分享不存在时返回 null */
+    fun adminDetail(id: String): ShareAdminDetailVO?
     /** 管理端：强制下架某个分享 */
     fun adminTakeDown(id: String): Boolean
 }

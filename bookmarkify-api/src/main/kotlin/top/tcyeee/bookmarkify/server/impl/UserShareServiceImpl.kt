@@ -12,6 +12,8 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.ShareCreateParams
 import top.tcyeee.bookmarkify.entity.ShareSearchParams
+import top.tcyeee.bookmarkify.entity.ShareAdminBookmarkVO
+import top.tcyeee.bookmarkify.entity.ShareAdminDetailVO
 import top.tcyeee.bookmarkify.entity.SharePublicVO
 import top.tcyeee.bookmarkify.entity.ShareStatusChangedVO
 import top.tcyeee.bookmarkify.entity.ShareSharerVO
@@ -177,6 +179,23 @@ class UserShareServiceImpl(
             ).toInt()
             UserShareAdminVO(entity, nickNameByUid[entity.uid] ?: "-", count)
         }
+    }
+
+    /**
+     * 管理端详情。与 [viewByCode] 的关键差别是**不校验状态**：后台要看的恰恰是被下架、
+     * 未过审的那几条 —— 用公开视图去查，需要人工复核的分享一条也打不开。
+     */
+    override fun adminDetail(id: String): ShareAdminDetailVO? {
+        val share = getById(id) ?: return null
+        val nickName = userService.getById(share.uid)?.nickName ?: "-"
+        // 与分享页同为大图形态，按 TILE 解析图标；一次批量解析避免逐条查资产表
+        val bookmarks = userShareBookmarkMapper.bookmarksByShareId(id)
+        val logoMap = siteAssetResolver.resolveBatch(bookmarks.mapNotNull { it.pageId }, DisplayMode.TILE)
+        bookmarks.forEach { it.initDisplay(logoMap[it.pageId], DisplayMode.TILE) }
+        return ShareAdminDetailVO(
+            share = UserShareAdminVO(share, nickName, bookmarks.size),
+            bookmarks = bookmarks.map { ShareAdminBookmarkVO(it) },
+        )
     }
 
     override fun adminTakeDown(id: String): Boolean =
