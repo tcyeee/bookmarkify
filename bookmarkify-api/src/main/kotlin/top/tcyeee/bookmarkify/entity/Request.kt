@@ -293,6 +293,14 @@ data class BookmarkSweepLogSearchParams(
 /** 管理后台书签活性检查日志查询入参 */
 data class BookmarkPingLogSearchParams(
     var urlHost: String? = null,
+    /**
+     * 只看某一个页面的探测历史，书签详情弹窗的「巡检记录」用它。
+     *
+     * 与 [urlHost] 不能互相替代：一个域名下可以有几十条深链，按 host 筛出来的是**整站**的探测流水，
+     * 而详情弹窗要回答的是「**这一页**是从哪一轮开始判死的」——混在一起时首页的 ALIVE 会把
+     * 深链自己的 DEAD 淹掉，正好看反。精确匹配，不做模糊。
+     */
+    @field:Schema(description = "按页面ID精确筛选(page_ping_log.page_id)") var pageId: String? = null,
     /** 按探测结论筛选。替代了原来的 alive 布尔筛选——那个表达不了「无结论」这一态。 */
     var outcome: PingOutcome? = null,
 ) : PageBean() {
@@ -301,6 +309,7 @@ data class BookmarkPingLogSearchParams(
         if (!urlHost.isNullOrBlank()) {
             query.like(PagePingLogEntity::urlHost, urlHost)
         }
+        if (!pageId.isNullOrBlank()) query.eq(PagePingLogEntity::pageId, pageId)
         outcome?.let { query.eq(PagePingLogEntity::outcome, it) }
         return query.orderByDesc(PagePingLogEntity::createTime)
     }

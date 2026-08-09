@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { BookmarkEntity, BookmarkLivenessResult, SimilarSite } from "#/api/bookmark";
+import type { BookmarkPingLogVO } from "#/api/bookmark-ping-log";
 import type { CategoryEntity } from "#/api/category";
 
 import { computed, defineAsyncComponent, onUnmounted, ref, watch } from "vue";
@@ -17,6 +18,10 @@ import {
   refetchBookmarkAssetsApi,
   updateBookmarkCategoriesApi,
 } from "#/api/bookmark";
+import {
+  getAdminBookmarkPingLogListApi,
+  PING_OUTCOME_META,
+} from "#/api/bookmark-ping-log";
 import { getCategoryListApi } from "#/api/category";
 import { createIngestSocket, type IngestSocketHandle } from "#/api/similarIngestSocket";
 
@@ -364,6 +369,45 @@ async function oneClickIngest() {
 
 onUnmounted(() => closeIngestSocket());
 
+// ── 巡检记录：这一页历次自动探测的流水（page_ping_log）────────────────────────────
+//
+// 上面那张卡片给的是**游标**（上次探测、下次巡检、连续失败几次），它只说得清"现在是什么状态"，
+// 说不清"怎么走到这个状态的"：从哪一轮开始判死、中间有没有反复 ALIVE/DEAD 抖动、
+// 那些 UNKNOWN 是不是集中在同一段时间（后者是我方链路故障的特征，不是站点的问题）。
+// 按 pageId 精确查，**不能**按域名查——同域几十条深链的流水混在一起，首页的 ALIVE 会把
+// 这一页自己的 DEAD 淹掉，正好看反。
+const PING_LOG_LIMIT = 20;
+const pingLogs = ref<BookmarkPingLogVO[]>([]);
+const pingLogTotal = ref(0);
+const loadingPingLogs = ref(false);
+
+/** 总数与本次显示条数不一定相等，写在标题上省得把「只有 20 条」误读成「只探测过 20 次」 */
+const pingLogSummary = computed(() =>
+  pingLogTotal.value > PING_LOG_LIMIT
+    ? `共 ${pingLogTotal.value} 次，显示最近 ${PING_LOG_LIMIT} 次`
+    : `共 ${pingLogTotal.value} 次`,
+);
+
+async function loadPingLogs() {
+  const row = current.value;
+  if (!row) return;
+  loadingPingLogs.value = true;
+  try {
+    const res = await getAdminBookmarkPingLogListApi({
+      pageId: row.id,
+      currentPage: 1,
+      pageSize: PING_LOG_LIMIT,
+    });
+    pingLogs.value = res.records ?? [];
+    pingLogTotal.value = res.total ?? 0;
+  } catch {
+    pingLogs.value = [];
+    pingLogTotal.value = 0;
+  } finally {
+    loadingPingLogs.value = false;
+  }
+}
+
 // ── 活性检测：直接调 scrapper 重抓一次，展示其返回的全部字段 ─────────────────────
 const checkingLiveness = ref(false);
 const livenessChecked = ref(false);
@@ -410,6 +454,8 @@ watch(visible, (opened) => {
   similarSites.value = [];
   similarLoaded.value = false;
   siblings.value = [];
+  pingLogs.value = [];
+  pingLogTotal.value = 0;
   resetIngest();
   resetLiveness();
   loadCategoryDict();
@@ -418,13 +464,19 @@ watch(visible, (opened) => {
     editingCategoryIds.value = (props.bookmark.categories ?? []).map((c) => c.id);
     // 非域名书签不展示「关联网站」，也就不必去查同域页面：localhost 下的"同域页面"
     // 是别人机器上的另一个服务，摆在一起只会误导
-    if (scrapable.value) loadSiblings();
+    if (scrapable.value) {
+      loadSiblings();
+      loadPingLogs();
+    }
   } else {
     resolved.value = null;
     lookup().then(() => {
       if (!resolved.value) return;
       editingCategoryIds.value = (resolved.value.categories ?? []).map((c) => c.id);
-      if (scrapable.value) loadSiblings();
+      if (scrapable.value) {
+        loadSiblings();
+        loadPingLogs();
+      }
     });
   }
 });
@@ -678,6 +730,60 @@ const livenessImageUrls = computed(() => {
             </span>
           </div>
         </div>
+      </ElCard>
+
+      <!-- 卡片二·二：巡检记录 —— 上面那张卡片的游标只说得清「现在什么状态」，
+           这里是历次探测的流水，说的是「怎么走到这个状态的」 -->
+      <ElCard v-if="scrapable" shadow="never" class="detail-card">
+        <template #header>
+          <div class="flex items-center gap-3">
+            <span class="font-medium">巡检记录</span>
+            <span class="text-xs text-gray-400">{{ pingLogSummary }}</span>
+            <ElButton size="small" :loading="loadingPingLogs" @click="loadPingLogs">
+              刷新
+            </ElButton>
+          </div>
+        </template>
+
+        <div v-if="loadingPingLogs && pingLogs.length === 0" class="text-gray-400">
+          加载中…
+        </div>
+        <!-- 空不等于没巡检过：这张表只保留 90 天，且底部的「检测活性」是人工单次触发，
+             不落这张表 —— 不写清楚的话，空列表会被当成「巡检没在跑」去排查 -->
+        <div v-else-if="pingLogs.length === 0" class="text-gray-400">
+          近 90 天内没有自动探测记录（日志保留 90 天；底部的「检测活性」是人工触发，不写入这张表）
+        </div>
+        <ul v-else class="space-y-1">
+          <li
+            v-for="row in pingLogs"
+            :key="row.id"
+            class="flex items-center gap-3 rounded border border-gray-100 px-2 py-1"
+          >
+            <span class="w-36 shrink-0 text-gray-500">{{ formatTime(row.createTime) }}</span>
+            <ElTag
+              :type="PING_OUTCOME_META[row.outcome]?.type ?? 'info'"
+              size="small"
+              class="shrink-0"
+              :title="PING_OUTCOME_META[row.outcome]?.tip"
+            >
+              {{ PING_OUTCOME_META[row.outcome]?.label ?? row.outcome }}
+            </ElTag>
+            <!-- ping 通之后是否顺带投递了重新抓取。空额度时会被推迟到下一轮，
+                 所以「存活但没触发」是正常的，不是漏了 -->
+            <ElTag
+              v-if="row.triggeredParse"
+              type="info"
+              size="small"
+              class="shrink-0"
+              title="本次探测后投递了重新抓取"
+            >
+              触发重抓
+            </ElTag>
+            <span class="min-w-0 flex-1 truncate text-right text-xs text-gray-400">
+              {{ row.urlHost }}
+            </span>
+          </li>
+        </ul>
       </ElCard>
 
       <!--

@@ -183,7 +183,18 @@ class ApiServiceImpl(
                 // 服务是活着的（有 HTTP 响应），所以这里只给地址不给"先启动服务"的提示
                 if (errorType == ErrorType.E307) append(" (scrapper: $endpoint)")
             }
-            logScrapperCall(url, startedAt, success = false, httpStatus = httpResponse.status, errorMsg = msg)
+            logScrapperCall(
+                url, startedAt, success = false, httpStatus = httpResponse.status, errorMsg = msg,
+                // 失败恰恰是最需要知道走了哪层的时候：同一个 403，停在 Layer 1 说明还有
+                // 无头可试，试到 Layer 2 仍失败说明拒的是这台机器的出口 IP，处置完全相反。
+                // 顶层的 layerUsed 是「最后尝试到的层」，老版 scrapper 不下发，回退读
+                // fetch.layerUsed（那里恒为 HTTP，含义是「这份现场由哪层产出」）；两边
+                // 都没有就留空，不猜。见 scrapper contract::ErrorResponse
+                // 用 isTextual 而不是 asText(null)：字段缺失时 MissingNode.asText() 给的是
+                // 空串，不是 null，回退分支根本不会走到
+                layerUsed = json?.path("layerUsed")?.takeIf { it.isTextual }?.asText()
+                    ?: json?.path("fetch")?.path("layerUsed")?.takeIf { it.isTextual }?.asText(),
+            )
             throw CommonException(errorType, msg)
         }
 

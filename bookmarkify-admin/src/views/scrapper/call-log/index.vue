@@ -147,8 +147,29 @@ const LAYER_META: Record<string, { desc: string; text: string; type: "info" | "s
   },
 };
 
+/**
+ * 失败行的"抓取层"回答的是另一个问题：**我们试到哪一层就放弃了**。所以释义要单独一套，
+ * 照搬成功行那套（"绝大多数站点走这条路"）在一条失败记录上是答非所问。
+ *
+ * 这个区分有实际代价差：停在 Layer 1 说明无头浏览器还没试过，重试有意义；试到 Layer 2
+ * 仍失败说明拒的是我方机房出口 IP 而不是请求长相，scrapper 会把这个 host 熔断 24 小时，
+ * 同站后续 URL 直接跳过 —— 这时候点重试只是白等。
+ */
+const FAILED_LAYER_DESC: Record<string, string> = {
+  HEADLESS:
+    "已回退无头 Chrome 重试，仍然失败。多半拒的是我方机房出口 IP 而非请求长相，重试大概率还是同一个结果",
+  HTTP: "停在 Layer 1 就失败了，没有回退无头：要么不是反爬类错误（超时/DNS/连不上），要么该站点近期已验证无头同样被拦、本次直接跳过",
+};
+
 function layerMetaOf(row: ScrapperCallLogVO) {
-  return row.layerUsed ? LAYER_META[row.layerUsed] : undefined;
+  const meta = row.layerUsed ? LAYER_META[row.layerUsed] : undefined;
+  if (!meta || row.success) return meta;
+  return {
+    desc: FAILED_LAYER_DESC[row.layerUsed!] ?? meta.desc,
+    text: meta.text,
+    // 失败行一律中性色：绿/黄在这一行只会被读成"这次抓取好不好"，而那是"结果"列的事
+    type: "info" as const,
+  };
 }
 
 /** 来源枚举释义，鼠标悬浮在"来源"表头时展示 */
@@ -160,6 +181,27 @@ const SOURCE_LEGEND: Array<[string, string]> = [
   ["headless", "普通 HTTP 抓取失败，由无头浏览器渲染后抓取，并附带页面截图"],
 ];
 
+/**
+ * 耗时的"网络良好/较差"分界。3s 是这条链路上有意义的那道坎：Layer 1 的普通 HTTP 抓取
+ * 正常都在 1~2s 内回来，越过 3s 基本意味着对端慢、重定向链长，或者已经退到无头浏览器
+ * （生产实测无头单次 ~28s）。
+ */
+const SLOW_CALL_MS = 3000;
+
+function durationClassOf(row: ScrapperCallLogVO) {
+  return row.durationMs < SLOW_CALL_MS
+    ? "text-green-600 dark:text-green-400"
+    : "text-orange-500 dark:text-orange-400";
+}
+
+/** 只有 200 算正常；其余（含 3xx/4xx/5xx）都要一眼能挑出来 */
+function httpStatusClassOf(row: ScrapperCallLogVO) {
+  if (row.httpStatus == null) return "text-gray-400";
+  return row.httpStatus === 200
+    ? "text-green-600 dark:text-green-400"
+    : "text-red-600 dark:text-red-400";
+}
+
 const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
   id: "admin-scrapper-call-log",
   columns: [
@@ -167,7 +209,7 @@ const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
     { field: "urlHost", title: "域名", minWidth: 180, slots: { default: "urlHost" } },
     { field: "url", title: "请求URL", minWidth: 240, showOverflow: "tooltip" },
     { field: "success", title: "结果", width: 90, slots: { default: "success" } },
-    { field: "httpStatus", title: "HTTP状态", width: 100 },
+    { field: "httpStatus", title: "HTTP状态", width: 100, slots: { default: "httpStatus" } },
     {
       field: "layerUsed",
       title: "抓取层",
@@ -176,8 +218,7 @@ const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
     },
     { field: "source", title: "来源", width: 120, slots: { header: "sourceHeader" } },
     { field: "cached", title: "缓存命中", width: 100, slots: { default: "cached" } },
-    { field: "durationMs", title: "耗时(ms)", width: 100 },
-    { field: "errorMsg", title: "错误信息", minWidth: 200, slots: { default: "errorMsg" } },
+    { field: "durationMs", title: "耗时(ms)", width: 100, slots: { default: "durationMs" } },
     {
       field: "createTime",
       title: "调用时间",
@@ -256,7 +297,10 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
                   <span class="font-mono">{{ meta.text }}</span>
                   ：{{ meta.desc }}
                 </div>
-                <div class="text-gray-300">抓取失败时该列为空</div>
+                <div class="text-gray-300">
+                  失败的记录这一列是"最后尝试到的层"：Layer 1 表示还没试过无头浏览器，Layer 2
+                  表示试过了也没成。只有连一个字节都没发出去(地址非法、目标不是域名、并发过载)才为空
+                </div>
               </div>
             </template>
             <span class="cursor-help underline decoration-dotted underline-offset-4">
@@ -300,18 +344,26 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
           </ElButton>
           <span v-else>-</span>
         </template>
+        <!-- 失败原因不再单占一列：悬浮在「失败」标签上看，长文案由 tooltip 完整展开 -->
         <template #success="{ row }">
           <ElTag v-if="row.success" type="success" size="small"> 成功 </ElTag>
+          <ElTooltip v-else-if="row.errorMsg" placement="top">
+            <template #content>
+              <div class="max-w-md whitespace-pre-wrap text-xs leading-relaxed">{{ row.errorMsg }}</div>
+            </template>
+            <ElTag class="cursor-help" type="danger" size="small"> 失败 </ElTag>
+          </ElTooltip>
+          <!-- 失败但没留下 errorMsg：不挂空 tooltip，免得鼠标停上去弹一个空框 -->
           <ElTag v-else type="danger" size="small"> 失败 </ElTag>
+        </template>
+        <template #httpStatus="{ row }">
+          <span :class="httpStatusClassOf(row)" class="font-mono">{{ row.httpStatus ?? "-" }}</span>
+        </template>
+        <template #durationMs="{ row }">
+          <span :class="durationClassOf(row)" class="font-mono">{{ row.durationMs }}</span>
         </template>
         <template #cached="{ row }">
           <ElTag v-if="row.cached" type="info" size="small"> 命中 </ElTag>
-          <span v-else>-</span>
-        </template>
-        <template #errorMsg="{ row }">
-          <ElTooltip v-if="row.errorMsg" :content="row.errorMsg" placement="top">
-            <span class="line-clamp-1">{{ row.errorMsg }}</span>
-          </ElTooltip>
           <span v-else>-</span>
         </template>
       </Grid>

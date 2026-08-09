@@ -801,6 +801,17 @@ pub struct ErrorResponse {
     /// 失败前已经拿到的传输层事实，用于排障。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fetch: Option<FetchInfo>,
+    /// **最后尝试到的抓取层**，`None` 表示一个字节都没发出去（URL 非法、目标不是域名、
+    /// 负缓存命中、并发过载）。
+    ///
+    /// 与 [`FetchInfo::layer_used`] 是两个问题，失败时两者会不一致，这是刻意的：
+    /// 后者说的是"上面那份传输层事实由哪层产出"，而 AUTO 模式下 Layer 1 被反爬拦下、
+    /// 回退 Layer 2 又同样被拦时，报出去的是 **Layer 1 的**错误现场（它更完整），
+    /// 于是 `fetch.layerUsed = HTTP` 而本字段 = `HEADLESS`。调用方要回答的
+    /// "这次到底试到哪一层"只能看本字段 —— 没有它，"压根没启浏览器"（同站熔断跳过）
+    /// 和"浏览器也过不去"在日志里长得一模一样。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer_used: Option<RenderLayer>,
 }
 
 #[cfg(test)]

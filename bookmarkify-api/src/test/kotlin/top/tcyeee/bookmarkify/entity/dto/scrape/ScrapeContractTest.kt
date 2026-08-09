@@ -170,6 +170,37 @@ class ScrapeContractTest {
         assertTrue(json.path("render").path("timeoutMs").isMissingNode, "null 不应出现在载荷里")
     }
 
+    /**
+     * 失败响应也要报出抓取层：`scrapper_call_log.layer_used` 靠它，而失败恰恰是最需要
+     * 知道走了哪层的时候 —— 停在 Layer 1 说明无头还没试过，重试有意义；试到 Layer 2
+     * 仍失败说明拒的是我方出口 IP，重试是白等。
+     *
+     * 顶层的 `layerUsed` 与 `fetch.layerUsed` 在这里**故意不一致**：后者描述的是
+     * `fetch` 里那份现场由哪层产出（恒为 HTTP，因为报出去的是 Layer 1 的完整现场）。
+     */
+    @Test
+    fun `error response carries the layer that was reached`() {
+        val err: ScrapeErrorResponse = mapper.readValue(
+            """
+            {"error":"FETCH_FAILED","detail":"HTTP 412 ...","layerUsed":"HEADLESS",
+             "fetch":{"finalUrl":"https://example.com/v/1","httpStatus":412,
+                      "layerUsed":"HTTP","fromCache":false,"timingMs":{"total":9}}}
+            """.trimIndent()
+        )
+        assertEquals(RenderLayer.HEADLESS, err.layerUsed)
+        assertEquals(RenderLayer.HTTP, err.fetch?.layerUsed)
+    }
+
+    /**
+     * 还没升级的 scrapper 不下发这个字段，此时必须是 null —— 不能默认成 HTTP，那等于
+     * 给一次从未发生过的 Layer 1 抓取盖章。两个服务按目录各自触发部署，这个窗口必然存在。
+     */
+    @Test
+    fun `error response without the field leaves the layer unknown`() {
+        val err: ScrapeErrorResponse = mapper.readValue("""{"error":"TIMEOUT"}""")
+        assertNull(err.layerUsed)
+    }
+
     /** 管理后台"重试"必须绕过缓存，否则等于没试 */
     @Test
     fun `retry bypasses cache`() {
