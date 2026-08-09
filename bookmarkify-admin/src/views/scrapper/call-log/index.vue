@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import type { ScrapperCallLogSearchParams, ScrapperCallLogVO } from "#/api/scrapper-call-log";
 
-import { defineAsyncComponent, reactive, ref } from "vue";
+import { computed, defineAsyncComponent, reactive, ref } from "vue";
+
+import { useRoute, useRouter } from "vue-router";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
@@ -65,9 +67,38 @@ const ElTooltip = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElTooltip)
 );
 
+const route = useRoute();
+const router = useRouter();
+
+// 巡检轮次页跳过来时带上筛选条件，直接落在目标数据上，省掉"再点一下筛选"。
+// 在 setup 里就写进初值而不是挂载后再改：后者会让表格先按"无筛选"查一次、再被自动搜索
+// 翻一次，中间那一版无关的数据还会闪一下（与巡检页的 onlyBreaker 是同一个套路）
 const searchForm = reactive<Pick<ScrapperCallLogSearchParams, "urlHost" | "success">>({
-  urlHost: "",
+  urlHost: typeof route.query.urlHost === "string" ? route.query.urlHost : "",
   success: undefined,
+});
+
+/**
+ * 时间窗。**只从 URL 来，页面上没有对应的输入框** —— 它不是一个日常筛选项，而是
+ * 「从某一轮巡检跳过来看这一轮触发的重抓」这一条链路的载体：那些重抓是异步投递的，
+ * scrapper_call_log 里既没有轮次 ID 也没有页面 ID，除了时间没有别的东西可以对上。
+ *
+ * 正因为它是近似（窗口内必然混进其它来源的抓取），一旦生效就要在页面上显式挂一条提示，
+ * 否则管理员会把窗口里所有的行都当成那一轮的产物。
+ */
+const timeWindow = computed(() => ({
+  from: typeof route.query.from === "string" ? route.query.from : undefined,
+  to: typeof route.query.to === "string" ? route.query.to : undefined,
+}));
+
+/** 是不是从巡检轮次跳过来的（决定提示文案说不说"这一轮"） */
+const fromSweep = computed(() => route.query.note === "sweep");
+
+/** 提示条上的可读区间，`YYYY-MM-DDTHH:mm:ss` 直接给人看太别扭 */
+const timeWindowText = computed(() => {
+  const { from, to } = timeWindow.value;
+  if (!from && !to) return "";
+  return `${from ? formatDateTime(from) : "不限"} ~ ${to ? formatDateTime(to) : "不限"}`;
 });
 
 // ── 书签解析对话框：失败行点"重试"后重新调用 scrapper 并展示其返回的全部信息 ──
@@ -236,6 +267,8 @@ const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
         const res = await getAdminScrapperCallLogListApi({
           urlHost: searchForm.urlHost || undefined,
           success: searchForm.success,
+          createTimeFrom: timeWindow.value.from,
+          createTimeTo: timeWindow.value.to,
           currentPage: page.currentPage,
           pageSize: page.pageSize,
         });
@@ -252,7 +285,27 @@ const [Grid, gridApi] = useVbenVxeGrid({
   gridEvents: { cellClick: handleCellClick },
 });
 
-const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
+// 「重置」要还原成"什么都不筛"，而不是 URL 带进来的那个筛选态
+const { reset: resetForm } = useAutoSearch(searchForm, () => gridApi.reload(), {
+  initial: { urlHost: "", success: undefined },
+});
+
+/**
+ * 清掉 URL 上的时间窗（以及跳转带来的域名筛选）。
+ *
+ * 时间窗不在 searchForm 里，所以 useAutoSearch 的 reset 碰不到它 —— 不一起清的话，
+ * 「重置」按下去域名框空了、结果却还被一个看不见的时间窗卡着，比不给重置更难排查。
+ * 改 query 不会重新 setup 组件，得手动 reload 一次表格。
+ */
+function clearTimeWindow() {
+  router.replace({ path: route.path });
+  gridApi.reload();
+}
+
+function reset() {
+  resetForm();
+  if (timeWindowText.value || route.query.urlHost) clearTimeWindow();
+}
 </script>
 
 <template>
@@ -265,6 +318,26 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
           <span>Scrapper 调用日志</span>
         </div>
       </template>
+      <!--
+        时间窗生效时必须显式挂出来。它只从 URL 来、筛选栏里没有对应的输入框，不挂的话
+        就是一个看不见的筛选条件：管理员会以为"这个域名最近只被抓过 3 次"，而那是窗口截出来的。
+        同样要说清它是**近似**——按时间圈进来的行不都是那一轮触发的。
+      -->
+      <div
+        v-if="timeWindowText"
+        class="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300"
+      >
+        <span>
+          已按时间窗筛选：<span class="font-mono">{{ timeWindowText }}</span>
+        </span>
+        <span v-if="fromSweep" class="text-blue-500 dark:text-blue-400">
+          来自巡检轮次的「本轮触发的重抓」。重抓是异步投递的，日志里没有轮次 ID 也没有页面
+          ID，只能按时间圈 —— 窗口内会混进其它来源的抓取，不是精确关联
+        </span>
+        <ElButton link size="small" type="primary" @click="clearTimeWindow">
+          清除
+        </ElButton>
+      </div>
       <FilterBar class="mb-4" @reset="reset">
         <FilterItem label="域名" width="240px">
           <ElInput v-model="searchForm.urlHost" placeholder="urlHost 模糊匹配" clearable />
@@ -363,8 +436,10 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
           <span :class="durationClassOf(row)" class="font-mono">{{ row.durationMs }}</span>
         </template>
         <template #cached="{ row }">
-          <ElTag v-if="row.cached" type="info" size="small"> 命中 </ElTag>
-          <span v-else>-</span>
+          <!-- 后端 cached 可为 null（调用没拿到响应时不写这一列），一律按「否」呈现 -->
+          <ElTag :type="row.cached ? 'success' : 'info'" size="small">
+            {{ row.cached ? "是" : "否" }}
+          </ElTag>
         </template>
       </Grid>
     </ElCard>

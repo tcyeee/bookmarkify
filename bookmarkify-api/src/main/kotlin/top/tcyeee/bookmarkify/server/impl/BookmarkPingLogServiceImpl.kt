@@ -11,6 +11,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkSweepLogSearchParams
 import top.tcyeee.bookmarkify.entity.SweepHealthVO
 import top.tcyeee.bookmarkify.entity.entity.PagePingLogEntity
 import top.tcyeee.bookmarkify.entity.entity.SweepLogEntity
+import top.tcyeee.bookmarkify.mapper.PageMapper
 import top.tcyeee.bookmarkify.mapper.PagePingLogMapper
 import top.tcyeee.bookmarkify.mapper.SweepLogMapper
 import top.tcyeee.bookmarkify.server.IBookmarkPingLogService
@@ -23,10 +24,22 @@ import java.time.temporal.ChronoUnit
 @Service
 class BookmarkPingLogServiceImpl(
     private val sweepLogMapper: SweepLogMapper,
+    private val pageMapper: PageMapper,
 ) : IBookmarkPingLogService, ServiceImpl<PagePingLogMapper, PagePingLogEntity>() {
 
-    override fun adminListAll(params: BookmarkPingLogSearchParams): IPage<BookmarkPingLogVO> =
-        baseMapper.selectPage(params.toPage(), params.toWrapper()).convert { BookmarkPingLogVO(it) }
+    override fun adminListAll(params: BookmarkPingLogSearchParams): IPage<BookmarkPingLogVO> {
+        val page = baseMapper.selectPage(params.toPage(), params.toWrapper()).convert { BookmarkPingLogVO(it) }
+
+        // 完整地址一次查询补齐整页 —— 逐行去查就是 N+1，而按轮次下钻时一页默认 50 行。
+        // 日志表只存 host，只有 host 时同一域名下的几十条深链在列表里长得一模一样。
+        // 探测过后页面被删是正常的（用户取消收藏 + 无人引用后清理），查不到就留空，不猜。
+        val pageIds = page.records.mapTo(HashSet()) { it.pageId }
+        if (pageIds.isNotEmpty()) {
+            val urlById = pageMapper.selectByIds(pageIds).associate { it.id to it.rawUrl }
+            page.records.forEach { it.url = urlById[it.pageId] }
+        }
+        return page
+    }
 
     override fun adminListSweeps(params: BookmarkSweepLogSearchParams): IPage<SweepLogEntity> =
         sweepLogMapper.selectPage(params.toPage(), params.toWrapper())

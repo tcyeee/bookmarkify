@@ -93,9 +93,11 @@ Content-Type: application/json
 开启截图还会**放开无头浏览器的资源拦截**：不截图时 CSS / 图片 / 字体是被拦掉的（Layer 2 的
 主要用途是拿渲染后的 HTML，拦掉能省下可观的内存和时间），只有截图才需要它们。
 
-> **⚠️ 已知问题：截图目前仍然只能截出裸 HTML**（无 CSS / 图片 / 字体）。放开上述拦截并没有
-> 解决它 —— 实测同一页面在拦截全开、全关、以及完全禁用拦截三种配置下截出的图**逐字节相同**，
-> 说明样式压根没参与渲染，原因仍未定位。在此之前请不要把截图当作可用功能。
+> **截图的"裸 HTML"老问题已于 2026-08-09 随 Layer 2 重写修复。** 病根不在资源拦截（当年实测
+> 拦截全开 / 全关 / 完全禁用三种配置下截出的图**逐字节相同**），而在于当时用的是 spider 的
+> **爬虫**接口去要一张图 —— 那条路径收集的是爬虫抓到的页面，从来不是"导航到这一页、等它渲染
+> 完、再截一帧"。改成直接驱动 CDP 后，同一个 stripe.com 从 107264 字节的无样式文档变成
+> 287698 字节的完整渲染图。
 
 #### `assets.download`
 
@@ -224,11 +226,12 @@ LOGO 用"以及跨 `extractor` 去重所需的全部依据。
 | `422` | `INVALID_URL` | URL 格式非法（非 http/https 或无法解析） |
 | `422` | *(axum 纯文本)* | 请求体含未知字段或类型不符（`deny_unknown_fields`），响应体非 JSON |
 | `502` | `FETCH_FAILED` | Layer 1 网络请求失败 |
-| `502` | `HEADLESS_FAILED` | Layer 2 无头浏览器抓取失败 |
+| `502` | `HEADLESS_FAILED` | Layer 2 跑通了，但这一页没有产出可用文档（空 HTML 等）——**关于目标页面的结论** |
+| `503` | `HEADLESS_UNAVAILABLE` | **我方**无头能力当下不可用：Chrome 起不来、CDP 报错、或等不到并发名额（`HEADLESS_QUEUE_WAIT_SECS`）。与目标站点无关，调用方应当稍后重试而不是据此判定站点失联 |
 | `502` | `RECENTLY_FAILED` | 命中**负缓存**：该 URL 60 秒内刚失败过。`cache.mode = BYPASS` 可绕过 |
 | `503` | `OVERLOADED` | 并发中的 `/scrape` + `/ping` 超过 `MAX_CONCURRENT_REQUESTS`，快速失败而非排队 |
 | `503` | `OSS_FAILED` | 对象存储上传失败 |
-| `504` | `TIMEOUT` | 抓取超时（Layer 1 见 `REQUEST_TIMEOUT_SECS`，Layer 2 见 `HEADLESS_TIMEOUT_SECS`） |
+| `504` | `TIMEOUT` | 抓取超时（Layer 1 见 `REQUEST_TIMEOUT_SECS`，Layer 2 见 `HEADLESS_TIMEOUT_SECS`——**只算页面时间**，排队等待另计，见 `HEADLESS_UNAVAILABLE`） |
 
 ```json
 {
@@ -335,8 +338,8 @@ axum_http_requests_duration_seconds_bucket{method="GET",status="200",endpoint="/
 
 ## 缓存语义
 
-- **正向缓存**：成功结果以规范化 URL（小写主机、排序查询参数、去除 fragment）为键写入内存缓存，命中时响应的 `fetch.fromCache` 为 `true`，且 `request` 块回显的是**本次**请求参数而非当初写入缓存的那次。容量 10,000 条，TTL 由 `CACHE_TTL_SECS` 控制（默认 3600s）。
-- **负向缓存**：`TIMEOUT` / `FETCH_FAILED` / `HEADLESS_FAILED` 会将 URL 标记为近期失败（TTL 60s），期间重复请求直接返回 `502 RECENTLY_FAILED`。`INVALID_URL` 与 `FORBIDDEN_TARGET` 不写入负缓存。
+- **正向缓存**：成功结果以规范化 URL（小写主机、排序查询参数、去除 fragment）为键写入内存缓存，命中时响应的 `fetch.fromCache` 为 `true`，且 `request` 块回显的是**本次**请求参数而非当初写入缓存的那次。容量 10,000 条，TTL 由 `CACHE_TTL_SECS` 控制（默认 21600s / 6h —— 重复请求由调用方的小时级巡检驱动，1h 的 TTL 每次都刚好过期，等于没有缓存）。
+- **负向缓存**：`TIMEOUT` / `FETCH_FAILED` / `HEADLESS_FAILED` 会将 URL 标记为近期失败（TTL 60s），期间重复请求直接返回 `502 RECENTLY_FAILED`。`INVALID_URL`、`FORBIDDEN_TARGET` 与 `HEADLESS_UNAVAILABLE` **不写入**负缓存——前两个是我方的决定，后一个是我方的状态，把它们记成"这条 URL 刚失败过"会让下一个调用方把我方拥塞读成站点故障。
 - **绕过**：`cache.mode = BYPASS` 同时绕过正向与负向缓存并覆盖正向缓存。缓存键只按 URL，不含请求参数，因此缓存里存的是"当次参数下的产物"——参数不同需要重取时请用 `BYPASS`。
 
 ---

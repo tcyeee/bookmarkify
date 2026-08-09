@@ -19,8 +19,18 @@ pub enum ScrapeError {
     FetchFailed(String),
     /// 目标站点返回了非 2xx 状态码，附带完整现场（见 [`HttpErrorDetail`]）
     HttpStatus(Box<HttpErrorDetail>),
-    /// 无头浏览器启动或页面加载失败，附带错误描述
+    /// 无头浏览器跑通了，但这一页没有产出可用的文档（空 HTML 等），附带错误描述。
+    ///
+    /// **这是关于目标页面的结论**，所以调用方据此写无头熔断是合理的。"浏览器本身用不了"
+    /// 是另一回事，见 [`ScrapeError::HeadlessUnavailable`]。
     HeadlessFailed(String),
+    /// 我方的无头能力当下不可用：Chrome 起不来、CDP 报错、或者并发名额等不到。
+    ///
+    /// 从 [`ScrapeError::HeadlessFailed`] 里拆出来的，理由和当初把 `FORBIDDEN_TARGET`
+    /// 从 E304 拆走一样：**"这个站点抓不到"和"我们现在抓不了"是两个结论**。混在一起时，
+    /// 一次 Chrome 故障会顺手给一批目标站点写上 24h 的无头熔断，活性巡检那边还可能据此
+    /// 判失联 —— 用我方的一次抖动给用户的书签判死刑。
+    HeadlessUnavailable(String),
     /// OSS 上传失败，附带错误描述
     OssFailed(String),
 }

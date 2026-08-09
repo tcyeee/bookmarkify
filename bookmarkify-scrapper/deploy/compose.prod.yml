@@ -5,11 +5,14 @@ services:
     container_name: bookmarkify-scraper
     restart: unless-stopped
     # Give in-flight requests time to finish under graceful shutdown before Docker
-    # SIGKILLs the container. Must exceed HEADLESS_TIMEOUT_SECS (30s below) with margin.
-    stop_grace_period: 40s
-    # Memory cap — headless Chrome can spike; serialized to one browser at a time.
-    # mem_limit is the hard ceiling; memswap_limit allows a little swap headroom so
-    # occasional spikes don't OOM-kill Chrome mid-scrape. Tune for the host.
+    # SIGKILLs the container. The worst-case headless request is now
+    # HEADLESS_QUEUE_WAIT_SECS (20s waiting for a slot) + HEADLESS_TIMEOUT_SECS (30s
+    # of page budget) = 50s, so this must clear 50s, not just 30s.
+    stop_grace_period: 70s
+    # Memory cap — one Chrome process is kept alive and reused across requests
+    # (HEADLESS_BROWSER_TTL_SECS / _MAX_USES recycle it), with up to
+    # HEADLESS_CONCURRENCY tabs open at a time. mem_limit is the hard ceiling;
+    # memswap_limit allows a little swap headroom. Tune for the host.
     mem_limit: 1g
     mem_reservation: 256m
     memswap_limit: 2g
@@ -23,8 +26,19 @@ services:
       # Container listens on 3000 (host port is controlled by the mapping above)
       PORT: 3000
       REQUEST_TIMEOUT_SECS: 10
+      # Page budget only — it starts *after* a concurrency slot is granted, so a
+      # queued request no longer burns it while waiting (that was how a batch of 8
+      # concurrent scrapes all "timed out against the target site" on 2026-08-08).
       HEADLESS_TIMEOUT_SECS: 30
-      CACHE_TTL_SECS: 3600
+      HEADLESS_QUEUE_WAIT_SECS: 20
+      # 2 vCPU on this host: more tabs would just make each one slower.
+      HEADLESS_CONCURRENCY: 2
+      # Was 3600, which quietly defeated the whole point of the 6h default: repeat
+      # requests here are driven by the API's *hourly* sweeps, so a 1h TTL expires
+      # exactly when the next sweep arrives (2026-08-07: 449 calls / 249 URLs and
+      # only 2 cache hits). Content re-crawls are on a 30-day cycle — a 6h-old
+      # result is indistinguishable from a fresh one.
+      CACHE_TTL_SECS: 21600
       RUST_LOG: info
       # Outbound proxy via the `clash` container (containerized Mihomo) on app_network.
       # Both Layer 1 (reqwest) and Layer 2 (headless Chrome) honor this; domestic sites

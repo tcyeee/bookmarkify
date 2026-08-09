@@ -6,7 +6,7 @@
 
 - **双层抓取策略**
   - **Layer 1（轻量）**：通过 `reqwest` 发起 HTTP 请求，解析 HTML 提取元数据，延迟低、资源占用少
-  - **Layer 2（无头浏览器）**：通过 `spider-rs` 驱动 Chrome，适用于重度依赖 JavaScript 渲染的页面
+  - **Layer 2（无头浏览器）**：直接通过 CDP 驱动 Chrome（`chromiumoxide`），浏览器实例跨请求复用；适用于重度依赖 JavaScript 渲染的页面
   - 当 Layer 1 无法获取标题时，自动回退到 Layer 2，对调用方透明
 
 - **元数据提取优先级**（高到低）
@@ -78,9 +78,15 @@ OSS_KEY_PREFIX=scrapper \
 |---|---|---|---|
 | `PORT` | | `3000` | HTTP 监听端口 |
 | `REQUEST_TIMEOUT_SECS` | | `10` | Layer 1 HTTP 请求超时（秒） |
-| `HEADLESS_TIMEOUT_SECS` | | `30` | Layer 2 无头浏览器整体超时（秒） |
+| `HEADLESS_TIMEOUT_SECS` | | `30` | Layer 2 **页面**预算（秒），从拿到并发名额之后开始计 |
+| `HEADLESS_QUEUE_WAIT_SECS` | | `20` | 等一个并发名额的上限（秒），超时报 `HEADLESS_UNAVAILABLE` |
+| `HEADLESS_CONCURRENCY` | | `2` | 同时可以有几个标签页在跑 |
+| `HEADLESS_BROWSER_TTL_SECS` | | `900` | 浏览器实例复用多久后回收重开 |
+| `HEADLESS_BROWSER_MAX_USES` | | `50` | 浏览器实例复用多少次后回收重开 |
+| `HEADLESS_LAUNCH_TIMEOUT_SECS` | | `20` | 启动 Chrome 自身的超时（秒） |
+| `CHROME_BIN` | | (自动探测) | Chrome/Chromium 可执行文件路径 |
 | `HEADLESS_IDLE_WAIT_SECS` | | `10` | Layer 2 网络空闲等待时间（秒），用于等待 JS 渲染完成；须小于 `HEADLESS_TIMEOUT_SECS` |
-| `CACHE_TTL_SECS` | | `3600` | 缓存条目存活时间（秒） |
+| `CACHE_TTL_SECS` | | `21600` | 缓存条目存活时间（秒） |
 | `PROXY_URL` | | — | HTTP 代理地址，例如 `http://127.0.0.1:7890`，不设则直连 |
 | `SSRF_ALLOW_PRIVATE` | | — | 设为 `1` 关闭 SSRF 防护，允许访问私有 / 回环地址；不设则默认拦截 |
 | `SCRAPER_AUTH_TOKEN` | | — | 设置后 `/scrape`、`/ping` 要求 `Authorization: Bearer <token>`；不设则不鉴权 |
@@ -117,7 +123,7 @@ cargo test -p scraper-service -- --ignored
 | 异步运行时 | `tokio 1` | 多线程异步执行器 |
 | HTTP 客户端 | `reqwest 0.12` | Layer 1 页面抓取，支持代理 |
 | HTML 解析 | `scraper 0.19` | CSS 选择器解析 DOM |
-| 无头浏览器 | `spider 2` | Chrome 驱动，含隐身模式 |
+| 无头浏览器 | `chromiumoxide`（经 `spider 2` 再导出） | 直连 CDP，含隐身模式 |
 | 缓存 | `moka 0.12` | 异步内存缓存，支持 TTL |
 | OSS 上传 | `hmac` / `sha1` / `httpdate` | 手写阿里云 OSS V1 签名，直接用上面的 `reqwest` 发出 PUT，不依赖第三方 OSS SDK |
 | 限流保护 | `tower`（`limit` / `load-shed`） | `/scrape`、`/ping` 并发上限 + 过载快速失败 |

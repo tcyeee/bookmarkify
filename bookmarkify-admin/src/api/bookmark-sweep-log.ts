@@ -89,6 +89,74 @@ export async function getAdminSweepLogListApi(params: BookmarkSweepLogSearchPara
   );
 }
 
+/**
+ * 手动触发一轮巡检之前的「这一轮会做什么」预览。
+ *
+ * 每个数都是后端用与真正开跑同一套候选查询现算的，所以确认框里写的条数和跑出来的对得上。
+ * 但预览与执行之间有时间差（游标会推进、站点活性会变），这些是预估不是承诺。
+ */
+export interface SweepPreviewVO {
+  taskLabel: string;
+  /** 这个任务管哪一批书签 */
+  scope: string;
+  /** 到期候选总数，不含 LIMIT 也不含非域名过滤 */
+  backlog: number;
+  batchSize: number;
+  /** 本轮会处理的条数：已按 LIMIT 截断、已滤掉非域名书签 */
+  candidates: number;
+  /** 被 LIMIT 截断、留到下一轮的条数 */
+  truncated: number;
+  /** 本地地址/IP 等非域名书签，不探测 */
+  skippedNonDomain: number;
+  /** 预计被站点层短路（所属域名已判死）、不逐页探测的条数 */
+  shortCircuited: number;
+  /** 为已判死的域名补探根地址的次数 */
+  rootProbes: number;
+  /** 预计实际发起的探测次数，耗时的来源 */
+  probes: number;
+  /** 预计最多多少条会顺带触发重新抓取（异步，不计入本轮耗时） */
+  mayTriggerParse: number;
+  /** 本任务是否有资格把书签改判为失联 —— 确认框里最该看清的一条 */
+  mayConfirmDeath: boolean;
+  deadConfirmFailures: number;
+  intervalHours: number;
+  concurrency: number;
+  estimatedMs: number;
+  /** 最坏耗时：全部探测都吃满单条超时 */
+  worstCaseMs: number;
+  /** 预估所用的单条探测平均墙钟耗时；null = 没有历史样本，用的是默认假设 */
+  sampleProbeMs: null | number;
+  sampleRounds: number;
+  /** 上一轮是否仍在进行。为真时触发会被巡检锁挡下 */
+  running: boolean;
+}
+
+/** 手动触发的受理结果。巡检是异步的，这里只回答「收下了没有」 */
+export interface SweepTriggerResultVO {
+  accepted: boolean;
+  message: string;
+}
+
+/** 可手动触发的巡检任务。已下线的 reviveArchivedBookmarks 不在其中（没有执行体） */
+export const SWEEP_TRIGGERABLE_TASKS = [
+  'livenessCheckStaleBookmarks',
+  'retryUnreachableBookmarks',
+] as const;
+
+export async function getAdminSweepPreviewApi(taskLabel: string) {
+  return requestClient.get<SweepPreviewVO>(
+    '/admin/bookmark-ping-log/sweep-preview',
+    { params: { taskLabel } },
+  );
+}
+
+export async function triggerAdminSweepApi(taskLabel: string) {
+  return requestClient.post<SweepTriggerResultVO>(
+    '/admin/bookmark-ping-log/sweep-trigger',
+    { taskLabel },
+  );
+}
+
 export async function getAdminSweepHealthApi(windowHours = 24) {
   return requestClient.get<SweepHealthVO>('/admin/bookmark-ping-log/sweep-health', {
     params: { windowHours },

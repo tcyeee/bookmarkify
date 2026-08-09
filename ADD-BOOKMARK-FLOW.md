@@ -213,7 +213,7 @@ resolved.parseStatus == PENDING ?   → 直接 return，节点保持 LOADING（�
 | 事件 | 线程池 | 做什么 | 为什么拆出去 |
 |---|---|---|---|
 | `BookmarkEnrichEvent` | `bookmarkEnrichExecutor`（2~8，队列 10000） | 分类打标 + NSFW 判定（DeepSeek） | 各要一次 10s 往返，而用户根本看不到；留在主链路等于每条书签多占解析线程 20s |
-| `BookmarkScreenshotEvent` | `bookmarkScreenshotExecutor`（**单线程**，队列 200） | 页面截图作封面 | 强制走无头浏览器，而对端 Chrome 由一把全局互斥锁串行化；单线程是与对端实际并发度对齐的硬约束 |
+| `BookmarkScreenshotEvent` | `bookmarkScreenshotExecutor`（**单线程**，队列 200） | 页面截图作封面 | 强制走无头浏览器，而对端的无头并发有上限（scrapper 的 `HEADLESS_CONCURRENCY`，默认 2）；单线程是与对端并发度对齐的选择 |
 
 截图落库走 `SiteAssetWriter.upsertScreenshot` 而**不是** `persist`——后者会整体替换 PAGE 层资产，把主抓取刚写好的社交图一并删掉。
 

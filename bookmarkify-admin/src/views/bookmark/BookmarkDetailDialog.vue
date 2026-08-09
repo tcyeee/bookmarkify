@@ -376,12 +376,22 @@ onUnmounted(() => closeIngestSocket());
 // 那些 UNKNOWN 是不是集中在同一段时间（后者是我方链路故障的特征，不是站点的问题）。
 // 按 pageId 精确查，**不能**按域名查——同域几十条深链的流水混在一起，首页的 ALIVE 会把
 // 这一页自己的 DEAD 淹掉，正好看反。
-const PING_LOG_LIMIT = 20;
+const PING_LOG_LIMIT = 5;
 const pingLogs = ref<BookmarkPingLogVO[]>([]);
 const pingLogTotal = ref(0);
 const loadingPingLogs = ref(false);
+/** 接口返回了不属于本书签的行（多半是 API 版本旧、不认识 pageId 这个筛选项） */
+const pingLogUnfiltered = ref(false);
 
-/** 总数与本次显示条数不一定相等，写在标题上省得把「只有 20 条」误读成「只探测过 20 次」 */
+/**
+ * 请求序号，用来丢弃过期响应。
+ *
+ * 弹窗是跨行复用的同一个实例：打开 A（请求在飞）→ 关掉 → 打开 B，A 的响应会晚于 B 的复位到达，
+ * 把 A 的记录填进 B 的卡片里 —— 症状正是"点开书签 A 看到书签 B 的记录"，且只在网络慢时出现。
+ */
+let pingLogToken = 0;
+
+/** 总数与本次显示条数不一定相等，写在标题上省得把「只有 5 条」误读成「只探测过 5 次」 */
 const pingLogSummary = computed(() =>
   pingLogTotal.value > PING_LOG_LIMIT
     ? `共 ${pingLogTotal.value} 次，显示最近 ${PING_LOG_LIMIT} 次`
@@ -391,20 +401,33 @@ const pingLogSummary = computed(() =>
 async function loadPingLogs() {
   const row = current.value;
   if (!row) return;
+  const token = ++pingLogToken;
+  const pageId = row.id;
   loadingPingLogs.value = true;
   try {
     const res = await getAdminBookmarkPingLogListApi({
-      pageId: row.id,
+      pageId,
       currentPage: 1,
       pageSize: PING_LOG_LIMIT,
     });
-    pingLogs.value = res.records ?? [];
-    pingLogTotal.value = res.total ?? 0;
+    // 已经不是当前这次请求了：弹窗期间换了书签，这份结果属于上一个
+    if (token !== pingLogToken) return;
+    const records = res.records ?? [];
+    // 再按 pageId 兜一道。**不是多余的防御**：`pageId` 是后加的筛选项，而 Spring Boot 默认
+    // 静默忽略未知字段，老版本 API 会原样返回"全表最近 N 条"。那些行属于别的书签，
+    // 摆在这张卡片里就等于宣称它们是本页的巡检历史 —— 错得比空列表严重得多。
+    const mine = records.filter((r) => r.pageId === pageId);
+    pingLogUnfiltered.value = mine.length !== records.length;
+    pingLogs.value = mine;
+    // 接口没按书签筛时，它给的 total 是全表的数，拿来当本页的探测次数是错的
+    pingLogTotal.value = pingLogUnfiltered.value ? mine.length : (res.total ?? 0);
   } catch {
+    if (token !== pingLogToken) return;
     pingLogs.value = [];
     pingLogTotal.value = 0;
+    pingLogUnfiltered.value = false;
   } finally {
-    loadingPingLogs.value = false;
+    if (token === pingLogToken) loadingPingLogs.value = false;
   }
 }
 
@@ -456,6 +479,7 @@ watch(visible, (opened) => {
   siblings.value = [];
   pingLogs.value = [];
   pingLogTotal.value = 0;
+  pingLogUnfiltered.value = false;
   resetIngest();
   resetLiveness();
   loadCategoryDict();
@@ -744,6 +768,15 @@ const livenessImageUrls = computed(() => {
             </ElButton>
           </div>
         </template>
+
+        <!-- 接口没认 pageId：把不属于本书签的行筛掉了，但要说清为什么这里可能是空的，
+             否则"筛完为空"会被读成"这一页从没被巡检过" -->
+        <div
+          v-if="pingLogUnfiltered"
+          class="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          接口返回了不属于本书签的记录（API 尚未部署按书签筛选的改动），已在前端筛除。
+        </div>
 
         <div v-if="loadingPingLogs && pingLogs.length === 0" class="text-gray-400">
           加载中…

@@ -321,7 +321,8 @@ CREATE TABLE public.page_ping_log (
     alive boolean,
     triggered_parse boolean DEFAULT false NOT NULL,
     create_time timestamp without time zone DEFAULT now() NOT NULL,
-    outcome character varying(16) NOT NULL
+    outcome character varying(16) NOT NULL,
+    sweep_id character varying(64)
 );
 
 
@@ -947,6 +948,13 @@ CREATE INDEX idx_ping_log_create_time ON public.page_ping_log USING btree (creat
 --
 
 CREATE INDEX idx_ping_log_page ON public.page_ping_log USING btree (page_id, create_time DESC);
+
+
+--
+-- Name: idx_ping_log_sweep; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ping_log_sweep ON public.page_ping_log USING btree (sweep_id, create_time) WHERE (sweep_id IS NOT NULL);
 
 
 --

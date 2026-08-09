@@ -701,9 +701,17 @@ data class BookmarkPingLogVO(
     @field:Schema(description = "日志ID") var id: String,
     @field:Schema(description = "书签ID") var pageId: String,
     @field:Schema(description = "URL host") var urlHost: String,
+    /**
+     * 被探测页面的完整地址（`page.raw_url`），由 Service 层按 pageId 批量补，页面已删除时为 null。
+     *
+     * 日志表本身只存 host。按 pageId 查单页历史时那样够用，但按巡检轮次下钻时一屏里会有同一域名下的
+     * 几十条深链，只给 host 完全分不清是哪一页 —— 而「首页 ALIVE、某条深链 DEAD」正是最常见的形态。
+     */
+    @field:Schema(description = "被探测页面的完整地址；页面已删除时为空") var url: String? = null,
     @field:Schema(description = "探测结论(ALIVE/DEAD/UNKNOWN)") var outcome: PingOutcome,
     @field:Schema(description = "是否存活；结论为 UNKNOWN 时为 null") var alive: Boolean? = null,
     @field:Schema(description = "ping通后是否触发了重新解析") var triggeredParse: Boolean = false,
+    @field:Schema(description = "产生这次探测的巡检轮次(sweep_log.id)；历史行为空") var sweepId: String? = null,
     @field:Schema(description = "检查时间") var createTime: LocalDateTime = LocalDateTime.now(),
 ) {
     constructor(entity: PagePingLogEntity) : this(
@@ -920,4 +928,57 @@ data class SweepHealthVO(
             "那种情况下熔断次数恒为 0，只看熔断数看不出来"
     )
     var lastRoundAt: LocalDateTime? = null,
+)
+
+/**
+ * 手动触发一轮巡检之前的「这一轮会做什么」预览。
+ *
+ * ## 为什么触发前要先算一遍
+ *
+ * 这不是一个幂等的只读操作：一轮存活巡检最多打 200 个站点、会把连续失败到阈值的书签**改判为失联**、
+ * 还会顺带向解析池投递几十条重新抓取。点之前看不见范围的话，管理员只能靠猜——而这几件事里任何一件
+ * 都不是"再点一次就好"的。所以确认框里的每个数字都是这里现算的，与真正开跑时用的是同一套候选查询
+ * （同样的状态过滤、同样的 `next_check_at` 游标、同样的 LIMIT 和非域名过滤）。
+ *
+ * 预览与执行之间当然有时间差（游标会推进、站点活性会变），所以这些数是**预估而非承诺**——
+ * 尤其 [probes]：站点层短路的页面若在开跑时发现根地址已恢复，会回到逐页探测，实际探测数会更接近
+ * [candidates]。[worstCaseMs] 按那种情况算。
+ */
+data class SweepPreviewVO(
+    @field:Schema(description = "巡检任务(方法名)") var taskLabel: String = "",
+    @field:Schema(description = "这个任务管哪一批书签，中文描述") var scope: String = "",
+    @field:Schema(description = "到期候选总数，不含 LIMIT 也不含非域名过滤") var backlog: Long = 0,
+    @field:Schema(description = "单轮处理上限(LIMIT)") var batchSize: Int = 0,
+    @field:Schema(description = "本轮会处理的条数：已按 LIMIT 截断、已滤掉非域名书签") var candidates: Int = 0,
+    @field:Schema(description = "被 LIMIT 截断、留到下一轮的条数") var truncated: Long = 0,
+    @field:Schema(description = "本地地址/IP 等非域名书签，不探测也不计入候选") var skippedNonDomain: Int = 0,
+    @field:Schema(description = "预计被站点层短路(所属域名已判死)、不逐页探测的条数") var shortCircuited: Int = 0,
+    @field:Schema(description = "为已判死的域名补探根地址的次数") var rootProbes: Int = 0,
+    @field:Schema(description = "预计实际发起的探测次数(逐页 + 根地址)，也是耗时的来源") var probes: Int = 0,
+    @field:Schema(description = "预计最多有多少条会顺带触发重新抓取(异步，不计入本轮耗时)") var mayTriggerParse: Int = 0,
+    @field:Schema(description = "本任务是否有资格把书签改判为失联") var mayConfirmDeath: Boolean = false,
+    @field:Schema(description = "连续失败多少次才落定失联；仅在 mayConfirmDeath 时有意义") var deadConfirmFailures: Int = 0,
+    @field:Schema(description = "该任务配置的检测间隔(小时)") var intervalHours: Int = 0,
+    @field:Schema(description = "并行探测的并发度") var concurrency: Int = 1,
+    @field:Schema(description = "预估耗时(ms)") var estimatedMs: Long = 0,
+    @field:Schema(description = "最坏耗时(ms)：全部探测都吃满单条超时") var worstCaseMs: Long = 0,
+    @field:Schema(
+        description = "预估所用的单条探测平均墙钟耗时(ms)。来自最近若干轮的真实记录，" +
+            "为空表示没有历史样本、用的是默认假设"
+    )
+    var sampleProbeMs: Long? = null,
+    @field:Schema(description = "预估依据的历史轮次数；0 表示无样本") var sampleRounds: Int = 0,
+    @field:Schema(description = "上一轮是否仍在进行(或另一实例正在跑)。为真时触发会被巡检锁挡下") var running: Boolean = false,
+)
+
+/**
+ * 手动触发一轮巡检的受理结果。
+ *
+ * 巡检本身是 `@Async` 的，接口返回时它才刚被投递，所以这里只回答"收下了没有"——
+ * [accepted] 为假只有一个原因：巡检锁被占着（上一轮还没跑完，或另一个实例正在跑）。
+ * 真正的结果要等那一轮跑完后落进 `sweep_log`。
+ */
+data class SweepTriggerResultVO(
+    @field:Schema(description = "是否已受理并投递") var accepted: Boolean = false,
+    @field:Schema(description = "给管理员看的说明") var message: String = "",
 )

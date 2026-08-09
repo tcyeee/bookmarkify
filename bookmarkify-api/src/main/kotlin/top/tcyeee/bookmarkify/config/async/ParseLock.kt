@@ -70,6 +70,19 @@ class ParseLock(private val redis: StringRedisTemplate) {
     }
 
     /**
+     * 这把锁当前是否被人持有。**只用于展示**，不能用来做互斥判断。
+     *
+     * 与 [acquire] 之间天然有竞态：读到 false 之后、真正开跑之前，另一个实例完全可能把锁抢走。
+     * 互斥仍然只由 `acquire` 的 SETNX 保证——这里回答的是"现在给管理员看的那句『上一轮还在跑』
+     * 该不该显示"，读错的代价只是一句提示不准。
+     *
+     * Redis 异常时返回 false，与 [acquire] 的降级放行方向一致：缓存故障不该让界面显示成"正在跑"
+     * 而把一个本来能点的按钮永久禁掉。
+     */
+    fun isHeld(key: String): Boolean =
+        runCatching { redis.hasKey("$KEY_PREFIX$key") }.getOrDefault(false)
+
+    /**
      * 提前释放，仅当锁仍然是 [token] 那一次持有时才删。
      *
      * 判断与删除必须在一次 Redis 往返里完成——分成 GET 再 DEL 的话，两步之间锁照样可能

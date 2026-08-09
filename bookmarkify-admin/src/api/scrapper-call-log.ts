@@ -23,6 +23,14 @@ export interface ScrapperCallLogVO {
 export interface ScrapperCallLogSearchParams {
   urlHost?: string;
   success?: boolean;
+  /**
+   * 调用时间下界/上界（含），`YYYY-MM-DD HH:mm:ss`。
+   *
+   * 给「从巡检轮次跳过来看这一轮触发的重抓」用：那些重抓是异步投递的，日志表里既没有轮次 ID 也没有
+   * 页面 ID，只能靠时间窗圈。上界要比轮次结束时刻宽出一截 —— 重抓排在解析池里，落库晚于巡检收工。
+   */
+  createTimeFrom?: string;
+  createTimeTo?: string;
   currentPage?: number;
   pageSize?: number;
 }
