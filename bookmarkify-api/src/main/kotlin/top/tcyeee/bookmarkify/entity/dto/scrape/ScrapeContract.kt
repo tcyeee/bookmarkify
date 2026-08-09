@@ -555,4 +555,17 @@ data class ScrapeErrorResponse(
     val detail: String? = null,
     /** 失败前已经拿到的传输层事实，用于排障 */
     val fetch: FetchInfo? = null,
+    /**
+     * **最后尝试到的抓取层**，null 表示一个字节都没发出去（URL 非法、目标不是域名、
+     * 负缓存命中、并发过载），也可能是还没升级的 scrapper 不下发这个字段。
+     *
+     * 与 [FetchInfo.layerUsed] 是两个问题，失败时两者会不一致，这是刻意的：后者说的是
+     * "[fetch] 里那份现场由哪层产出"，恒为 [RenderLayer.HTTP]；而 AUTO 模式下 Layer 1
+     * 被反爬拦下、回退 Layer 2 又同样被拦时，报出去的是 Layer 1 的错误现场（它更完整），
+     * 此时本字段才是 [RenderLayer.HEADLESS]。
+     *
+     * 这个区分是有代价差的：停在 Layer 1 说明还有无头浏览器可试；试到 Layer 2 仍失败
+     * 说明拒的是这台机器的出口 IP，再重试多少次都一样（见 `ScrapeCache::headless_futile`）。
+     */
+    val layerUsed: RenderLayer? = null,
 )

@@ -292,6 +292,7 @@ async fn auth_middleware(State(state): State<AppState>, req: Request, next: Next
                 error: "UNAUTHORIZED".to_string(),
                 detail: None,
                 fetch: None,
+                layer_used: None,
             }),
         )
             .into_response()
@@ -349,6 +350,7 @@ async fn ping_handler(State(state): State<AppState>, Json(body): Json<PingReques
                     error: "INVALID_URL".to_string(),
                     detail: None,
                     fetch: None,
+                    layer_used: None,
                 }),
             )
                 .into_response();
@@ -362,6 +364,7 @@ async fn ping_handler(State(state): State<AppState>, Json(body): Json<PingReques
                 error: "INVALID_URL".to_string(),
                 detail: None,
                 fetch: None,
+                layer_used: None,
             }),
         )
             .into_response();
@@ -440,6 +443,7 @@ async fn handle_overload(_err: tower::BoxError) -> Response {
             error: "OVERLOADED".to_string(),
             detail: Some("too many concurrent scrape requests, retry shortly".to_string()),
             fetch: None,
+            layer_used: None,
         }),
     )
         .into_response()
@@ -500,7 +504,8 @@ async fn scrape_handler(
     if let Some(url) = parsed_url.as_ref() {
         if let Err(e) = scraper::validate_target_is_domain(url) {
             tracing::info!(domain, "scrape rejected: not a domain target");
-            return scrape_error_response(e, start.elapsed().as_millis() as u64);
+            // 一个字节都没发出去，不带抓取层
+            return scrape_error_response(e, start.elapsed().as_millis() as u64, None);
         }
     }
 
@@ -558,6 +563,10 @@ async fn scrape_handler(
     // 站点 API 救援的产物。非空时阶段 2 不再解析 HTML —— 那份 HTML 压根没拿到。
     let mut site_api: Option<siteapi::SiteApiMeta> = None;
     let shot_opts = want_screenshot.then(|| body.screenshot.clone());
+    // 最后尝试到的抓取层。失败时随错误响应一起报出去 —— 没有它，"熔断跳过、压根没启
+    // 浏览器"和"浏览器也过不去"在后台调用日志里长得一模一样，而这两件事的处置完全相反。
+    // 成功路径不看它（层次由 Fetched 自己带着），所以只在真正踏出那一步时更新。
+    let mut attempted_layer = contract::RenderLayer::Http;
     let go_headless = || {
         headless::capture_headless(
             &body.url,
@@ -570,6 +579,7 @@ async fn scrape_handler(
     let fetched = match effective_mode {
         RenderMode::Headless => {
             tracing::info!(domain, "scraping (layer2/headless)");
+            attempted_layer = contract::RenderLayer::Headless;
             go_headless()
                 .await
                 .map(|c| Fetched::from_headless(&body.url, c))
@@ -603,6 +613,7 @@ async fn scrape_handler(
                         "layer1 no title, falling back to layer2"
                     );
                     warnings.push("layer1 produced no title, fell back to headless".to_string());
+                    attempted_layer = contract::RenderLayer::Headless;
                     go_headless()
                         .await
                         .map(|c| Fetched::from_headless(&body.url, c))
@@ -636,6 +647,7 @@ async fn scrape_handler(
                                 .push("本次走站点 API 救援，页面未渲染，因此没有截图".to_string());
                         }
                         site_api = Some(m);
+                        attempted_layer = contract::RenderLayer::SiteApi;
                         Ok(Fetched::from_site_api(&body.url, detail.status))
                     // 熔断：这个 host 近期已经验证过"无头也过不去"。结论有了就别再为它
                     // 启 Chrome —— 容器内存只有 1GB，全量重抓时同站几百条 URL 各启一次
@@ -655,6 +667,9 @@ async fn scrape_handler(
                             status = detail.status,
                             "layer1 blocked by anti-bot, falling back to layer2"
                         );
+                        // 与上面的熔断分支形成对照：那条**没有**改这个值，于是后台一眼
+                        // 能分出"跳过了"和"试过了没成"
+                        attempted_layer = contract::RenderLayer::Headless;
                         match go_headless().await {
                             Ok(c) if (200..300).contains(&c.status) => {
                                 warnings.push(format!(
@@ -710,7 +725,11 @@ async fn scrape_handler(
                 elapsed_ms = start.elapsed().as_millis(),
                 "scrape failed: {reason}"
             );
-            return scrape_error_response(e, start.elapsed().as_millis() as u64);
+            return scrape_error_response(
+                e,
+                start.elapsed().as_millis() as u64,
+                Some(attempted_layer),
+            );
         }
     };
 
@@ -1014,36 +1033,65 @@ fn html_to_text(html: &str) -> String {
 }
 
 fn error_response(status: StatusCode, code: &str, detail: Option<String>) -> Response {
+    layered_error_response(status, code, detail, None)
+}
+
+/// 同 [`error_response`]，另外报出**最后尝试到的抓取层**。
+///
+/// 只有真的发过字节的失败才该带层：URL 非法、目标不是域名、负缓存命中、并发过载都是
+/// 在取回之前拒绝的，那些场景传 `None`，否则后台的"抓取层"一列会给一次从未发生过的
+/// 抓取标上 Layer 1。
+fn layered_error_response(
+    status: StatusCode,
+    code: &str,
+    detail: Option<String>,
+    layer_used: Option<contract::RenderLayer>,
+) -> Response {
     (
         status,
         Json(contract::ErrorResponse {
             error: code.to_string(),
             detail,
             fetch: None,
+            layer_used,
         }),
     )
         .into_response()
 }
 
-fn scrape_error_response(e: scraper::ScrapeError, elapsed_ms: u64) -> Response {
+/// 把取回阶段的失败转成响应。
+///
+/// `attempted_layer` 是调用方掌握的事实：AUTO 模式下到底停在 Layer 1，还是回退过
+/// Layer 2 / 站点 API。取回之前就拒掉的场景传 `None`（见 [`layered_error_response`]）。
+fn scrape_error_response(
+    e: scraper::ScrapeError,
+    elapsed_ms: u64,
+    attempted_layer: Option<contract::RenderLayer>,
+) -> Response {
     use scraper::ScrapeError as E;
+    let layered =
+        |status, code, detail| layered_error_response(status, code, detail, attempted_layer);
     match e {
+        // URL 非法与目标不是域名都发生在第一个字节之前，层次无从谈起 —— 即便调用方
+        // 传了 attempted_layer 也不采纳
         E::InvalidUrl => error_response(StatusCode::UNPROCESSABLE_ENTITY, "INVALID_URL", None),
         E::ForbiddenTarget(msg) => {
             error_response(StatusCode::FORBIDDEN, "FORBIDDEN_TARGET", Some(msg))
         }
-        E::Timeout(msg) => error_response(StatusCode::GATEWAY_TIMEOUT, "TIMEOUT", Some(msg)),
-        E::FetchFailed(msg) => error_response(StatusCode::BAD_GATEWAY, "FETCH_FAILED", Some(msg)),
+        E::Timeout(msg) => layered(StatusCode::GATEWAY_TIMEOUT, "TIMEOUT", Some(msg)),
+        E::FetchFailed(msg) => layered(StatusCode::BAD_GATEWAY, "FETCH_FAILED", Some(msg)),
         // 沿用 FETCH_FAILED 这个错误码：调用方（API 的 classifyScrapperError）据它判定
         // "目标站点打不开"，新增码会掉进 else 分支被误判成我方服务故障。细节走 detail
         // 和 fetch 两个字段透出，机器可读的那份放 fetch。
-        E::HttpStatus(d) => http_status_error_response(*d, elapsed_ms),
-        E::HeadlessFailed(msg) => {
-            error_response(StatusCode::BAD_GATEWAY, "HEADLESS_FAILED", Some(msg))
-        }
-        E::OssFailed(msg) => {
-            error_response(StatusCode::SERVICE_UNAVAILABLE, "OSS_FAILED", Some(msg))
-        }
+        E::HttpStatus(d) => http_status_error_response(*d, elapsed_ms, attempted_layer),
+        // 走到这一步必然是 Layer 2 自己失败的，兜底不看调用方传了什么
+        E::HeadlessFailed(msg) => layered_error_response(
+            StatusCode::BAD_GATEWAY,
+            "HEADLESS_FAILED",
+            Some(msg),
+            Some(contract::RenderLayer::Headless),
+        ),
+        E::OssFailed(msg) => layered(StatusCode::SERVICE_UNAVAILABLE, "OSS_FAILED", Some(msg)),
     }
 }
 
@@ -1051,7 +1099,14 @@ fn scrape_error_response(e: scraper::ScrapeError, elapsed_ms: u64) -> Response {
 ///
 /// `ErrorResponse.fetch` 契约上一直写着"失败前已经拿到的传输层事实，用于排障"，
 /// 但此前从没有人往里填过东西。
-fn http_status_error_response(d: scraper::HttpErrorDetail, elapsed_ms: u64) -> Response {
+///
+/// `fetch.layer_used` 恒为 `HTTP`，因为这份现场就是 Layer 1 抓回来的 —— 回退过 Layer 2
+/// 与否记在顶层的 `layer_used` 里，两者不一致是正常的（见 `contract::ErrorResponse`）。
+fn http_status_error_response(
+    d: scraper::HttpErrorDetail,
+    elapsed_ms: u64,
+    attempted_layer: Option<contract::RenderLayer>,
+) -> Response {
     let fetch = contract::FetchInfo {
         final_url: d.final_url.clone(),
         redirect_chain: d
@@ -1080,6 +1135,7 @@ fn http_status_error_response(d: scraper::HttpErrorDetail, elapsed_ms: u64) -> R
             error: "FETCH_FAILED".to_string(),
             detail: Some(d.describe()),
             fetch: Some(fetch),
+            layer_used: attempted_layer,
         }),
     )
         .into_response()
@@ -1699,6 +1755,89 @@ mod tests {
             status,
             StatusCode::UNPROCESSABLE_ENTITY,
             "旧的 headless 字段应被 deny_unknown_fields 拒绝"
+        );
+    }
+
+    /// 读出一个已经构造好的 `Response` 的 JSON 体，供直接调用错误响应构造函数的用例使用。
+    async fn error_body(response: Response) -> serde_json::Value {
+        let bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    fn anti_bot_detail() -> scraper::HttpErrorDetail {
+        scraper::HttpErrorDetail {
+            requested_url: "https://example.com/video/BV1".to_string(),
+            final_url: "https://example.com/video/BV1".to_string(),
+            redirects: Vec::new(),
+            status: 412,
+            content_type: Some("text/html".to_string()),
+            server: None,
+            body_snippet: None,
+            warmed_up: true,
+            headless_retry: None,
+        }
+    }
+
+    /// 失败响应必须报出最后尝试到的抓取层 —— 后台调用日志的"抓取层"一列靠它，
+    /// 否则每一条失败记录都是空的，而失败恰恰是最需要知道走了哪层的时候。
+    #[tokio::test]
+    async fn failure_reports_the_layer_it_reached() {
+        let json = error_body(scrape_error_response(
+            scraper::ScrapeError::HttpStatus(Box::new(anti_bot_detail())),
+            42,
+            Some(contract::RenderLayer::Http),
+        ))
+        .await;
+        assert_eq!(json["error"], "FETCH_FAILED");
+        assert_eq!(json["layerUsed"], "HTTP");
+    }
+
+    /// 反爬回退过无头、无头也没成：顶层报 `HEADLESS`（我们试到了第二层），
+    /// 而 `fetch` 里那份现场仍是 Layer 1 抓的，两者不一致是刻意设计。
+    #[tokio::test]
+    async fn headless_fallback_failure_is_distinguishable_from_a_skip() {
+        let mut tried = anti_bot_detail();
+        tried.headless_retry = Some("导航返回 HTTP 412".to_string());
+        let json = error_body(scrape_error_response(
+            scraper::ScrapeError::HttpStatus(Box::new(tried)),
+            42,
+            Some(contract::RenderLayer::Headless),
+        ))
+        .await;
+        assert_eq!(json["layerUsed"], "HEADLESS");
+        assert_eq!(
+            json["fetch"]["layerUsed"], "HTTP",
+            "fetch 里的现场是 Layer 1 抓的，不该跟着顶层改"
+        );
+
+        // 熔断跳过：同样带着 headless_retry 说明，但压根没启浏览器
+        let mut skipped = anti_bot_detail();
+        skipped.headless_retry = Some("该站点近期已验证无头浏览器同样被拦，本次跳过".to_string());
+        let json = error_body(scrape_error_response(
+            scraper::ScrapeError::HttpStatus(Box::new(skipped)),
+            42,
+            Some(contract::RenderLayer::Http),
+        ))
+        .await;
+        assert_eq!(
+            json["layerUsed"], "HTTP",
+            "熔断跳过时没有启过 Chrome，不能报成 Layer 2"
+        );
+    }
+
+    /// 取回之前就拒掉的失败不带层：那次抓取压根没发生。
+    #[tokio::test]
+    async fn pre_fetch_rejection_carries_no_layer() {
+        let json = error_body(scrape_error_response(
+            scraper::ScrapeError::ForbiddenTarget("裸 IP".to_string()),
+            0,
+            None,
+        ))
+        .await;
+        assert_eq!(json["error"], "FORBIDDEN_TARGET");
+        assert!(
+            json.get("layerUsed").is_none(),
+            "未发生的抓取不该被标上 Layer 1"
         );
     }
 
