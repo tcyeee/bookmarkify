@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import cn.hutool.core.date.LocalDateTimeUtil
+import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page
@@ -675,6 +676,138 @@ class BookmarkServiceImpl(
         }
     }
 
+    // ────── 手动触发一轮巡检 ──────
+
+    /**
+     * 两个巡检任务各自的口径，[sweepPreview] 与后台的确认框共用。
+     *
+     * 抽出来只为一件事：预览用的候选查询必须与 [pingSweepExclusively] 里那份**完全一致**
+     * （同样的状态过滤、同样的 `next_check_at` 游标、同样的 LIMIT 和非域名过滤），否则确认框上
+     * 写的"本轮 187 条"与真正跑出来的数对不上，这个功能就只剩误导。真正的执行体仍在各自的
+     * [livenessCheckStaleBookmarks] / [retryUnreachableBookmarks] 里，这里不重复它们的策略。
+     */
+    private data class SweepSpec(
+        val status: ParseStatusEnum,
+        val batchSize: Int,
+        val scope: String,
+        /** 是否有资格把书签改判为失联 —— 确认框里最该写明的一条 */
+        val mayConfirmDeath: Boolean,
+        val intervalHoursOf: (BookmarkLivenessConfigValue) -> Int,
+        /**
+         * 这一条**有可能**顺带触发重新抓取吗。
+         *
+         * 只能给上界：真正的判据要等探测结果出来（见各自的 `triggeredParseOf`），而预览时
+         * 一次都还没探。所以这里只滤掉"无论探成什么样都不会重抓"的那些（已手动认证的、
+         * 存活巡检里内容还没过期的）。
+         */
+        val mayTriggerParse: (PageEntity, BookmarkLivenessConfigValue) -> Boolean,
+    )
+
+    /**
+     * 只有仍在运行的两个任务。已下线的 `reviveArchivedBookmarks` 不在其中——它在历史轮次里还查得到，
+     * 但没有执行体，可触发的清单必须按"现在真的跑得起来"来定，否则后台会给出一个点了没有任何反应的按钮。
+     */
+    private val sweepSpecs: Map<String, SweepSpec> = mapOf(
+        "livenessCheckStaleBookmarks" to SweepSpec(
+            status = ParseStatusEnum.SUCCESS,
+            batchSize = LIVENESS_CHECK_BATCH_SIZE,
+            scope = "状态为「正常」的书签",
+            mayConfirmDeath = true,
+            intervalHoursOf = { it.activeCheckIntervalHours },
+            // 与 livenessCheckStaleBookmarks 的 triggeredParseOf 同一个判据，按"探测结果为 ALIVE"取上界
+            mayTriggerParse = { page, config -> shouldRefreshContent(page, PingOutcome.ALIVE, config) },
+        ),
+        "retryUnreachableBookmarks" to SweepSpec(
+            status = ParseStatusEnum.UNREACHABLE,
+            batchSize = RETRY_UNREACHABLE_BATCH_SIZE,
+            scope = "已判为「失联」的书签",
+            mayConfirmDeath = false,
+            intervalHoursOf = { it.abnormalCheckIntervalHours },
+            // 这个任务只有 DEAD 不重抓，其余（含无结论）都会试，所以上界就是"没被手动认证过"
+            mayTriggerParse = { page, _ -> !page.verifyFlag },
+        ),
+    )
+
+    override fun sweepPreview(taskLabel: String): SweepPreviewVO {
+        val spec = sweepSpecs[taskLabel] ?: throw CommonException(ErrorType.E102)
+        val config = bookmarkLivenessConfigService.getConfig()
+        val now = LocalDateTime.now()
+
+        val backlog = ktQuery()
+            .eq(PageEntity::parseStatus, spec.status)
+            .apply(DUE_CLAUSE, now)
+            .count()
+
+        val batch = ktQuery()
+            .eq(PageEntity::parseStatus, spec.status)
+            .apply(DUE_CLAUSE, now)
+            .last("ORDER BY $DUE_CURSOR ASC LIMIT ${spec.batchSize}")
+            .list()
+        val candidates = batch.filter { WebsiteParser.classifyLinkType(it.urlHost) == BookmarkLinkType.DOMAIN }
+
+        // 站点层短路的预测。真跑起来时根地址探通了的域名，其页面会回到逐页探测——
+        // 所以 probes 是**下界**，worstCase 按"一个都没短路成"算。
+        val siteMap = siteService.mapByIds(candidates.map { it.siteId })
+        val (pagesOfDeadSites, pagesOfLiveSites) = candidates.partition { siteMap[it.siteId]?.isAlive == false }
+        val rootProbes = pagesOfDeadSites.map { it.siteId }.distinct().size
+        val probes = pagesOfLiveSites.size + rootProbes
+
+        val perProbe = recentProbeCost(taskLabel)
+        // 并发只压缩墙钟，不减少总工作量：估算按"分几批跑完"算，一批 PING_CONCURRENCY 条
+        val waves = { n: Int -> Math.ceilDiv(n, AsyncConfig.PING_CONCURRENCY).toLong() }
+
+        return SweepPreviewVO(
+            taskLabel = taskLabel,
+            scope = spec.scope,
+            backlog = backlog,
+            batchSize = spec.batchSize,
+            candidates = candidates.size,
+            truncated = (backlog - batch.size).coerceAtLeast(0),
+            skippedNonDomain = batch.size - candidates.size,
+            shortCircuited = pagesOfDeadSites.size,
+            rootProbes = rootProbes,
+            probes = probes,
+            mayTriggerParse = pagesOfLiveSites.count { spec.mayTriggerParse(it, config) },
+            mayConfirmDeath = spec.mayConfirmDeath,
+            deadConfirmFailures = config.deadConfirmFailures,
+            intervalHours = spec.intervalHoursOf(config),
+            concurrency = AsyncConfig.PING_CONCURRENCY,
+            // 历史均值本身已经包含了并发的效果（它是 durationMs/probed，墙钟除以条数），
+            // 所以那条路径直接乘，不要再除一次并发度——除两次会把预估压到实际的八分之一
+            estimatedMs = perProbe?.let { probes * it.msPerProbe } ?: (waves(probes) * ASSUMED_PROBE_MS),
+            worstCaseMs = waves(candidates.size + rootProbes) * PING_TIMEOUT_MS,
+            sampleProbeMs = perProbe?.msPerProbe,
+            sampleRounds = perProbe?.rounds ?: 0,
+            running = isSweepRunning(taskLabel),
+        )
+    }
+
+    override fun isSweepRunning(taskLabel: String): Boolean = parseLock.isHeld(ParseLock.sweep(taskLabel))
+
+    private data class ProbeCost(val msPerProbe: Long, val rounds: Int)
+
+    /**
+     * 从最近若干轮真实记录里估一条探测要多久（墙钟）。
+     *
+     * 用历史而不是拿"超时 15s ÷ 并发 8"去算：绝大多数探测在几百毫秒内就返回了，按超时算出来的
+     * 预估会高出实际一个数量级，而一个永远报"预计 6 分钟"、实际 20 秒跑完的数字，管理员看两次
+     * 就不会再信它。只统计 `probed > 0` 的轮次——空轮次的耗时是纯查询开销，混进来会把均值压到 0。
+     */
+    private fun recentProbeCost(taskLabel: String): ProbeCost? {
+        val rounds = runCatching {
+            sweepLogMapper.selectList(
+                KtQueryWrapper(SweepLogEntity::class.java)
+                    .eq(SweepLogEntity::taskLabel, taskLabel)
+                    .gt(SweepLogEntity::probed, 0)
+                    .orderByDesc(SweepLogEntity::createTime)
+                    .last("LIMIT $PROBE_COST_SAMPLE_ROUNDS")
+            )
+        }.getOrElse { emptyList() }
+        val probed = rounds.sumOf { it.probed }
+        if (probed <= 0) return null
+        return ProbeCost(msPerProbe = rounds.sumOf { it.durationMs } / probed, rounds = rounds.size)
+    }
+
     /**
      * 归档记录的**唯一**复活入口：有用户来添加这个网址，就地把重试次数清零并重新检查一次。
      *
@@ -790,6 +923,10 @@ class BookmarkServiceImpl(
     ) {
         val startedAt = System.currentTimeMillis()
         val now = LocalDateTime.now()
+        // 轮次 ID 在这里就定下来，而不是等 SweepLogEntity 构造时才生成：ping 日志比汇总行**先**落库
+        // （汇总行的 durationMs 要等本轮跑完才知道），要让每条探测都带上自己属于哪一轮，
+        // 这个 id 必须先于两者存在。见 PagePingLogEntity.sweepId
+        val roundId = IdUtil.fastUUID()
 
         val totalBacklog = ktQuery()
             .eq(PageEntity::parseStatus, statusFilter)
@@ -818,6 +955,7 @@ class BookmarkServiceImpl(
             // 于是告警条常亮"巡检已 N 小时没跑过" —— 一个总在响的警报等于没有警报。
             recordSweepRound(
                 SweepLogEntity(
+                    id = roundId,
                     taskLabel = taskLabel,
                     candidates = 0,
                     backlog = totalBacklog,
@@ -922,6 +1060,7 @@ class BookmarkServiceImpl(
                     urlHost = bookmark.urlHost,
                     outcome = outcome,
                     triggeredParse = triggeredParseOfEach[index],
+                    sweepId = roundId,
                 )
             }
         )
@@ -929,6 +1068,8 @@ class BookmarkServiceImpl(
         // 一轮一行，无论正常完成、熔断，还是上面那种没有候选的空轮次。见 SweepLogEntity
         fun recordRound() = recordSweepRound(
             SweepLogEntity(
+                // 与上面那批 ping 日志的 sweepId 是同一个值 —— 后台的下钻正是靠它对上
+                id = roundId,
                 taskLabel = taskLabel,
                 candidates = candidates.size,
                 backlog = totalBacklog,
@@ -2611,6 +2752,16 @@ class BookmarkServiceImpl(
         private const val DUE_CLAUSE = "$DUE_CURSOR <= {0}"
         private const val RETRY_UNREACHABLE_BATCH_SIZE = 50
         private const val LIVENESS_CHECK_BATCH_SIZE = 200
+
+        // ── 手动触发前的耗时预估（只影响确认框里那个数字，不影响任何执行逻辑）──
+        // 单条探测的超时，与 ApiServiceImpl.PING_READ_TIMEOUT_MS 对齐。只用来算「最坏耗时」：
+        // 一批全部吃满超时的情况实际上只在 scrapper 整个不可达时出现。
+        private const val PING_TIMEOUT_MS = 15_000L
+        // 没有历史轮次可参考时的单条探测假设值。取 3s 而不是超时值：绝大多数探测在一秒内返回，
+        // 按 15s 估会给出一个高出实际一个数量级的数字，那样的预估没人会再看第二次。
+        private const val ASSUMED_PROBE_MS = 3_000L
+        // 估算单条探测耗时时回看多少轮。够摊平个别慢轮，又不至于把几天前的链路状况算进来。
+        private const val PROBE_COST_SAMPLE_ROUNDS = 20
         /**
          * 「这个页面截不出图」的抑制时长。
          *

@@ -215,6 +215,15 @@ data class BookmarkCategoriesParams(
 data class ScrapperCallLogSearchParams(
     var urlHost: String? = null,
     var success: Boolean? = null,
+    /**
+     * 调用时间下界（含）。
+     *
+     * 加它是为了让巡检轮次能跳过来：一轮巡检触发的重新抓取是**异步**投递的，日志表里既没有
+     * 轮次 ID 也没有页面 ID，只有 url 和时间 —— 「这一轮触发的 N 次重抓后来成没成」只能靠
+     * 时间窗圈。窗口右界要比轮次结束时刻宽出一截，因为重抓排在解析池里，落库晚于巡检收工。
+     */
+    @field:Schema(description = "调用时间下界(含)") var createTimeFrom: LocalDateTime? = null,
+    @field:Schema(description = "调用时间上界(含)") var createTimeTo: LocalDateTime? = null,
 ) : PageBean() {
     fun toWrapper(): Wrapper<ScrapperCallLogEntity> {
         val query = KtQueryWrapper(ScrapperCallLogEntity::class.java)
@@ -222,6 +231,8 @@ data class ScrapperCallLogSearchParams(
             query.like(ScrapperCallLogEntity::urlHost, urlHost)
         }
         success?.let { query.eq(ScrapperCallLogEntity::success, it) }
+        createTimeFrom?.let { query.ge(ScrapperCallLogEntity::createTime, it) }
+        createTimeTo?.let { query.le(ScrapperCallLogEntity::createTime, it) }
         return query.orderByDesc(ScrapperCallLogEntity::createTime)
     }
 }
@@ -290,6 +301,16 @@ data class BookmarkSweepLogSearchParams(
     }
 }
 
+/**
+ * 手动触发一轮巡检的入参。
+ *
+ * 只有一个字段也用 body 而不是 query：这是个有副作用的写操作（会 ping 几百个站点、可能把书签
+ * 改判为失联），POST + body 让它不会被浏览器地址栏、爬虫或预取顺手触发一次。
+ */
+data class SweepTriggerParams(
+    @field:Schema(description = "巡检任务(方法名)，只接受仍在运行的两个") var taskLabel: String = "",
+)
+
 /** 管理后台书签活性检查日志查询入参 */
 data class BookmarkPingLogSearchParams(
     var urlHost: String? = null,
@@ -301,6 +322,14 @@ data class BookmarkPingLogSearchParams(
      * 深链自己的 DEAD 淹掉，正好看反。精确匹配，不做模糊。
      */
     @field:Schema(description = "按页面ID精确筛选(page_ping_log.page_id)") var pageId: String? = null,
+    /**
+     * 只看某一轮巡检探测过的页面，巡检轮次页的下钻抽屉用它。
+     *
+     * 注意这里查出来的条数等于该轮的 `probed`，**不等于** `candidates`：被站点层短路的页面
+     * 本轮压根没探过，按「一次探测一行」的语义不落日志。抽屉里要把这个差额显式说明，
+     * 否则会被当成漏数据。
+     */
+    @field:Schema(description = "按巡检轮次精确筛选(page_ping_log.sweep_id)") var sweepId: String? = null,
     /** 按探测结论筛选。替代了原来的 alive 布尔筛选——那个表达不了「无结论」这一态。 */
     var outcome: PingOutcome? = null,
 ) : PageBean() {
@@ -310,6 +339,7 @@ data class BookmarkPingLogSearchParams(
             query.like(PagePingLogEntity::urlHost, urlHost)
         }
         if (!pageId.isNullOrBlank()) query.eq(PagePingLogEntity::pageId, pageId)
+        if (!sweepId.isNullOrBlank()) query.eq(PagePingLogEntity::sweepId, sweepId)
         outcome?.let { query.eq(PagePingLogEntity::outcome, it) }
         return query.orderByDesc(PagePingLogEntity::createTime)
     }

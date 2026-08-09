@@ -95,8 +95,9 @@ bookmarkify:
     reclaim-orphan-assets: ${BOOKMARKIFY_SCRAPPER_RECLAIM_ORPHAN_ASSETS:true}
     asset-max-bytes: 8388608  # 单张图片上限 8MB（契约默认 2MB 是给"只探测"场景定的，会挡掉大尺寸 og:image）
     asset-max-count: 40       # 单页最多处理 40 张图（图标齐全的站点很容易超过契约默认的 20）
-    # 主解析链路是否等截图。保持关闭：截图强制走无头浏览器，而 scrapper 侧的 Chrome 由一把
-    # 全局互斥锁串行化，放进主链路等于让每条新增书签排队等浏览器。截图走下面的异步补抓。
+    # 主解析链路是否等截图。保持关闭：截图强制走无头浏览器，而对端的无头并发是有上限的
+    # （scrapper 的 HEADLESS_CONCURRENCY，默认 2），放进主链路等于让每条新增书签排队等浏览器。
+    # 截图走下面的异步补抓。
     screenshot: ${BOOKMARKIFY_SCRAPPER_SCREENSHOT:false}
     # 解析成功后异步补一张页面截图，作为详情面板封面（BookmarkScreenshotEvent，单线程池）。
     # 关掉即完全不产生截图负载。

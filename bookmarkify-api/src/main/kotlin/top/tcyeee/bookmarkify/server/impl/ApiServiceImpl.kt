@@ -92,6 +92,13 @@ class ApiServiceImpl(
         // 一直转到 30 分钟后 drainStuckLoading 的陈旧阈值到期。同一网址被两个用户先后添加、
         // 或者手快点了两次，第二次就会撞上。
         "RECENTLY_FAILED" -> ErrorType.E304
+        // 我方无头能力当下不可用：Chrome 起不来、CDP 挂了、或者并发名额等不到。
+        // 与 HEADLESS_FAILED 只差一个词，含义却相反——那个是"这一页用浏览器也打不开"
+        // （站点的结论），这个是"我们现在打不开任何页面"（我方的状态）。归 E307 有两个
+        // 后果，都是要的：书签留在 PENDING 等下一轮而不是被判失联；后台一眼能看出这是
+        // 自家拥塞，不是站点故障。它落在 else 里本来也是 E307，显式写出来是因为
+        // 这个 when 的 else 太重要，不该靠"恰好落对了"。
+        "HEADLESS_UNAVAILABLE" -> ErrorType.E307
         // UNAUTHORIZED(鉴权 token 配错)、OSS_FAILED、限流 503、422(请求体字段对不上)、
         // 以及任何未识别取值，都归为我方服务问题
         else -> ErrorType.E307

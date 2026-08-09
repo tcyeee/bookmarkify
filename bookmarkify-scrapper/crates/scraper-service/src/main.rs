@@ -66,8 +66,14 @@ struct AppState {
 /// | 变量名 | 默认值 | 说明 |
 /// |---|---|---|
 /// | `REQUEST_TIMEOUT_SECS` | 10 | HTTP 请求超时（秒） |
-/// | `HEADLESS_TIMEOUT_SECS` | 30 | 无头浏览器超时（秒） |
+/// | `HEADLESS_TIMEOUT_SECS` | 30 | 无头**页面**预算（秒），不含排队等待 |
 /// | `HEADLESS_IDLE_WAIT_SECS` | 10 | 网络空闲等待时间（秒），用于等待 JS 渲染完成 |
+/// | `HEADLESS_CONCURRENCY` | 2 | 同时可以有几个标签页在跑 |
+/// | `HEADLESS_QUEUE_WAIT_SECS` | 20 | 等一个并发名额最多等多久，超时报 `HEADLESS_UNAVAILABLE` |
+/// | `HEADLESS_BROWSER_TTL_SECS` | 900 | 浏览器实例复用多久后回收重开 |
+/// | `HEADLESS_BROWSER_MAX_USES` | 50 | 浏览器实例复用多少次后回收重开 |
+/// | `HEADLESS_LAUNCH_TIMEOUT_SECS` | 20 | 启动 Chrome 自身的超时 |
+/// | `CHROME_BIN` | (自动探测) | Chrome/Chromium 可执行文件路径 |
 /// | `CACHE_TTL_SECS` | 3600 | 缓存条目存活时间（秒） |
 /// | `PROXY_URL` | (无默认) | HTTP 代理地址，例如 `http://127.0.0.1:7890`，不设则直连 |
 /// | `PORT` | 3000 | 监听端口 |
@@ -104,6 +110,10 @@ async fn main() {
             "HEADLESS_IDLE_WAIT_SECS ({headless_idle_wait_secs}) >= HEADLESS_TIMEOUT_SECS ({headless_timeout_secs}): headless scrapes will always timeout"
         );
     }
+
+    // 这一串旋钮全是环境变量，出问题时"线上到底跑的是哪套参数"必须能直接看日志，
+    // 而不是回去翻部署文件
+    tracing::info!("headless: {}", headless::config_summary());
 
     let proxy_url = env::var("PROXY_URL").ok().filter(|s| !s.is_empty());
 
@@ -170,7 +180,8 @@ async fn main() {
     };
 
     // Bounds how many /scrape + /ping requests run at once. Layer 1 fetches have no
-    // per-request cost limit otherwise, and Layer 2 already serializes on HEADLESS_LOCK
+    // per-request cost limit otherwise, and Layer 2 has its own admission control
+    // (HEADLESS_CONCURRENCY + HEADLESS_QUEUE_WAIT_SECS, see headless.rs)
     // but with no cap on how many callers can be queued waiting for it. Beyond this cap,
     // load_shed fails fast with 503 instead of letting requests queue indefinitely.
     let max_concurrent: usize = env_or("MAX_CONCURRENT_REQUESTS", 32);
@@ -449,7 +460,7 @@ async fn handle_overload(_err: tower::BoxError) -> Response {
         .into_response()
 }
 
-fn env_or<T: std::str::FromStr>(key: &str, default: T) -> T {
+pub(crate) fn env_or<T: std::str::FromStr>(key: &str, default: T) -> T {
     env::var(key)
         .ok()
         .and_then(|v| v.parse().ok())
@@ -572,6 +583,7 @@ async fn scrape_handler(
             &body.url,
             state.headless_timeout_secs,
             state.headless_idle_wait_secs,
+            body.render.wait_until,
             viewport,
             shot_opts.clone(),
         )
@@ -687,8 +699,25 @@ async fn scrape_handler(
                                 detail.headless_retry = Some(format!("导航返回 HTTP {}", c.status));
                                 Err(scraper::ScrapeError::HttpStatus(detail))
                             }
-                            // 无头自身失败（超时 / Chrome 起不来，后者在小内存机器上多半
-                            // 就是 OOM）同样进熔断：这种状态下继续开浏览器只会雪上加霜。
+                            // 无头自身失败：**只有关于目标页面的失败才进熔断**。
+                            //
+                            // 超时进熔断是对的 —— 队列等待已经不占页面预算了，超时意味着
+                            // 这一页真的独占了 30s 还没打开（登录墙 SPA 就是这样），结论下次
+                            // 也不会变。反过来，`HeadlessUnavailable`（Chrome 起不来、CDP 挂了、
+                            // 并发名额等不到）是我方的抖动，把它写进 24h 熔断等于让一次自家
+                            // 故障顺手拉黑一批本来抓得动的站点。
+                            //
+                            // 报什么错也跟着分：我方不可用时**不能**报 Layer 1 那个 403。
+                            // 站点确实拒了我们，但"这条书签抓不到"这个结论并没有成立
+                            // —— 救援压根没跑起来。报成站点的错，调用方会据此判失联；
+                            // 报成我方的错，那条书签会留在 PENDING 等下一轮，这才是实情。
+                            Err(scraper::ScrapeError::HeadlessUnavailable(msg)) => {
+                                tracing::warn!(domain, "layer2 unavailable: {msg}");
+                                Err(scraper::ScrapeError::HeadlessUnavailable(format!(
+                                    "{msg}；此前 layer1 被反爬拦截（HTTP {}）",
+                                    detail.status
+                                )))
+                            }
                             Err(e) => {
                                 tracing::warn!(domain, "layer2 fallback failed: {e:?}");
                                 state.cache.mark_headless_futile(&body.url).await;
@@ -709,9 +738,15 @@ async fn scrape_handler(
     let fetched = match fetched {
         Ok(f) => f,
         Err(e) => {
+            // 负缓存只记**关于目标的**失败。`HeadlessUnavailable` 是我方能力问题，
+            // 记进去等于把"我们现在忙"翻译成 60s 内对所有人回 RECENTLY_FAILED，
+            // 而调用方把那个码读作"这条 URL 刚判过一次抓不到"（E304）—— 一次拥塞
+            // 就这样变成了对站点的判决。同理 InvalidUrl / ForbiddenTarget 是我方决定。
             if !matches!(
                 e,
-                scraper::ScrapeError::InvalidUrl | scraper::ScrapeError::ForbiddenTarget(_)
+                scraper::ScrapeError::InvalidUrl
+                    | scraper::ScrapeError::ForbiddenTarget(_)
+                    | scraper::ScrapeError::HeadlessUnavailable(_)
             ) {
                 state.cache.set_error(&body.url).await;
             }
@@ -1088,6 +1123,14 @@ fn scrape_error_response(
         E::HeadlessFailed(msg) => layered_error_response(
             StatusCode::BAD_GATEWAY,
             "HEADLESS_FAILED",
+            Some(msg),
+            Some(contract::RenderLayer::Headless),
+        ),
+        // 我方能力不可用，与目标站点无关：503 而不是 502，调用方（classifyScrapperError）
+        // 据此归 E307「我方抓取服务不可用」，从而**不**把这条书签判成失联
+        E::HeadlessUnavailable(msg) => layered_error_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "HEADLESS_UNAVAILABLE",
             Some(msg),
             Some(contract::RenderLayer::Headless),
         ),
@@ -1512,12 +1555,13 @@ mod tests {
     /// 同时钉住两条承诺：**回退确实发生了**（`detail` 里写明），以及**拦截页不会被
     /// 当成正常页面收下**（那样书签标题就会变成"出错啦"，比报错糟得多）。
     ///
-    /// 需要本机有 Chrome；Chrome 缺席时 `capture_headless` 报 HeadlessFailed，两条断言
-    /// 依然成立，只是走的是"无头自身失败"那个分支。
+    /// **本机必须有 Chrome。** 2026-08-09 之前 Chrome 缺席时两条断言照样成立（走的是
+    /// "无头自身失败"分支，报的仍是 Layer 1 的错误）；现在不行了：起不来浏览器报的是
+    /// `HeadlessUnavailable`，而那条路**故意**不再冒充站点的错误——"站点拒了我们"和
+    /// "我们没能力去试"是两个结论，混起来会让一次自家故障把书签判成失联。
     ///
-    /// **跑之前先 `RUST_MIN_STACK=16777216`**：debug 构建下 spider/chromiumoxide 的调用
-    /// 栈超出测试线程默认的 2MB，任何经由 router 触发无头抓取的用例都会栈溢出（与本
-    /// 分支无关，显式 `mode: HEADLESS` 一样溢出）。release 构建不受影响。
+    /// 从前这里还写着"跑之前先 `RUST_MIN_STACK=16777216`"，那是 spider 爬虫路径的深调用
+    /// 栈撑爆测试线程默认 2MB 所致；改成直接驱动 CDP 后不再需要，已实测。
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[ignore]
     async fn anti_bot_falls_back_to_headless_and_refuses_the_block_page() {

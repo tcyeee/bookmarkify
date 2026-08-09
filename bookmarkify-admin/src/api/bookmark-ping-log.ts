@@ -11,10 +11,19 @@ export interface BookmarkPingLogVO {
   /** 被探测的页面 ID（page_ping_log.page_id），与书签详情里的「书签 ID」是同一个值 */
   pageId: string;
   urlHost: string;
+  /**
+   * 被探测页面的完整地址，后端按 pageId 补；页面已被删除时为 null。
+   *
+   * 日志表本身只存 host。按轮次下钻时一屏里会有同一域名下的几十条深链，只给 host 分不清是哪一页
+   * —— 而「首页 ALIVE、某条深链 DEAD」正是最常见的形态。
+   */
+  url: null | string;
   outcome: PingOutcome;
   /** outcome 为 UNKNOWN 时为 null */
   alive: boolean | null;
   triggeredParse: boolean;
+  /** 产生这次探测的巡检轮次（sweep_log.id）。null = 2026-08-09 之前的历史行 */
+  sweepId: null | string;
   createTime: string;
 }
 
@@ -27,6 +36,13 @@ export interface BookmarkPingLogSearchParams {
    * 首页的 ALIVE 会把某条深链自己的 DEAD 淹掉。详情弹窗要的是「这一页」的历史。
    */
   pageId?: string;
+  /**
+   * 只看某一轮巡检探测过的页面（精确匹配），巡检轮次页的下钻抽屉用它。
+   *
+   * 查出来的条数等于该轮的 `probed`，**不等于** `candidates`：被站点层短路的页面本轮压根没探过，
+   * 按「一次探测一行」的语义不落日志。抽屉里必须把这个差额说明白，否则会被当成漏数据。
+   */
+  sweepId?: string;
   outcome?: PingOutcome;
   currentPage?: number;
   pageSize?: number;

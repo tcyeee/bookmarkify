@@ -6,7 +6,7 @@ A web metadata scraping service for bookmarks, supporting both static pages and 
 
 - **Two-layer scraping strategy**
   - **Layer 1 (lightweight)**: Fetches pages via `reqwest` and parses HTML metadata — low latency, minimal resource usage
-  - **Layer 2 (headless browser)**: Drives Chrome via `spider-rs` for pages that require JavaScript rendering
+  - **Layer 2 (headless browser)**: Drives Chrome directly over CDP (`chromiumoxide`), reusing one browser across requests, for pages that require JavaScript rendering
   - Automatically falls back from Layer 1 to Layer 2 when no title is found — transparent to callers
 
 - **Metadata extraction priority** (highest to lowest)
@@ -75,9 +75,15 @@ The service listens on `0.0.0.0:3000` by default.
 |---|---|---|---|
 | `PORT` | | `3000` | HTTP listen port |
 | `REQUEST_TIMEOUT_SECS` | | `10` | Layer 1 HTTP request timeout (seconds) |
-| `HEADLESS_TIMEOUT_SECS` | | `30` | Layer 2 headless browser total timeout (seconds) |
+| `HEADLESS_TIMEOUT_SECS` | | `30` | Layer 2 **page** budget (seconds), starting after a concurrency slot is granted |
+| `HEADLESS_QUEUE_WAIT_SECS` | | `20` | Max wait for a concurrency slot (seconds); exceeding it returns `HEADLESS_UNAVAILABLE` |
+| `HEADLESS_CONCURRENCY` | | `2` | How many tabs may run at once |
+| `HEADLESS_BROWSER_TTL_SECS` | | `900` | Recycle the reused browser after this long |
+| `HEADLESS_BROWSER_MAX_USES` | | `50` | Recycle the reused browser after this many uses |
+| `HEADLESS_LAUNCH_TIMEOUT_SECS` | | `20` | Timeout for launching Chrome itself (seconds) |
+| `CHROME_BIN` | | (auto-detect) | Path to the Chrome/Chromium binary |
 | `HEADLESS_IDLE_WAIT_SECS` | | `10` | Layer 2 network-idle wait for JS rendering (seconds); must be less than `HEADLESS_TIMEOUT_SECS` |
-| `CACHE_TTL_SECS` | | `3600` | Cache entry time-to-live (seconds) |
+| `CACHE_TTL_SECS` | | `21600` | Cache entry time-to-live (seconds) |
 | `PROXY_URL` | | — | HTTP proxy URL, e.g. `http://127.0.0.1:7890`; direct connection if unset |
 | `SSRF_ALLOW_PRIVATE` | | — | Set to `1` to disable SSRF protection; blocked by default |
 | `SCRAPER_AUTH_TOKEN` | | — | When set, `/scrape` and `/ping` require `Authorization: Bearer <token>`; unset means no auth |
@@ -181,7 +187,7 @@ cargo test -p scraper-service -- --ignored
 | Async runtime | `tokio 1` | Multi-threaded async executor |
 | HTTP client | `reqwest 0.12` | Layer 1 page fetching, proxy support |
 | HTML parsing | `scraper 0.19` | CSS selector DOM parsing |
-| Headless browser | `spider 2` | Chrome driver with stealth mode |
+| Headless browser | `chromiumoxide` (re-exported by `spider 2`) | Direct CDP, stealth mode |
 | Caching | `moka 0.12` | Async in-memory cache with TTL |
 | OSS upload | `hmac` / `sha1` / `httpdate` | Hand-rolled Aliyun OSS V1 request signing over the same `reqwest` client — no third-party OSS SDK |
 | Overload protection | `tower` (`limit` / `load-shed`) | Concurrency cap + fast-fail for `/scrape`, `/ping` |

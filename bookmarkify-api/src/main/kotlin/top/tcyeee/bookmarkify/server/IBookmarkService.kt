@@ -23,6 +23,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchVO
 import top.tcyeee.bookmarkify.entity.CategoryVO
 import top.tcyeee.bookmarkify.entity.BookmarkImportPreviewVO
+import top.tcyeee.bookmarkify.entity.SweepPreviewVO
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 
@@ -52,9 +53,9 @@ interface IBookmarkService : IService<PageEntity> {
     /**
      * 抓取成功后补一张页面截图，作为详情面板的封面。
      *
-     * 由 BookmarkScreenshotEvent 在**单线程**的截图池上触发。单线程是硬约束：截图强制走
-     * 无头浏览器，而 scrapper 侧的 Chrome 由一把全局互斥锁串行化，这边多开只会一起堵在
-     * 对端那把锁上。抓不到就没有封面，前端按可选处理。
+     * 由 BookmarkScreenshotEvent 在**单线程**的截图池上触发：截图强制走无头浏览器，而对端
+     * 的无头并发有上限（scrapper 的 `HEADLESS_CONCURRENCY`，默认 2），这边多开只会堵在对端
+     * 的准入队列里。抓不到就没有封面，前端按可选处理。
      */
     fun captureScreenshot(pageId: String)
 
@@ -72,6 +73,22 @@ interface IBookmarkService : IService<PageEntity> {
 
     /** 定时扫描 SUCCESS 书签（含已认证）做活性复查，结果写入 bookmark_ping_log；异步执行，不占用调度线程 */
     fun livenessCheckStaleBookmarks()
+
+    /**
+     * 手动触发一轮巡检之前的预览：这一轮会覆盖哪些书签、探几次、大概多久、会不会改判失联。
+     *
+     * 用的是与真正开跑**同一套**候选查询，所以数字对得上；但它只读不写，也不占巡检锁。
+     *
+     * @param taskLabel 只接受仍在运行的两个任务，其余（含已下线的 reviveArchivedBookmarks）抛 E102
+     */
+    fun sweepPreview(taskLabel: String): SweepPreviewVO
+
+    /**
+     * 巡检锁当前是否被占着。手动触发前用它给出「上一轮还在跑」的提示。
+     *
+     * **只用于展示**：与真正的 acquire 之间有竞态，互斥仍由巡检自己的 SETNX 保证。
+     */
+    fun isSweepRunning(taskLabel: String): Boolean
 
     /** 添加书签并异步检查 */
     fun addOne(url: String, uid: String): UserLayoutNodeVO

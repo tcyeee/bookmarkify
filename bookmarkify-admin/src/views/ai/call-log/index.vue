@@ -77,7 +77,9 @@ const gridOptions: VxeGridProps<AiCallLogVO> = {
     { field: "scene", title: "场景", width: 130, slots: { default: "scene", header: "sceneHeader" } },
     { field: "subject", title: "判定对象", minWidth: 200, showOverflow: "tooltip" },
     { field: "model", title: "模型", width: 140 },
-    { field: "success", title: "结果", width: 90, slots: { default: "success" } },
+    // 失败原因并入本列（悬浮 tag 出 tooltip）：showOverflow=false 让内层 ElTooltip 生效，
+    // 否则 vxe 自己那层单元格溢出提示会盖住它
+    { field: "success", title: "结果", width: 90, showOverflow: false, slots: { default: "success" } },
     { field: "httpStatus", title: "HTTP状态", width: 100 },
     { field: "totalTokens", title: "token", width: 110, slots: { default: "tokens" } },
     { field: "durationMs", title: "耗时(ms)", width: 100 },
@@ -89,7 +91,6 @@ const gridOptions: VxeGridProps<AiCallLogVO> = {
       showOverflow: false,
       slots: { default: "output" },
     },
-    { field: "errorMsg", title: "错误信息", minWidth: 180, slots: { default: "errorMsg" } },
     {
       field: "createTime",
       title: "调用时间",
@@ -192,6 +193,15 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
         </template>
         <template #success="{ row }">
           <ElTag v-if="row.success" type="success" size="small"> 成功 </ElTag>
+          <!-- 失败时把错误信息挂在 tag 的 tooltip 上，不再单开一列 -->
+          <ElTooltip v-else-if="row.errorMsg" placement="top">
+            <template #content>
+              <div class="max-w-md text-xs leading-relaxed break-words whitespace-pre-wrap">
+                {{ row.errorMsg }}
+              </div>
+            </template>
+            <ElTag type="danger" size="small" class="cursor-help"> 失败 </ElTag>
+          </ElTooltip>
           <ElTag v-else type="danger" size="small"> 失败 </ElTag>
         </template>
         <template #tokens="{ row }">
@@ -212,12 +222,6 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
           >
             {{ outputOf(row) }}
           </div>
-          <span v-else>-</span>
-        </template>
-        <template #errorMsg="{ row }">
-          <ElTooltip v-if="row.errorMsg" :content="row.errorMsg" placement="top">
-            <span class="line-clamp-1">{{ row.errorMsg }}</span>
-          </ElTooltip>
           <span v-else>-</span>
         </template>
       </Grid>

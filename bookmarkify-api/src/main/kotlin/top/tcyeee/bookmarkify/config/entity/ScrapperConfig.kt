@@ -66,9 +66,9 @@ data class ScrapperConfig(
     /**
      * 主解析链路是否顺带抓页面截图。
      *
-     * **保持关闭**。截图强制走无头浏览器，而 scrapper 侧的 Chrome 由一把全局互斥锁串行化
-     * （`headless.rs` 的 `HEADLESS_LOCK`，生产容器内存只有 1GB，开不起第二个）。把它并进
-     * 主链路，等于让每一条新增书签都去排队等浏览器，"加一个书签要转多久圈"会直接崩掉。
+     * **保持关闭**。截图强制走无头浏览器，而对端的无头并发是有上限的（scrapper 的
+     * `HEADLESS_CONCURRENCY`，默认 2，生产容器只有 1GB 内存 / 2 vCPU）。把它并进主链路，
+     * 等于让每一条新增书签都去排队等浏览器，"加一个书签要转多久圈"会直接崩掉。
      *
      * 截图走的是另一条路：解析成功后发
      * [BookmarkScreenshotEvent][top.tcyeee.bookmarkify.config.event.BookmarkScreenshotEvent]，
