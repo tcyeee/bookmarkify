@@ -2409,12 +2409,19 @@ class BookmarkServiceImpl(
         val startedAt = System.currentTimeMillis()
         // 抓取会覆盖 title/description/appName，先留一份人工值，落库前还原被锁定的那些
         val manual = bookmark.copy()
+        // 这次实际请求出去的地址。不能在下面重新读一次 `bookmark.rawUrl`：applyTo 可能把
+        // urlScheme 升成 https，而 rawUrl 是拿它现拼的，快照里就会记成一个我们本次并没有
+        // 请求过的地址 —— 那一列存在的意义正是"这次到底抓的哪个 URL"
+        val requestedUrl = bookmark.rawUrl
         return runCatching {
-            apiService.scrape(bookmark.rawUrl, apiService.scrapeRequest(bookmark.rawUrl, cacheMode))
+            apiService.scrape(requestedUrl, apiService.scrapeRequest(requestedUrl, cacheMode))
         }.fold(
             onSuccess = { vo ->
                 log.debug("[parseByApi] scrapper 返回成功: pageId=${bookmark.id}, title=${vo.title}, source=${vo.primarySource}, assets=${vo.assets.size}")
                 val previousTitle = bookmark.title
+                // applyTo 可能把 urlScheme 从 http 升成 https（抓取真正落地在哪个协议上），
+                // 记下升级前的值，下面据此决定要不要把站点那一层也一并升上去
+                val previousScheme = bookmark.urlScheme
                 vo.applyTo(bookmark)
                 bookmark.scheduleAfterParseSuccess()
                 // 简称优先用 manifest.short_name（W3C 就是为"图标下方空间受限"定义的），
@@ -2434,7 +2441,7 @@ class BookmarkServiceImpl(
                 // 没有任何一个会回来补这条。抓取此时已经结束，合并进一个短事务不增加持锁时间。
                 txTemplate.execute {
                     baseMapper.insertOrUpdate(bookmark)
-                    siteAssetWriter.persist(bookmark.siteId, bookmark.id, bookmark.rawUrl, vo, elapsedMs(startedAt), bookmark.isRootPage)
+                    siteAssetWriter.persist(bookmark.siteId, bookmark.id, requestedUrl, vo, elapsedMs(startedAt), bookmark.isRootPage)
                 }
                 // 站点级文字信息（品牌名/短名）落到 site 那一层。写入强度按「抓的是不是首页」分档：
                 // 首页是权威来源、可以覆盖；深链只在站点侧还没有值时回填 —— 否则某个视频页里写歪的
@@ -2447,6 +2454,13 @@ class BookmarkServiceImpl(
                         fromRootPage = bookmark.isRootPage,
                     )
                 }.onFailure { log.warn("[parseByApi] 站点信息回写失败(忽略): siteId=${bookmark.siteId}, err=${it.message}") }
+                // 页面协议被升级了，说明这个 host 现在确实在 https 上服务；站点那一层的 scheme
+                // 建行之后从没人回写过，顺手一并升上去（只升不降，判据见 ScrapeResponseExt）。
+                // 同样降级为日志：站点层写失败不该把这一页已经抓好的结果拖下水
+                if (previousScheme != bookmark.urlScheme) {
+                    runCatching { siteService.upgradeSchemeToHttps(bookmark.siteId) }
+                        .onFailure { log.warn("[parseByApi] 站点协议升级失败(忽略): siteId=${bookmark.siteId}, err=${it.message}") }
+                }
                 log.debug("[parseByApi] 第三方API解析全部完成: pageId=${bookmark.id}, assets=${vo.assets.size}")
                 bookmark
             },

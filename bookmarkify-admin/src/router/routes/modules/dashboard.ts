@@ -71,6 +71,17 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        // 紧挨着调用日志：两者是同一批数据的两个粒度（一次调用一行 vs 按域名聚合），
+        // 排障时来回跳，隔开只会让人每次都去菜单里找
+        name: 'ScrapperFailedHost',
+        path: '/scrapper/failed-host',
+        component: () => import('#/views/scrapper/failed-host/index.vue'),
+        meta: {
+          icon: 'carbon:warning-alt',
+          title: 'Scrapper失败站点排行',
+        },
+      },
+      {
         name: 'ScrapperSweep',
         path: '/scrapper/sweep',
         component: () => import('#/views/scrapper/sweep/index.vue'),

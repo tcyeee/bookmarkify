@@ -252,6 +252,19 @@ class SiteServiceImpl(
         log.debug("[applyCrawledMeta] 站点信息已更新: siteId=$siteId, host=${site.host}, brandName=$brand, shortName=$short, fromRootPage=$fromRootPage")
     }
 
+    override fun upgradeSchemeToHttps(siteId: String) {
+        val site = baseMapper.selectById(siteId) ?: run {
+            logger.warn("[upgradeSchemeToHttps] 站点不存在，跳过: siteId=$siteId")
+            return
+        }
+        if (site.scheme.equals("https", ignoreCase = true)) return
+        ktUpdate().eq(SiteEntity::id, siteId)
+            .set(SiteEntity::scheme, "https")
+            .set(SiteEntity::updateTime, LocalDateTime.now())
+            .update()
+        logger.info("[upgradeSchemeToHttps] 站点协议升级: siteId=$siteId, host=${site.host}, ${site.scheme}->https")
+    }
+
     override fun recordLiveness(siteId: String, alive: Boolean) {
         val site = baseMapper.selectById(siteId) ?: return
         // 连续失败次数只在域名级失败时累加；恢复即归零。UNKNOWN 压根不会走到这里 ——

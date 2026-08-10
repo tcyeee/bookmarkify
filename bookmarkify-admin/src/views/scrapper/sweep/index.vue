@@ -27,7 +27,7 @@ import {
 import { FilterBar, FilterItem, useAutoSearch } from '#/components/filter-bar';
 import BookmarkDetailDialog from '#/views/bookmark/BookmarkDetailDialog.vue';
 
-import { formatDuration } from './duration';
+import { formatDuration } from '../duration';
 import SweepRoundDetailDialog from './SweepRoundDetailDialog.vue';
 import SweepTriggerDialog from './SweepTriggerDialog.vue';
 

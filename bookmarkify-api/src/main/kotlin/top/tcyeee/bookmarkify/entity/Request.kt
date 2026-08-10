@@ -237,6 +237,42 @@ data class ScrapperCallLogSearchParams(
     }
 }
 
+/**
+ * 失败站点排行查询入参。
+ *
+ * 刻意**不继承 [PageBean]**：这是一张排行榜，不是一个可以无限往下翻的数据集。做它的目的是
+ * 回答「哪几个站点最值得处理」，翻到第 7 页的第 340 名对这个问题没有任何意义，而分页会逼着
+ * 聚合语句再跑一遍 count，代价却买不到东西。要看某个域名的全部记录，下钻到调用日志页去看。
+ */
+data class ScrapperFailedHostParams(
+    /**
+     * 统计窗口天数。
+     *
+     * 默认 30 天而不是 7：抓取重复请求由小时级巡检和 30 天的内容重抓周期驱动，7 天的窗口会把
+     * 「每 30 天来一次、每次都失败」这一类恰好切掉，而那正是最该被看见的一类浪费。
+     */
+    @field:Schema(description = "统计窗口天数") var days: Int = 30,
+    /** 失败次数门槛。低于它的域名不进榜——一次性抖动人人都有，混进来只会把真正的常客淹掉 */
+    @field:Schema(description = "失败次数门槛(含)") var minFailures: Int = 3,
+    @field:Schema(description = "排序口径：failedDurationMs / failedCalls / failRate") var sortField: String = "failedDurationMs",
+    @field:Schema(description = "返回条数上限") var limit: Int = 50,
+) {
+    /**
+     * 收紧到安全区间。
+     *
+     * 这些参数会直接进聚合语句，而聚合是全表扫描量级的操作：`days` 给一个 100000 会让它扫完
+     * 整张表，`limit` 给一个百万会把整个结果集拉进内存。入参来自后台页面，但接口是公开的。
+     */
+    fun sanitized() = ScrapperFailedHostParams(
+        days = days.coerceIn(1, 365),
+        minFailures = minFailures.coerceIn(1, 10_000),
+        // 认不出的取值不报错，交给 SQL 的 CASE 落到默认口径 —— 排序方式选错的代价是看错顺序，
+        // 不值得让整个页面报一个 400
+        sortField = sortField,
+        limit = limit.coerceIn(1, 500),
+    )
+}
+
 /** 管理后台系统配置变更记录查询入参 */
 data class ConfigChangeLogSearchParams(
     @field:Schema(description = "只看某一组配置(system_config.config_key)") var configKey: String? = null,

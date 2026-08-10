@@ -63,6 +63,19 @@ interface ISiteService : IService<SiteEntity> {
     fun applyCrawledMeta(siteId: String, brandName: String?, shortName: String?, fromRootPage: Boolean)
 
     /**
+     * 把站点协议升到 https。只升不降，已经是 https 时是空操作。
+     *
+     * `site.scheme` 只在 [getOrCreateByHost] 建行的那一刻写过一次，取自当时那个用户提交的
+     * 网址。站点后来全站上了 https 也没有任何地方回写，于是 `site.rootUrl`（后台站点管理里
+     * 那个可点的链接）会一直指着明文地址。
+     *
+     * 刻意不并进 [applyCrawledMeta]：那条路径处处让着人工值（认证过就整体跳过、锁住的列不写、
+     * 深链只回填空列），而协议是传输层的事实，不是可供人工校订的名字 —— 一个认证过的站点，
+     * 它的 https 照样是 https。混进去就得给那些前置判断开后门，两种意图迟早互相拌蒜。
+     */
+    fun upgradeSchemeToHttps(siteId: String)
+
+    /**
      * 写入 NSFW 判定结果。
      *
      * **判定结果为 false 也要写**（写进 `nsfw_reason`），否则"没判过"和"判过且干净"无法区分，
