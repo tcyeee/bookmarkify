@@ -175,7 +175,7 @@ function deadTip(row: BookmarkSweepLogVO) {
     split && split.dead > 0
       ? `其中 ${split.dead} 条是站点层短路复用的上一轮站点结论、本轮并未探测，真正探测判死 ${row.deadCount - split.dead} 条；`
       : '';
-  return `${reused}探测判死占实际探测 ≥90%（且实际探测 ≥20 条）时触发熔断，判定为我方出网链路故障而非站点集体下线`;
+  return `${reused}判死域名占本轮探测到的域名 ≥90%（且实际探测 ≥20 条）时触发熔断，判定为我方出网链路故障而非站点集体下线`;
 }
 
 /** 无结论列的说明。阈值与样本量见 LivenessPolicy.breakerReason */
@@ -185,7 +185,7 @@ function unknownTip(row: BookmarkSweepLogVO) {
     split && split.unknown > 0
       ? `本列含 ${split.unknown} 条站点层短路复用的结论，它们不计入熔断判据；`
       : '';
-  return `「我方探不到」而非「站点失联」，不会改动书签状态。${reused}占实际探测 ≥50%（且实际探测 ≥10 条）即触发熔断`;
+  return `「我方探不到」而非「站点失联」，不会改动书签状态。${reused}探不到的域名占本轮探测到的域名 ≥50%（且实际探测 ≥10 条）即触发熔断`;
 }
 
 const gridOptions: VxeGridProps<BookmarkSweepLogVO> = {
@@ -422,7 +422,7 @@ onUnmounted(stopPolling);
           </span>
           <span class="flex items-center gap-3">
             <span class="text-xs text-gray-400">
-              一轮一行，点任意一行看这一轮探了哪些页面。熔断 = 本轮整体结论被判定为不可信，没有改动任何书签
+              一轮一行，点任意一行看这一轮探了哪些页面。熔断 = 本轮整体结论被判定为不可信，不改动任何书签状态，只把这批记录的下次检查推后 1 小时
             </span>
             <!--
               放在标题栏而不是筛选栏：筛选栏那几项是"看什么"，这个按钮是"做什么"，

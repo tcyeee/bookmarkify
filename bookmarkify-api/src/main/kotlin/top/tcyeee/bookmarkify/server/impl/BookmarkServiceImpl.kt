@@ -939,14 +939,17 @@ class BookmarkServiceImpl(
             )
         }
 
-        val candidates = ktQuery()
+        val batch = ktQuery()
             .eq(PageEntity::parseStatus, statusFilter)
             .apply(DUE_CLAUSE, now)
             // 最该查的优先处理，配合 LIMIT 保证积压记录会被逐批消费，不会被新记录饿死
             .last("ORDER BY $DUE_CURSOR ASC LIMIT $batchSize")
             .list()
-            // 非域名类型(本地/IP/其他)不抓取，也不应对其发起存活 ping
-            .filter { WebsiteParser.classifyLinkType(it.urlHost) == BookmarkLinkType.DOMAIN }
+        // 非域名类型(本地/IP/其他)不抓取，也不应对其发起存活 ping
+        val (candidates, nonDomain) = batch.partition {
+            WebsiteParser.classifyLinkType(it.urlHost) == BookmarkLinkType.DOMAIN
+        }
+        parkNonDomain(nonDomain, taskLabel)
         if (candidates.isEmpty()) {
             // **空轮次同样要留一行。** 「没有到期候选」是一个正常且有意义的事实，而它与
             // 「巡检压根没在跑」在数据上必须可区分 —— 后者正是 SweepHealthVO.lastRoundAt
@@ -1008,7 +1011,11 @@ class BookmarkServiceImpl(
         // **熔断只看真正探测过的结果。** 短路出来的那些 DEAD 不是探测结论，是上一轮的结论在复用；
         // 把它们混进来会凭空拉高失联比例，让「>90% DEAD」这条规则在一个健康的系统里误触发 ——
         // 而那条规则本来是用来发现"scrapper 通着但出口坏了、于是诚实地把一切报成死"的。
-        val breakerReason = LivenessPolicy.breakerReason(actuallyProbed.map { it.second })
+        //
+        // 带上 urlHost：判据的比例按域名去重算，理由见 LivenessPolicy.breakerReason
+        val breakerReason = LivenessPolicy.breakerReason(
+            actuallyProbed.map { (page, outcome) -> LivenessPolicy.HostOutcome(page.urlHost, outcome) }
+        )
 
         val probed = actuallyProbed + shortCircuited
 
@@ -1089,7 +1096,14 @@ class BookmarkServiceImpl(
         )
 
         if (breakerReason != null) {
-            log.error("[$taskLabel] 熔断，本轮不改动任何书签: $breakerReason")
+            log.error("[$taskLabel] 熔断，本轮不改动任何书签状态(仅推进 ${probed.size} 条的巡检游标): $breakerReason")
+            // **熔断也必须推进游标。** 熔断的语义是"本轮的结论不可信，别拿它改书签"，不是
+            // "本轮什么都没发生"。而候选是按 next_check_at 选的：一条都不推进，下一轮就会选出
+            // **同一批**记录、得到同一个比例、再次熔断 —— 熔断从"跳过这一轮"退化成"永久停摆"，
+            // 且没有任何自愈路径。2026-08-10 生产上连续 25 轮完全相同的记录就是这么来的。
+            // 推 TRIGGERED_PARSE_PROTECT_HOURS(1h) 而不是更久：巡检本身就是小时级的，
+            // 我方链路修好后下一轮即可恢复，代价只是这批记录晚一个周期被判活性。
+            probed.forEach { (page, _) -> protectSchedule(page) }
             recordRound()
             return
         }
@@ -1282,6 +1296,37 @@ class BookmarkServiceImpl(
             consecutiveFail = consecutiveFail,
             config = config,
         )
+    }
+
+    /**
+     * 把「本轮选中了、但按类型压根不该探测」的记录挪出候选队列。
+     *
+     * 非域名书签（`localhost` / 裸 IP / `chrome:` 等）会被 [WebsiteParser.classifyLinkType]
+     * 过滤掉，而过滤发生在 `LIMIT` **之后** —— 它们照样占着候选查询的名额，且因为一路走不到
+     * 任何写调度列的地方，`next_check_at` 永远停在过去，于是**永久**坐在
+     * `ORDER BY next_check_at ASC` 的队头。2026-08-10 生产上 65 条到期候选里有 55 条是这种，
+     * 只是当时 65 < 单轮上限 200 才没造成饥饿；再多 145 条这样的书签，真正该复查的记录就
+     * 一条也选不出来了 —— 而这个故障没有任何症状，候选数看起来一直是满的。
+     *
+     * 推一年而不是一个周期：一条书签的 host 不会变（改网址会落到另一条 canonical 记录上），
+     * 所以这个判断的结果是永久的，推短了只是让同一件事每周重来一次。也不推成 NULL 或更远：
+     * `DUE_CURSOR` 把 NULL 当作"最该查"，而留一个能到期的时刻意味着万一分类规则将来放宽，
+     * 这批记录还能自己回到巡检里，不需要一次数据订正。
+     */
+    private fun parkNonDomain(pages: List<PageEntity>, taskLabel: String) {
+        if (pages.isEmpty()) return
+        val now = LocalDateTime.now()
+        // 一条 SQL 批量更新：这批可能有几百条，而它们既不产生探测也不产生日志，
+        // 逐条 update 纯属白付数据库往返
+        runCatching {
+            ktUpdate().`in`(PageEntity::id, pages.map { it.id })
+                // 刻意不写 lastCheckAt：本轮并没有"检查"过它们，写了会让后台以为探过
+                .set(PageEntity::nextCheckAt, now.plusDays(NON_DOMAIN_PARK_DAYS))
+                .update()
+        }.onFailure {
+            log.warn("[$taskLabel] 非域名候选的游标挪移失败(忽略): ${it.message}")
+        }
+        log.debug("[$taskLabel] ${pages.size} 条非域名书签不做探测，游标推后 ${NON_DOMAIN_PARK_DAYS} 天")
     }
 
     /**
@@ -2773,6 +2818,8 @@ class BookmarkServiceImpl(
         // 新用户添加该网址），所以这个值不影响任何查询——它只是不让后台的「下次检查」列
         // 停在一个几个月前的时间点上，那读起来像是巡检卡住了
         private const val ARCHIVE_RECHECK_DAYS = 30L
+        // 非域名书签（本地/IP）被选中却无法探测时，游标推多远。见 parkNonDomain
+        private const val NON_DOMAIN_PARK_DAYS = 365L
         private const val MAX_IMPORT_BOOKMARK_COUNT = 2000
         // addOne 判重时最多回捞多少条「同域名的导入占位」做规范化比对（见 assertNotPendingImport）。
         // 同一用户在同一域名下同时挂着几百条待抓占位已经极端，够用且不会让判重本身变成慢查询。

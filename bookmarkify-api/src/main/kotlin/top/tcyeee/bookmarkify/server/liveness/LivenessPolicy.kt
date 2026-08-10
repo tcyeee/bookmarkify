@@ -81,6 +81,9 @@ object LivenessPolicy {
     private const val DEAD_PERCENT = 90
     private const val MIN_SAMPLE_DEAD = 20
 
+    /** 一次探测的「哪个域名 → 什么结论」。[breakerReason] 需要域名，见那里的说明。 */
+    data class HostOutcome(val host: String, val outcome: PingOutcome)
+
     /**
      * 整批探测结果是否呈现「系统性失败」的形态；非 null 表示应当熔断，内容是给日志的原因。
      *
@@ -90,17 +93,36 @@ object LivenessPolicy {
      *   `alive=false`，全是合法的 2xx 响应，上一条判据完全看不见。而现实中一批随机站点
      *   不会在同一小时集体死亡，这种形态只可能是我方的问题。
      *
-     * 两者都要求最小样本量，否则一轮只有两三条候选、恰好都是死站点时会误触发。
+     * ## 比例按**域名**算，样本量按**探测次数**算
+     *
+     * 两个判据要回答的都是「这是不是我方的全局故障」，而一个域名下有几条书签纯属用户的收藏
+     * 习惯，与故障范围毫无关系。按探测次数算比例，等于让收藏最多的那个站点决定全局结论 ——
+     * 2026-08-10 生产上就是这么锁死的：10 条候选里 4 条是同一个 B 站视频页，B 站对机房出口
+     * IP 的内容页一律回 412（判 UNKNOWN，且是**确定性**的，123 次探测 123 次如此），再加
+     * zfrontier、reddit 各一条，恒定 6/10 = 60% 触发熔断。而熔断的出口在落库之前，
+     * `next_check_at` 一条也不推进，于是下一个整点选出来的还是这 10 条、还是这个比例 ——
+     * 连续 25 轮字节级相同，全系统再没有任何一条书签被判过活性。按域名去重是 3/7 = 43%，
+     * 不触发；真正的我方故障则是**所有**域名一起探不到，去重后反而更接近 100%，判得更准。
+     *
+     * 样本量仍按探测次数算：它防的是「一轮只剩两三条候选、恰好都是死站点」的误触发，
+     * 那是个关于证据量的问题，与域名分布无关。
+     *
+     * 某个域名下混着 ALIVE 的，既不算 UNKNOWN 也不算 DEAD 域名 —— 有一页通了就说明这个域名
+     * 我方够得着，它恰恰是「全局故障」这个结论的反证。
      */
-    fun breakerReason(outcomes: List<PingOutcome>): String? {
-        val total = outcomes.size
-        val unknown = outcomes.count { it == PingOutcome.UNKNOWN }
-        val dead = outcomes.count { it == PingOutcome.DEAD }
+    fun breakerReason(probes: List<HostOutcome>): String? {
+        val total = probes.size
+        if (total == 0) return null
+        val byHost = probes.groupBy { it.host }
+        val hosts = byHost.size
+        fun hostsAll(outcome: PingOutcome) = byHost.count { (_, group) -> group.all { it.outcome == outcome } }
+        val unknownHosts = hostsAll(PingOutcome.UNKNOWN)
+        val deadHosts = hostsAll(PingOutcome.DEAD)
         return when {
-            total >= MIN_SAMPLE_UNKNOWN && unknown * 100 >= total * UNKNOWN_PERCENT ->
-                "无结论 $unknown/$total 已达 $UNKNOWN_PERCENT%，抓取服务多半整体不可用"
-            total >= MIN_SAMPLE_DEAD && dead * 100 >= total * DEAD_PERCENT ->
-                "判定失联 $dead/$total 已达 $DEAD_PERCENT%，多半是我方出网链路故障而非站点集体下线"
+            total >= MIN_SAMPLE_UNKNOWN && unknownHosts * 100 >= hosts * UNKNOWN_PERCENT ->
+                "无结论 $unknownHosts/$hosts 个域名（共 $total 次探测）已达 $UNKNOWN_PERCENT%，抓取服务多半整体不可用"
+            total >= MIN_SAMPLE_DEAD && deadHosts * 100 >= hosts * DEAD_PERCENT ->
+                "判定失联 $deadHosts/$hosts 个域名（共 $total 次探测）已达 $DEAD_PERCENT%，多半是我方出网链路故障而非站点集体下线"
             else -> null
         }
     }

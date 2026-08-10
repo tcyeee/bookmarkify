@@ -18,8 +18,17 @@ import kotlin.test.assertTrue
  */
 class LivenessPolicyTest {
 
-    private fun outcomes(alive: Int = 0, dead: Int = 0, unknown: Int = 0): List<PingOutcome> =
-        List(alive) { PingOutcome.ALIVE } + List(dead) { PingOutcome.DEAD } + List(unknown) { PingOutcome.UNKNOWN }
+    /** 每条探测来自**各自不同**的域名——最分散的形态，域名比例与探测次数比例一致 */
+    private fun outcomes(alive: Int = 0, dead: Int = 0, unknown: Int = 0): List<LivenessPolicy.HostOutcome> {
+        var n = 0
+        fun batch(count: Int, outcome: PingOutcome) =
+            List(count) { LivenessPolicy.HostOutcome("host-${n++}.example.com", outcome) }
+        return batch(alive, PingOutcome.ALIVE) + batch(dead, PingOutcome.DEAD) + batch(unknown, PingOutcome.UNKNOWN)
+    }
+
+    /** 同一域名下的 [count] 条页面，结论相同——现实里"一个站点收藏了好几条"的形态 */
+    private fun sameHost(host: String, count: Int, outcome: PingOutcome) =
+        List(count) { LivenessPolicy.HostOutcome(host, outcome) }
 
     // ────── 由探测事实判定死活 ──────
 
@@ -134,6 +143,51 @@ class LivenessPolicyTest {
     @Test
     fun `空批次不熔断`() {
         assertNull(LivenessPolicy.breakerReason(emptyList()))
+    }
+
+    @Test
+    fun `一个反爬站点收藏了很多条不足以熔断——比例按域名算`() {
+        // 2026-08-10 生产实况：10 条候选里 4 条是同一个 B 站视频页（对机房 IP 恒定 412 判
+        // UNKNOWN），加上 zfrontier、reddit 各一条，按探测次数是 6/10=60% 必然熔断；
+        // 按域名去重是 3/7=43%，不该熔断。这是全部改动的判据。
+        val probes = sameHost("www.bilibili.com", 4, PingOutcome.UNKNOWN) +
+            sameHost("www.zfrontier.com", 1, PingOutcome.UNKNOWN) +
+            sameHost("www.reddit.com", 1, PingOutcome.UNKNOWN) +
+            sameHost("caniuse.com", 1, PingOutcome.ALIVE) +
+            sameHost("www.lingdaima.com", 1, PingOutcome.ALIVE) +
+            sameHost("cssbuttongenerator.com", 1, PingOutcome.ALIVE) +
+            sameHost("qqe2.com", 1, PingOutcome.ALIVE)
+        assertNull(LivenessPolicy.breakerReason(probes))
+    }
+
+    @Test
+    fun `同一批里域名过半探不到仍要熔断——去重不该把真故障也稀释掉`() {
+        // 与上一条只差"探不到的域名有几个"：我方链路故障时是**所有**域名一起探不到，
+        // 去重之后比例反而更高，判得比按次数算更准
+        val probes = (1..5).flatMap { sameHost("dead-$it.example.com", 2, PingOutcome.UNKNOWN) } +
+            (1..5).map { LivenessPolicy.HostOutcome("ok-$it.example.com", PingOutcome.ALIVE) }
+        assertNotNull(LivenessPolicy.breakerReason(probes))
+    }
+
+    @Test
+    fun `域名下混着存活就不算探不到的域名`() {
+        // 有一页通了，恰恰证明这个域名我方够得着——它是"全局故障"的反证，不能记进分子。
+        // 20 个域名里 10 个混合、10 个存活，按"任一页 UNKNOWN 即算"会得出 50% 触发熔断
+        val probes = (1..10).flatMap {
+            sameHost("mixed-$it.example.com", 1, PingOutcome.UNKNOWN) +
+                sameHost("mixed-$it.example.com", 1, PingOutcome.ALIVE)
+        } + (1..10).map { LivenessPolicy.HostOutcome("ok-$it.example.com", PingOutcome.ALIVE) }
+        assertNull(LivenessPolicy.breakerReason(probes))
+    }
+
+    @Test
+    fun `一个域名下的大量死链不足以判成我方出网故障`() {
+        // DEAD 侧同一条道理：某个站点整体下线（30 条书签全在它名下）是站点的事实，
+        // 不是我方链路故障。按次数算 30/33=91% 会误熔断，而误熔断的代价是这批书签
+        // 永远判不了失联——巡检唯一的产出被这条规则挡在门外
+        val probes = sameHost("shutdown.example.com", 30, PingOutcome.DEAD) +
+            (1..3).map { LivenessPolicy.HostOutcome("ok-$it.example.com", PingOutcome.ALIVE) }
+        assertNull(LivenessPolicy.breakerReason(probes))
     }
 
     // ────── 退避曲线 ──────
