@@ -164,17 +164,6 @@
     <dialog ref="editDialogRef" class="cy-modal">
       <div class="cy-modal-box max-w-md">
         <div class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">修改书签</div>
-        <!--
-          页面封面：截图优先，退 og:image。按需拉取，没有就整块不渲染 ——
-          留一个空的 16:9 灰框只会让"这个站抓不到图"看起来像"图挂了"。
-        -->
-        <img
-          v-if="editCover"
-          :src="editCover"
-          alt=""
-          loading="lazy"
-          class="w-full aspect-video object-cover object-top rounded-lg mb-4 bg-slate-100 dark:bg-slate-800"
-          @error="editCover = null" />
         <div class="space-y-3">
           <label class="block">
             <span class="text-sm text-slate-600 dark:text-slate-300">书签名称</span>
@@ -261,7 +250,6 @@ import {
   bookmarksDel,
   bookmarksUpdate,
   bookmarksPin,
-  bookmarksCover,
   bookmarksCreateDir,
   bookmarksRecordOpen,
   bookmarksSort,
@@ -695,31 +683,18 @@ const editDialogRef = ref<HTMLDialogElement | null>(null)
 const editingNode = ref<UserLayoutNodeVO | null>(null)
 const editForm = reactive({ title: '', description: '' })
 const editSaving = ref(false)
-/** 封面按需拉取，见 bookmarksCover。null = 没有封面，此时整块不渲染，不占位 */
-const editCover = ref<string | null>(null)
 
 function openEditModal(node: UserLayoutNodeVO) {
   if (!node.typeApp) return
   editingNode.value = node
   editForm.title = node.typeApp.title || ''
   editForm.description = node.typeApp.description || ''
-  editCover.value = null
   editDialogRef.value?.showModal()
-
-  // 封面是锦上添花：拿不到就当没有，不弹错、不挡住改标题这件正事
-  const linkId = node.typeApp.bookmarkId
-  bookmarksCover(linkId)
-    .then((url) => {
-      // 用户可能已经关掉弹窗又点开了另一条，晚到的响应不能盖到新的上面
-      if (editingNode.value?.typeApp?.bookmarkId === linkId) editCover.value = url
-    })
-    .catch(() => {})
 }
 
 function closeEditModal() {
   editDialogRef.value?.close()
   editingNode.value = null
-  editCover.value = null
 }
 
 async function saveEdit() {

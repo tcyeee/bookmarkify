@@ -982,3 +982,46 @@ data class SweepTriggerResultVO(
     @field:Schema(description = "是否已受理并投递") var accepted: Boolean = false,
     @field:Schema(description = "给管理员看的说明") var message: String = "",
 )
+
+/**
+ * 无人引用书签清理的「会删什么 / 删了什么」。
+ *
+ * 预览与执行返回的是同一个结构，用 [dryRun] 区分——两者必须由同一段代码算出来，
+ * 否则确认框里的数字与真正删掉的东西之间没有任何保证，而这个操作没有撤销路径。
+ *
+ * 三层计数刻意分开列：[pages] / [sites] 是管理员真正关心的「删掉了多少条记录」，
+ * 其余是随之级联清掉的附属行——它们数量大得多（一个页面能带几十条 ping 日志），
+ * 混在一起报会让人以为删多了。
+ */
+data class OrphanCleanupReport(
+    @field:Schema(description = "是否只统计不删除") var dryRun: Boolean = true,
+
+    /* ── 页面层 ── */
+    @field:Schema(description = "无人引用且属于本地/IP 站点的页面数") var localIpPages: Int = 0,
+    @field:Schema(description = "无人引用且已判定失活(抓取失败/已归档)的页面数") var deadPages: Int = 0,
+    @field:Schema(description = "实际删除的页面数。两条规则会重叠，所以不等于上面两个相加") var pages: Int = 0,
+    @field:Schema(
+        description = "命中规则但因创建时间太近而跳过的页面数。" +
+            "用户正在添加的书签会先建页面、再建关联，这段窗口里它看起来正是「无人引用」"
+    )
+    var skippedRecentPages: Int = 0,
+
+    /* ── 站点层 ── */
+    @field:Schema(description = "实际删除的站点数(已无任何页面，且是本地/IP 或已判定不可达)") var sites: Int = 0,
+
+    /* ── 级联清掉的附属行 ── */
+    @field:Schema(description = "页面元信息(page_meta)") var pageMeta: Int = 0,
+    @field:Schema(description = "抓取快照(scrape_snapshot)") var snapshots: Int = 0,
+    @field:Schema(description = "探测日志(page_ping_log)") var pingLogs: Int = 0,
+    @field:Schema(description = "分类关联(page_category)") var pageCategories: Int = 0,
+    @field:Schema(description = "页面级图片资产(社交图/截图)") var pageAssets: Int = 0,
+    @field:Schema(description = "站点级图片资产(favicon/logo)") var siteAssets: Int = 0,
+    @field:Schema(description = "站点展示偏好(site_display_pref)") var displayPrefs: Int = 0,
+    @field:Schema(
+        description = "随之失去引用的对象存储文件数。这里**不删对象**，" +
+            "它们会在下一轮 OSS 对账里被认定为孤儿后按既有策略回收"
+    )
+    var releasedFiles: Int = 0,
+
+    @field:Schema(description = "耗时(ms)") var durationMs: Long = 0,
+)
