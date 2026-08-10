@@ -18,6 +18,7 @@ import { computed, markRaw, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
+import BookmarkCleanupSection from './BookmarkCleanupSection.vue';
 import ConfigChangeLogSection from './ConfigChangeLogSection.vue';
 import LivenessCheckSection from './LivenessCheckSection.vue';
 import LivenessRetrySection from './LivenessRetrySection.vue';
@@ -44,6 +45,15 @@ const CATEGORIES: SettingCategory[] = [
     desc: '探测失败后的重试退避曲线与归档阈值',
     key: 'liveness-retry',
     title: '重试与归档',
+  },
+  // 清理不是"设置"——它是一次有副作用且不可撤销的动作，所以与上面两组设置之间画一条线。
+  // 放在这一页而不是书签管理页，是因为它的判据（多久算失活、失败几次才归档）正是上面配的那几项。
+  {
+    component: markRaw(BookmarkCleanupSection),
+    desc: '删除已无人收藏、且不会再有内容的页面与站点',
+    key: 'cleanup',
+    separated: true,
+    title: '书签清理',
   },
   {
     component: markRaw(ConfigChangeLogSection),
