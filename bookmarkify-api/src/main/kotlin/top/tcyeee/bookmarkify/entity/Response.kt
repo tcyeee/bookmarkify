@@ -613,7 +613,13 @@ data class ScrapperCallLogVO(
     @field:Schema(description = "请求URL") var url: String,
     @field:Schema(description = "URL host") var urlHost: String,
     @field:Schema(description = "是否成功") var success: Boolean,
-    @field:Schema(description = "HTTP状态码") var httpStatus: Int? = null,
+    @field:Schema(description = "HTTP状态码(scrapper 回给我方的，不是目标站点的)") var httpStatus: Int? = null,
+    @field:Schema(description = "scrapper 错误码，成功时为空") var errorCode: String? = null,
+    /**
+     * 目标站点自己的最终状态码。与 [httpStatus] 是两个问题：那一列是 scrapper 回给我方的码，
+     * `FETCH_FAILED` 恒 502、`TIMEOUT` 恒 504，看不出目标站点发生了什么。
+     */
+    @field:Schema(description = "目标站点的最终HTTP状态码，未连上目标时为空") var targetStatus: Int? = null,
     @field:Schema(description = "命中来源") var source: String? = null,
     @field:Schema(description = "是否命中scrapper缓存") var cached: Boolean? = null,
     @field:Schema(description = "实际抓取层：HTTP/HEADLESS/SITE_API") var layerUsed: String? = null,
@@ -641,6 +647,64 @@ data class ScrapperCallLogVO(
         BeanUtil.copyProperties(entity, this)
     }
 }
+
+/**
+ * 失败站点排行的一行：某个域名在时间窗内的抓取失败画像。
+ *
+ * # 这张表回答什么
+ *
+ * 「要不要给某类站点建一个永不重试的禁访名单」这个问题，之前只能靠印象回答 —— `scrapper_call_log`
+ * 是一次调用一行，翻它只看得到个例。而做不做名单取决于两个数：**这个站点失败得有多频繁**，
+ * 以及**每次失败烧掉多少秒**。后者才是真正的代价：一次无头浏览器的失败要 30 秒，而一次 DNS
+ * 失败只要几百毫秒，同样是"失败 10 次"，两者差了两个数量级。
+ *
+ * # 为什么不直接给结论
+ *
+ * 这里刻意只呈现事实，不给「建议屏蔽」之类的判定。同一个高失败率有完全不同的处置：
+ * 反爬（403/406/412）应该去写一个站点 API 适配器，把失败变成成功；连不上/DNS 失败是站点
+ * 真的没了，交给巡检判失联即可；而 `SCRAPPER_UNREACHABLE` / `HEADLESS_UNAVAILABLE` 压根
+ * 不是站点的问题，是我方抖动，按站点归因就是错的。区分它们的是 [errorBreakdown] 和
+ * [lastTargetStatus]，不是失败率本身。
+ */
+data class ScrapperFailedHostVO(
+    @field:Schema(description = "域名") var urlHost: String,
+    @field:Schema(description = "窗口内总调用次数") var totalCalls: Long,
+    @field:Schema(description = "窗口内失败次数") var failedCalls: Long,
+    /** 失败落在多少个不同的地址上。1 表示只有一个页面在反复失败，接近 [failedCalls] 表示整站都抓不动 */
+    @field:Schema(description = "失败涉及的不同URL数") var failedUrls: Long,
+    /**
+     * 失败调用的累计耗时 —— 这就是"浪费"，也是排行默认的排序依据。
+     *
+     * 单看失败次数会把一个失败 20 次、每次 200ms 的站点排在失败 7 次、每次 28 秒的前面，
+     * 而后者才是真正值得处理的那个（生产上 console.cloud.tencent.com 就是这个形态）。
+     */
+    @field:Schema(description = "失败调用累计耗时(ms)") var failedDurationMs: Long,
+    @field:Schema(description = "全部调用累计耗时(ms)") var totalDurationMs: Long,
+    @field:Schema(description = "最近一次失败时间") var lastFailedAt: LocalDateTime? = null,
+    /**
+     * 窗口内最近一次**成功**的时间，为空表示这个窗口里从来没成功过。
+     *
+     * 它是判断「这个站点是不是彻底抓不动」的关键：同一个域名根路径 200、内容页 412 是常见形态
+     * （B 站就是），此时失败率很高但站点本身完全正常，按域名屏蔽会误伤。
+     */
+    @field:Schema(description = "窗口内最近一次成功时间，从未成功时为空") var lastSuccessAt: LocalDateTime? = null,
+    @field:Schema(description = "最近一次失败的URL") var lastFailedUrl: String? = null,
+    @field:Schema(description = "最近一次失败的错误信息") var lastErrorMsg: String? = null,
+    @field:Schema(description = "最近一次失败的错误码") var lastErrorCode: String? = null,
+    @field:Schema(description = "最近一次失败时目标站点的状态码") var lastTargetStatus: Int? = null,
+    /** 最近一次失败停在哪一层。HEADLESS 表示无头浏览器也试过了，重试大概率还是同一个结果 */
+    @field:Schema(description = "最近一次失败尝试到的抓取层") var lastLayerUsed: String? = null,
+    /** 窗口内该域名各错误码的次数，按次数降序。为空只可能是历史行（迁移前不记错误码） */
+    @field:Schema(description = "错误码分布，按次数降序") var errorBreakdown: List<ScrapperErrorCodeCountVO> = emptyList(),
+    /** 见 [ScrapperCallLogVO.faviconUrl]：我方 OSS 签名地址，为空时前端落本地兜底图，不要直连外站 */
+    @field:Schema(description = "站点图标签名地址，我方无此站图标时为空") var faviconUrl: String? = null,
+)
+
+/** 某个错误码在窗口内出现了多少次 */
+data class ScrapperErrorCodeCountVO(
+    @field:Schema(description = "错误码；迁移前的历史行没有这个值，统一归为 UNKNOWN") var errorCode: String,
+    @field:Schema(description = "出现次数") var count: Long,
+)
 
 /**
  * 系统配置的一次变更。

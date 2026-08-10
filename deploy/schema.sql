@@ -358,7 +358,9 @@ CREATE TABLE public.scrapper_call_log (
     duration_ms bigint NOT NULL,
     error_msg character varying(500),
     create_time timestamp without time zone DEFAULT now() NOT NULL,
-    layer_used character varying(20)
+    layer_used character varying(20),
+    error_code character varying(64),
+    target_status integer
 );
 
 

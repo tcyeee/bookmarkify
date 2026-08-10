@@ -34,7 +34,7 @@ import {
   triggerAdminSweepApi,
 } from '#/api/bookmark-sweep-log';
 
-import { formatDuration } from './duration';
+import { formatDuration } from '../duration';
 
 const emit = defineEmits<{
   /** 已受理，调用方据此开始等待新轮次落库 */

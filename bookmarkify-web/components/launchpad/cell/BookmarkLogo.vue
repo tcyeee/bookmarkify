@@ -5,7 +5,7 @@
     <!-- 内层 Logo：默认白底，必要时覆盖主色与淡白蒙版；不可访问时整体变灰 -->
     <div
       class="bg-white flex justify-center items-center"
-      :class="{ 'inactive-logo': isInactive || isInsecure }"
+      :class="{ 'inactive-logo': isInactive }"
       :style="[logoSizeStyle, logoStyle]">
       <!-- 本地/IP 类型书签：后端不抓取信息，用与「不可访问」同色的灰底 + 白色圆点图标 -->
       <Icon v-if="isPlainCircle" icon="mdi:dots-circle" class="shrink-0 text-white" :style="glyphStyle" />
@@ -24,14 +24,9 @@
       <div v-else class="monogram" :style="monogramStyle">{{ monogramChar }}</div>
     </div>
 
-    <!-- 不可访问 / 不支持 SSL：整体覆盖同一层灰色蒙版，居中叠加白色标识（断网 / 感叹号）以区分两种状态 -->
-    <div
-      v-if="isInactive || isInsecure"
-      class="inactive-mask"
-      :style="{ backgroundColor: INACTIVE_GRAY }"
-      :aria-label="isInactive ? '无法访问' : '不支持 SSL'">
+    <!-- 不可访问：整体覆盖一层灰色蒙版，居中叠加白色断网标识 -->
+    <div v-if="isInactive" class="inactive-mask" :style="{ backgroundColor: INACTIVE_GRAY }" aria-label="无法访问">
       <svg
-        v-if="isInactive"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -48,7 +43,6 @@
         <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
         <line x1="12" y1="20" x2="12.01" y2="20" />
       </svg>
-      <Icon v-else icon="mdi:exclamation-thick" class="shrink-0" :style="glyphStyle" />
     </div>
   </div>
 </template>
@@ -85,12 +79,10 @@ const glyphStyle = computed(() => {
 const customBgColor = computed(() => props.value.logo?.iconBgColor || '')
 const effectivePadding = computed(() => props.value.logo?.iconPadding ?? 0)
 
-// 不支持 SSL(明文 http)：后端不下发该标记，前端按 urlFull 的协议判定。
-// 本地/IP 天然多为 http，已有各自的展示形态；「不可访问」优先级更高，两者都不再叠加此状态
-const isInsecure = computed(() => {
-  if (isPlainCircle.value || props.value?.isActivity === false) return false
-  return /^http:\/\//i.test(props.value?.urlFull || '')
-})
+// 明文 http 曾经在这里额外叠一个「不支持 SSL」的感叹号蒙版，已移除：它与「不可访问」共用
+// 同一层灰蒙版和去色滤镜，在 20px 的列表格子里两者几乎分辨不出，实际效果是把一批活得好好的
+// 站点显示成失活；而判据是前端拿 urlFull 的协议现算的，后台没有任何对应字段可供核对。
+// 站点用不用 SSL 也不该由书签图标来提示 —— 浏览器地址栏本来就在做这件事。
 
 // 网站不可访问：图标变灰并叠加断网标识
 const isInactive = computed(() => props.value?.isActivity === false)

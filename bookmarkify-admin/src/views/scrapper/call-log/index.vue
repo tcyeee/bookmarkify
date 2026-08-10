@@ -8,7 +8,10 @@ import { useRoute, useRouter } from "vue-router";
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
 
-import { getAdminScrapperCallLogListApi } from "#/api/scrapper-call-log";
+import {
+  getAdminScrapperCallLogListApi,
+  SCRAPPER_ERROR_CODE_DESC,
+} from "#/api/scrapper-call-log";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
 
@@ -75,7 +78,14 @@ const router = useRouter();
 // 翻一次，中间那一版无关的数据还会闪一下（与巡检页的 onlyBreaker 是同一个套路）
 const searchForm = reactive<Pick<ScrapperCallLogSearchParams, "urlHost" | "success">>({
   urlHost: typeof route.query.urlHost === "string" ? route.query.urlHost : "",
-  success: undefined,
+  // 失败站点排行跳过来时带 success=false：从一张只讲失败的榜单点进来，落地却混着成功记录，
+  // 等于让人再手动筛一次。只认 "false"/"true" 两个串，其余取值当没传
+  success:
+    route.query.success === "false"
+      ? false
+      : route.query.success === "true"
+        ? true
+        : undefined,
 });
 
 /**
@@ -233,6 +243,32 @@ function httpStatusClassOf(row: ScrapperCallLogVO) {
     : "text-red-600 dark:text-red-400";
 }
 
+/** 错误码释义；认不出的码（scrapper 新增而后台没跟上）返回空串，由模板只显示原始码 */
+function errorCodeDescOf(row: ScrapperCallLogVO) {
+  return row.errorCode ? (SCRAPPER_ERROR_CODE_DESC[row.errorCode]?.desc ?? "") : "";
+}
+
+/** 反爬类状态码：连上了但被拒，与"连不上"是完全不同的两件事，用橙色和红色分开 */
+const TARGET_STATUS_ANTI_BOT = new Set([403, 406, 412, 429]);
+
+function targetStatusClassOf(row: ScrapperCallLogVO) {
+  if (row.targetStatus == null) return "text-gray-400";
+  return TARGET_STATUS_ANTI_BOT.has(row.targetStatus)
+    ? "text-orange-500 dark:text-orange-400"
+    : "text-red-600 dark:text-red-400";
+}
+
+function targetStatusTip(row: ScrapperCallLogVO) {
+  if (row.targetStatus == null) {
+    return row.success
+      ? "成功的调用不记这一列（那恒为 2xx）"
+      : "没有拿到目标站点的状态码：连接压根没建立起来（DNS 解析失败、连不上、超时），或者这次根本没走到目标站点";
+  }
+  return TARGET_STATUS_ANTI_BOT.has(row.targetStatus)
+    ? `目标返回 ${row.targetStatus}：连上了但被拒，典型的反爬。拒的多半是我方机房出口 IP 而非请求长相`
+    : `目标站点返回 ${row.targetStatus}`;
+}
+
 const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
   id: "admin-scrapper-call-log",
   columns: [
@@ -240,7 +276,20 @@ const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
     { field: "urlHost", title: "域名", minWidth: 180, slots: { default: "urlHost" } },
     { field: "url", title: "请求URL", minWidth: 240, showOverflow: "tooltip" },
     { field: "success", title: "结果", width: 90, slots: { default: "success" } },
-    { field: "httpStatus", title: "HTTP状态", width: 100, slots: { default: "httpStatus" } },
+    {
+      field: "httpStatus",
+      title: "HTTP状态",
+      width: 100,
+      slots: { default: "httpStatus", header: "httpStatusHeader" },
+    },
+    // 目标站点自己的码。与上一列分开是这两列存在的全部意义：上一列是 scrapper 回给我方的，
+    // 取回失败恒 502、超时恒 504，光看它永远分不出"412 被反爬拦下"和"连不上/DNS 挂了"
+    {
+      field: "targetStatus",
+      title: "目标状态",
+      width: 100,
+      slots: { default: "targetStatus", header: "targetStatusHeader" },
+    },
     {
       field: "layerUsed",
       title: "抓取层",
@@ -422,15 +471,59 @@ function reset() {
           <ElTag v-if="row.success" type="success" size="small"> 成功 </ElTag>
           <ElTooltip v-else-if="row.errorMsg" placement="top">
             <template #content>
-              <div class="max-w-md whitespace-pre-wrap text-xs leading-relaxed">{{ row.errorMsg }}</div>
+              <div class="max-w-md space-y-1 text-xs leading-relaxed">
+                <!-- 错误码单独拎出来：errorMsg 里虽然也带着它，但那是一整段自由文本，
+                     而"这属于哪一类失败"是看一眼就该得到的结论 -->
+                <div v-if="row.errorCode">
+                  <span class="font-mono text-gray-300">{{ row.errorCode }}</span>
+                  <span v-if="errorCodeDescOf(row)"> · {{ errorCodeDescOf(row) }}</span>
+                </div>
+                <div class="whitespace-pre-wrap">{{ row.errorMsg }}</div>
+              </div>
             </template>
             <ElTag class="cursor-help" type="danger" size="small"> 失败 </ElTag>
           </ElTooltip>
           <!-- 失败但没留下 errorMsg：不挂空 tooltip，免得鼠标停上去弹一个空框 -->
           <ElTag v-else type="danger" size="small"> 失败 </ElTag>
         </template>
+        <template #httpStatusHeader="{ column }">
+          <ElTooltip placement="top">
+            <template #content>
+              <div class="max-w-md text-xs leading-relaxed">
+                <span class="font-medium">scrapper 回给我方</span>的状态码，不是目标站点的：
+                取回失败恒为 502、超时恒为 504、我方能力不可用恒为 503。
+                目标站点发生了什么看右边的「目标状态」列
+              </div>
+            </template>
+            <span class="cursor-help underline decoration-dotted underline-offset-4">
+              {{ column.title }}
+            </span>
+          </ElTooltip>
+        </template>
         <template #httpStatus="{ row }">
           <span :class="httpStatusClassOf(row)" class="font-mono">{{ row.httpStatus ?? "-" }}</span>
+        </template>
+        <template #targetStatusHeader="{ column }">
+          <ElTooltip placement="top">
+            <template #content>
+              <div class="max-w-md text-xs leading-relaxed">
+                <span class="font-medium">目标站点</span>的最终 HTTP 状态码。
+                403/406/412/429 是「连上了但被拒」（反爬），为空是「连接压根没建立」（DNS/连不上/超时）——
+                两者处置完全相反，而只有这一列分得开。<br />
+                2026-08-10 之前的历史记录没有这一列，一律显示为空
+              </div>
+            </template>
+            <span class="cursor-help underline decoration-dotted underline-offset-4">
+              {{ column.title }}
+            </span>
+          </ElTooltip>
+        </template>
+        <template #targetStatus="{ row }">
+          <ElTooltip :content="targetStatusTip(row)" placement="top">
+            <span :class="targetStatusClassOf(row)" class="cursor-help font-mono">
+              {{ row.targetStatus ?? "-" }}
+            </span>
+          </ElTooltip>
         </template>
         <template #durationMs="{ row }">
           <span :class="durationClassOf(row)" class="font-mono">{{ row.durationMs }}</span>

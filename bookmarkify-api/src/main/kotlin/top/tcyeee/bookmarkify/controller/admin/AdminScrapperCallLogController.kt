@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.entity.ScrapperCallLogSearchParams
 import top.tcyeee.bookmarkify.entity.ScrapperCallLogVO
+import top.tcyeee.bookmarkify.entity.ScrapperFailedHostParams
+import top.tcyeee.bookmarkify.entity.ScrapperFailedHostVO
 import top.tcyeee.bookmarkify.server.IScrapperCallLogService
 
 @RestController
@@ -20,4 +22,11 @@ class AdminScrapperCallLogController(
     @PostMapping("/all")
     fun getAllLogs(@RequestBody params: ScrapperCallLogSearchParams): IPage<ScrapperCallLogVO> =
         scrapperCallLogService.adminListAll(params)
+
+    /**
+     * 失败站点排行。不分页 —— 见 [ScrapperFailedHostParams] 的类注释。
+     */
+    @PostMapping("/failed-host-ranking")
+    fun failedHostRanking(@RequestBody params: ScrapperFailedHostParams): List<ScrapperFailedHostVO> =
+        scrapperCallLogService.failedHostRanking(params)
 }

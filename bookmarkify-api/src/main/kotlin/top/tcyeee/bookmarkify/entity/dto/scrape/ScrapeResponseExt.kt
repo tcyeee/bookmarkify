@@ -6,6 +6,7 @@ import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.server.asset.AssetRolePolicy
 import top.tcyeee.bookmarkify.utils.OssUtils
+import java.net.URI
 import java.time.LocalDateTime
 
 /**
@@ -93,4 +94,35 @@ fun ScrapeResponse.applyTo(bookmark: PageEntity): PageEntity = bookmark.apply {
     parseErrMsg = null
     antiCrawlerBlocked = diagnostics.antiCrawler?.detected == true
     updateTime = LocalDateTime.now()
+    this@applyTo.upgradedSchemeOf(this)?.let {
+        log.info(
+            "[applyTo] 抓取落地在 https，升级页面协议: pageId=$id, urlHost=$urlHost, {}->{}, finalUrl={}",
+            urlScheme, it, this@applyTo.fetch.finalUrl,
+        )
+        urlScheme = it
+    }
+}
+
+/**
+ * 抓取跟随重定向后真正落地的协议，仅在它比库里记着的更安全时给出。
+ *
+ * `page.urlScheme` 来自用户当初提交的那个网址（`WebsiteParser.urlWrapper` 解析 raw URL），
+ * 此前**从不回写**。于是一条当年用 `http://` 收藏、站点后来全站上了 https 的书签，会永远
+ * 以 http 为抓取目标：`page.rawUrl` 是拿这一列拼出来的，每一次抓取和活性探测都要先白吃一跳
+ * 301，后台的「协议」列和 `site.rootUrl` 也跟着一直是错的。而终点其实一直在
+ * `fetch.finalUrl` 里躺着，只是没人读。
+ *
+ * 判据刻意收得很紧：
+ * - **只升不降。** https 的记录被某一次落在 http 的抓取改写，等于把抓取目标往回退一档；
+ *   真正只有 http 的站点本来就记着 http，无事可做。
+ * - **authority 必须完全一致。** `example.com` 跳到 `www.example.com` 说明这条记录指向的
+ *   根本是另一个 host，那是 canonical 重定向要解决的问题，改一个 scheme 字段只会把
+ *   「记错了地址」伪装成「记对了」。scheme 不参与 page 的去重四元组
+ *   （见 [PageEntity]），所以单独改它不会造成重复页面；改 host 则会。
+ */
+private fun ScrapeResponse.upgradedSchemeOf(page: PageEntity): String? {
+    if (!page.urlScheme.equals("http", ignoreCase = true)) return null
+    val final = runCatching { URI(fetch.finalUrl) }.getOrNull() ?: return null
+    if (!"https".equals(final.scheme, ignoreCase = true)) return null
+    return if (final.authority == page.urlHost) "https" else null
 }

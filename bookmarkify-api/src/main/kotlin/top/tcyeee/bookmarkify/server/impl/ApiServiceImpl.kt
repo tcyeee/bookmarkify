@@ -170,7 +170,13 @@ class ApiServiceImpl(
             // scrapper 判定后以 HTTP 错误码回报的。以前这里一律记成 E304「域名无法访问」，
             // 本地没起 scrapper 时就会把"服务没开"误报成"这个网站挂了"
             val msg = "无法连接抓取服务 $endpoint :: ${it.message ?: it.toString()}$scrapperStartupHint"
-            logScrapperCall(url, startedAt, success = false, httpStatus = null, errorMsg = msg)
+            // 错误码这里是**我方自造**的，不是契约里的取值——scrapper 一个字节都没回，没有码可抄。
+            // 造一个而不是留空，是因为排行页按 error_code 分组：留空会让「我方服务挂了」这一类
+            // 混进 null 桶里，与历史行无从区分，而它恰恰是最不该按站点去归因的一类
+            logScrapperCall(
+                url, startedAt, success = false, httpStatus = null, errorMsg = msg,
+                errorCode = "SCRAPPER_UNREACHABLE",
+            )
             throw CommonException(ErrorType.E307, msg)
         }
 
@@ -201,6 +207,13 @@ class ApiServiceImpl(
                 // 空串，不是 null，回退分支根本不会走到
                 layerUsed = json?.path("layerUsed")?.takeIf { it.isTextual }?.asText()
                     ?: json?.path("fetch")?.path("layerUsed")?.takeIf { it.isTextual }?.asText(),
+                errorCode = code,
+                // 目标站点自己的状态码，和上面那个 httpStatus（scrapper 回给我们的码）是两件事：
+                // FETCH_FAILED 恒为 502、TIMEOUT 恒为 504，只看那一列永远分不出「412 被反爬拦下」
+                // 和「连不上/DNS 挂了」。用 canConvertToInt 而不是 asInt()：字段缺失时
+                // MissingNode.asInt() 给的是 0，会被当成一个真实存在的状态码存进去
+                targetStatus = json?.path("fetch")?.path("httpStatus")
+                    ?.takeIf { it.canConvertToInt() }?.asInt(),
             )
             throw CommonException(errorType, msg)
         }
@@ -209,7 +222,12 @@ class ApiServiceImpl(
             .getOrElse {
                 // 契约对不上是我方两侧代码不同步，不是目标站点的问题
                 val msg = "scrapper 响应解析失败(契约不匹配) :: ${it.message?.take(200)}"
-                logScrapperCall(url, startedAt, success = false, httpStatus = httpResponse.status, errorMsg = msg)
+                // 同样是我方自造的码：契约对不上是两侧代码不同步，与目标站点无关。它在排行页里
+                // 必须能一眼认出来——按站点去查一个其实每个站点都会中的问题，是纯粹的浪费
+                logScrapperCall(
+                    url, startedAt, success = false, httpStatus = httpResponse.status, errorMsg = msg,
+                    errorCode = "CONTRACT_MISMATCH",
+                )
                 throw CommonException(ErrorType.E307, msg)
             }
 
@@ -236,6 +254,8 @@ class ApiServiceImpl(
         cached: Boolean? = null,
         layerUsed: String? = null,
         errorMsg: String? = null,
+        errorCode: String? = null,
+        targetStatus: Int? = null,
     ) {
         runCatching {
             scrapperCallLogMapper.insert(
@@ -244,6 +264,8 @@ class ApiServiceImpl(
                     urlHost = runCatching { WebsiteParser.urlWrapper(url).urlHost }.getOrDefault(url),
                     success = success,
                     httpStatus = httpStatus,
+                    errorCode = errorCode,
+                    targetStatus = targetStatus,
                     source = source,
                     cached = cached,
                     layerUsed = layerUsed,
