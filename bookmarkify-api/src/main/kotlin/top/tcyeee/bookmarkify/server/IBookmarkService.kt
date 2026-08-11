@@ -23,7 +23,6 @@ import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchVO
 import top.tcyeee.bookmarkify.entity.CategoryVO
 import top.tcyeee.bookmarkify.entity.BookmarkImportPreviewVO
-import top.tcyeee.bookmarkify.entity.SweepPreviewVO
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 
@@ -38,9 +37,6 @@ interface IBookmarkService : IService<PageEntity> {
      * 也兜底 addOne 丢失的解析事件。按线程池空闲队列容量决定投递量，跑在调度线程上。
      */
     fun drainStuckLoading()
-
-    /** 定时扫描 UNREACHABLE 书签（含已认证）：ping 通后重新触发解析，结果写入 bookmark_ping_log；异步执行，不占用调度线程 */
-    fun retryUnreachableBookmarks()
 
     /**
      * 抓取成功后的元数据富化（分类打标 + NSFW 判定，均为 DeepSeek 调用）。
@@ -71,25 +67,6 @@ interface IBookmarkService : IService<PageEntity> {
      */
     fun coverOf(linkId: String, uid: String): String?
 
-    /** 定时扫描 SUCCESS 书签（含已认证）做活性复查，结果写入 bookmark_ping_log；异步执行，不占用调度线程 */
-    fun livenessCheckStaleBookmarks()
-
-    /**
-     * 手动触发一轮巡检之前的预览：这一轮会覆盖哪些书签、探几次、大概多久、会不会改判失联。
-     *
-     * 用的是与真正开跑**同一套**候选查询，所以数字对得上；但它只读不写，也不占巡检锁。
-     *
-     * @param taskLabel 只接受仍在运行的两个任务，其余（含已下线的 reviveArchivedBookmarks）抛 E102
-     */
-    fun sweepPreview(taskLabel: String): SweepPreviewVO
-
-    /**
-     * 巡检锁当前是否被占着。手动触发前用它给出「上一轮还在跑」的提示。
-     *
-     * **只用于展示**：与真正的 acquire 之间有竞态，互斥仍由巡检自己的 SETNX 保证。
-     */
-    fun isSweepRunning(taskLabel: String): Boolean
-
     /** 添加书签并异步检查 */
     fun addOne(url: String, uid: String): UserLayoutNodeVO
 
@@ -117,56 +94,6 @@ interface IBookmarkService : IService<PageEntity> {
 
     /** 导入 Chrome 书签；skipUrls 为用户选择跳过的完整 URL 集合；返回创建好的 LOADING 占位节点列表 */
     fun importBookmarkFile(file: MultipartFile, uid: String, skipUrls: Set<String> = emptySet()): List<UserLayoutNodeVO>
-
-    /** 管理员查询全部书签 */
-    fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO>
-
-    /** 管理员修改书签图标设置（图片内边距 iconPadding、图标背景色 iconBgColor） */
-    fun adminUpdateIcon(pageId: String, params: BookmarkIconUpdateParams)
-
-    /** 管理员「重新获取」：重新解析网站标题与图标但不落库，暂存抓取结果供后续应用，返回预览数据 */
-    fun adminRefetch(pageId: String): BookmarkRefetchVO
-
-    /** 管理员「书签检测」：直接调用 scrapper 重新抓取一次，回传其给出的全部字段，并同步落库 isActivity/parseStatus */
-    fun adminCheckLiveness(pageId: String): BookmarkLivenessVO
-
-    /** 管理员应用「重新获取」的结果：按选择采用新标题/新图标并持久化（采用新图标会重抓高清 LOGO 到 OSS） */
-    fun adminApplyRefetch(pageId: String, params: BookmarkRefetchApplyParams): BookmarkAdminVO
-
-    /** 管理员「一键更新」：重新抓取网站信息并直接覆盖持久化标题/简介/图标/高清 LOGO，同步落库 isActivity/parseStatus */
-    fun adminRefresh(pageId: String): BookmarkAdminVO
-
-    /**
-     * 管理员「图片资产 · 重新抓取」：只重抓图片，不覆盖标题/简介、不解锁人工锁、不改动书签活性。
-     *
-     * 本次没抓到图时保留库中现有图片（由 SiteAssetWriter 保证），所以"抓不到"不会把已有图片清空。
-     */
-    fun adminRefetchAssets(pageId: String): BookmarkAssetRefetchVO
-
-    /**
-     * 「网站管理」页任意 URL 活性检测在抓取成功后的落库同步：仅当该 URL 已对应某条 canonical 书签(按
-     * urlHost+urlPath 匹配)时才生效，覆盖持久化标题/简介/图标/高清 LOGO，同步落库 isActivity/parseStatus；
-     * 未命中已有书签时不新建记录，也不落库。返回是否实际同步了某条书签。
-     */
-    fun adminSyncFromExternalScrape(url: String, vo: ScrapeResponse): Boolean
-
-    /** 管理员手动编辑书签基础信息（标题/简介），非空字段才会覆盖 */
-    fun adminUpdateBasicInfo(pageId: String, params: BookmarkBasicInfoUpdateParams): BookmarkAdminVO
-
-    /** 管理员手动设置某书签的分类（覆盖式），返回更新后的分类列表 */
-    fun adminUpdateCategories(pageId: String, categoryIds: List<String>): List<CategoryVO>
-
-    /** 管理员对某书签重新跑一次 DeepSeek 自动归类，返回更新后的分类列表 */
-    fun adminRecategorize(pageId: String): List<CategoryVO>
-
-    /** 管理员：AI 推荐与该书签相似的网站（仅展示，回填 exists 标记本地是否已收录） */
-    fun adminSimilarSites(pageId: String): List<SimilarSite>
-
-    /** 管理员「一键收录」：异步顺序收录相似网站域名，逐站通过 WebSocket 回推进度（抓取失败=幻觉，删除并跳过） */
-    fun adminIngestSimilar(adminUid: String, domains: List<String>)
-
-    fun adminGenerateAppName(pageId: String): String?
-
     /** 解析书签,然后保存到数据库,同时通过 WebSocket 通知用户（异步事件入口） */
     fun parseAndNotice(uid: String, pageId: String, userLinkId: String, nodeId: String)
 

@@ -54,6 +54,16 @@ dependencies {
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit5'
     testImplementation 'org.springframework:spring-webflux'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // 真实 PostgreSQL 实例（下载官方二进制在本地起进程），用于验证那些**只有数据库才能保证**
+    // 的约束：部分唯一索引的谓词、并发插入的收敛、事务回滚。见 PageConstraintTest。
+    // 选 zonky 而不是 Testcontainers：后者要求本机有 Docker，而这套约束的验证不该被
+    // "开发机上装没装 Docker" 挡住 —— 一个跑不起来的测试等于没有测试。
+    testImplementation 'io.zonky.test:embedded-postgres:2.0.7'
+    testImplementation enforcedPlatform('io.zonky.test.postgres:embedded-postgres-binaries-bom:16.2.0')
+    // Apple Silicon 的二进制不在 zonky 的默认依赖里，要显式加；缺了它在 M 系机器上起不来
+    testRuntimeOnly 'io.zonky.test.postgres:embedded-postgres-binaries-darwin-arm64v8'
+    testRuntimeOnly 'io.zonky.test.postgres:embedded-postgres-binaries-linux-arm64v8'
 }
 
 kotlin {
@@ -67,4 +77,18 @@ tasks.named('test') {
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
     }
+}
+
+/**
+ * 从 Kotlin 枚举生成两端前端共用的 TS 定义（写进 bookmarkify-web / bookmarkify-admin 的源码树）。
+ *
+ * 生成物是**检入仓库**的，不是构建期产物：前端 CI 不跑 Gradle，拿不到这一步；而检入之后，
+ * 后端加一个枚举取值会在 diff 里表现为"前端也跟着变了一行"，评审时一眼可见。
+ * 一致性由 `SharedEnumContractTest` 守着，改了 Kotlin 却忘了重新生成就是红灯。
+ */
+tasks.register('generateSharedEnums', JavaExec) {
+    group = 'contract'
+    description = '重新生成 bookmarkify-web / bookmarkify-admin 的 enums.generated.ts'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'top.tcyeee.bookmarkify.contract.SharedEnumGenerator'
 }

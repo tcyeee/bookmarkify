@@ -109,7 +109,14 @@ export default defineNuxtConfig({
     '~/plugins/contextMenu.ts',
     '~/plugins/auth.ts',
     '~/plugins/analytics.client.ts',
+    '~/plugins/version.client.ts',
   ],
+  experimental: {
+    // 新版本探测间隔。默认 1 小时，对一个「开着不关」的书签桌面来说太久：
+    // 用户可能一整天都停在旧版上。5 分钟一次的成本是一个几十字节的 latest.json。
+    // 探测到之后的处理见 plugins/version.client.ts。
+    checkOutdatedBuildInterval: 5 * 60 * 1000,
+  },
   vite: {
     // 按需从 @iconify-json/* 打包图标（如 mdi），只编译代码中实际用到的图标，
     // 避免像 memory 图标集那样把整套 icon 集合全量塞进运行时 bundle。

@@ -72,18 +72,9 @@ export enum PageTurnMode {
 
 export enum FunctionType { SETTING = 'SETTING' }
 
-// 书签链接类型：域名(正常网站) / 本地(localhost、127.0.0.1) / IP地址 / 其他(预留)
-export enum BookmarkLinkType {
-  DOMAIN = 'DOMAIN',
-  LOCAL = 'LOCAL',
-  IP = 'IP',
-  OTHER = 'OTHER',
-}
-
-export enum ShareStatus {
-  NORMAL = 'NORMAL',
-  EXPIRED = 'EXPIRED',
-  CANCELLED = 'CANCELLED',
-  ADMIN_TAKEDOWN = 'ADMIN_TAKEDOWN',
-  REVIEW_REJECTED = 'REVIEW_REJECTED',
-}
+// ── 以下枚举由后端拥有，从生成物里转出，不要在本文件里手写 ──
+//
+// 本文件上面那些是**前端自己的**枚举（渲染模式、Socket 消息名、布局偏好…），后端不认识它们，
+// 手写是对的。而下面这几个是接口契约的一部分：后端加一个取值，手抄的这份不会有任何提示，
+// 那个取值只会在界面上静默变成空白。生成与校验见 bookmarkify-api 的 SharedEnumGenerator。
+export { BookmarkLinkType, ShareStatus } from './enums.generated'

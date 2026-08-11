@@ -10,8 +10,9 @@
     "build:analyze": "VITE_VISUALIZER=true pnpm vite build --mode production",
     "dev": "pnpm vite --mode development",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit --skipLibCheck",
-    "postinstall": "pnpm -r run stub --if-present"
+    "typecheck": "node scripts/typecheck.mjs",
+    "postinstall": "pnpm -r run stub --if-present",
+    "typecheck:raw": "vue-tsc --noEmit --skipLibCheck"
   },
   "imports": {
     "#/*": "./src/*"

@@ -18,6 +18,7 @@ import top.tcyeee.bookmarkify.entity.dto.WebsiteLivenessCheckParams
 import top.tcyeee.bookmarkify.entity.dto.WebsiteLivenessCheckVO
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.server.admin.IBookmarkAdminService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.repair.DeepLinkSplitRepair
 
@@ -31,6 +32,7 @@ import top.tcyeee.bookmarkify.server.repair.DeepLinkSplitRepair
 class AdminWebsiteController(
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val bookmarkService: IBookmarkService,
+    private val bookmarkAdminService: IBookmarkAdminService,
     private val apiService: IApiService,
     private val deepLinkSplitRepair: DeepLinkSplitRepair,
 ) {
@@ -67,7 +69,7 @@ class AdminWebsiteController(
     fun checkLiveness(@RequestBody params: WebsiteLivenessCheckParams): WebsiteLivenessCheckVO =
         runCatching { apiService.queryWebsiteInfo(params.url) }.fold(
             onSuccess = { vo ->
-                val synced = bookmarkService.adminSyncFromExternalScrape(params.url, vo)
+                val synced = bookmarkAdminService.adminSyncFromExternalScrape(params.url, vo)
                 WebsiteLivenessCheckVO(
                     success = true,
                     title = vo.title,
