@@ -30,6 +30,7 @@ import top.tcyeee.bookmarkify.mapper.SiteMapper
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 import java.time.Duration
 import java.time.LocalDateTime
+import kotlin.reflect.KClass
 
 /**
  * 清理**无人引用**的页面与站点。
@@ -82,9 +83,61 @@ class OrphanCleanupService(
     private val siteDisplayPrefMapper: SiteDisplayPrefMapper,
 ) {
 
+    /** [OWNERSHIP_REGISTRY] 里一张表的处置方式。 */
+    sealed interface Disposition {
+        /** 随所属的页面/站点一起删（本服务的 `purge` 调用里必然有它一行） */
+        data object Cascade : Disposition
+
+        /** 刻意**不**删，[why] 说明为什么这不是遗漏 */
+        data class Retained(val why: String) : Disposition
+    }
+
     companion object {
         /** IN 列表的分片大小，取值理由同 `OssReconcileServiceImpl.CHUNK` */
         private const val CHUNK = 500
+
+        /**
+         * **按 `page_id` / `site_id` 归属的每一张表，都必须在这里登记。**
+         *
+         * ## 为什么需要这么一份清单
+         *
+         * 库里没有一条指向 `page` / `site` 的外键约束（`deploy/schema.sql` 里只有
+         * `background_config` 那两条），所以级联删除完全是这个类逐个 `purge` 调用堆出来的。
+         * 漏掉一张表**不会报任何错**：删完之后库里静静躺着一批 `page_id` 指向不存在页面的行，
+         * 没有任何入口能看见它们，也没有任何查询会失败。
+         *
+         * 这与 `OssReconcileServiceImpl.collectReferencedKeys` 是同一类陷阱、方向相反：
+         * 那边漏登记会把还在用的对象**误删**，这边漏登记会把该删的行**留下**。
+         *
+         * ## 这份清单为什么是数据而不是注释
+         *
+         * 原先它是一段说明「记得同步更新」的文字。文字管不住人，而这件事恰好可以让编译器和
+         * 测试去管：`RegistryCoverageTest` 反射扫描全部 `@TableName` 实体，凡是带
+         * `pageId` / `siteId` 属性却不在本表里的，直接红灯。新增一张归属表时，测试会在你
+         * 想起这段注释之前先失败 —— 那才是它真正起作用的时刻。
+         *
+         * [Disposition.Retained] 是一等公民而不是"从清单里省略"：**不删**同样是一个需要理由的
+         * 决定，省略掉它就无法区分"想过了，不该删"与"压根没想到这张表"。
+         */
+        val OWNERSHIP_REGISTRY: Map<KClass<*>, Disposition> = mapOf(
+            // ── 随页面一起删 ──
+            PageMetaEntity::class to Disposition.Cascade,
+            ScrapeSnapshotEntity::class to Disposition.Cascade,
+            PagePingLogEntity::class to Disposition.Cascade,
+            PageCategory::class to Disposition.Cascade,
+            // 归属其实是 (ownerType, ownerId)，pageId 只是溯源列；两种归属都由 purgeAssets 覆盖
+            SiteAssetEntity::class to Disposition.Cascade,
+            // 键是 (site_id, display_mode)，随站点删
+            SiteDisplayPrefEntity::class to Disposition.Cascade,
+            // 页面自己：带 site_id，站点删光名下页面才轮得到它
+            PageEntity::class to Disposition.Cascade,
+
+            // ── 刻意不删 ──
+            BookmarkEntity::class to Disposition.Retained(
+                "它是引用方，不是附属行。只要有一行 bookmark 指向这个页面，页面就算「有人收藏」，" +
+                    "压根走不到删除那一步 —— 反过来按 page_id 去删 bookmark，等于替用户把书签删了"
+            ),
+        )
 
         /**
          * 页面的"保护期"：创建时间在这个窗口内的一律不删。

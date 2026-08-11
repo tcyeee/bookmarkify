@@ -20,14 +20,15 @@ import top.tcyeee.bookmarkify.entity.SweepTriggerParams
 import top.tcyeee.bookmarkify.entity.SweepTriggerResultVO
 import top.tcyeee.bookmarkify.entity.entity.SweepLogEntity
 import top.tcyeee.bookmarkify.server.IBookmarkPingLogService
-import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.server.liveness.ILivenessSweepService
+import top.tcyeee.bookmarkify.server.liveness.LivenessSweepService
 
 @RestController
 @SaCheckRole(value = ["ADMIN"], type = "ADMIN")
 @RequestMapping("/admin/bookmark-ping-log")
 class AdminBookmarkPingLogController(
     private val bookmarkPingLogService: IBookmarkPingLogService,
-    private val bookmarkService: IBookmarkService,
+    private val livenessSweepService: ILivenessSweepService,
 ) {
 
     @PostMapping("/all")
@@ -59,14 +60,14 @@ class AdminBookmarkPingLogController(
      */
     @GetMapping("/sweep-preview")
     fun previewSweep(@RequestParam taskLabel: String): SweepPreviewVO =
-        bookmarkService.sweepPreview(taskLabel)
+        livenessSweepService.sweepPreview(taskLabel)
 
     /**
      * 手动触发一轮巡检。
      *
      * ## 几件必须写在这里的事
      *
-     * **执行体必须从代理上调。** 两个巡检方法都标了 `@Async`，走 [bookmarkService] 这个注入进来的
+     * **执行体必须从代理上调。** 两个巡检方法都标了 `@Async`，走 [livenessSweepService] 这个注入进来的
      * 代理才会真的异步；在 Service 内部自调用会绕开代理，变成在 HTTP 线程上同步跑一轮 200 条探测。
      *
      * **[SweepPreviewVO.running] 的检查是尽力而为。** 这里读到"没在跑"之后、巡检真正 acquire 之前，
@@ -81,13 +82,13 @@ class AdminBookmarkPingLogController(
     fun triggerSweep(@RequestBody params: SweepTriggerParams): SweepTriggerResultVO {
         // 先校验任务名，再看锁：预览拿不到 spec 会抛 E102，这里的语义要一致，
         // 不能让一个拼错的任务名走到"已受理"
-        val preview = bookmarkService.sweepPreview(params.taskLabel)
+        val preview = livenessSweepService.sweepPreview(params.taskLabel)
         if (preview.running) {
             return SweepTriggerResultVO(accepted = false, message = "上一轮「${params.taskLabel}」仍在进行，本次未触发")
         }
         when (params.taskLabel) {
-            "livenessCheckStaleBookmarks" -> bookmarkService.livenessCheckStaleBookmarks()
-            "retryUnreachableBookmarks" -> bookmarkService.retryUnreachableBookmarks()
+            LivenessSweepService.TASK_LIVENESS_CHECK -> livenessSweepService.livenessCheckStaleBookmarks()
+            LivenessSweepService.TASK_RETRY_UNREACHABLE -> livenessSweepService.retryUnreachableBookmarks()
             // sweepPreview 已经挡掉了未知任务名，走不到这里
             else -> throw CommonException(ErrorType.E102)
         }

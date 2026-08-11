@@ -18,7 +18,9 @@ export interface CategoryVO {
  * - UNREACHABLE 抓取失败，可能是暂时性故障，仍在按退避曲线重试
  * - ARCHIVED    连续失败达到阈值，已停止巡检（管理员手动刷新/检测可让它回到上面两态）
  */
-export type BookmarkParseStatus = 'ARCHIVED' | 'PENDING' | 'SUCCESS' | 'UNREACHABLE';
+import type { BookmarkParseStatus } from '#/api/enums.generated';
+
+export type { BookmarkParseStatus };
 
 export interface SimilarSite {
   name: string;
@@ -29,11 +31,17 @@ export interface SimilarSite {
 }
 
 /** 图片用途：由后端从 scrapper 报告的 extractor 推导而来 */
-export type AssetRole = 'FAVICON' | 'LOGO' | 'SCREENSHOT' | 'SOCIAL';
+import type { AssetRole } from '#/api/enums.generated';
+
+export type { AssetRole };
 /** 可信度：TRUSTED=来源语义明确；DEGRADED=借用其它用途的图凑数 */
-export type AssetQuality = 'DEGRADED' | 'TRUSTED';
+import type { AssetQuality } from '#/api/enums.generated';
+
+export type { AssetQuality };
 /** 展示模式：TILE=大图+短名，LIST=小图+全名 */
-export type DisplayMode = 'LIST' | 'TILE';
+import type { DisplayMode } from '#/api/enums.generated';
+
+export type { DisplayMode };
 
 /**
  * 资产归属层级。
@@ -42,7 +50,9 @@ export type DisplayMode = 'LIST' | 'TILE';
  * 产品」（它声明的图标与站点现有图标字节毫无交集，如 `tools.x.com/tools/a` 与 `/tools/b`）
  * 时，它的图标才会是 PAGE。社交图与截图天然是 PAGE。
  */
-export type AssetOwnerType = 'PAGE' | 'SITE';
+import type { AssetOwnerType } from '#/api/enums.generated';
+
+export type { AssetOwnerType };
 
 /** 单张图片资产（site_asset，一行一图） */
 export interface SiteAsset {
@@ -199,7 +209,9 @@ export interface BookmarkEntity {
 }
 
 /** 管理员手工改过、自动抓取不允许覆盖的字段 */
-export type BookmarkLockedField = 'APP_NAME' | 'DESCRIPTION' | 'TITLE';
+import type { BookmarkLockedField } from '#/api/enums.generated';
+
+export type { BookmarkLockedField };
 
 export interface BookmarkSearchParams {
   name?: string;

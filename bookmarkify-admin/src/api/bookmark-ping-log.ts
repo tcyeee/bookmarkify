@@ -4,7 +4,9 @@ import { requestClient } from '#/api/request';
  * 探测结论。UNKNOWN = 我方链路（抓取服务/鉴权/限流）有问题，这一轮对该站点没有结论，
  * 不会改动书签状态 —— 与「站点确实失联(DEAD)」是两回事。
  */
-export type PingOutcome = 'ALIVE' | 'DEAD' | 'UNKNOWN';
+import type { PingOutcome } from '#/api/enums.generated';
+
+export type { PingOutcome };
 
 export interface BookmarkPingLogVO {
   id: string;

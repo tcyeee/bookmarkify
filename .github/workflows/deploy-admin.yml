@@ -63,6 +63,20 @@ jobs:
             echo "VITE_ARCHIVER=false"
           } > .env.production.local
 
+      # `vite build` strips types without reading them, so a broken type ships
+      # silently — same reason the web workflow runs this before its build.
+      #
+      # This step was impossible until 2026-08-11: `pnpm typecheck` reported a
+      # constant 129 errors, so it could never block anything. 122 of those were
+      # element-plus's on-demand `style/css` subpaths shipping no .d.ts (fixed by
+      # src/element-plus-style.d.ts); the remaining 7 all live in the vendored
+      # vben sources under packages/, which we did not write. scripts/typecheck.mjs
+      # therefore fails on src/ errors only and prints the vendored ones without
+      # blocking — see that file for why excluding them via tsconfig doesn't work.
+      - name: Type check
+        working-directory: bookmarkify-admin
+        run: pnpm typecheck
+
       # Builds the (pruned, web-ele-only) app in production mode → dist/
       # (hash router, so a single /index.html SPA fallback covers every route).
       - name: Build admin

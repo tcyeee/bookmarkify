@@ -25,6 +25,7 @@ import top.tcyeee.bookmarkify.server.IOssReconcileService
 import top.tcyeee.bookmarkify.utils.OssUtils
 import java.time.Duration
 import java.time.LocalDateTime
+import kotlin.reflect.KClass
 
 /**
  * OSS 对账实现，契约见 [IOssReconcileService]。
@@ -325,4 +326,56 @@ class OssReconcileServiceImpl(
         }
         return allOk
     }
+}
+
+/**
+ * **每一个持有对象存储引用的字段，都必须在这里登记。**
+ *
+ * ## 这份清单管的是什么
+ *
+ * [OssReconcileServiceImpl.collectReferencedKeys] 是"哪些对象还在用"的**唯一**判据，而它是
+ * 一段手写的、逐个引用方查过去的代码。漏掉一处的后果不是统计不准，是**把还在使用的对象删掉**
+ * ——`bookmarkify.oss.reclaim-orphans` 打开时，那个对象会在宽限期后被真的从桶里抹掉，
+ * 而用户侧的表现是头像/背景/图标某天突然变成裂图，且没有任何数据能把它找回来。
+ *
+ * `FILE-SYSTEM-REFACTOR.md` D5 之所以选"对账"而不是"在 `oss_object` 上维护 ref_count 列"，
+ * 正是因为漏改在这里只有**一处**；代价则是这一处必须真的不漏。所以把它从注释升级成数据：
+ * `RegistryCoverageTest` 反射扫描全部 `@TableName` 实体，凡是带 `*fileId` 属性却没在
+ * 本表里登记的，直接红灯。
+ *
+ * 这与 [top.tcyeee.bookmarkify.server.repair.OrphanCleanupService.OWNERSHIP_REGISTRY] 是同一类
+ * 陷阱、方向相反：那边漏登记会把该删的行**留下**（脏数据，可事后清理），这边漏登记会把还在用的
+ * 对象**误删**（不可逆）。两处的严重性不对称，但都没有任何症状来提示违反。
+ *
+ * ## 不在这张表里的第五个引用方
+ *
+ * 系统默认背景图**在库里没有任何行**，只能按 `defaultImgBacById` 的同一套约定拼出 key
+ * （见 `collectReferencedKeys` 末尾）。它没有实体类，因此也无法被反射发现 —— 这正是它
+ * 最危险的地方，也是它必须被写在这段注释里的原因。
+ */
+object OssReferrerRegistry {
+
+    /**
+     * 实体类 → 该实体上持有 `oss_object.id` 的属性名。
+     *
+     * 值是**属性名**而不是列名：测试用反射比对的是 Kotlin 属性，而列名要经 MyBatis-Plus 的
+     * 驼峰转换才对得上，多一层转换就多一处可能对不齐的地方。
+     */
+    val LEDGER_ID_FIELDS: Map<KClass<*>, Set<String>> = mapOf(
+        UserInfoEntity::class to setOf("avatarFileId"),
+        BackgroundImageEntity::class to setOf("fileId"),
+        SiteAssetEntity::class to setOf("fileId"),
+    )
+
+    /**
+     * 登记了、但**刻意不参与**引用统计的字段，附理由。
+     *
+     * 与 `OrphanCleanupService` 那边同理：「不算引用」也是一个需要理由的决定，
+     * 从清单里省略掉就无法区分"想过了"与"没想到"。
+     */
+    val EXCLUDED: Map<KClass<*>, Map<String, String>> = mapOf(
+        OssObjectEntity::class to mapOf(
+            "id" to "它就是账本自己的主键，不是指向账本的引用 —— 把它算成引用等于所有对象永远非孤儿",
+        ),
+    )
 }

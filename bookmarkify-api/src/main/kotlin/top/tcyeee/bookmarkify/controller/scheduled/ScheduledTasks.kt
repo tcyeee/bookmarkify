@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.server.IBookmarkPingLogService
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IOssReconcileService
+import top.tcyeee.bookmarkify.server.liveness.ILivenessSweepService
 import top.tcyeee.bookmarkify.server.asset.SiteAssetWriter
 
 /**
@@ -45,6 +46,7 @@ class ScheduledTasks(
     private val bookmarkService: IBookmarkService,
     private val bookmarkPingLogService: IBookmarkPingLogService,
     private val ossReconcileService: IOssReconcileService,
+    private val livenessSweepService: ILivenessSweepService,
     private val siteAssetWriter: SiteAssetWriter,
 ) {
     @Description("每5分钟对账一次未完成解析的书签")
@@ -68,11 +70,11 @@ class ScheduledTasks(
      */
     @Description("每小时(半点)重试到期的 UNREACHABLE 书签：ping 通则触发重新抓取，结果写入 bookmark_ping_log")
     @Scheduled(cron = "0 30 * * * ?")
-    fun retryUnreachableBookmarks() = bookmarkService.retryUnreachableBookmarks()
+    fun retryUnreachableBookmarks() = livenessSweepService.retryUnreachableBookmarks()
 
     @Description("每小时(整点)巡检到期的 SUCCESS 书签：探测存活情况并按「内容重新抓取间隔」刷新内容，结果写入 bookmark_ping_log")
     @Scheduled(cron = "0 0 * * * ?")
-    fun livenessCheckStaleBookmarks() = bookmarkService.livenessCheckStaleBookmarks()
+    fun livenessCheckStaleBookmarks() = livenessSweepService.livenessCheckStaleBookmarks()
 
     // 「每天凌晨 2 点复活探测已归档书签」这条任务已移除。归档现在是终态：它由管理员配置的
     // 「失活网站最大重试次数」触发，到达即彻底停止巡检。出口改为按需——有新用户添加该网址时

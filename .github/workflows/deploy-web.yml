@@ -57,7 +57,22 @@ jobs:
         run: pnpm generate
 
       # rsync the static output to the dir nginx serves (/home/ubuntu/www →
-      # /var/www in the nginx container). --delete keeps the dir in sync.
+      # /var/www in the nginx container).
+      #
+      # Two passes, and the order matters in both directions:
+      #
+      #  1. `_nuxt/` first, WITHOUT --delete. These are content-hashed chunks, so
+      #     adding never conflicts. Keeping the previous build's chunks alive is
+      #     what stops an already-open tab from breaking mid-upgrade: it lazy-loads
+      #     a route chunk that no longer exists, `try_files` hands it /200.html,
+      #     and the dynamic import dies on the MIME type. Pushing assets before
+      #     HTML also closes the reverse window, where fresh HTML references a
+      #     chunk that hasn't landed yet.
+      #  2. everything else WITH --delete, so removed pages/assets really go away.
+      #     `--exclude='/_nuxt/'` is anchored to the transfer root on purpose.
+      #
+      # Stale chunks are swept after 14 days — comfortably longer than any tab
+      # stays open, and long enough that a rollback still finds its assets.
       - name: Deploy to server (rsync)
         env:
           SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
@@ -70,10 +85,25 @@ jobs:
           echo "$SSH_KEY" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -p "$SERVER_PORT" "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/id_deploy -p $SERVER_PORT -o StrictHostKeyChecking=accept-new" \
+          SSH_OPTS="ssh -i ~/.ssh/id_deploy -p $SERVER_PORT -o StrictHostKeyChecking=accept-new"
+
+          # 1) hashed build assets — add only, never delete
+          rsync -az -e "$SSH_OPTS" \
+            bookmarkify-web/.output/public/_nuxt/ \
+            "$SERVER_USER@$SERVER_HOST:/home/ubuntu/www/bookmarkify-web/_nuxt/"
+
+          # 2) everything else — keep the dir in sync
+          rsync -az --delete --exclude='/_nuxt/' -e "$SSH_OPTS" \
             bookmarkify-web/.output/public/ \
             "$SERVER_USER@$SERVER_HOST:/home/ubuntu/www/bookmarkify-web/"
+
+          # 3) sweep chunks older than 14 days. rsync -a rewrites the mtime of every
+          #    file it ships, including ones whose content didn't change, so a chunk
+          #    still referenced by the current build never ages out.
+          ssh -i ~/.ssh/id_deploy -p "$SERVER_PORT" -o StrictHostKeyChecking=accept-new \
+            "$SERVER_USER@$SERVER_HOST" \
+            'find /home/ubuntu/www/bookmarkify-web/_nuxt -type f -mtime +14 -delete;
+             find /home/ubuntu/www/bookmarkify-web/_nuxt -mindepth 1 -type d -empty -delete' || true
 
       # Push a WeChat notification via Server酱 once the deploy succeeds.
       # Set the SERVERCHAN_SENDKEY repo secret to enable; without it this is a no-op.

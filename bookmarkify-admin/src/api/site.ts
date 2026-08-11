@@ -4,10 +4,14 @@ import type { PageResult } from '#/api/bookmark-ping-log';
 import { requestClient } from '#/api/request';
 
 /** 链接类型：本地/IP 类型的站点不会再被抓取网站信息，前端只展示统一图标 */
-export type SiteLinkType = 'DOMAIN' | 'IP' | 'LOCAL' | 'OTHER';
+import type { BookmarkLinkType as SiteLinkType } from '#/api/enums.generated';
+
+export type { SiteLinkType };
 
 /** 站点级人工锁定字段：锁住的字段不会被下一轮自动抓取覆盖 */
-export type SiteLockedField = 'BRAND_NAME' | 'SHORT_NAME';
+import type { SiteLockedField } from '#/api/enums.generated';
+
+export type { SiteLockedField };
 
 /**
  * 站点（域名）视图 —— **一个域名一行**。
