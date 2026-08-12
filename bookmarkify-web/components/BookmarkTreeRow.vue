@@ -130,7 +130,8 @@ function openMenu(x: number, y: number, node: UserLayoutNodeVO) {
       },
       // 以下三项是拖拽在触屏/键盘下的替代路径 —— 拖拽用的是 HTML5 drag-and-drop，
       // 手机上根本不会触发，没有这三项手机用户无法整理书签
-      { label: '上移', icon: h(Icon, { icon: 'mdi:arrow-up', class: 'size-4' }), divided: true, disabled: positionOf(node).isFirst, onClick: () => moveWithin(node, -1) },
+      // divided 的布尔值等价于 'down'（分割线画在自己下面），这里要的是画在自己上面，必须显式写 'up'
+      { label: '上移', icon: h(Icon, { icon: 'mdi:arrow-up', class: 'size-4' }), divided: 'up', disabled: positionOf(node).isFirst, onClick: () => moveWithin(node, -1) },
       { label: '下移', icon: h(Icon, { icon: 'mdi:arrow-down', class: 'size-4' }), disabled: positionOf(node).isLast, onClick: () => moveWithin(node, 1) },
       {
         label: '移动到…',
@@ -138,7 +139,7 @@ function openMenu(x: number, y: number, node: UserLayoutNodeVO) {
         hidden: !hasMoveTargets.value,
         onClick: () => moveToFolder(node),
       },
-      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), divided: true, onClick: () => delOne(node) },
+      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), divided: 'up', onClick: () => delOne(node) },
     ],
     x,
     y,

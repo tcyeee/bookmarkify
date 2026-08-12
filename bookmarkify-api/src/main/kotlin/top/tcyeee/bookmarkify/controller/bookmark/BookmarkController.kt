@@ -116,6 +116,14 @@ class BookmarksController(
     fun update(@RequestBody params: BookmarkUpdatePrams): Boolean =
         bookmarkUserLinkService.updateOne(params, BaseUtils.uid())
 
+    // 一次点击就要占一个解析线程、跨服务发一次抓取（几秒到几十秒），节流间隔比其余写接口给得更长。
+    // 真正的去重靠解析锁（同一页面同一时刻只跑一次），这里挡的是同一用户对不同书签的连点。
+    @Throttle(interval = 3000)
+    @PostMapping("/refetch")
+    @Operation(summary = "重新抓取该书签(异步，结果经 WebSocket HOME_ITEM_UPDATE 推回)")
+    fun refetch(@RequestParam linkId: String): Boolean =
+        bookmarkService.requestRefetch(linkId, BaseUtils.uid())
+
     @Throttle
     @PostMapping("/pin")
     @Operation(summary = "置顶/取消置顶")

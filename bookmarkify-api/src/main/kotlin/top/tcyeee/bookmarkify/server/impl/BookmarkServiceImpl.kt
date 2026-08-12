@@ -728,6 +728,44 @@ class BookmarkServiceImpl(
         return showForDesktop(userLink.id).let { UserLayoutNodeVO(nodeEntity, it) }
     }
 
+    override fun requestRefetch(linkId: String, uid: String): Boolean {
+        if (linkId.isBlank() || uid.isBlank()) return false
+
+        // uid + deleted 一并进 where，同 coverOf：拿别人的 linkId 来问只能查不到，
+        // 而不是替别人触发一次抓取；已删除的书签同样不该还能触发（本项目没配逻辑删除）
+        val link = bookmarkUserLinkMapper.selectOne(
+            KtQueryWrapper(BookmarkEntity::class.java)
+                .eq(BookmarkEntity::id, linkId)
+                .eq(BookmarkEntity::uid, uid)
+                .eq(BookmarkEntity::deleted, false)
+        ) ?: run {
+            log.debug("[requestRefetch] 书签不存在或不属于该用户，忽略: linkId=$linkId, uid=$uid")
+            return false
+        }
+
+        // 'LOADING' 是批量导入写下的占位（见 BookmarkEntity 的导入构造器），它还没绑定 canonical 页面。
+        // 这类记录的重抓入口是 drainStuckLoading，不是这里——按 pageId='LOADING' 去 selectById 只会
+        // 查不到，与「页面已被清理」混作一谈
+        val pageId = link.pageId?.takeIf { it.isNotBlank() && it != "LOADING" } ?: run {
+            log.debug("[requestRefetch] 该书签尚未绑定 canonical 页面，忽略: linkId=$linkId")
+            return false
+        }
+        val page = baseMapper.selectById(pageId) ?: run {
+            log.debug("[requestRefetch] canonical 页面已不存在，忽略: pageId=$pageId, linkId=$linkId")
+            return false
+        }
+
+        // 本机/IP/其他一律不抓（E309）。parseBookmarkExclusively 内部也有同样的判断，会把这类书签
+        // 直接标成 SUCCESS 后返回，于是用户点了「重新抓取」什么也没发生、也没有任何提示。挡在入口
+        // 上才能把「我方决定不抓」这个结论如实回给他。前端对这类书签本就不显示该按钮，这里是兜底
+        ScrapeTargetGuard.assertScrapable(page.rawUrl)
+
+        // 与新增书签同一条链路：解析锁保证同一页面同一时刻只有一次抓取在跑，重复点击会被它挡掉；
+        // 抓完由 parseAndNotice 推 HOME_ITEM_UPDATE，前端 replaceContent() 就地替换那一格
+        eventPublisher.publishEvent(BookmarkParseAndNoticeEvent(uid, pageId, link.id, link.layoutNodeId))
+        log.debug("[requestRefetch] 已投递重新抓取: uid=$uid, pageId=$pageId, linkId=$linkId, urlHost=${page.urlHost}")
+        return true
+    }
 
     override fun findListByHost(defaultBookmarkify: List<String>): List<PageEntity> =
         ktQuery().`in`(PageEntity::urlHost, defaultBookmarkify).list()
