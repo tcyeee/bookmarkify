@@ -179,6 +179,15 @@
           </label>
         </div>
         <div class="cy-modal-action">
+          <!-- 本地/IP 类书签后端根本不抓（ScrapeTargetGuard），摆出按钮只会点了没反应 -->
+          <button
+            v-if="canRefetchEditing"
+            type="button"
+            class="cy-btn cy-btn-ghost mr-auto"
+            :disabled="editRefetchRequested"
+            @click="requestRefetch">
+            {{ editRefetchRequested ? '等待后台重新抓取' : '重新抓取' }}
+          </button>
           <button type="button" class="cy-btn cy-btn-ghost" :disabled="editSaving" @click="closeEditModal">取消</button>
           <button type="button" class="cy-btn cy-btn-primary" :disabled="editSaving" @click="saveEdit">
             {{ editSaving ? '保存中...' : '保存' }}
@@ -243,13 +252,14 @@
 
 <script lang="ts" setup>
 import { h } from 'vue'
-import { HomeItemType, ROOT_KEY, type UserLayoutNodeVO } from '@typing'
+import { BookmarkLinkType, HomeItemType, ROOT_KEY, type UserLayoutNodeVO } from '@typing'
 import {
   bookmarksSearch,
   bookmarksLinkOne,
   bookmarksDel,
   bookmarksUpdate,
   bookmarksPin,
+  bookmarksRefetch,
   bookmarksCreateDir,
   bookmarksRecordOpen,
   bookmarksSort,
@@ -665,7 +675,7 @@ function openMyResultMenu(x: number, y: number, item: UserLayoutNodeVO) {
         hidden: !hasMoveTargets.value,
         onClick: () => moveToFolder(item),
       },
-      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), divided: true, onClick: () => delMyResult(item) },
+      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), divided: 'up', onClick: () => delMyResult(item) },
     ],
     x,
     y,
@@ -683,6 +693,37 @@ const editDialogRef = ref<HTMLDialogElement | null>(null)
 const editingNode = ref<UserLayoutNodeVO | null>(null)
 const editForm = reactive({ title: '', description: '' })
 const editSaving = ref(false)
+
+// 已经请求过重新抓取的书签（按 bookmarkId 记）。之所以不是一个随弹窗开关重置的布尔量：
+// 抓取要几十秒，用户关掉弹窗再点开同一条时任务多半还在跑，按钮若复原成可点的「重新抓取」，
+// 就是在邀请他再排一次队。本轮会话内保持禁用，刷新页面即清空——那时任务早已结束。
+const refetchRequestedIds = ref(new Set<string>())
+
+const canRefetchEditing = computed(() => {
+  const app = editingNode.value?.typeApp
+  if (!app) return false
+  return app.linkType !== BookmarkLinkType.LOCAL && app.linkType !== BookmarkLinkType.IP
+})
+
+const editRefetchRequested = computed(() => {
+  const id = editingNode.value?.typeApp?.bookmarkId
+  return !!id && refetchRequestedIds.value.has(id)
+})
+
+async function requestRefetch() {
+  const app = editingNode.value?.typeApp
+  if (!app || refetchRequestedIds.value.has(app.bookmarkId)) return
+  try {
+    await bookmarksRefetch(app.bookmarkId)
+    // Set 是引用类型，就地 add 不会触发上面那个 computed 重算，必须换新引用
+    refetchRequestedIds.value = new Set(refetchRequestedIds.value).add(app.bookmarkId)
+    $track('bookmark-refetch')
+    useToastStore().success('已提交重新抓取，完成后会自动更新')
+  } catch (error) {
+    // 失败时刻意不置位：按钮保持可点，用户还能再试一次
+    console.error('[index] 提交重新抓取失败', error)
+  }
+}
 
 function openEditModal(node: UserLayoutNodeVO) {
   if (!node.typeApp) return

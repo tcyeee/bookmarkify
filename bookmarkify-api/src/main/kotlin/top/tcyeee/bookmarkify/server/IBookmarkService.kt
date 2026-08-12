@@ -70,6 +70,22 @@ interface IBookmarkService : IService<PageEntity> {
     /** 添加书签并异步检查 */
     fun addOne(url: String, uid: String): UserLayoutNodeVO
 
+    /**
+     * 用户主动要求重新抓取自己的某一条书签：投递一次与「新增书签」完全相同的异步解析
+     * （`BookmarkParseAndNoticeEvent` → [parseAndNotice]），抓完经 WebSocket `HOME_ITEM_UPDATE` 推回去。
+     *
+     * 复用同一条链路而不是另起一套，是因为那条链路上的每一处兜底（解析锁去重、E307 留在
+     * PENDING 不收口、节点被删则放弃推送）在这里同样需要，抄一遍必然抄漏。
+     *
+     * 与后台的「一键更新」不同的是：这里**不**翻转桌面节点为 LOADING。用户手上已经有一条能用的
+     * 书签，抓取要几十秒且完全可能失败，把它变回转圈的占位是净损失——推送到了就地替换即可。
+     *
+     * @param linkId `bookmark.id`（用户与页面的关联行），同时充当归属校验的凭据
+     * @return 是否成功投递。查不到该 uid 名下的这条链接、或它还没绑定 canonical 页面（导入占位）时返回 false
+     * @throws top.tcyeee.bookmarkify.config.exception.CommonException E309 —— 该网址不是域名，我方不抓
+     */
+    fun requestRefetch(linkId: String, uid: String): Boolean
+
     /** 为新用户设置默认书签 */
     fun setDefaultBookmark(uid: String)
 

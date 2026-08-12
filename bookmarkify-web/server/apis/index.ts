@@ -25,6 +25,11 @@ export const bookmarksSort = (params: Record<string, number>) => http.post<boole
 export const bookmarksDel = (params: Array<string>) => http.post<boolean>('/bookmark/delete', params)
 export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post<t.BookmarkShow>('/bookmark/update', params)
 export const bookmarksPin = (linkId: string, pinned: boolean) => http.post<boolean>('/bookmark/pin', { linkId, pinned })
+// 让后端重新抓取这条书签。**只投递、不等待**：抓取要几秒到几十秒，接口立刻返回，结果稍后经
+// WebSocket HOME_ITEM_UPDATE 推回来，由 bookmarkStore.replaceContent() 就地替换那一格。
+// 因此调用方拿到的 true 只代表「已排进后台队列」，不代表抓到了东西。
+export const bookmarksRefetch = (linkId: string) =>
+  http.post<boolean>(`/bookmark/refetch?linkId=${encodeURIComponent(linkId)}`)
 // 书签封面（页面截图优先，退 og:image）。按需单取而不是随桌面列表下发：桌面可能有几百条
 // 书签，而封面只在点开某一条时才看得到，给每条都带一个几百字节的签名 URL 是纯浪费。
 // 没有封面时返回 null，此时不该渲染任何占位。
