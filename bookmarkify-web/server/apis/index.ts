@@ -23,7 +23,10 @@ export const bookmarksLinkOne = (pageId: string) =>
   http.post<t.UserLayoutNodeVO>(`/bookmark/linkOne?pageId=${encodeURIComponent(pageId)}`)
 export const bookmarksSort = (params: Record<string, number>) => http.post<boolean>('/bookmark/sort', params)
 export const bookmarksDel = (params: Array<string>) => http.post<boolean>('/bookmark/delete', params)
-export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post<t.BookmarkShow>('/bookmark/update', params)
+// 返回的是「更新成功与否」，**不是**更新后的书签（BookmarksController.update: Boolean）。
+// 这里曾声明成 BookmarkShow，于是调用方读 res.title / res.description 永远拿到 undefined，
+// 保存完那一格的标题与描述就被清空了 —— 类型是编出来的，tsc 自然一句话都不会说。
+export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post<boolean>('/bookmark/update', params)
 export const bookmarksPin = (linkId: string, pinned: boolean) => http.post<boolean>('/bookmark/pin', { linkId, pinned })
 // 让后端重新抓取这条书签。**只投递、不等待**：抓取要几秒到几十秒，接口立刻返回，结果稍后经
 // WebSocket HOME_ITEM_UPDATE 推回来，由 bookmarkStore.replaceContent() 就地替换那一格。
