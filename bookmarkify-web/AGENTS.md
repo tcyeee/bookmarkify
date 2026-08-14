@@ -1,180 +1,151 @@
-# AGENTS.md - Bookmarkify Web
+# AGENTS.md
 
-## Agent Roles and Responsibilities
+This file provides guidance to coding agents working with code in this repository.
 
-This document defines the specialized agent roles for working on the Bookmarkify Web codebase.
+## Project Overview
 
----
+**Bookmarkify Web** (书签鸭) is the Nuxt 4 + Vue 3 frontend for a bookmark management platform. It presents a browser-style launchpad where users save, organize, and browse bookmarks with drag-and-drop, real-time updates via WebSocket, and customizable backgrounds. UI text, comments, and debug logs are in Chinese (Simplified) — the app targets Chinese users.
 
-### UI Component Agent
+The backend (Kotlin/Spring Boot) lives at `../bookmarkify-api/` on port 8001 (local dev; prod is 7001). See `api.md` for the REST contract.
 
-**Scope:** Vue components under `components/`, `pages/`, and `layouts/`
+## Tech Stack
 
-**Key responsibilities:**
-- Build new Vue components following `<script setup lang="ts">` pattern
-- Create page components in `pages/` with proper `definePageMeta` (layout, middleware)
-- Add layout variants in `layouts/` when new page structures are needed
-- Implement responsive designs using Tailwind CSS + DaisyUI (`cy-` prefix)
-- Add visual effects using GSAP, Typed.js, or CSS animations
+- **Framework:** Nuxt 4.2 (Vue 3, SSR/SPA hybrid), Vite, TypeScript 5.9
+- **Styling:** Tailwind CSS 4 + DaisyUI 5 (prefix `cy-`) + Sass. No component library — element-plus was fully removed; all UI is DaisyUI/native HTML.
+- **State:** Pinia 3 + `pinia-plugin-persistedstate` (Option Store syntax)
+- **Package manager:** pnpm (Node 18+)
+- **Notable libs:** @atlaskit/pragmatic-drag-and-drop (drag-and-drop grid), GSAP, Typed.js, Lenis, @vueuse/core, vue-command-palette, @imengyu/vue3-context-menu, @iconify/vue
 
-**Conventions to follow:**
-- Component files: `PascalCase.vue`, organized by feature domain under `components/`
-- Props typed with `defineProps<{...}>()`, emits with `defineEmits<{...}>()`
-- Use `cn()` utility from `@utils` for conditional class composition
-- DaisyUI components always use `cy-` prefix: `cy-btn`, `cy-modal`, `cy-input`, `cy-chat`
-- **Prefer DaisyUI components** (https://daisyui.com) for all UI elements — use `cy-btn`, `cy-badge`, `cy-alert`, `cy-tooltip`, etc. before reaching for raw Tailwind or custom CSS
-- Dark mode: respect `.dark` class and `data-theme` attribute
-- UI text must be in Chinese (Simplified) — the app targets Chinese users
-- Use `useToastStore().success/error/warning/info()` for toast notifications (no UI library — DaisyUI + native HTML only)
-- Import types from `@typing`, stores from `@stores`, APIs from `@api`
+## Commands
 
-**Key files to understand first:**
-- `app.vue` — Root component structure
-- `pages/index.vue` — Main bookmark page (search, pinned grid, folder cards)
-- `components/BookmarkFolderCard.vue` / `components/BookmarkTreeRow.vue` — Folder card and its rows (drag-and-drop lives here)
-- `components/common/Header.vue` — Global header with auth state
-- `components/common/CommandPalette.vue` — Cmd+K search interface
+```bash
+pnpm install              # also runs `nuxt prepare` via postinstall
+pnpm dev                  # http://localhost:3000 (needs backend at 127.0.0.1:8001)
+pnpm build
+pnpm preview
+pnpm generate             # static site generation → .output/public
+```
 
----
+## Deployment
 
-### State Management Agent
+Deployed as a **static site** (`nuxt generate` → `.output/public`) served directly by nginx — there is no Node/Docker runtime in production. CI (`.github/workflows/deploy-web.yml`, monorepo root) builds on push to the `prod` branch, rsyncs `.output/public` to `/home/ubuntu/www/bookmarkify-web/` on the server (nginx `location /` serves it with a `/200.html` SPA fallback), then notifies WeChat via Server酱. The workflow sets `NUXT_BACKEND=https://bookmarkify.cc` and `nuxt.config.ts` derives the public `apiBase` (`https://bookmarkify.cc/api`) and `wsBase` (`wss://bookmarkify.cc`) from it; both are baked into the static output at build time.
 
-**Scope:** Pinia stores under `stores/` and data flow
+### Shipping a new version to already-open tabs
 
-**Key responsibilities:**
-- Create and maintain Pinia stores using Option Store syntax
-- Manage state persistence strategy (which stores persist, which don't)
-- Handle WebSocket message routing and state updates
-- Ensure Vue reactivity by creating new object references on mutations
-- Coordinate cross-store interactions (e.g., auth → websocket → bookmark)
+Three pieces that only work as a set — this is a launchpad users leave open for days, so "they'll refresh eventually" is not a strategy.
 
-**Conventions to follow:**
-- Store files: `camelCase.store.ts`, export `useXxxStore()`
-- Use Option Store syntax (not Setup Store / Composition API)
-- Persistence via `persist: true` or `persist: { storage: piniaPluginPersistedstate.localStorage() }`
-- WebSocket store must NOT persist (`persist: false`)
-- When updating nested objects in arrays, always create new references to trigger reactivity
-- Access other stores via `useXxxStore()` within actions (not in state)
+- **The deploy is two rsync passes, and the order is load-bearing.** `_nuxt/` goes first **without** `--delete` (content-hashed names never collide, so adding is always safe), everything else after **with** `--delete`. Keeping the previous build's chunks alive is what stops an open tab from breaking mid-upgrade: it lazy-loads a route chunk that no longer exists, `try_files` hands it `/200.html`, and the dynamic import dies on the MIME type rather than on a clean 404. Assets-before-HTML also closes the reverse window, where fresh HTML references a chunk that hasn't landed. A `find -mtime +14` sweep collects the old ones; `rsync -a` rewrites the mtime of every file it ships, so a chunk the current build still references never ages out.
+- **nginx caching is layered by path** (`deploy/nginx/bookmakify.cc.conf`): `/_nuxt/` is `immutable` for a year, `/_nuxt/builds/latest.json` is `no-store`, everything else is `no-cache`. Before this the file had **no** cache headers at all, so HTML fell to browser heuristic caching and a user could hard-refresh and still get an `index.html` pointing at chunks the next deploy had already replaced. **The `no-cache` must sit on `location /` itself, not on a `~* \.html$` regex location** — `try_files` only performs an internal redirect for its *last* argument; earlier ones (`$uri/index.html`, which is what the homepage hits) are processed in the current context and never re-match, so the regex form silently leaves `/` with no header at all. Verify with `curl -I https://bookmarkify.cc/` — exactly one `Cache-Control` per response (two means an `expires` directive is fighting an `add_header`).
+- **Detection is Nuxt's app manifest, retimed.** Every build emits `_nuxt/builds/latest.json` with a fresh `buildId`; Nuxt's built-in `check-outdated-build.client` polls it and fires `app:manifest:update`, whose default handler hard-reloads **on the next route navigation**. That default is nearly useless here — the desktop is effectively one page (`/`), so navigation may never happen. `plugins/version.client.ts` adds the missing triggers: `experimental.checkOutdatedBuildInterval` drops 1h → 5min, a `visibilitychange` listener re-checks whenever the tab comes back to the foreground (timers are throttled while hidden, and returning to the tab is also the moment no drag or input is in flight), and the outcome splits by visibility — a hidden page reloads silently, a visible one only gets a toast, because yanking the page out from under someone mid-drag is worse than staying a version behind.
 
-**Key files:**
-- `stores/auth.store.ts` — Auth lifecycle, token management, user info
-- `stores/bookmark.store.ts` — Bookmark tree, sort order, real-time cell updates
-- `stores/preference.store.ts` — User preferences, background DataURL caching
-- `stores/websocket.store.ts` — WebSocket connection, heartbeat, reconnect logic
-- `stores/sys.store.ts` — System-level dialogs, key events, countdown timers
+There is no test runner or lint script configured in `package.json`. No tests exist in the repo. `pnpm typecheck` (`nuxt typecheck`) is clean (0 errors) and **runs in CI before the build** — a failure there blocks the deploy. It has to be a separate step because `nuxt generate` does not type check at all (vite strips types without reading them), so without it a broken type ships silently.
 
----
+This suite used to fail with ~86 errors that were written off as "pre-existing noise". They were not independent: `bookmark.store.ts` passed `persist: { paths: [...] }`, and `paths` is the **v3** name for that option (v4 renamed it `pick`). An unrecognized key made the whole options object fail `defineStore`'s overload resolution, collapsing getters and actions to `{}` and cascading ~80 "Property 'xxx' does not exist" errors across every file that touched the store. If this suite ever goes loud again, look for one root cause before assuming the errors are unrelated.
 
-### API Integration Agent
+## Environment Variables
 
-**Scope:** API client, endpoint functions, and server utilities under `server/`
+Copy `.env.example` to `.env`:
 
-**Key responsibilities:**
-- Add new API endpoint functions in `server/apis/index.ts`
-- Maintain the HTTP client class in `server/apis/http.ts`
-- Handle auth token lifecycle (injection, expiry detection, auto re-login)
-- Define TypeScript types for API request/response in `typing/`
-- Manage image URL configuration in `server/config/image.config.ts`
+| Variable | Purpose | Default |
+|---|---|---|
+| `NUXT_BACKEND` | Backend origin — the **only** switch for which backend to hit. REST and WebSocket are both derived from it in `nuxt.config.ts`: remote values get `/api` appended for REST (nginx strips it again), local ones don't; `wsBase` is the same origin with `http`→`ws`. Pass an origin only — no `/api`, no `/ws`. | `http://127.0.0.1:8001` |
+| `NUXT_PUBLIC_SITE_URL` | Public site URL (SEO/canonical) | `https://bookmarkify.cc` |
+| `NUXT_PUBLIC_GOOGLE_CLIENT_ID` | Google OAuth client ID | — |
+| `NUXT_PUBLIC_GITHUB_CLIENT_ID` | GitHub OAuth client ID | — |
 
-**Conventions to follow:**
-- API functions are descriptive: `bookmarksShowAll()`, `captchaVerifyEmail()`
-- Return typed promises: `Promise<t.SomeType>`
-- The `http` class is static — do not instantiate, call `http.get()`, `http.post()` directly
-- Use `http.withDebounce()` for endpoints that may be called rapidly
-- Token is sent via `satoken` HTTP header (not Authorization)
-- Response codes: 0 = success, 101 = token expired (triggers auto re-login), 1xx = show error, 3xx = silent reject
-- Centralized error display via `useToastStore().error()`
-- All request/response types defined in `typing/` and barrel-exported from `typing/index.ts`
+## Architecture (the parts that span files)
 
-**Key files:**
-- `server/apis/http.ts` — HTTP client with debounce, token injection, error handling
-- `server/apis/index.ts` — All API endpoint function definitions
-- `typing/result.ts` — `Result<T>` response wrapper type
-- `typing/bookmark.ts` — Bookmark-related types
-- `typing/user.ts` — User and auth types
-- `typing/setting.ts` — Preference and background types
-- `server/config/image.config.ts` — Environment-aware file URL helpers
+### Anonymous-first auth
+Every visitor gets a session via `POST /auth/track` — no login required. Guest sessions "upgrade" by verifying phone or email. The auth plugin (`plugins/auth.ts`) restores the session on page load, then reconnects WebSocket and re-fetches user + bookmark data. `middleware/auth.ts` redirects unauthenticated users to `/welcome`. Token is sent via the **`satoken`** HTTP header (not `Authorization`).
 
----
+### Tree-based bookmark layout
+Bookmarks are a `UserLayoutNodeVO[]` tree in `bookmark.store.ts`. Node types (see `typing/enum.ts` `HomeItemType`): `BOOKMARK`, `BOOKMARK_DIR`, `FUNCTION`, `BOOKMARK_LOADING` (placeholder while the backend parses the URL). `pages/index.vue` renders `BOOKMARK` / `BOOKMARK_DIR` (via `BookmarkFolderCard` → `BookmarkTreeRow`) and `BOOKMARK_LOADING`. **`FUNCTION` has no renderer** — its cell was part of the launchpad board that the rewrite orphaned and `2026-08-04` deleted; a `FUNCTION` node reaching the client renders as nothing. The type stays in the wire contract (`UserLayoutNodeVO.typeFuc`).
 
-### Styling/Theme Agent
+### WebSocket-driven live updates
+After the user adds a URL, the backend parses the page asynchronously (Spring `ApplicationEvent` + `@Async`, in-process — not a message queue) and pushes the result back. `stores/websocket.store.ts` connects to `{wsBase}/ws?token={token}`, pings every 5s, and reconnects with exponential backoff (1s → 30s, max 5 attempts).
 
-**Scope:** CSS, Tailwind configuration, DaisyUI theming, visual design
+**A push is fire-and-forget: there is no offline queue and no server-side retry.** `SessionManager.send` drops it if the user has no live session. Everything below exists because of that one fact — treat them as a set, not as optional hardening:
 
-**Key responsibilities:**
-- Maintain Tailwind CSS 4 configuration and DaisyUI theme setup
-- Style components using Tailwind utilities and DaisyUI classes
-- Manage dark mode implementation (`.dark` class + `data-theme`)
-- Handle background rendering (gradients via CSS, images via DataURL)
-- Maintain custom fonts and global CSS in `assets/css/`
+- **Reconnect re-syncs.** `onopen` calls `bookmarkStore.refresh()` when this is a *re*connect (`hasEverConnected`), because whatever was pushed while the socket was down is simply gone. Skipped on the first connect — `plugins/auth.ts` just fetched.
+- **The heartbeat is two-way and watched.** The server replies `pong` (`WebSocketHandler.handleTextMessage`); the client records `lastMessageAt` on *any* frame and force-closes after 3 silent ping intervals. Without the reply, a half-open socket (network switch, NAT timeout, laptop lid) keeps `readyState === OPEN` and `send()` keeps succeeding, so `onclose` never fires and the tile spins forever. A send-only heartbeat proves nothing.
+- **`online` / `visibilitychange` bypass the backoff budget** via `forceReconnect()`. Five attempts is ~31s; a real outage exhausts it and nothing would ever bring the socket back.
+- **Loading tiles poll as a backstop** — see `watchForResolution` / `armPendingWatches` in `bookmark.store.ts`, which retry on a widening interval (30s → 5min, 8 times, ~35 min total) so the window crosses the backend's 30-minute `drainStuckLoading` threshold. Watchers are armed centrally (`setLayout`, `addImportLoadingBatch`, `plugins/auth.ts`), *not* by each caller that inserts a placeholder — that was how nodes restored from `localStorage` ended up with nobody watching them.
 
-**Conventions to follow:**
-- DaisyUI always uses `cy-` prefix (configured in `tailwind.config.ts`)
-- Tailwind v4 syntax: `@import 'tailwindcss'` in `app.css`
-- Three themes: `light` (default), `dark` (prefers-dark), `cupcake`
-- Use `cn()` for conditional class merging (clsx + tailwind-merge)
-- Background images cached as DataURL in localStorage for performance
-- Gradient backgrounds are pure CSS `linear-gradient` — no image files
-- Custom font: Jersey10-Regular (pixel-art style) for header logo
+The server keeps **all** of a user's sessions and broadcasts to each (`SessionManager`, keyed `realm:uid` → list). It used to keep one, so a second tab kicked the first offline, the first auto-reconnected and kicked the second, and two tabs flapped against each other about once a second forever.
 
-**Key files:**
-- `assets/css/app.css` — Tailwind setup, DaisyUI themes, custom font
-- `assets/css/common.scss` — Global SCSS utilities, command dialog styles
-- `tailwind.config.ts` — DaisyUI plugin config with `cy-` prefix
-- `components/setting/background/Preview.vue` — Background preview rendering
-- `components/setting/background/` — Background configuration UI
+Three layout message types, each with a **different payload shape** — they are separate types precisely so the client can tell them apart:
 
----
+| Type | Payload | Store action |
+|---|---|---|
+| `HOME_ITEM_UPDATE` | one node, always `type=BOOKMARK` with non-null `typeApp` | `replaceContent()` |
+| `HOME_DIR_UPDATE` | one `BOOKMARK_DIR` node plus its direct `children` | `replaceFolder()` |
+| `HOME_LAYOUT_REFRESH` | the whole tree root (same shape as `/bookmark/query`) | `setLayout()` |
 
-### Auth/Plugin Agent
+All three previously shared the single name `HOME_ITEM_UPDATE`, and `replaceContent()` dropped anything that wasn't the first shape — so folder moves never synced across tabs. If you add a fourth push, give it its own type rather than overloading one.
 
-**Scope:** Authentication flow, middleware, and Nuxt plugins
+Whatever the type, the store **must replace nodes with new object references** to trigger Vue reactivity — see `replaceContent()` for the pattern. Direct nested mutation will not re-render.
 
-**Key responsibilities:**
-- Maintain the auth middleware (`middleware/auth.ts`) for route guards
-- Handle the auth plugin (`plugins/auth.ts`) for session restoration on app load
-- Manage keyboard listener plugin and context menu plugin
-- Implement login/register flows (SMS, email, image CAPTCHA verification)
+### HTTP client
+All API calls go through the static `http` class in `server/apis/http.ts`. Endpoint functions live in `server/apis/index.ts` and return `Promise<t.SomeType>`.
 
-**Conventions to follow:**
-- Anonymous-first: every visitor gets a session via `/auth/track`; users "upgrade" by verifying phone/email
-- Auth state lives in `authStore` — check `isLogin` for authenticated state
-- Route guard redirects unauthenticated users to `/welcome`
-- On app startup, the auth plugin reconnects WebSocket and refreshes user/bookmark data
-- Login dialogs are components in `components/setting/account/`
-- CAPTCHA and verification flows use countdown timers from `sysStore`
+- Auto-injects `satoken` header
+- On response code `101` (token expired), it logs the user out (`authStore.logout()`) and redirects to `/welcome` — there is no silent re-login/retry
+- `http.withDebounce()` deduplicates in-flight requests within a 600ms window
+- Response shape: `Result<T> { code, msg, data, ok }` — `code === 0` is success, `1xx` shows an error toast via `useToastStore().error()`, `3xx` rejects silently
+- Components should not duplicate API error toasts; the client handles them centrally
 
-**Key files:**
-- `middleware/auth.ts` — Route guard logic
-- `plugins/auth.ts` — Startup session restoration
-- `plugins/keyListener.ts` — Global keyboard event binding
-- `plugins/contextMenu.ts` — Right-click menu registration
-- `stores/auth.store.ts` — Auth state and actions
-- `components/setting/account/LoginDialog.vue` — Login UI
-- `components/setting/account/VerifyEmail.vue` / `VerifyPhone.vue` — Verification flows
+### Background rendering & preferences
+`preference.store.ts` drives grid cell size (60/80/100px), gap mode, page-turn behavior, title visibility, and link-open target. Background images are converted to DataURL and cached in `localStorage` for instant paint; gradients are pure CSS `linear-gradient` (no image files). Background rendering happens in `layouts/setting.vue` / `components/setting/background/Preview.vue`; the old full-screen launchpad background (`layouts/launch.vue`) was deleted as dead code on 2026-08-04.
 
----
+### OAuth login (Google + GitHub)
+The site is a static SPA with no server, so both flows run entirely client-side. **Google** (`composables/useGoogleOAuth.ts`): classic OAuth2 implicit flow (`response_type=id_token`) — full-page redirect to Google, credential returns via URL hash to `pages/auth/google/callback.vue`, `state`/`nonce` round-tripped through `sessionStorage` (not usable for a popup since implicit-flow redirects can't reliably `postMessage` cross-origin before unload). **GitHub** (`composables/useGithubOAuth.ts`): authorization-code flow via a popup window — `pages/auth/github/callback.vue` `postMessage`s the code back to the opener (checked against `location.origin` and a `state` value), and the caller exchanges it through the backend. Callback pages are the only consumers of these composables.
 
-## Cross-Cutting Concerns
+### Bulk import
+`components/setting/BookmarkManage.vue` uploads a browser bookmark file: `bookmarksUploadPreview()` first (server returns per-item `isDuplicate`, matched on the **canonical** URL quadruple, not on the raw string), the user unchecks what to skip, then `bookmarksUpload(file, skipUrls)` returns the created nodes — folders plus `BOOKMARK_LOADING` placeholders. Those go into the tree via `bookmarkStore.addImportLoadingBatch()`, and each loading node registers a 60s `watchForResolution()` fallback. The backend deliberately does **not** publish parse events for an import (it would flood the parse pool); its `drainStuckLoading()` sweep picks the placeholder rows up in batches, so results trickle back over WebSocket. There is no aggregate progress UI — an earlier `importProgress.store.ts` + `ImportProgressNotice.vue` pair was removed in `fc66cb23`.
 
-### Type Safety
-All agents should define TypeScript types in `typing/` and export them from `typing/index.ts`. Use the `t` namespace import pattern (`import * as t from '@typing'`) when accessing types across modules.
+### Layouts
+- `setting.vue` — settings sidebar
+- `explore.vue` — `/welcome` landing
+- `default.vue` — pass-through
 
-### Error Handling
-Use `useToastStore().error()` for user-facing errors. The HTTP client handles API-level errors centrally — individual components should not duplicate error toasts for API calls.
+Pages declare layout via `definePageMeta({ layout: '...' })`.
 
-### Reactivity
-When updating store state that contains nested objects or arrays, always create new object references. Direct mutation of nested properties will not trigger Vue reactivity. The bookmark store's `updateOneBookmarkCell()` demonstrates the correct pattern.
+## Path Aliases
 
-### Testing
-No tests currently exist. When adding tests:
-- Use Vitest (Nuxt's recommended test runner)
-- Place test files alongside source files or in a `tests/` directory
-- Mock API calls and store state
-- Test component rendering with `@vue/test-utils`
+Configured in both `nuxt.config.ts` and `tsconfig.json`:
 
-### Code Organization
-- Components are auto-imported by Nuxt — no manual registration needed
-- Composables from `@vueuse/core` are auto-imported
-- Pinia stores are auto-imported via `@pinia/nuxt` module
-- Path aliases (`@api`, `@stores`, `@typing`, etc.) are configured in both `nuxt.config.ts` and `tsconfig.json`
+| Alias | Target |
+|---|---|
+| `@api` | `server/apis` |
+| `@stores` | `stores` |
+| `@config` | `server/config` |
+| `@typing` | `typing` |
+| `@utils` | `server/utils` |
+
+Pinia stores, `@vueuse/core` composables, and Vue components are auto-imported by Nuxt — don't add manual imports for them.
+
+## Conventions
+
+- **Vue:** `<script setup lang="ts">` only; `defineProps<{...}>()` / `defineEmits<{...}>()`; files `PascalCase.vue`.
+- **Stores:** `camelCase.store.ts`, exported as `useXxxStore()`, **Option Store** syntax (not Setup Store). Persistence via `persist: true` or explicit `persist: { storage: piniaPluginPersistedstate.localStorage() }`. The WebSocket store must NOT persist.
+- **Persist whitelists use `pick`, not `paths`** (`pinia-plugin-persistedstate` v4 renamed it; the repo is on 4.7.1). **Unknown keys are silently ignored**, so the wrong name doesn't warn — it just persists the entire state. That is not merely wasteful: anything non-serializable in state (a `Promise`, a timer handle) comes back from JSON as `{}`, which is truthy, and any `if (this.someInflightThing)` guard is then permanently stuck. Re-check this whenever the plugin is upgraded.
+- **Types:** Define in `typing/`, barrel-export from `typing/index.ts`. Cross-module type access uses `import * as t from '@typing'`.
+- **Enums owned by the backend are generated, not written here.** `typing/enums.generated.ts` comes from the Kotlin enums (`cd bookmarkify-api && ./gradlew generateSharedEnums`) and `typing/enum.ts` re-exports the ones this app uses. Don't hand-edit the generated file and don't re-declare an API enum locally: `tsc` accepts a union missing a member, so a value the backend added would simply fall through a `switch` and render blank — no error anywhere. Frontend-only enums (`HomeItemType`, `SocketTypes`, `BookmarkGapMode`, …) stay hand-written in `typing/enum.ts`; the backend doesn't know about them.
+- **DaisyUI:** the prefix is `cy-` (e.g. `cy-btn`, `cy-modal`, `cy-tooltip`, `cy-alert`). Prefer DaisyUI components over raw Tailwind / custom CSS when one fits. Themes: `light` (default), `dark` (prefers-dark), `cupcake`. Dark mode toggles `.dark` on `<body>` and `data-theme="dark"`.
+- **Class composition:** use `cn()` from `@utils` (`twMerge(clsx(...))`).
+- **Toasts:** `useToastStore().success/error/warning/info(message)` (`stores/toast.store.ts`, rendered by `components/common/ToastHost.vue`, mounted once in `app.vue`) — a small DaisyUI-based (`cy-toast`/`cy-alert`) replacement for element-plus's `ElMessage`/`ElNotification`. Do not reintroduce a UI library for this.
+- **Confirm dialogs:** `useConfirmStore().confirm(message, { title?, confirmText?, cancelText?, type? })` (`stores/confirm.store.ts` + `components/common/ConfirmDialog.vue`) returns a `Promise<void>` that resolves on confirm and rejects on cancel/Esc/backdrop-click — the same `try { await ... } catch { return }` shape element-plus's `ElMessageBox.confirm` used.
+- **Prettier:** 130 char width, single quotes, no semicolons, bracket same line.
+
+## Plugins (load order in `nuxt.config.ts`)
+
+`iconify.ts` → `keyListener.ts` → `contextMenu.ts` → `auth.ts` → `analytics.client.ts`. The auth plugin runs before analytics because analytics only needs the router; it does not depend on auth state.
+
+## Notes
+
+- `public/upload/` and `server/routes/upload/[...path].ts` are dev-only static file proxies; production serves files from `https://cdn.bookmarkify.cc` (see `server/config/image.config.ts`).
+- `pages/market.vue` is a stub; not yet implemented.
+- `AGENTS.md` documents per-domain agent roles (UI, state, API, styling, auth) with deeper conventions for each — useful when scoping a task to one area.
+- `api.md` describes the backend API surface this client consumes.
+- `/` and `/setting` are forced client-only (`routeRules: { ssr: false }` in `nuxt.config.ts`) because login state only lives in client `localStorage` — SSR/prerender can't read it, so the `auth` middleware would redirect the prerendered HTML to `/welcome` and cause a flash on refresh. `/welcome` stays SSR/prerendered for landing-page SEO and is explicitly listed under `nitro.prerender.routes` since the SPA-ified `/` can no longer be crawled to discover it.
+- Analytics is self-hosted GoatCounter, proxied same-origin through nginx as `/count.js` + `/count` (no third-party domain exposed). All tracking goes through `plugins/analytics.client.ts`; call `useNuxtApp().$track('event-name')` from business code rather than touching `window.goatcounter` directly. No-ops in dev.

@@ -741,14 +741,18 @@ function closeEditModal() {
 async function saveEdit() {
   const node = editingNode.value
   if (!node?.typeApp || editSaving.value) return
+  const title = editForm.title.trim()
+  const description = editForm.description.trim()
   editSaving.value = true
   try {
-    const res = await bookmarksUpdate({
-      linkId: node.typeApp.bookmarkId,
-      title: editForm.title.trim(),
-      description: editForm.description.trim(),
-    })
-    bookmarkStore.nodes[node.id] = { ...node, typeApp: { ...node.typeApp, title: res.title, description: res.description } }
+    await bookmarksUpdate({ linkId: node.typeApp.bookmarkId, title, description })
+    // 用刚提交的值就地更新那一格。接口只回一个布尔量（见 bookmarksUpdate 的注释），
+    // 从它身上读 title/description 得到的是 undefined，等于保存一次清空一次。
+    bookmarkStore.nodes[node.id] = { ...node, typeApp: { ...node.typeApp, title, description } }
+    // 标题清空不等于「这条书签没有标题」，而是「交还给服务端决定」：兜底文案的优先级
+    // （站点短名 → 页面标题 → 域名，还分 TILE/LIST）只存在于后端 BookmarkDisplayPolicy，
+    // 本地算不出来，只能补拉一次布局把它取回来，否则这一格会一直退化成裸域名。
+    if (!title) bookmarkStore.refresh('清空书签标题后取回服务端兜底文案')
     useToastStore().success('修改成功')
     closeEditModal()
   } catch (error) {
