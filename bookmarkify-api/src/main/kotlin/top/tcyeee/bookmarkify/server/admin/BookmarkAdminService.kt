@@ -26,6 +26,7 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.entity.CategorySource
 import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
+import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.PageLockedField
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
@@ -100,7 +101,7 @@ class BookmarkAdminService(
                     val resolved = resolvedByMode[mode]?.get(vo.id)
                     SiteDisplayPrefVO(
                         displayMode = mode,
-                        iconPadding = pref?.iconPadding ?: 25,
+                        iconPadding = pref?.iconPadding ?: SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
                         iconBgColor = pref?.iconBgColor,
                         pinnedAssetId = pref?.pinnedAssetId,
                         previewUrl = resolved?.url,
@@ -510,7 +511,7 @@ class BookmarkAdminService(
             val resolved = siteAssetResolver.resolveOne(pageId, mode)
             SiteDisplayPrefVO(
                 displayMode = mode,
-                iconPadding = pref?.iconPadding ?: 25,
+                iconPadding = pref?.iconPadding ?: SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
                 iconBgColor = pref?.iconBgColor,
                 pinnedAssetId = pref?.pinnedAssetId,
                 previewUrl = resolved.url,

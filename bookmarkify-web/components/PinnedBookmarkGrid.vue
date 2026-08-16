@@ -20,9 +20,7 @@
         class="group relative w-16 flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
         @click="recordOpen(node)"
         @contextmenu.prevent="openMenu($event.x, $event.y, node)">
-        <!-- padding=0：磁贴要的是图铺满整块圆角卡片。服务端默认 iconPadding 是 25%，
-             那份留白是给小尺寸列表图标的，放到 56px 的磁贴上就成了一圈明显的白边 -->
-        <BookmarkLogo :value="node.typeApp!" :size="56" :padding="0" />
+        <BookmarkLogo :value="node.typeApp!" :size="56" />
         <!-- 触屏没有右键，这个按钮是同一份菜单的第二个触发器（桌面上悬停才显形，观感不变） -->
         <button
           type="button"

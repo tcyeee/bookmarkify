@@ -131,12 +131,27 @@ data class SiteDisplayPrefEntity(
     /** 历史列：最初在哪个页面上调的，仅供溯源，业务代码不读。 */
     @field:Schema(description = "最初在哪个页面上调的(溯源用)") var pageId: String? = null,
     @field:Schema(description = "展示模式") var displayMode: DisplayMode = DisplayMode.TILE,
-    @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
+    @field:Schema(description = "图片内边距") var iconPadding: Int = DEFAULT_ICON_PADDING,
     @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
     @field:Schema(description = "人工钉死的资产ID,覆盖自动选择") var pinnedAssetId: String? = null,
     @field:Schema(description = "操作人") var updatedBy: String? = null,
     @field:Schema(description = "更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
-)
+) {
+    companion object {
+        /**
+         * 没有人工设置过时的内边距（百分比）。
+         *
+         * **0 = 图铺满图标卡片。** 原值是 25，那圈留白是照着 16px 列表行定的，可它同样落在
+         * TILE 模式 56px 的大磁贴上，观感是图标缩在一块白底中间盖不住背景。留白该由容器自己给，
+         * 不该由图片默认让出来 —— 真需要留白的站点由管理员按（站点 × 展示模式）单独调，
+         * 那正是 `site_display_pref` 存在的理由。
+         *
+         * 这个默认值散落在 VO / Params / 解析结果 / 建表语句里各写过一遍，改一处漏一处不会报错，
+         * 只会让同一个字段在不同接口上给出不同的默认值，所以收敛到这里。
+         */
+        const val DEFAULT_ICON_PADDING = 0
+    }
+}
 
 /**
  * scrapper 响应的原样留档。

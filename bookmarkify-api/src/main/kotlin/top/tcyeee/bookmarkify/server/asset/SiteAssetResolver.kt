@@ -51,7 +51,7 @@ class SiteAssetResolver(
         val quality: AssetQuality? = null,
         val isVector: Boolean = false,
         val monogram: Boolean = true,
-        val iconPadding: Int = 25,
+        val iconPadding: Int = SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
         val iconBgColor: String? = null,
     ) {
         companion object {
@@ -298,7 +298,7 @@ class SiteAssetResolver(
         val pref = prefs?.firstOrNull { it.displayMode == mode }
         val chosen = AssetRolePolicy.resolve(assets, mode, pref?.pinnedAssetId)
             ?: return ResolvedLogo.EMPTY.copy(
-                iconPadding = pref?.iconPadding ?: 25,
+                iconPadding = pref?.iconPadding ?: SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
                 iconBgColor = pref?.iconBgColor,
             )
 
@@ -309,7 +309,7 @@ class SiteAssetResolver(
                 role = chosen.role,
                 quality = chosen.quality,
                 monogram = true,
-                iconPadding = pref?.iconPadding ?: 25,
+                iconPadding = pref?.iconPadding ?: SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
                 iconBgColor = pref?.iconBgColor,
             )
         }
@@ -320,7 +320,7 @@ class SiteAssetResolver(
             quality = chosen.quality,
             isVector = chosen.isVector,
             monogram = false,
-            iconPadding = pref?.iconPadding ?: 25,
+            iconPadding = pref?.iconPadding ?: SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
             iconBgColor = pref?.iconBgColor,
         )
     }

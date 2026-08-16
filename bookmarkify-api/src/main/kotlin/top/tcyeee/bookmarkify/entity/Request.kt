@@ -58,7 +58,7 @@ data class BookmarkOpenParams(var linkId: String)
 data class BookmarkIconUpdateParams(
     // 显示设置按展示模式分行：72px 大图上的内边距/背景色与 16px 列表行是两回事
     @field:Schema(description = "展示模式 TILE/LIST") var displayMode: DisplayMode = DisplayMode.TILE,
-    @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
+    @field:Schema(description = "图片内边距") var iconPadding: Int = SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
     @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
     @field:Schema(description = "人工钉死的资产ID,覆盖自动选择;为空表示走自动") var pinnedAssetId: String? = null,
     @field:Schema(description = "书签简称") var appName: String? = null,
