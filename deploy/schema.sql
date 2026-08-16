@@ -172,7 +172,8 @@ CREATE TABLE public.bookmark (
     pinned boolean DEFAULT false NOT NULL,
     link_type character varying(20) DEFAULT 'OTHER'::character varying NOT NULL,
     open_count integer DEFAULT 0 NOT NULL,
-    dispatch_attempts integer DEFAULT 0 NOT NULL
+    dispatch_attempts integer DEFAULT 0 NOT NULL,
+    pinned_sort integer DEFAULT 0 NOT NULL
 );
 
 

@@ -80,11 +80,16 @@ export const useBookmarkStore = defineStore('homeItems', {
         return null
       }
     },
-    // 全部被置顶的书签节点（不区分所在文件夹），沿用书签自身的桌面排序
+    // 全部被置顶的书签节点（不区分所在文件夹），按用户在置顶区里排好的顺序。
+    //
+    // 用 typeApp.pinnedSort 而不是节点自身的 sort：后者是「本节点在它所属的那一层里排第几」，
+    // 两条来自不同文件夹的书签拿各自的 sort 相比得到的顺序是巧合；而且拖动置顶区若去改 sort，
+    // 会连带把书签在它自己文件夹里的位置也挪了。pinnedSort 是后端 bookmark 行上独立的一列。
+    // 历史数据全是 0，此时退回按节点 sort 排（与改动前的表现一致），用户拖一次就写实了。
     pinnedNodes(state): Array<UserLayoutNodeVO> {
       return Object.values(state.nodes)
         .filter((n) => n.type === HomeItemType.BOOKMARK && n.typeApp?.pinned)
-        .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+        .sort((a, b) => (a.typeApp!.pinnedSort ?? 0) - (b.typeApp!.pinnedSort ?? 0) || (a.sort ?? 0) - (b.sort ?? 0))
     },
     // 后端 /bookmark/sort 是整表覆盖式写入（非按 key 合并），只提交单个文件夹的顺序会把
     // 其余节点的 sort 一并抹掉。这里始终基于全量 order 生成完整 sort 表，同一列表内的
@@ -355,11 +360,26 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.checkImportBatches()
     },
 
-    // 置顶/取消置顶：本地就地替换 typeApp 对象引用以触发响应式更新
+    // 置顶/取消置顶：本地就地替换 typeApp 对象引用以触发响应式更新。
+    // 新置顶的排到置顶区末尾，与后端 setPinned 的分配规则保持一致——不同步的话，这一格会先
+    // 出现在最前面（pinnedSort 还是旧值或 0），下次刷新又跳到末尾。
     setPinnedLocal(nodeId: string, pinned: boolean) {
       const node = this.nodes[nodeId]
       if (!node?.typeApp) return
-      this.nodes[nodeId] = { ...node, typeApp: { ...node.typeApp, pinned } }
+      const pinnedSort = pinned ? Math.max(-1, ...this.pinnedNodes.map((n) => n.typeApp!.pinnedSort ?? 0)) + 1 : node.typeApp.pinnedSort
+      this.nodes[nodeId] = { ...node, typeApp: { ...node.typeApp, pinned, pinnedSort } }
+    },
+
+    // 置顶区重排：按传入的节点顺序重写各自的 pinnedSort。
+    // 与 reorderLocal（改 order 顺序表）走的是完全不同的一条路——置顶区不是 order 里的一层，
+    // 它是从各层里筛出来的视图，顺序只能记在书签自己身上。
+    reorderPinnedLocal(nodeIds: Array<string>) {
+      nodeIds.forEach((id, index) => {
+        const node = this.nodes[id]
+        if (!node?.typeApp) return
+        this.nodes[id] = { ...node, typeApp: { ...node.typeApp, pinnedSort: index } }
+      })
+      if (import.meta.client) useNuxtApp().$track('pinned-reorder')
     },
 
     // 重命名文件夹的本地同步（后端确认成功后调用）。

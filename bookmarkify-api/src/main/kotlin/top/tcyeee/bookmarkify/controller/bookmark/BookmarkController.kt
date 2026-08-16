@@ -130,6 +130,22 @@ class BookmarksController(
     fun pin(@RequestBody params: BookmarkPinParams): Boolean =
         bookmarkUserLinkService.setPinned(params.linkId, params.pinned, BaseUtils.uid())
 
+    /**
+     * 置顶区重排。入参是**整个置顶区**按新顺序排好的书签ID列表，序号由服务端按下标分配。
+     *
+     * 与 [sort] 是两套顺序，不可合并：那个走 `user_preference` 的节点排序表，按「层」记
+     * （key 是布局节点 id）；置顶区是把各个文件夹里的书签抽出来平铺的，跨层，在那张表里
+     * 表达不出来，而且用它来排会连带挪动书签在自己文件夹里的位置。
+     *
+     * **和 [sort] 一样不加 @Throttle**：整理顺序天然是连着拖好几下，1 秒的间隔挡下第二次
+     * 拖拽后，前端本地已经落位、服务端没收到，用户看到的顺序刷新一次就变回去 —— 而这是
+     * 一次只写自己几行的廉价写入，全局的 20 req/s 过滤器已经够了。
+     */
+    @PostMapping("/pinSort")
+    @Operation(summary = "置顶区排序(传整个置顶区的书签ID顺序)")
+    fun pinSort(@RequestBody params: List<String>): Boolean =
+        bookmarkUserLinkService.setPinnedOrder(params, BaseUtils.uid())
+
     // 会创建 bookmark/user_layout_node/bookmark_user_link 三张表的写入，不应该用 GET 承载
     // （历史遗留问题：GET 请求可能被浏览器预取/代理缓存/爬虫意外重放，触发非预期的写操作）
     @Throttle

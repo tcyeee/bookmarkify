@@ -32,12 +32,14 @@ interface BookmarkMapper : BaseMapper<BookmarkEntity> {
                -- 「没改过」压成了同一个值，优先级也就无从表达。
                a.title                                      AS userTitle,
                b.title                                      AS pageTitle,
+               b.app_name                                   AS pageAppName,
                st.short_name                                AS siteShortName,
                st.brand_name                                AS siteBrandName,
                -- 没有 canonical 记录时（无源书签）当作首页处理：那种书签只有用户自己的标题
                COALESCE(b.url_path = '/' AND b.url_query = '' AND b.url_fragment = '', true) AS rootPage,
                COALESCE(a.description, b.description)       AS description,
                a.pinned                                     AS pinned,
+               a.pinned_sort                                AS pinnedSort,
                a.link_type                                  AS linkType,
                b.is_activity                                AS isActivity,
                b.url_host                                   AS urlHost,
@@ -67,12 +69,14 @@ interface BookmarkMapper : BaseMapper<BookmarkEntity> {
                -- 「没改过」压成了同一个值，优先级也就无从表达。
                a.title                                      AS userTitle,
                b.title                                      AS pageTitle,
+               b.app_name                                   AS pageAppName,
                st.short_name                                AS siteShortName,
                st.brand_name                                AS siteBrandName,
                -- 没有 canonical 记录时（无源书签）当作首页处理：那种书签只有用户自己的标题
                COALESCE(b.url_path = '/' AND b.url_query = '' AND b.url_fragment = '', true) AS rootPage,
                COALESCE(a.description, b.description)       AS description,
                a.pinned                                     AS pinned,
+               a.pinned_sort                                AS pinnedSort,
                a.link_type                                  AS linkType,
                b.is_activity                                AS isActivity,
                b.url_host                                   AS urlHost,

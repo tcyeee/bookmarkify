@@ -23,11 +23,37 @@ class BookmarkUserLinkServiceImpl : IBookmarkUserLinkService, ServiceImpl<Bookma
             .set(BookmarkEntity::description, params.description)
             .update()
 
-    override fun setPinned(linkId: String, pinned: Boolean, uid: String): Boolean =
-        ktUpdate().eq(BookmarkEntity::id, linkId)
+    // 新置顶的书签排到置顶区末尾：不给序号的话所有新置顶书签都是 0，谁在前谁在后要看数据库返回
+    // 的顺序，用户每次刷新都可能换一个样子。取消置顶不清零 —— 重新置顶时反正会重新分配。
+    override fun setPinned(linkId: String, pinned: Boolean, uid: String): Boolean {
+        val update = ktUpdate().eq(BookmarkEntity::id, linkId)
             .eq(BookmarkEntity::uid, uid)
             .set(BookmarkEntity::pinned, pinned)
-            .update()
+        if (pinned) update.set(BookmarkEntity::pinnedSort, nextPinnedSort(uid))
+        return update.update()
+    }
+
+    /** 该用户当前置顶区的末位序号 + 1。置顶数量是个位数到几十条的量级，直接取回来算即可。 */
+    private fun nextPinnedSort(uid: String): Int =
+        ktQuery().eq(BookmarkEntity::uid, uid)
+            .eq(BookmarkEntity::pinned, true)
+            .eq(BookmarkEntity::deleted, false)
+            .list()
+            .maxOfOrNull { it.pinnedSort }
+            ?.plus(1) ?: 0
+
+    // 逐条 update 而不是拼一条 CASE WHEN：置顶区是用户自己一个个钉上去的，几十条已是极限，
+    // 而 uid 条件必须逐条带上（少一条就是「改别人的书签」）。同一个事务里提交，避免半套顺序落库。
+    @Transactional(rollbackFor = [Exception::class])
+    override fun setPinnedOrder(linkIds: List<String>, uid: String): Boolean {
+        linkIds.forEachIndexed { index, linkId ->
+            ktUpdate().eq(BookmarkEntity::id, linkId)
+                .eq(BookmarkEntity::uid, uid)
+                .set(BookmarkEntity::pinnedSort, index)
+                .update()
+        }
+        return true
+    }
 
     // 用 setSql 做原子自增，避免"读旧值→+1→回写"在并发打开时互相覆盖丢计数
     override fun recordOpen(linkId: String, uid: String): Boolean =
