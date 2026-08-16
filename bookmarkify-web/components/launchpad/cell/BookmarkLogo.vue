@@ -55,7 +55,10 @@ import { resolveCachedIconBlob } from '@utils'
 
 // preferHd 已移除：用哪张图是服务端按展示模式决定的（AssetRolePolicy），
 // 前端再传一个偏好只会和服务端策略打架。原先这个 prop 也从未被任何调用方传过。
-const props = defineProps<{ value: BookmarkShow; size?: number }>()
+// padding：覆盖服务端下发的 iconPadding（百分比）。默认不传就用服务端的值——
+// 那是管理台按展示模式调好的留白，前端不该猜。只有「大图铺满」这种由容器形态决定的
+// 场景才显式传 0（置顶区磁贴），此时留白由外层卡片自己给，再叠一层就成了双重内边距。
+const props = defineProps<{ value: BookmarkShow; size?: number; padding?: number }>()
 
 // 统一的灰：「不可访问」蒙版与「本地/IP」底色共用，保证两种状态视觉一致
 const INACTIVE_GRAY = 'rgba(100, 116, 139, 0.62)'
@@ -77,7 +80,7 @@ const glyphStyle = computed(() => {
 
 // 自定义背景色 / 内边距：管理台按展示模式设置，服务端已随 logo 一并下发
 const customBgColor = computed(() => props.value.logo?.iconBgColor || '')
-const effectivePadding = computed(() => props.value.logo?.iconPadding ?? 0)
+const effectivePadding = computed(() => props.padding ?? props.value.logo?.iconPadding ?? 0)
 
 // 明文 http 曾经在这里额外叠一个「不支持 SSL」的感叹号蒙版，已移除：它与「不可访问」共用
 // 同一层灰蒙版和去色滤镜，在 20px 的列表格子里两者几乎分辨不出，实际效果是把一批活得好好的
