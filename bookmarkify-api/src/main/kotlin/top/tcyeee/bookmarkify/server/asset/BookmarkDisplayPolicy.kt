@@ -26,8 +26,22 @@ import top.tcyeee.bookmarkify.entity.enums.DisplayMode
  *
  * | | TILE（大图 + 短文案） | LIST（小图 + 全名） |
  * |---|---|---|
- * | 首页 | 用户标题 → **站点短名** → 品牌名 → host | 用户标题 → 页面标题 → 品牌名 → host |
- * | 深链 | 用户标题 → **页面标题** → 站点短名 → host | 用户标题 → 页面标题 → host |
+ * | 首页 | 用户标题 → **站点短名** → 页面简称 → 品牌名 → host | 用户标题 → 页面标题 → 品牌名 → host |
+ * | 深链 | 用户标题 → **页面标题** → 站点短名 → 页面简称 → host | 用户标题 → 页面标题 → host |
+ *
+ * ## 「页面简称」为什么必须在候选里
+ *
+ * `site.short_name` 只有一个来源：manifest 的 `short_name`。而绝大多数站点根本没有 manifest
+ * —— 2026-08-16 查生产：92 个首页里只有 **15** 个有站点短名。若候选表止步于此，磁贴上的
+ * "站点短名"这一档对 84% 的书签是空的，直接掉到品牌名/裸域名（bilibili 会显示成
+ * `www.bilibili.com`），整条规则等于没生效。
+ *
+ * `page.app_name` 是同一件东西的另一个来源：manifest 短名**拿不到时**由 DeepSeek 从页面标题
+ * 推断（见 `BookmarkServiceImpl.parseByApi`），同一批数据里有 **75** 个 —— "哔哩哔哩"、"豆瓣"、
+ * "少数派" 全在这一列。它排在站点短名之后：站点那一层由首页抓取权威写入，而这一列是逐页的
+ * LLM 推断，深链上尤其可能带偏。
+ *
+ * 只加在 TILE 两档，LIST 原封不动：列表行有完整空间，本来就该显示页面标题。
  *
  * ## 用户标题永远第一
  *
@@ -43,7 +57,8 @@ object BookmarkDisplayPolicy {
      *   这条区分依赖 `bookmark_user_link.title` 不再存创建时从页面拷来的快照，见
      *   `SITE_LAYERING_DESIGN.md` §6。
      * @param pageTitle 页面标题（`bookmark.title`）
-     * @param siteShortName 站点短名（`site.short_name`，来自 `manifest.short_name`）
+     * @param siteShortName 站点短名（`site.short_name`，只来自 `manifest.short_name`，覆盖率低）
+     * @param pageAppName 页面简称（`page.app_name`：manifest 短名，拿不到时由 DeepSeek 从标题推断）
      * @param siteBrandName 站点全名（`site.brand_name`，来自 `og:site_name` / `manifest.name`）
      * @param urlHost 兜底：什么都没有时至少显示域名，不要显示空白
      * @param isRootPage 是不是站点首页（`bookmark.isRootPage`）
@@ -56,15 +71,16 @@ object BookmarkDisplayPolicy {
         userTitle: String?,
         pageTitle: String?,
         siteShortName: String?,
+        pageAppName: String?,
         siteBrandName: String?,
         urlHost: String?,
         isRootPage: Boolean,
         mode: DisplayMode,
     ): String? {
         val candidates = when {
-            // 首页 + 大图：站点短名唯一真正合适的场景
+            // 首页 + 大图：短名唯一真正合适的场景。站点短名优先于页面简称，理由见类注释
             isRootPage && mode == DisplayMode.TILE ->
-                listOf(userTitle, siteShortName, siteBrandName, urlHost)
+                listOf(userTitle, siteShortName, pageAppName, siteBrandName, urlHost)
 
             isRootPage ->
                 listOf(userTitle, pageTitle, siteBrandName, urlHost)
@@ -72,7 +88,7 @@ object BookmarkDisplayPolicy {
             // 深链 + 大图：同站点的多个深链图标一模一样，只能靠页面标题区分；
             // 短名退成兜底（页面标题都没抓到时，"YouTube" 仍好于裸域名）
             mode == DisplayMode.TILE ->
-                listOf(userTitle, pageTitle, siteShortName, urlHost)
+                listOf(userTitle, pageTitle, siteShortName, pageAppName, urlHost)
 
             else ->
                 listOf(userTitle, pageTitle, urlHost)

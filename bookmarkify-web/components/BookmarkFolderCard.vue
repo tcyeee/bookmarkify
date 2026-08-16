@@ -113,17 +113,19 @@ function registerRows() {
     return combine(
       draggable({
         element: el,
-        getInitialData: () => ({ id }),
+        getInitialData: () => ({ kind: 'bookmark-row', id }),
         onDragStart: () => (draggingId.value = id),
         onDrop: reset,
       }),
       dropTargetForElements({
         element: el,
         // 不再要求 source 必须已属于本卡片：允许从其它文件夹/根目录拖入，实现跨文件夹移动。
-        // 文件夹卡片级别的拖拽（source.data.kind === 'folder-card'，见 pages/index.vue）走的是
-        // 卡片外层包装 div 的独立 dropTarget，这里必须排除，否则一张文件夹卡片会被当成书签
-        // 塞进另一张卡片的子项列表
-        canDrop: ({ source }) => source.data.id !== id && source.data.kind !== 'folder-card',
+        // 但只收「书签行」这一种来源，其余两套拖拽各有自己的放置区：文件夹卡片级别的拖拽
+        // （kind === 'folder-card'，见 pages/index.vue）走卡片外层包装 div，置顶区磁贴
+        // （kind === 'pinned-tile'）只落在置顶区自己身上。**这里必须是白名单**：置顶书签同时
+        // 也是某个文件夹的子项，光看 id 两边完全分不开，漏掉一种来源就会让一次置顶区拖拽被
+        // 当成「把书签移进这个文件夹」执行掉。
+        canDrop: ({ source }) => source.data.kind === 'bookmark-row' && source.data.id !== id,
         getData: () => ({ id }),
         onDrag: ({ location }) => {
           // dropTargets[0] 是嵌套放置区里被命中的最内层元素；只有真正悬停在本行上时才更新指示线，
@@ -150,8 +152,9 @@ function registerCard() {
   if (!el) return
   cardCleanup = dropTargetForElements({
     element: el,
-    // 同上：拒收文件夹卡片级别的拖拽，交给 pages/index.vue 里包装 div 上的 dropTarget 处理
-    canDrop: ({ source }) => source.data.kind !== 'folder-card',
+    // 同上：只收书签行，文件夹卡片拖拽交给 pages/index.vue 里包装 div 上的 dropTarget，
+    // 置顶区磁贴不落到卡片里
+    canDrop: ({ source }) => source.data.kind === 'bookmark-row',
     getData: () => ({ id: CARD_END_ID }),
     onDrag: ({ location }) => {
       if (location.current.dropTargets[0]?.element !== el) return
@@ -172,6 +175,9 @@ function registerMonitor() {
   monitorCleanup = monitorForElements({
     onDrop: ({ source, location }) => {
       reset()
+      // 全局 monitor 收到的是**所有**拖拽，包括置顶区磁贴与文件夹卡片；它们的 id 就是节点 id，
+      // 与本卡片的子项 id 同一个取值空间，不看 kind 的话下面那道 belongsToThisCard 会认成自家行
+      if (source.data.kind !== 'bookmark-row') return
       const target = location.current.dropTargets[0]
       if (!target) return
       const sourceId = String(source.data.id)

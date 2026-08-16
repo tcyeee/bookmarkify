@@ -16,12 +16,13 @@ class BookmarkDisplayPolicyTest {
         userTitle: String? = null,
         pageTitle: String? = null,
         siteShortName: String? = null,
+        pageAppName: String? = null,
         siteBrandName: String? = null,
         urlHost: String? = "www.youtube.com",
         isRootPage: Boolean,
         mode: DisplayMode,
     ) = BookmarkDisplayPolicy.title(
-        userTitle, pageTitle, siteShortName, siteBrandName, urlHost, isRootPage, mode,
+        userTitle, pageTitle, siteShortName, pageAppName, siteBrandName, urlHost, isRootPage, mode,
     )
 
     // ────── 用户标题永远第一 ──────
@@ -69,6 +70,54 @@ class BookmarkDisplayPolicyTest {
                 mode = DisplayMode.TILE,
             ),
             "磁贴空间只有一行，首页就该用 manifest.short_name",
+        )
+    }
+
+    /**
+     * 生产上 92 个首页里只有 15 个有 manifest 短名，而 75 个有 `page.app_name`（DeepSeek 从标题
+     * 推断的简称）。没有这一档，磁贴上「短名」这条规则对 84% 的书签形同虚设 —— bilibili 首页
+     * 会一路掉到裸域名 `www.bilibili.com`。
+     */
+    @Test
+    fun `homepage tile falls back to the page app name when the site has no manifest short name`() {
+        assertEquals(
+            "哔哩哔哩",
+            title(
+                pageTitle = "哔哩哔哩 (゜-゜)つロ 干杯~-bilibili",
+                siteShortName = null,
+                pageAppName = "哔哩哔哩",
+                urlHost = "www.bilibili.com",
+                isRootPage = true,
+                mode = DisplayMode.TILE,
+            ),
+        )
+    }
+
+    /** 站点短名是首页抓取权威写入的，压在逐页 LLM 推断之上 */
+    @Test
+    fun `site short name outranks the page app name`() {
+        assertEquals(
+            "YouTube",
+            title(siteShortName = "YouTube", pageAppName = "油管", isRootPage = true, mode = DisplayMode.TILE),
+        )
+    }
+
+    /** 列表行原封不动：有完整空间，就该显示页面标题，简称不参与 */
+    @Test
+    fun `list mode ignores the page app name entirely`() {
+        assertEquals(
+            "哔哩哔哩 (゜-゜)つロ 干杯~-bilibili",
+            title(
+                pageTitle = "哔哩哔哩 (゜-゜)つロ 干杯~-bilibili",
+                pageAppName = "哔哩哔哩",
+                isRootPage = true,
+                mode = DisplayMode.LIST,
+            ),
+        )
+        assertEquals(
+            "www.youtube.com",
+            title(pageAppName = "油管", isRootPage = false, mode = DisplayMode.LIST),
+            "深链列表行抓不到页面标题就退到域名，简称不该顶上来",
         )
     }
 

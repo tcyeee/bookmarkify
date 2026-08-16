@@ -11,8 +11,17 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 interface IBookmarkUserLinkService : IService<BookmarkEntity> {
     /** 修改用户书签的标题/描述；仅修改属于该用户自己的记录 */
     fun updateOne(params: BookmarkUpdatePrams, uid: String): Boolean
-    /** 置顶/取消置顶用户书签；仅修改属于该用户自己的记录 */
+    /** 置顶/取消置顶用户书签；仅修改属于该用户自己的记录。新置顶的书签排到置顶区末尾 */
     fun setPinned(linkId: String, pinned: Boolean, uid: String): Boolean
+
+    /**
+     * 重排置顶区：[linkIds] 是**整个置顶区**按新顺序排列的书签ID，序号由服务端按下标分配。
+     *
+     * 收整份顺序而不是收一个 `id -> sort` 的映射（`/bookmark/sort` 那种），是因为客户端只知道
+     * 「谁排在谁前面」，具体取什么数值是服务端的事：让客户端算 sort 值，重号、空洞、以及两次
+     * 拖拽之间数值漂移就都成了它要操心的事，而这些错误没有任何一处会报出来。
+     */
+    fun setPinnedOrder(linkIds: List<String>, uid: String): Boolean
     /** 记录一次书签打开(仅做计数，不做展示)；仅修改属于该用户自己的记录 */
     fun recordOpen(linkId: String, uid: String): Boolean
     fun copy(sourceUid: String, targetUid: String)
