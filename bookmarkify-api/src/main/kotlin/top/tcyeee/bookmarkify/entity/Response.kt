@@ -154,7 +154,7 @@ data class BookmarkLogoShowVO(
     @field:Schema(description = "可信度:TRUSTED/DEGRADED") val quality: AssetQuality? = null,
     @field:Schema(description = "是否矢量图") val isVector: Boolean = false,
     @field:Schema(description = "为 true 时前端应放弃图片,改用首字母色块") val monogram: Boolean = true,
-    @field:Schema(description = "图片内边距") val iconPadding: Int = 25,
+    @field:Schema(description = "图片内边距") val iconPadding: Int = SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
     @field:Schema(description = "图标背景色") val iconBgColor: String? = null,
 ) {
     companion object {
@@ -526,7 +526,7 @@ data class SiteAdminVO(
 /** 管理后台某展示模式下的图标设置 */
 data class SiteDisplayPrefVO(
     @field:Schema(description = "展示模式") var displayMode: DisplayMode = DisplayMode.TILE,
-    @field:Schema(description = "图片内边距") var iconPadding: Int = 25,
+    @field:Schema(description = "图片内边距") var iconPadding: Int = SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
     @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
     @field:Schema(description = "人工钉死的资产ID") var pinnedAssetId: String? = null,
     @field:Schema(description = "当前该模式下实际会渲染的地址") var previewUrl: String? = null,
