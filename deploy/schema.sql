@@ -424,7 +424,7 @@ CREATE TABLE public.site_asset (
 CREATE TABLE public.site_display_pref (
     page_id character varying(64),
     display_mode character varying(20) NOT NULL,
-    icon_padding integer DEFAULT 25 NOT NULL,
+    icon_padding integer DEFAULT 0 NOT NULL,
     icon_bg_color character varying(32),
     pinned_asset_id character varying(64),
     updated_by character varying(64),

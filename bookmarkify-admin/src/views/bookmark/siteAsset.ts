@@ -52,7 +52,7 @@ export function prefOf(
   return (
     (prefs ?? []).find((p) => p.displayMode === mode) ?? {
       displayMode: mode,
-      iconPadding: 25,
+      iconPadding: 0,
       iconBgColor: undefined,
       pinnedAssetId: undefined,
       previewUrl: undefined,
