@@ -28,6 +28,11 @@ export const bookmarksDel = (params: Array<string>) => http.post<boolean>('/book
 // 保存完那一格的标题与描述就被清空了 —— 类型是编出来的，tsc 自然一句话都不会说。
 export const bookmarksUpdate = (params: t.BookmarkUpdatePrams) => http.post<boolean>('/bookmark/update', params)
 export const bookmarksPin = (linkId: string, pinned: boolean) => http.post<boolean>('/bookmark/pin', { linkId, pinned })
+// 置顶区排序。传的是**整个置顶区**按新顺序排好的 bookmarkId（用户与页面的关联行ID，不是布局节点ID），
+// 序号由后端按下标分配 —— 前端只知道谁在谁前面，具体存什么数值是后端的事。
+// 与 bookmarksSort 不能混用：那条走 user_preference 的节点排序表，按「层」记；置顶区是跨层平铺的，
+// 用它来排会连带把书签在自己文件夹里的位置也挪了。
+export const bookmarksPinSort = (linkIds: Array<string>) => http.post<boolean>('/bookmark/pinSort', linkIds)
 // 让后端重新抓取这条书签。**只投递、不等待**：抓取要几秒到几十秒，接口立刻返回，结果稍后经
 // WebSocket HOME_ITEM_UPDATE 推回来，由 bookmarkStore.replaceContent() 就地替换那一格。
 // 因此调用方拿到的 true 只代表「已排进后台队列」，不代表抓到了东西。

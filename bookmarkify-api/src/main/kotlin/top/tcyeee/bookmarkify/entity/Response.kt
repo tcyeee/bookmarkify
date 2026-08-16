@@ -38,10 +38,24 @@ data class BookmarkShow(
     @field:Schema(description = "关联书签ID") var pageId: String? = null,
     @field:Schema(description = "关联用户自定义信息ID") var bookmarkId: String? = null,
     @field:Schema(description = "书签标题") var title: String? = null,
+    /**
+     * 磁贴形态该显示的文案（首页书签取站点短名），由 [initDisplay] 一并算出。
+     *
+     * 之所以与 [title] 并存而不是让调用方换个 mode 重新解析一遍：**同一条书签在首页上会被渲染
+     * 两次** —— 置顶区是大图短文案的磁贴，下方的文件夹卡片里还有一行列表行。一份 VO 供两处使用，
+     * 只带一个文案就必然有一处是错的。带两个文案的代价是每条书签多一个短字符串，而两处各解析
+     * 一次的代价是整棵桌面树的资产解析翻倍（[SiteAssetResolver.resolveBatch] 是这条链路上唯一
+     * 的数据库开销）。
+     *
+     * 图标仍是按调用方那一个 mode 解析的（置顶区拿到的是 LIST 那张）：文案是纯函数、白拿，
+     * 而图标要再查一遍资产表并重新签名。56px 的磁贴用 LIST 的 64px 源图看不出差别。
+     */
+    @field:Schema(description = "磁贴形态的标题(置顶区用;首页书签为站点短名)") var tileTitle: String? = null,
     @field:Schema(description = "书签备注") var description: String? = null,
     @field:Schema(description = "完整url") var urlFull: String? = null,
     @field:Schema(description = "基础url") var urlBase: String? = null,
     @field:Schema(description = "是否置顶") var pinned: Boolean = false,
+    @field:Schema(description = "置顶区排序(越小越靠前;非置顶书签无意义)") var pinnedSort: Int = 0,
     @field:Schema(description = "书签链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
     // 图标不再由本类自己拼装：改由 SiteAssetResolver 按展示模式从 site_asset 解析后注入。
     @field:Schema(description = "图标信息(按展示模式解析后的结果)") var logo: BookmarkLogoShowVO = BookmarkLogoShowVO(),
@@ -59,6 +73,7 @@ data class BookmarkShow(
     @JsonIgnore @field:Schema(description = "用户自己改的标题；null 表示没改过") var userTitle: String? = null,
     @JsonIgnore @field:Schema(description = "页面标题(bookmark.title)") var pageTitle: String? = null,
     @JsonIgnore @field:Schema(description = "站点短名(site.short_name)") var siteShortName: String? = null,
+    @JsonIgnore @field:Schema(description = "页面简称(page.app_name)：manifest 短名，缺失时由 DeepSeek 推断") var pageAppName: String? = null,
     @JsonIgnore @field:Schema(description = "站点全名(site.brand_name)") var siteBrandName: String? = null,
     @JsonIgnore @field:Schema(description = "是否站点首页，决定文案优先级") var rootPage: Boolean = true,
 ) {
@@ -77,12 +92,14 @@ data class BookmarkShow(
         layoutNodeId = userlink.layoutNodeId
         urlFull = userlink.urlFull
         pinned = userlink.pinned
+        pinnedSort = userlink.pinnedSort
         linkType = userlink.linkType
 
         userTitle = userlink.title
         description = userlink.description ?: bookmark?.description
 
         pageTitle = bookmark?.title
+        pageAppName = bookmark?.appName
         urlHost = bookmark?.urlHost ?: site?.host
         isActivity = bookmark?.isActivity
         rootPage = bookmark?.isRootPage ?: true
@@ -103,21 +120,26 @@ data class BookmarkShow(
      * 完成后的两处 WebSocket 推送都是这么丢的。参数必填，让编译器替我们守住这条边界。
      *
      * [mode] 同理必填：文案优先级与图标优先级在两种模式下都不一样，而且**必须取同一个值** ——
-     * 用 TILE 选图、用 LIST 选文案会得到一个自相矛盾的格子。
+     * 用 TILE 选图、用 LIST 选文案会得到一个自相矛盾的格子。[tileTitle] 是这条规则唯一的例外，
+     * 理由见它自己的注释：那一份是给**另一处**渲染（置顶区磁贴）用的，不参与本格子的显示。
      */
     fun initDisplay(resolved: SiteAssetResolver.ResolvedLogo?, mode: DisplayMode): BookmarkShow {
         logo = BookmarkLogoShowVO.from(resolved)
-        title = BookmarkDisplayPolicy.title(
-            userTitle = userTitle,
-            pageTitle = pageTitle,
-            siteShortName = siteShortName,
-            siteBrandName = siteBrandName,
-            urlHost = urlHost,
-            isRootPage = rootPage,
-            mode = mode,
-        )
+        title = titleFor(mode)
+        tileTitle = if (mode == DisplayMode.TILE) title else titleFor(DisplayMode.TILE)
         return this
     }
+
+    private fun titleFor(mode: DisplayMode): String? = BookmarkDisplayPolicy.title(
+        userTitle = userTitle,
+        pageTitle = pageTitle,
+        siteShortName = siteShortName,
+        pageAppName = pageAppName,
+        siteBrandName = siteBrandName,
+        urlHost = urlHost,
+        isRootPage = rootPage,
+        mode = mode,
+    )
 }
 
 /**

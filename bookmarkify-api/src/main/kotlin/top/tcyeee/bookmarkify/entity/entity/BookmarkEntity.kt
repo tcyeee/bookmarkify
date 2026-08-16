@@ -41,6 +41,21 @@ data class BookmarkEntity(
     @field:Schema(description = "书签链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
 
     @field:Schema(description = "是否置顶") var pinned: Boolean = false,
+
+    /**
+     * 置顶区里的排列顺序，**与桌面树的排序是两回事**。
+     *
+     * 桌面顺序存在 `user_preference.node_sort_map_json`（key 是布局节点 id），它表达的是「某个节点
+     * 在它所属的那一层里排第几」。而置顶区把**分散在各个文件夹里**的书签抽出来平铺成一行，它们
+     * 之间的先后在那张表里根本无从表达 —— 两条来自不同文件夹的书签各自的 sort 只在自己那一层
+     * 里有意义，拿来跨层比较得到的顺序是巧合。硬要用它排还有一个更糟的后果：改置顶区的顺序
+     * 就会连带改动这条书签在它自己文件夹里的位置。
+     *
+     * 因此这一列归在「用户的这一次收藏」上，与 [pinned] 同层：置顶与置顶顺序本就是同一件事的
+     * 两个方面。新置顶的书签排到末尾（见 `BookmarkUserLinkServiceImpl.setPinned`），取消置顶时
+     * 不清零 —— 反正重新置顶会重新分配。
+     */
+    @field:Schema(description = "置顶区排序(越小越靠前)") var pinnedSort: Int = 0,
     @JsonIgnore @field:Schema(description = "用户打开该书签的累计次数(仅做记录)") var openCount: Int = 0,
 
     /**

@@ -45,10 +45,17 @@ export interface BookmarkShow {
   // 打开计数(bookmarksRecordOpen)/置顶(bookmarksPin)/封面等按“用户的这一条”操作的接口都要它。
   bookmarkId: string
   title: string
+  // 磁贴形态（大图 + 一行短文案）该显示的文案，服务端 BookmarkDisplayPolicy 按 TILE 模式算好下发：
+  // 首页书签取站点短名(manifest short_name)，深链仍取页面标题——同站深链的图标一模一样，
+  // 文案再统一成短名就没法区分了。置顶区用它，桌面列表行仍用 title。
+  tileTitle?: string
   description: string
   urlFull: string
   urlBase: string
   pinned: boolean
+  // 置顶区内的顺序（越小越靠前）。与桌面树的 sort 是两套：置顶区把各文件夹里的书签平铺成一行，
+  // 跨层的先后在按层记的 sort 里表达不出来。仅 pinned 为 true 时有意义。
+  pinnedSort: number
   // 书签链接类型：本地/IP 类型不会被后端抓取，前端仅展示统一的 mdi 圆圈图标
   linkType: BookmarkLinkType
   // 图标相关字段统一收拢到 logo（后端 website_logo 表）
