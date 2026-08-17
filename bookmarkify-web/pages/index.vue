@@ -4,9 +4,7 @@
   <div class="flex h-dvh w-full flex-col select-none">
     <CommonHeader />
     <div class="flex-1 overflow-y-auto bg-white dark:bg-slate-900">
-      <div class="max-w-6xl mx-auto px-4 py-6">
-        <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-4">全部书签</h1>
-
+      <div class="max-w-6xl mx-auto px-20 py-6">
         <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-6">
           <label
             class="cy-input flex items-center gap-2 w-full sm:flex-1"
