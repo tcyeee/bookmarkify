@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { HomeItemType, ROOT_KEY, type UserLayoutNodeVO } from '@typing'
-import { bookmarksShowAll, bookmarksMoveNode, bookmarksDel } from '@api'
+import { bookmarksShowAll, bookmarksMoveNode, bookmarksDel, bookmarksUpdateDirCollapsed } from '@api'
 
 // 兜底重试的退避上限：单次最多等 5 分钟
 const MAX_RESOLUTION_DELAY_MS = 5 * 60 * 1000
@@ -12,6 +12,9 @@ const MAX_ARMED_WATCHES = 20
 // 批量导入完成提示的超时兜底：留 15 分钟余量越过后端 drainStuckLoading 的 30 分钟陈旧阈值，
 // 避免个别节点因我方抓取服务故障（E307）长期停在 LOADING 导致这批导入永远等不到"全部完成"
 const IMPORT_BATCH_TIMEOUT_MS = 45 * 60 * 1000
+// 文件夹动画结束后，用户保持该状态多久才落库。动画期间的点击由组件拦截；等待期间的新操作
+// 会清掉旧定时器并从下一次动画结束重新计算。
+const FOLDER_COLLAPSE_SYNC_DELAY_MS = 1000
 
 /**
  * 同一层子节点的排列顺序：以后端的 sort 为准，绝不沿用数组自带的顺序。
@@ -41,6 +44,17 @@ function normalize(root?: UserLayoutNodeVO | null) {
   }
   walk(root?.children, ROOT_KEY)
   return { nodes, order }
+}
+
+/** 把本标签页的文件夹视图覆盖到服务端快照上，服务端数据只负责新标签页的初始状态。 */
+function overlayFolderCollapsedOverrides(
+  nodes: Record<string, UserLayoutNodeVO>,
+  overrides: Record<string, boolean>,
+) {
+  for (const [folderId, collapsed] of Object.entries(overrides)) {
+    const node = nodes[folderId]
+    if (node?.type === HomeItemType.BOOKMARK_DIR) nodes[folderId] = { ...node, collapsed }
+  }
 }
 
 /**
@@ -82,6 +96,17 @@ export const useBookmarkStore = defineStore('homeItems', {
     // 真实文件夹的状态以节点上的 collapsed 为准，并通过 /bookmark/updateDirCollapsed 落库。
     // 只记 true 的那些：折叠是少数派，展开的卡片不该在 localStorage 里占一行。
     collapsedFolders: {} as Record<string, boolean>,
+    // 真实文件夹尚未完成落库的最终折叠意图。其它结构操作仍可能通过 WebSocket 或补拉带回
+    // 一棵较旧的布局；服务端快照必须先与本地视图合并，不能反过来覆盖用户操作。
+    // 当前标签页一旦操作过某个文件夹，它的视图就不再接受 WS/补拉快照里的 collapsed 覆盖；
+    // 刷新页面后该覆盖消失，再从后端持久化值初始化。
+    folderCollapsedOverrides: {} as Record<string, boolean>,
+    // 这六项都是进程内协调状态，不进入 persist.pick。
+    pendingFolderCollapsed: {} as Record<string, boolean>,
+    folderCollapseVersions: {} as Record<string, number>,
+    folderCollapseSyncTimers: {} as Record<string, ReturnType<typeof setTimeout>>,
+    folderCollapseSaveQueues: {} as Record<string, Promise<void>>,
+    folderCollapsePersisted: {} as Record<string, boolean>,
   }),
 
   getters: {
@@ -173,6 +198,10 @@ export const useBookmarkStore = defineStore('homeItems', {
 
     setLayout(root?: UserLayoutNodeVO | null) {
       const { nodes, order } = normalize(root)
+      overlayFolderCollapsedOverrides(nodes, this.folderCollapsedOverrides)
+      for (const folderId of Object.keys(this.folderCollapsedOverrides)) {
+        if (!nodes[folderId]) this.discardFolderCollapseState(folderId)
+      }
       // 服务端这份布局里已经没有的节点，其兜底定时器也该跟着走，否则它会一直空转到超时
       for (const id of Object.keys(this.pendingTimeouts)) {
         if (!nodes[id]) this.clearResolutionWatch(id)
@@ -364,7 +393,13 @@ export const useBookmarkStore = defineStore('homeItems', {
       // 覆盖前先记下本地这份子列表，用来算出「谁被移出去了」（见下方兜底）
       const prevChildIds = this.order[node.id] ?? []
       const cur = this.nodes[node.id]
-      this.nodes[node.id] = { ...node, parentId: cur?.parentId ?? node.parentId ?? null, children: undefined }
+      const localCollapsed = this.folderCollapsedOverrides[node.id]
+      this.nodes[node.id] = {
+        ...node,
+        collapsed: localCollapsed ?? node.collapsed,
+        parentId: cur?.parentId ?? node.parentId ?? null,
+        children: undefined,
+      }
       for (const child of children) {
         if (!child?.id) continue
         this.nodes[child.id] = { ...child, parentId: node.id, children: undefined }
@@ -448,13 +483,82 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.nodes[folderId] = { ...node, color }
     },
 
-    updateFolderCollapsedLocal(folderId: string, collapsed: boolean) {
+    beginFolderCollapsedChange(folderId: string, collapsed: boolean) {
       const node = this.nodes[folderId]
       if (!node) {
         console.warn(`[bookmark] 更新折叠状态的文件夹在本地不存在，跳过: folderId=${folderId}`)
         return
       }
+
+      this.clearFolderCollapseSyncTimer(folderId)
+      // 新一轮操作开始时，以当前服务端已确认状态作为失败回滚基准。pending 存在时说明仍是
+      // 同一轮连续操作，不能把尚未落库的乐观状态误记成服务端基准。
+      if (!Object.hasOwn(this.pendingFolderCollapsed, folderId)) {
+        this.folderCollapsePersisted[folderId] = node.collapsed === true
+      }
+      this.folderCollapsedOverrides = { ...this.folderCollapsedOverrides, [folderId]: collapsed }
+      this.pendingFolderCollapsed = { ...this.pendingFolderCollapsed, [folderId]: collapsed }
+      this.folderCollapseVersions[folderId] = (this.folderCollapseVersions[folderId] ?? 0) + 1
       this.nodes[folderId] = { ...node, collapsed }
+    },
+
+    clearFolderCollapseSyncTimer(folderId: string) {
+      const timer = this.folderCollapseSyncTimers[folderId]
+      if (timer == null) return
+      clearTimeout(timer)
+      delete this.folderCollapseSyncTimers[folderId]
+    },
+
+    // 由卡片的 after-enter / after-leave 调用，保证这一秒从动画完整结束后才开始计算。
+    scheduleFolderCollapsedSync(folderId: string) {
+      this.clearFolderCollapseSyncTimer(folderId)
+      if (!Object.hasOwn(this.pendingFolderCollapsed, folderId)) return
+      this.folderCollapseSyncTimers[folderId] = setTimeout(() => {
+        delete this.folderCollapseSyncTimers[folderId]
+        this.persistFolderCollapsed(folderId)
+      }, FOLDER_COLLAPSE_SYNC_DELAY_MS)
+    },
+
+    persistFolderCollapsed(folderId: string) {
+      if (!Object.hasOwn(this.pendingFolderCollapsed, folderId)) return
+      const requestedCollapsed = this.pendingFolderCollapsed[folderId]!
+      const changeVersion = this.folderCollapseVersions[folderId] ?? 0
+      const previousQueue = this.folderCollapseSaveQueues[folderId] ?? Promise.resolve()
+
+      this.folderCollapseSaveQueues[folderId] = previousQueue
+        .catch(() => undefined)
+        .then(async () => {
+          try {
+            await bookmarksUpdateDirCollapsed(folderId, requestedCollapsed)
+            this.folderCollapsePersisted[folderId] = requestedCollapsed
+            // 请求期间若又有操作，只确认这个旧请求已经落库；新的乐观意图继续覆盖服务端快照。
+            if (changeVersion !== (this.folderCollapseVersions[folderId] ?? 0)) return
+            const { [folderId]: _settled, ...remaining } = this.pendingFolderCollapsed
+            this.pendingFolderCollapsed = remaining
+            const node = this.nodes[folderId]
+            if (node) this.nodes[folderId] = { ...node, collapsed: requestedCollapsed }
+          } catch (error) {
+            // 旧请求失败不能回滚更新的操作。只有最终请求失败时才回到最近一次服务端确认状态。
+            if (changeVersion === (this.folderCollapseVersions[folderId] ?? 0)) {
+              const fallback = this.folderCollapsePersisted[folderId] ?? false
+              this.folderCollapsedOverrides = { ...this.folderCollapsedOverrides, [folderId]: fallback }
+              const { [folderId]: _failed, ...remaining } = this.pendingFolderCollapsed
+              this.pendingFolderCollapsed = remaining
+              const node = this.nodes[folderId]
+              if (node) this.nodes[folderId] = { ...node, collapsed: fallback }
+            }
+            console.error('[bookmark] 更新文件夹折叠状态失败', error)
+          }
+        })
+    },
+
+    discardFolderCollapseState(folderId: string) {
+      this.clearFolderCollapseSyncTimer(folderId)
+      delete this.folderCollapsedOverrides[folderId]
+      delete this.pendingFolderCollapsed[folderId]
+      delete this.folderCollapseVersions[folderId]
+      delete this.folderCollapsePersisted[folderId]
+      delete this.folderCollapseSaveQueues[folderId]
     },
 
     removeNode(id: string) {
@@ -475,6 +579,7 @@ export const useBookmarkStore = defineStore('homeItems', {
     removeSubtree(id: string, isRoot = true) {
       const node = this.nodes[id]
       if (node?.type === HomeItemType.BOOKMARK_DIR) {
+        this.discardFolderCollapseState(id)
         for (const cid of [...(this.order[id] ?? [])]) this.removeSubtree(cid, false)
       }
       this.clearResolutionWatch(id)
@@ -485,7 +590,7 @@ export const useBookmarkStore = defineStore('homeItems', {
       if (isRoot && import.meta.client) useNuxtApp().$track('folder-delete')
     },
 
-    // 根目录及旧版本数据的本地折叠兜底。真实文件夹由 updateFolderCollapsedLocal + API 维护。
+    // 根目录及旧版本数据的本地折叠兜底。真实文件夹由 beginFolderCollapsedChange + API 维护。
     // 展开时把键删掉而不是置 false，否则 localStorage 里会慢慢攒下一批「曾经折叠过」的 id。
     toggleFolderCollapsed(cardId: string) {
       if (this.collapsedFolders[cardId]) {
@@ -541,6 +646,7 @@ export const useBookmarkStore = defineStore('homeItems', {
 
     // 解散一个文件夹：残留 0/1 子项并入根末尾、删除文件夹自身。安静执行（不报警）。
     dissolveFolderLocal(folderId: string) {
+      this.discardFolderCollapseState(folderId)
       const children = this.order[folderId] ?? []
       for (const cid of children) {
         if (this.nodes[cid]) this.nodes[cid] = { ...this.nodes[cid], parentId: null, children: undefined }
@@ -620,7 +726,8 @@ export const useBookmarkStore = defineStore('homeItems', {
   // pinia-plugin-persistedstate 会回退到 cookies（单条 ~4KB 上限），书签树（含内嵌
   // base64 图标）写入必然静默失败/截断，导致缓存永远无法在 F5 后存活。与
   // preference.store 写法保持一致。
-  // pendingTimeouts / inflightUpdate 是进程内瞬时状态，刷新后必然失效，排除在持久化范围外。
+  // pendingTimeouts / inflightUpdate 以及 folderCollapse* 协调字段是进程内瞬时状态，刷新后
+  // 必然失效，排除在持久化范围外。
   //
   // ⚠️ 字段名是 `pick`，不是 `paths`。`paths` 是 pinia-plugin-persistedstate v3 的写法，v4
   // 把它改名成了 `pick`（本项目装的是 4.7.1）—— 而**多余的键是被静默忽略的**，于是这个白名单

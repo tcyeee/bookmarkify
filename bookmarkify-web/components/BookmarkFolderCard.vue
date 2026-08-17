@@ -16,6 +16,8 @@
         type="button"
         class="shrink-0 text-slate-400 hover:text-primary dark:text-slate-500 dark:hover:text-primary"
         :aria-expanded="!collapsed"
+        :aria-disabled="isTransitioning"
+        :disabled="isTransitioning"
         :title="collapsed ? '展开' : '折叠'"
         @click="toggleCollapsed">
         <Icon
@@ -86,7 +88,14 @@
     <!-- 折叠时整份列表最终会卸载（而不是 v-show 藏起来）：行是拖拽放置区，留在 DOM 里会让人把书签
          "拖进"一个看不见的位置。卡片容器自身的放置区仍在，所以折叠状态下依然能收下书签，
          落到该文件夹末尾。动画开始时先清理行注册，展开动画结束后再补一次 registerRows。 -->
-    <Transition name="folder-content" @before-leave="unregisterRows" @after-enter="registerRows">
+    <Transition
+      name="folder-content"
+      mode="out-in"
+      @before-leave="unregisterRows"
+      @after-leave="finishTransition"
+      @after-enter="finishTransition"
+      @enter-cancelled="cancelTransition"
+      @leave-cancelled="cancelTransition">
       <div v-if="!collapsed" class="folder-content">
         <div class="folder-content-inner">
           <div
@@ -125,7 +134,6 @@ import ContextMenu from '@imengyu/vue3-context-menu'
 import {
   bookmarksRenameDir,
   bookmarksUpdateDirColor,
-  bookmarksUpdateDirCollapsed,
   bookmarksDel,
   bookmarksSort,
   bookmarksMoveNode,
@@ -171,22 +179,37 @@ const collapsed = computed(() =>
     : props.initialCollapsed,
 )
 
-async function toggleCollapsed() {
+const isTransitioning = ref(false)
+
+function toggleCollapsed() {
+  // 过渡期间保持当前动画完整播放，避免 Vue 同时处理 enter/leave 导致内容卡住或闪烁。
+  if (isTransitioning.value) return
+
   const next = !collapsed.value
+  isTransitioning.value = true
+
   if (props.isRoot) {
     // 根目录是前端合成节点，不对应 user_layout_node，只能保留在本地。
     bookmarkStore.toggleFolderCollapsed(props.folderId)
     return
   }
 
-  // 先乐观更新，避免等待网络往返造成标题点击无响应；失败时回滚。
-  bookmarkStore.updateFolderCollapsedLocal(props.folderId, next)
-  try {
-    await bookmarksUpdateDirCollapsed(props.folderId, next)
-  } catch (error) {
-    bookmarkStore.updateFolderCollapsedLocal(props.folderId, !next)
-    console.error('[BookmarkFolderCard] 更新文件夹折叠状态失败', error)
-  }
+  // 乐观状态、延迟保存与请求串行都归 store 管；它也会在应用服务端布局前覆盖这份待提交意图。
+  bookmarkStore.beginFolderCollapsedChange(props.folderId, next)
+}
+
+function finishTransition() {
+  isTransitioning.value = false
+  if (collapsed.value) unregisterRows()
+  else nextTick(registerRows)
+  if (!props.isRoot) bookmarkStore.scheduleFolderCollapsedSync(props.folderId)
+}
+
+function cancelTransition() {
+  isTransitioning.value = false
+  unregisterRows()
+  if (!collapsed.value) nextTick(registerRows)
+  if (!props.isRoot) bookmarkStore.scheduleFolderCollapsedSync(props.folderId)
 }
 
 // ── 书签拖动排序 / 跨文件夹移动 ──
@@ -377,6 +400,8 @@ onMounted(() =>
   }),
 )
 onBeforeUnmount(() => {
+  // 切路由或瀑布流重排导致组件卸载时，待提交状态仍由 store 持有，不能随着组件生命周期丢掉。
+  if (!props.isRoot) bookmarkStore.scheduleFolderCollapsedSync(props.folderId)
   unregisterRows()
   cardCleanup?.()
   monitorCleanup?.()
