@@ -85,6 +85,8 @@ All three previously shared the single name `HOME_ITEM_UPDATE`, and `replaceCont
 
 Whatever the type, the store **must replace nodes with new object references** to trigger Vue reactivity — see `replaceContent()` for the pattern. Direct nested mutation will not re-render.
 
+**A payload's `children` array order is not the contract — `sort` is.** Both entry points that ingest children (`normalize()` for the full tree, `replaceFolder()` for `HOME_DIR_UPDATE`) go through `sortedByServerSort()`; keep any new one on it too. `replaceFolder()` used to take `children.map(c => c.id)` verbatim, which is how "drag a bookmark from folder A into folder B and B's existing bookmarks shuffle" happened: `moveNode` builds that push from a plain `WHERE parent_id = ?` query, so the array arrives in **Postgres heap order**, and a row that has ever been UPDATEd (creating a folder, moving in or out — all rewrite `parent_id`) has its new tuple version somewhere else in the heap, permanently decoupling scan order from `sort`. Production had folders in exactly that state. The API now sorts on its side too (`UserLayoutNodeServiceImpl.CHILD_ORDER`), but the client must not depend on that: **the two services deploy from separate path-filtered pipelines, so a version-skew window is guaranteed.** The matching write-order rule lives in `BookmarkFolderCard.persist()` — `bookmarksSort` must be awaited *before* `bookmarksMoveNode`, because the server builds that push from the sort map as it stands at that moment.
+
 ### HTTP client
 All API calls go through the static `http` class in `server/apis/http.ts`. Endpoint functions live in `server/apis/index.ts` and return `Promise<t.SomeType>`.
 
