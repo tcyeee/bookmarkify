@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Language
+
+All commit messages, pull request titles, and pull request descriptions must be written in English.
+
 ## What This Is
 
 **Bookmarkify** (书签鸭) is a bookmark management platform consisting of four services that work together. Each service has its own `CLAUDE.md` with detailed conventions — read those when working inside a specific service.
