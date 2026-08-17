@@ -102,7 +102,7 @@
               class="group flex items-center gap-3 py-2 px-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
               @click="recordOpen(item)"
               @contextmenu.prevent="openMyResultMenu($event.x, $event.y, item)">
-              <BookmarkLogo :value="item.typeApp!" :size="20" />
+              <BookmarkLogo :value="item.typeApp!" size="S" />
               <div class="flex flex-col overflow-hidden flex-1">
                 <span
                   class="text-sm truncate"
@@ -226,7 +226,7 @@
               class="cy-checkbox cy-checkbox-sm"
               :checked="pickedBookmarkIds.has(item.id)"
               @change="togglePickedBookmark(item.id)" />
-            <BookmarkLogo :value="item.typeApp!" :size="20" />
+            <BookmarkLogo :value="item.typeApp!" size="S" />
             <span class="text-sm text-slate-700 dark:text-slate-200 truncate flex-1">
               {{ item.typeApp!.title || item.typeApp!.urlBase }}
             </span>
@@ -268,7 +268,6 @@ import { useDebounceFn, useBreakpoints, breakpointsTailwind } from '@vueuse/core
 import ContextMenu from '@imengyu/vue3-context-menu'
 import { Icon } from '@iconify/vue'
 import { externalHref } from '@utils'
-import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 
