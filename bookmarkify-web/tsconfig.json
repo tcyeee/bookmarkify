@@ -7,7 +7,8 @@
       "@config": ["./server/config"],
       "@config/*": ["./server/config/*"],
       "@typing": ["./typing"],
-      "@utils": ["./server/utils"]
+      "@utils": ["./server/utils"],
+      "@utils/*": ["./server/utils/*"]
     }
   },
   "vueCompilerOptions": {

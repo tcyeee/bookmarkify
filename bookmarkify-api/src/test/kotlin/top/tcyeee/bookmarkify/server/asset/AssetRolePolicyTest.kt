@@ -6,6 +6,7 @@ import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
+import top.tcyeee.bookmarkify.entity.enums.IconVerdict
 import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -152,15 +153,64 @@ class AssetRolePolicyTest {
         assertEquals(AssetQuality.TRUSTED, assets.first { it.role == AssetRole.LOGO }.quality)
     }
 
-    /** 完全没有 LOGO 时借一张 favicon 顶上，但必须标记为降级 */
+    /**
+     * 完全没有 LOGO 时借一张 favicon 顶上，**但不改它的可信度**。
+     *
+     * 借用改变的是「这张图派什么用场」，不是「这张图可不可信」。从前这里会把借来的那张压成
+     * DEGRADED —— `APPLE_TOUCH_ICON` 在 TABLE 里本是 (FAVICON, TRUSTED)，于是一张本来可信的
+     * 大图被主动降级，再被当时 `shouldFallbackToMonogram` 的可信度否决判成色块。
+     */
     @Test
-    fun `missing logo borrows from the icon family as degraded`() {
+    fun `missing logo borrows from the icon family without downgrading it`() {
         val assets = AssetRolePolicy.assignRoles(
             listOf(asset(AssetExtractor.APPLE_TOUCH_ICON, size = 180, hash = "sha256:a"))
         )
         val logo = assets.firstOrNull { it.role == AssetRole.LOGO }
         assertNotNull(logo, "应借一张顶上")
-        assertEquals(AssetQuality.DEGRADED, logo.quality)
+        assertEquals(
+            AssetQuality.TRUSTED,
+            logo.quality,
+            "apple-touch-icon 被当 LOGO 用之后并不会变得不可信",
+        )
+    }
+
+    /**
+     * 借用要取同族**最大的一张**，不是列表里的第一张。
+     *
+     * 站点声明多张不同尺寸的 apple-touch-icon 是常态，从前的 `firstOrNull` 抓到哪张纯看
+     * 列表顺序。生产实测：`live.bilibili.com` 借到 32px 而同族 512px 那张留在 FAVICON 层，
+     * `www.jianshu.com` 借到 57px 而不是 152px，`tool.lu` 借到 57px 而不是 144px ——
+     * 借来的小图还会因为「LOGO 层一非空就 return」挡住旁边那张大图。
+     */
+    @Test
+    fun `borrowing takes the largest of the family, not the first`() {
+        val assets = AssetRolePolicy.assignRoles(
+            listOf(
+                asset(AssetExtractor.APPLE_TOUCH_ICON, size = 32, hash = "h32", url = "https://x/32.png"),
+                asset(AssetExtractor.APPLE_TOUCH_ICON, size = 512, hash = "h512", url = "https://x/512.png"),
+                asset(AssetExtractor.APPLE_TOUCH_ICON, size = 152, hash = "h152", url = "https://x/152.png"),
+            )
+        )
+        val logo = assets.first { it.role == AssetRole.LOGO }
+        assertEquals(512, logo.width, "借用应取同族最大的一张")
+        // 顺带确认整条链的结果：借到大图 + 不降级 ⇒ TILE 下正常显示，而不是首字母色块
+        assertFalse(AssetRolePolicy.shouldFallbackToMonogram(AssetRolePolicy.resolve(assets, DisplayMode.TILE)))
+    }
+
+    /** 借用的顺序仍按 [LOGO_FALLBACK_ORDER]：先看 apple-touch，再退 ms-tile / link-icon */
+    @Test
+    fun `borrowing prefers the apple touch family over a plain link icon`() {
+        val assets = AssetRolePolicy.assignRoles(
+            listOf(
+                asset(AssetExtractor.LINK_ICON, size = 512, hash = "hlink", url = "https://x/link.png"),
+                asset(AssetExtractor.APPLE_TOUCH_ICON, size = 180, hash = "happle", url = "https://x/apple.png"),
+            )
+        )
+        assertEquals(
+            "https://x/apple.png",
+            assets.first { it.role == AssetRole.LOGO }.resolvedUrl,
+            "出处顺序优先于尺寸：apple-touch-icon 更接近「主屏图标」这个用途",
+        )
     }
 
     @Test
@@ -277,6 +327,109 @@ class AssetRolePolicyTest {
             listOf(asset(AssetExtractor.MANIFEST_ICON, vector = true, url = "https://x/l.svg"))
         )
         assertFalse(AssetRolePolicy.shouldFallbackToMonogram(AssetRolePolicy.resolve(assets, DisplayMode.TILE)))
+    }
+
+    /**
+     * **可信度不再是拒绝显示图片的理由 —— 只有尺寸是。**
+     *
+     * `shouldFallbackToMonogram` 曾经是 `quality == DEGRADED || size < TILE_MIN_SIZE`，
+     * 把出处判断（「这不是品牌 LOGO，只是 favicon 换了个 rel」）和渲染判断（「放大会糊」）
+     * 混成了一个。代价实测出来是 **40 个站点**：选中的图 ≥128px，却被渲染成首字母色块，
+     * 占生产全部站点的 25%。
+     *
+     * 这条用例构造的正是那个形态 —— 一张 512px 的 manifest icon 与 favicon 字节相同，
+     * 于是被 `assignRoles` 第二遍降级成 DEGRADED。它必须照样显示出来。
+     */
+    @Test
+    fun `a large icon renders even when its quality is degraded`() {
+        val shared = "sha256:samebytes"
+        val assets = AssetRolePolicy.assignRoles(
+            listOf(
+                asset(AssetExtractor.LINK_ICON, size = 512, hash = shared, url = "https://x/fav.png"),
+                asset(AssetExtractor.MANIFEST_ICON, size = 512, hash = shared, url = "https://x/logo.png"),
+            )
+        )
+        val chosen = AssetRolePolicy.resolve(assets, DisplayMode.TILE)
+        assertNotNull(chosen)
+        assertEquals(AssetQuality.DEGRADED, chosen.quality, "前提：这张图确实是被降级过的")
+        assertFalse(
+            AssetRolePolicy.shouldFallbackToMonogram(chosen),
+            "512px 的图放在 72px 磁贴上很好看，它算不算「真 logo」与要不要显示无关",
+        )
+    }
+
+    /** 反过来：可信度再高，尺寸不够照样走色块 —— 判据换成了尺寸，不是取消了判据 */
+    @Test
+    fun `a small icon still falls back even when trusted`() {
+        val assets = AssetRolePolicy.assignRoles(
+            listOf(asset(AssetExtractor.MANIFEST_ICON, size = 32, hash = "sha256:small"))
+        )
+        val chosen = AssetRolePolicy.resolve(assets, DisplayMode.TILE)
+        assertEquals(AssetQuality.TRUSTED, chosen!!.quality)
+        assertTrue(AssetRolePolicy.shouldFallbackToMonogram(chosen))
+    }
+
+    /**
+     * **LOGO 优先是偏好，不是绝对闸门。** 只有一张小 LOGO、而 FAVICON 层有大图时，TILE 要取大图。
+     *
+     * `roleOrder` 的循环一旦在 LOGO 层拿到候选就 `return`，永不下探 FAVICON —— 于是一张 48px
+     * 的 LOGO 会挡住旁边 192px 的 favicon，最终退成首字母色块。生产实测被这条挡住的有
+     * `gitlab.com`（LOGO 尺寸未知 vs 两张 192px favicon）、`element.eleme.cn` / `www.chiphell.com`
+     * （小 LOGO vs 矢量 mask-icon）、`www.iconfont.cn`、`wallhere.com`。
+     */
+    @Test
+    fun `tile descends to the favicon layer when the only logo is too small`() {
+        val assets = AssetRolePolicy.assignRoles(
+            listOf(
+                asset(AssetExtractor.MANIFEST_ICON, size = 48, hash = "hlogo", url = "https://x/logo48.png"),
+                asset(AssetExtractor.LINK_ICON, size = 192, hash = "hfav", url = "https://x/fav192.png"),
+            )
+        )
+        val chosen = AssetRolePolicy.resolve(assets, DisplayMode.TILE)
+        assertEquals("https://x/fav192.png", chosen?.resolvedUrl, "小 LOGO 不该挡住大 favicon")
+        assertFalse(AssetRolePolicy.shouldFallbackToMonogram(chosen))
+    }
+
+    /** 同一层内部同理：可信度不能压过尺寸，TRUSTED 48px 不该胜过 DEGRADED 192px（hellogithub.com 的形态） */
+    @Test
+    fun `tile does not let a trusted small logo beat a degraded large one`() {
+        val shared = "sha256:favbytes"
+        val assets = AssetRolePolicy.assignRoles(
+            listOf(
+                // 这张与 favicon 同字节，第二遍会把它降级成 DEGRADED
+                asset(AssetExtractor.MANIFEST_ICON, size = 192, hash = shared, url = "https://x/big.png"),
+                asset(AssetExtractor.LINK_ICON, size = 32, hash = shared, url = "https://x/fav.png"),
+                asset(AssetExtractor.MANIFEST_ICON, size = 48, hash = "hsmall", url = "https://x/small.png"),
+            )
+        )
+        val chosen = AssetRolePolicy.resolve(assets, DisplayMode.TILE)
+        assertEquals("https://x/big.png", chosen?.resolvedUrl, "够大才是硬要求，可信度只是同档之间的偏好")
+    }
+
+    /** 但候选全都撑不起大图时，role 偏好继续生效 —— 反正无论选谁都会走色块 */
+    @Test
+    fun `role preference still applies when nothing is large enough`() {
+        val assets = AssetRolePolicy.assignRoles(
+            listOf(
+                asset(AssetExtractor.MANIFEST_ICON, size = 48, hash = "hlogo", url = "https://x/logo.png"),
+                asset(AssetExtractor.LINK_ICON, size = 64, hash = "hfav", url = "https://x/fav.png"),
+            )
+        )
+        val chosen = AssetRolePolicy.resolve(assets, DisplayMode.TILE)
+        assertEquals("https://x/logo.png", chosen?.resolvedUrl)
+        assertTrue(AssetRolePolicy.shouldFallbackToMonogram(chosen))
+    }
+
+    /** LIST 不受这道筛子影响：小图场景本来就该要小图，16px 的行里 512px 的 LOGO 是纯浪费 */
+    @Test
+    fun `list is unaffected by the tile size filter`() {
+        val assets = AssetRolePolicy.assignRoles(
+            listOf(
+                asset(AssetExtractor.LINK_ICON, size = 64, hash = "hfav", url = "https://x/fav64.png"),
+                asset(AssetExtractor.MANIFEST_ICON, size = 512, hash = "hlogo", url = "https://x/logo.png"),
+            )
+        )
+        assertEquals("https://x/fav64.png", AssetRolePolicy.resolve(assets, DisplayMode.LIST)?.resolvedUrl)
     }
 
     @Test
@@ -559,6 +712,86 @@ class AssetRolePolicyTest {
                 now = now,
             )
         )
+    }
+
+    // ── 后台判定总览的分档 ──────────────────────────────────────────────────
+
+    /**
+     * `tileVerdict` 必须与 `resolve` + `shouldFallbackToMonogram` **完全同步**。
+     *
+     * 这是分档存在的全部意义：后台那张表是用来量规则改动效果的，它一旦和线上渲染的判断漂开，
+     * 就会用一个错的数字证明改动有效 —— 比没有这张表更糟。这里用穷举的方式钉死等价关系，
+     * 而不是逐个断言几个样例，因为漂移恰恰发生在没被举例到的那个分支上。
+     */
+    @Test
+    fun `tile verdict stays in lockstep with the render decision`() {
+        val cases = listOf(
+            "无资产" to emptyList(),
+            "只有出错的图" to listOf(asset(AssetExtractor.LINK_ICON, size = 512, error = "下载失败")),
+            "大图正常显示" to listOf(asset(AssetExtractor.MANIFEST_ICON, size = 512)),
+            "矢量图正常显示" to listOf(asset(AssetExtractor.LINK_MASK_ICON, vector = true)),
+            "小 favicon" to listOf(asset(AssetExtractor.LINK_ICON, size = 32)),
+            "够大但撞 hash 被降级" to listOf(
+                asset(AssetExtractor.LINK_ICON, size = 256, hash = "same"),
+                asset(AssetExtractor.MANIFEST_ICON, size = 256, hash = "same"),
+            ),
+            "尺寸未知" to listOf(asset(AssetExtractor.JSON_LD_ORG_LOGO)),
+        )
+
+        cases.forEach { (name, raw) ->
+            val assets = AssetRolePolicy.assignRoles(raw.map { it.copy() })
+            val (verdict, chosen) = AssetRolePolicy.tileVerdict(assets)
+
+            assertEquals(AssetRolePolicy.resolve(assets, DisplayMode.TILE), chosen, "$name: 选中的图应与 resolve 一致")
+            assertEquals(
+                AssetRolePolicy.shouldFallbackToMonogram(chosen),
+                verdict != IconVerdict.IMAGE,
+                "$name: IMAGE 档必须恰好等价于「不走首字母色块」",
+            )
+            // 两个色块档的分界线只有尺寸：MONOGRAM_QUALITY 的定义是「够大却仍然退回色块」，
+            // 即尺寸之外还有别的否决权。移除 quality 否决后它恒为 0，见 IconVerdict 的注释
+            if (verdict == IconVerdict.MONOGRAM_QUALITY) {
+                assertTrue(chosen!!.effectiveSize() >= AssetRolePolicy.TILE_MIN_SIZE, "$name: 这一档的图必须够大")
+            }
+            if (verdict == IconVerdict.MONOGRAM_SIZE) {
+                assertTrue(chosen!!.effectiveSize() < AssetRolePolicy.TILE_MIN_SIZE, "$name: 这一档的图必须偏小")
+            }
+            if (verdict == IconVerdict.NO_ASSET) assertNull(chosen, "$name: 没有结论就不该有选中的图")
+        }
+    }
+
+    /**
+     * `qualifiesForTile` 是 `shouldFallbackToMonogram` 的逐张版本，两者判据必须互为镜像。
+     *
+     * 它算的是后台那个「改进空间」数字（基线 31）：判成色块、可库里本来就躺着一张能用的图。
+     * 判据一旦和渲染侧对不上，这个数就既不是改进空间也不是别的什么。
+     */
+    @Test
+    fun `qualifiesForTile mirrors the render decision for a single asset`() {
+        listOf(
+            asset(AssetExtractor.MANIFEST_ICON, size = 512),
+            asset(AssetExtractor.LINK_MASK_ICON, vector = true),
+            asset(AssetExtractor.LINK_ICON, size = 32),
+            asset(AssetExtractor.JSON_LD_ORG_LOGO),
+            asset(AssetExtractor.MS_TILE_IMAGE, size = 256),
+        ).forEach { raw ->
+            // 单张也要先过 assignRoles：quality 是它定的，跳过就等于在测一个不存在的状态
+            val one = AssetRolePolicy.assignRoles(listOf(raw)).single()
+            assertEquals(
+                !AssetRolePolicy.shouldFallbackToMonogram(one),
+                AssetRolePolicy.qualifiesForTile(one),
+                "${raw.extractor}: 逐张判据与渲染判据不一致",
+            )
+        }
+    }
+
+    /** 出错/未落地的资产永远不算合格候选，否则「改进空间」里会混进一批根本渲染不出来的图 */
+    @Test
+    fun `unrenderable assets never qualify`() {
+        val broken = AssetRolePolicy.assignRoles(
+            listOf(asset(AssetExtractor.MANIFEST_ICON, size = 512, error = "下载失败"))
+        ).single()
+        assertFalse(AssetRolePolicy.qualifiesForTile(broken))
     }
 
     companion object {

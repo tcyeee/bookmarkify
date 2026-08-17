@@ -63,6 +63,15 @@ export const DisplayMode = {
 } as const
 export type DisplayMode = (typeof DisplayMode)[keyof typeof DisplayMode]
 
+/** 对应 Kotlin `IconVerdict` */
+export const IconVerdict = {
+  IMAGE: 'IMAGE',
+  MONOGRAM_QUALITY: 'MONOGRAM_QUALITY',
+  MONOGRAM_SIZE: 'MONOGRAM_SIZE',
+  NO_ASSET: 'NO_ASSET',
+} as const
+export type IconVerdict = (typeof IconVerdict)[keyof typeof IconVerdict]
+
 /** 对应 Kotlin `LogoImgType` */
 export const LogoImgType = {
   ICO: 'ICO',

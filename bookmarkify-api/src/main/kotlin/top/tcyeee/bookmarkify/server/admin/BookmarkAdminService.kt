@@ -35,7 +35,8 @@ import top.tcyeee.bookmarkify.server.IBookmarkCategoryService
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.ISiteService
-import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
+import top.tcyeee.bookmarkify.server.asset.IconResolver
+import top.tcyeee.bookmarkify.server.asset.SiteAssetQuery
 import top.tcyeee.bookmarkify.server.asset.SiteAssetWriter
 import top.tcyeee.bookmarkify.server.liveness.PageScheduleWriter
 import top.tcyeee.bookmarkify.server.parse.PageParseStateWriter
@@ -59,7 +60,8 @@ import java.time.LocalDateTime
 class BookmarkAdminService(
     private val pageMapper: PageMapper,
     private val siteService: ISiteService,
-    private val siteAssetResolver: SiteAssetResolver,
+    private val iconResolver: IconResolver,
+    private val siteAssetQuery: SiteAssetQuery,
     private val siteAssetWriter: SiteAssetWriter,
     private val bookmarkCategoryService: IBookmarkCategoryService,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
@@ -86,11 +88,11 @@ class BookmarkAdminService(
         // 用一条 in 查询批量取回避免 N+1，签名按列表格子的尺寸缩放
         runCatching {
             val ids = page.records.map { it.id }
-            val assetMap = siteAssetResolver.assetsOfBatch(ids)
+            val assetMap = siteAssetQuery.assetsOfBatch(ids)
             page.records.forEach { vo -> vo.assets = toAssetVOs(assetMap[vo.id].orEmpty(), ADMIN_LIST_ASSET_SIZE) }
             // 规则在两种模式下各选了哪张图 —— 取图优先级是反的，只看资产列表推不出结果，
             // 所以必须随列表下发。批量解析，查询条数只与展示模式个数有关，与行数无关
-            val resolvedByMode = DisplayMode.entries.associateWith { siteAssetResolver.resolveBatch(ids, it) }
+            val resolvedByMode = DisplayMode.entries.associateWith { iconResolver.resolveBatch(ids, it) }
             page.records.forEach { vo ->
                 vo.iconRenders = DisplayMode.entries.map { mode ->
                     val resolved = resolvedByMode[mode]?.get(vo.id)
@@ -445,7 +447,7 @@ class BookmarkAdminService(
             .groupingBy { it }.eachCount().filterValues { it > 1 }.keys
 
         // 一次取全这批资产的账本行，别在下面的 map 里逐张查
-        val objectByFileId = siteAssetResolver.objectsOf(assets)
+        val objectByFileId = siteAssetQuery.objectsOf(assets)
 
         return assets.map { a ->
             SiteAssetAdminVO(
@@ -492,10 +494,10 @@ class BookmarkAdminService(
         // 同 adminListAll：NSFW 在站点层，BeanUtil 拷不到，必须显式取
         vo.nsfw = siteService.mapByIds(setOf(bookmark.siteId))[bookmark.siteId]?.nsfw ?: false
 
-        vo.assets = toAssetVOs(siteAssetResolver.assetsOf(pageId))
+        vo.assets = toAssetVOs(siteAssetQuery.assetsOf(pageId))
 
         vo.iconRenders = DisplayMode.entries.map { mode ->
-            val resolved = siteAssetResolver.resolveOne(pageId, mode)
+            val resolved = iconResolver.resolveOne(pageId, mode)
             IconRenderVO(
                 displayMode = mode,
                 previewUrl = resolved.url,

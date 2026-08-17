@@ -56,8 +56,12 @@ export interface BookmarkShow {
   pinnedSort: number
   // 书签链接类型：本地/IP 类型不会被后端抓取，前端仅展示统一的 mdi 圆圈图标
   linkType: BookmarkLinkType
-  // 图标相关字段统一收拢到 logo（后端 website_logo 表）
+  // 图标相关字段统一收拢到 logo（后端 site_asset 表，按本视图的展示模式解析后下发）
   logo: BookmarkLogo
+  // 磁贴形态（置顶区）该显示的图标，与 tileTitle 完全对称：同一条书签在首页被渲染两次，
+  // 置顶区是 56px 的大图位，要的是 LOGO 优先、签在 256px、够不着就退首字母色块的那一份。
+  // 桌面列表行仍用 logo。缺省时 BookmarkLogo.vue 会回落到 logo（老版本后端不下发这个字段）
+  tileLogo?: BookmarkLogo
   isActivity: boolean
   createTime?: number
   paths?: Array<string>

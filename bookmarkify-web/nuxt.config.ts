@@ -62,6 +62,9 @@ export default defineNuxtConfig({
     '@config': resolve(__dirname, 'server/config'),
     '@typing': resolve(__dirname, 'typing'),
     '@utils': resolve(__dirname, 'server/utils'),
+    // 子路径别名：图标那一块拆成了 utils/icon/{cache,pixels,appearance}，
+    // 只映射目录本身的话 `@utils/icon/cache` 解析不到
+    '@utils/icon': resolve(__dirname, 'server/utils/icon'),
   },
   // 登录态只存在于客户端 localStorage（auth.store 持久化）。受 auth 中间件保护的页面
   // 若在 `nuxt generate` 阶段 SSR 预渲染，服务端读不到登录态 → 中间件重定向到 /welcome，

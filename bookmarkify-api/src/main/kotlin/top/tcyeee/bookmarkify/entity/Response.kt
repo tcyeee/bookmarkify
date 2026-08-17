@@ -10,6 +10,7 @@ import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
+import top.tcyeee.bookmarkify.entity.enums.IconVerdict
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.PageLockedField
 import top.tcyeee.bookmarkify.entity.enums.OssAddressing
@@ -21,7 +22,8 @@ import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.entity.enums.SiteLockedField
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 import top.tcyeee.bookmarkify.server.asset.BookmarkDisplayPolicy
-import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
+import top.tcyeee.bookmarkify.server.asset.DisplayIcons
+import top.tcyeee.bookmarkify.server.asset.ResolvedIcon
 import top.tcyeee.bookmarkify.utils.OssUtils
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 import java.time.LocalDateTime
@@ -44,11 +46,12 @@ data class BookmarkShow(
      * 之所以与 [title] 并存而不是让调用方换个 mode 重新解析一遍：**同一条书签在首页上会被渲染
      * 两次** —— 置顶区是大图短文案的磁贴，下方的文件夹卡片里还有一行列表行。一份 VO 供两处使用，
      * 只带一个文案就必然有一处是错的。带两个文案的代价是每条书签多一个短字符串，而两处各解析
-     * 一次的代价是整棵桌面树的资产解析翻倍（[SiteAssetResolver.resolveBatch] 是这条链路上唯一
+     * 一次的代价是整棵桌面树的资产解析翻倍（[IconResolver.resolveBatch] 是这条链路上唯一
      * 的数据库开销）。
      *
-     * 图标仍是按调用方那一个 mode 解析的（置顶区拿到的是 LIST 那张）：文案是纯函数、白拿，
-     * 而图标要再查一遍资产表并重新签名。56px 的磁贴用 LIST 的 64px 源图看不出差别。
+     * 图标侧曾经**没有**对应的一份，那是遗漏不是设计（2026-08-17 补上 [tileLogo]）：置顶区
+     * 拿到的是 LIST 那张 —— FAVICON 优先、签在 64px、且不走首字母色块兜底，塞进 56px 的格子里
+     * （2× 屏需要 112px）必糊。原先注释里那句「看不出差别」是错的。
      */
     @field:Schema(description = "磁贴形态的标题(置顶区用;首页书签为站点短名)") var tileTitle: String? = null,
     @field:Schema(description = "书签备注") var description: String? = null,
@@ -57,8 +60,16 @@ data class BookmarkShow(
     @field:Schema(description = "是否置顶") var pinned: Boolean = false,
     @field:Schema(description = "置顶区排序(越小越靠前;非置顶书签无意义)") var pinnedSort: Int = 0,
     @field:Schema(description = "书签链接类型(域名/本地/IP/其他)") var linkType: BookmarkLinkType = BookmarkLinkType.OTHER,
-    // 图标不再由本类自己拼装：改由 SiteAssetResolver 按展示模式从 site_asset 解析后注入。
+    // 图标不再由本类自己拼装：改由 IconResolver 按展示模式从 site_asset 解析后注入。
     @field:Schema(description = "图标信息(按展示模式解析后的结果)") var logo: BookmarkLogoShowVO = BookmarkLogoShowVO(),
+    /**
+     * 磁贴形态该显示的图标，与 [tileTitle] 完全对称 —— 同一条书签在首页被渲染两次，
+     * 置顶区那次要的是 TILE 那一档（LOGO 优先、签在 256px、够不着 [AssetRolePolicy.TILE_MIN_SIZE]
+     * 时退首字母色块），而 [logo] 是按调用方那个 mode 解析的。
+     *
+     * `mode == TILE` 时它与 [logo] 是同一份，不额外解析。
+     */
+    @field:Schema(description = "磁贴形态的图标(置顶区用)") var tileLogo: BookmarkLogoShowVO = BookmarkLogoShowVO(),
     @field:Schema(description = "网站活性") var isActivity: Boolean? = null,
     @JsonIgnore @field:Schema(description = "用户ID") var uid: String? = null,
     @JsonIgnore @field:Schema(description = "Host(什么都拿不到时的最后兜底)") var urlHost: String? = null,
@@ -114,19 +125,20 @@ data class BookmarkShow(
     /**
      * 注入按展示模式解析出的图标与最终文案。
      *
-     * [resolved] 刻意不给默认值。图片从 bookmark_logo 的扁平列改成 site_asset 一行一图后，
-     * 图标改由调用方经 [SiteAssetResolver] 解析注入，而 [logo] 字段自身有默认值——于是漏注入的
+     * [icons] 刻意不给默认值。图片从 bookmark_logo 的扁平列改成 site_asset 一行一图后，
+     * 图标改由调用方经 [IconResolver] 解析注入，而 [logo] 字段自身有默认值——于是漏注入的
      * 调用点照样编译通过，前端只会静默退化成首字母色块，没有任何报错。桌面主视图与添加/导入
      * 完成后的两处 WebSocket 推送都是这么丢的。参数必填，让编译器替我们守住这条边界。
      *
-     * [mode] 同理必填：文案优先级与图标优先级在两种模式下都不一样，而且**必须取同一个值** ——
-     * 用 TILE 选图、用 LIST 选文案会得到一个自相矛盾的格子。[tileTitle] 是这条规则唯一的例外，
-     * 理由见它自己的注释：那一份是给**另一处**渲染（置顶区磁贴）用的，不参与本格子的显示。
+     * **展示模式随 [icons] 一起进来，不再单独传。** 从前它是第二个参数，于是「用 TILE 选图、
+     * 用 LIST 选文案」这种自相矛盾的组合在类型上是合法的，只能靠一段注释拦着；现在两者出自
+     * 同一次 [IconResolver.resolveForDisplay]，想写错也写不出来。
      */
-    fun initDisplay(resolved: SiteAssetResolver.ResolvedLogo?, mode: DisplayMode): BookmarkShow {
-        logo = BookmarkLogoShowVO.from(resolved)
-        title = titleFor(mode)
-        tileTitle = if (mode == DisplayMode.TILE) title else titleFor(DisplayMode.TILE)
+    fun initDisplay(icons: DisplayIcons): BookmarkShow {
+        logo = BookmarkLogoShowVO.from(icons.icon)
+        tileLogo = BookmarkLogoShowVO.from(icons.tileIcon)
+        title = titleFor(icons.mode)
+        tileTitle = if (icons.mode == DisplayMode.TILE) title else titleFor(DisplayMode.TILE)
         return this
     }
 
@@ -156,7 +168,7 @@ data class BookmarkLogoShowVO(
     @field:Schema(description = "为 true 时前端应放弃图片,改用首字母色块") val monogram: Boolean = true,
 ) {
     companion object {
-        fun from(r: SiteAssetResolver.ResolvedLogo?): BookmarkLogoShowVO {
+        fun from(r: ResolvedIcon?): BookmarkLogoShowVO {
             if (r == null) return BookmarkLogoShowVO()
             return BookmarkLogoShowVO(
                 url = r.url,
@@ -181,7 +193,7 @@ data class BookmarkSearchVO(
     // 搜索现在只在 site 层匹配（见 BookmarkServiceImpl.search），appName 权威值随之改读
     // site.shortName（而不是过渡期字段 PageEntity.appName）——两者本应一致，但站点信息
     // 是首页抓取权威写入的，比某条深链残留的旧值更可信。
-    constructor(entity: PageEntity, site: SiteEntity, resolved: SiteAssetResolver.ResolvedLogo?) : this(
+    constructor(entity: PageEntity, site: SiteEntity, resolved: ResolvedIcon?) : this(
         id = entity.id,
         urlHost = entity.urlHost,
         urlScheme = entity.urlScheme,
@@ -524,13 +536,105 @@ data class SiteAdminVO(
  *
  * 前身是 `SiteDisplayPrefVO`，那时它混着「人工设置」（内边距/背景色/钉图）与「渲染结果」两件事。
  * 人工设置那半边随 `site_display_pref` 一并移除（2026-08-17），留下的这半边不来自任何偏好表，
- * 而是 [SiteAssetResolver] 现算的 —— 它回答的是「这个书签在 TILE / LIST 下实际会渲染成什么」，
+ * 而是 [IconResolver] 现算的 —— 它回答的是「这个书签在 TILE / LIST 下实际会渲染成什么」，
  * 正是排图标规则时最需要的那个事实，所以读侧一并保留。
  */
 data class IconRenderVO(
     @field:Schema(description = "展示模式") var displayMode: DisplayMode = DisplayMode.TILE,
     @field:Schema(description = "当前该模式下实际会渲染的地址") var previewUrl: String? = null,
     @field:Schema(description = "为 true 表示该模式下会走首字母色块") var monogram: Boolean = true,
+)
+
+/**
+ * 管理后台「图标判定总览」：把 `AssetRolePolicy` 在**存量数据**上的判定结果按档聚合。
+ *
+ * 存在的理由是可度量：图标规则的每一次改动（见 `docs/ICON-DISPLAY-TODO.md` §3.1）都要能
+ * 立刻回答「27 变成多少了」，而在有这张表之前，这个数只能靠连生产库手敲一段 SQL 拿到 ——
+ * 于是实际上没人量，规则改得对不对全凭印象。
+ *
+ * **判定一律现算，不读任何缓存列。** 这张表的口径必须与线上渲染逐字一致，复刻一份 SQL
+ * 判定逻辑是这里最容易犯也最难发现的错：它会在规则改动后悄悄漂走，然后用一个错的数字
+ * 证明改动有效。
+ */
+data class IconVerdictOverviewVO(
+    @field:Schema(description = "按判定结论分档的站点数") var buckets: List<IconVerdictBucketVO> = emptyList(),
+    @field:Schema(description = "候选图数量的分布(按 content_hash 去重)") var candidateHistogram: List<IconCandidateBucketVO> = emptyList(),
+    @field:Schema(description = "参与判定的站点数(至少有一行站点级 FAVICON/LOGO)") var siteTotal: Int = 0,
+    /**
+     * 一行图标资产都没有的站点。**不计入 [buckets]**，与 [IconVerdict.NO_ASSET] 是两回事：
+     * 那一档是"有资产行但没有一张能渲染"（抓到了图但都失败/都没落地），这里是"根本没抓到过图"。
+     * 混在一起会让「规则挡掉了多少」这个问题的分母不成立。
+     */
+    @field:Schema(description = "一行图标资产都没有的站点数(未参与判定)") var siteWithoutAssets: Int = 0,
+    /**
+     * 判成色块、但库里躺着一张合格候选（矢量或 TRUSTED ≥ TILE_MIN_SIZE）的站点数。
+     *
+     * **这一个数就是规则的改进空间**：它衡量的不是"站点没提供好图"，而是"好图就在库里、
+     * 规则没选中它"。基线 31。修完 §3.1 的三个缺陷后它应当趋近 0；它不降说明改动没打中要害。
+     */
+    @field:Schema(description = "判成色块但库里有合格候选的站点数(规则的改进空间)") var salvageable: Int = 0,
+    @field:Schema(description = "本次判定使用的 TILE_MIN_SIZE") var tileMinSize: Int = 0,
+)
+
+/** 一档判定结论的站点数 */
+data class IconVerdictBucketVO(
+    @field:Schema(description = "判定结论") var verdict: IconVerdict,
+    @field:Schema(description = "站点数") var count: Int = 0,
+    @field:Schema(description = "其中「库里有合格候选」的站点数") var salvageable: Int = 0,
+)
+
+/** 候选图数量的一档（`count` 张可选图的站点有多少个）。6 张及以上并入最后一档 */
+data class IconCandidateBucketVO(
+    @field:Schema(description = "可选图标数;最后一档为 6 表示 6 张及以上") var candidates: Int = 0,
+    @field:Schema(description = "站点数") var sites: Int = 0,
+)
+
+/** 图标判定总览的下钻行：一个站点一行 */
+data class IconVerdictSiteVO(
+    @field:Schema(description = "站点ID") var siteId: String = "",
+    @field:Schema(description = "域名") var host: String = "",
+    @field:Schema(description = "站点品牌名") var brandName: String? = null,
+    @field:Schema(description = "TILE 模式下的判定结论") var verdict: IconVerdict = IconVerdict.NO_ASSET,
+    /**
+     * 选中那张图的签名地址，**不回退源站直连**。
+     *
+     * 判成色块时也照样下发：这张表最主要的用法就是人眼核对"规则判它色块判得对不对"，
+     * 而那个判断没有图是做不出来的。回退源站直连则一律禁止 —— 后台页面去请求一批我们
+     * 自己都抓不动的站点，会把管理员 IP 暴露出去并刷出成片超时（同 `signedOssUrl` 的理由）。
+     */
+    @field:Schema(description = "选中那张图的签名地址(未落 OSS 时为 null)") var chosenUrl: String? = null,
+    @field:Schema(description = "选中那张图的用途") var chosenRole: AssetRole? = null,
+    @field:Schema(description = "选中那张图的可信度") var chosenQuality: AssetQuality? = null,
+    @field:Schema(description = "选中那张图的出处(scrapper 报的 extractor)") var chosenExtractor: String? = null,
+    @field:Schema(description = "选中那张图的有效边长;矢量图为 null") var chosenSize: Int? = null,
+    @field:Schema(description = "选中那张图是否矢量") var chosenIsVector: Boolean = false,
+    @field:Schema(description = "可选图标数(按 content_hash 去重)") var candidateCount: Int = 0,
+    /**
+     * 库里最大的那张可渲染图的边长（矢量为 null 且 [bestIsVector] 为 true）。
+     *
+     * 与 [chosenSize] 并列显示，是为了让"规则没选中更好的那张"这件事在行上直接看得见 ——
+     * 两个数不一样就是一条线索，不必再去翻资产列表。
+     */
+    @field:Schema(description = "库里最大的一张可渲染图的边长") var bestSize: Int? = null,
+    @field:Schema(description = "库里最大的一张是否矢量") var bestIsVector: Boolean = false,
+    @field:Schema(description = "判成色块但库里有合格候选") var salvageable: Boolean = false,
+)
+
+/**
+ * 「重算图标判定」的结果。
+ *
+ * 这个动作会改写全站图标的显示结果，所以它必须是**有人按下、有日志、可复测**的 ——
+ * 报告里的 [changed] 就是复测的依据：规则没变时重跑应当恒为 0（幂等），
+ * 规则改了则应当与预期的影响面对得上。
+ */
+data class AssetVerdictRecomputeReport(
+    @field:Schema(description = "是否空跑(只统计不写库)") var dryRun: Boolean = false,
+    @field:Schema(description = "扫描的资产行数") var scanned: Int = 0,
+    @field:Schema(description = "涉及的归属数(站点+页面)") var owners: Int = 0,
+    @field:Schema(description = "判定发生变化的行数") var changed: Int = 0,
+    @field:Schema(description = "判定发生变化的归属数") var changedOwners: Int = 0,
+    @field:Schema(description = "耗时(ms)") var durationMs: Long = 0,
+    @field:Schema(description = "完成时间") var finishedAt: LocalDateTime = LocalDateTime.now(),
 )
 
 /** 管理后台「重新获取」的预览结果：重新解析得到的标题与小图标（不落库，仅供前端对比选择） */

@@ -7,6 +7,7 @@ import top.tcyeee.bookmarkify.config.result.PageBean
 import top.tcyeee.bookmarkify.entity.entity.*
 import top.tcyeee.bookmarkify.entity.enums.AiCallScene
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
+import top.tcyeee.bookmarkify.entity.enums.IconVerdict
 import top.tcyeee.bookmarkify.entity.enums.OssObjectSource
 import top.tcyeee.bookmarkify.entity.enums.OssObjectState
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
@@ -273,6 +274,33 @@ data class ScrapperFailedHostParams(
         // 不值得让整个页面报一个 400
         sortField = sortField,
         limit = limit.coerceIn(1, 500),
+    )
+}
+
+/**
+ * 管理后台「图标判定总览」下钻列表的入参。
+ *
+ * 与 [ScrapperFailedHostParams] 同样刻意不分页，理由也一样：这是一张用来**排查规则**的表，
+ * 使用方式是"筛出一档、逐行看图、发现共性"，不是往下翻。真要看某个站点的全部候选图，
+ * 下钻到书签详情的资产列表去看。
+ */
+data class IconVerdictQueryParams(
+    /** 只看某一档判定结论；null 表示全部 */
+    @field:Schema(description = "只看某一档判定结论(IMAGE/MONOGRAM_QUALITY/MONOGRAM_SIZE/NO_ASSET)") var verdict: IconVerdict? = null,
+    /**
+     * 只看「判成色块但库里有合格候选」的站点。
+     *
+     * 这是这张表最主要的用法：它筛出来的每一行都是规则本可以做对却没做对的一次，
+     * 也就是 §3.1 三个缺陷的实际受害者名单。
+     */
+    @field:Schema(description = "只看库里有合格候选却被判色块的站点") var onlySalvageable: Boolean = false,
+    @field:Schema(description = "返回条数上限") var limit: Int = 300,
+) {
+    /** 上限收紧到安全区间：接口是公开的，而这个查询会把全部站点级图标行读进内存 */
+    fun sanitized() = IconVerdictQueryParams(
+        verdict = verdict,
+        onlySalvageable = onlySalvageable,
+        limit = limit.coerceIn(1, 2000),
     )
 }
 
