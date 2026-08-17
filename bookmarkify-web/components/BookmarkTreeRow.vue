@@ -23,7 +23,7 @@
       :style="bookmarkIndentStyle"
       @click="recordOpen(node)"
       @contextmenu.prevent="openMenu($event.x, $event.y, node)">
-      <BookmarkLogo :value="node.typeApp" :size="20" />
+      <BookmarkLogo :value="node.typeApp" size="S" />
       <span
         class="text-sm truncate"
         :class="
@@ -60,7 +60,6 @@ import { Icon } from '@iconify/vue'
 import { bookmarksDel, bookmarksPin, bookmarksRecordOpen } from '@api'
 import { HomeItemType, type UserLayoutNodeVO } from '@typing'
 import { externalHref } from '@utils'
-import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
 defineOptions({ name: 'BookmarkTreeRow' })
 

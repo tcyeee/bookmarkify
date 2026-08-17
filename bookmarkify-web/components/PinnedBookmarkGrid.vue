@@ -20,7 +20,7 @@
         class="group relative w-16 flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
         @click="recordOpen(node)"
         @contextmenu.prevent="openMenu($event.x, $event.y, node)">
-        <BookmarkLogo :value="node.typeApp!" :size="56" />
+        <BookmarkLogo :value="node.typeApp!" size="M" />
         <!-- 触屏没有右键，这个按钮是同一份菜单的第二个触发器（桌面上悬停才显形，观感不变） -->
         <button
           type="button"
@@ -53,7 +53,6 @@ import { Icon } from '@iconify/vue'
 import { bookmarksDel, bookmarksPin, bookmarksPinSort, bookmarksRecordOpen } from '@api'
 import type { UserLayoutNodeVO } from '@typing'
 import { externalHref } from '@utils'
-import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 

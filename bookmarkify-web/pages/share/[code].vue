@@ -38,7 +38,7 @@
           rel="noopener noreferrer"
           class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
           @click="bookmarksRecordOpen(item.bookmarkId).catch(() => {})">
-          <BookmarkLogo :value="item" :size="20" />
+          <BookmarkLogo :value="item" size="S" />
           <div class="flex flex-col overflow-hidden flex-1">
             <span class="text-sm text-slate-700 dark:text-slate-200 truncate">{{ item.title || item.urlBase }}</span>
             <span class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ item.urlBase }}</span>
@@ -52,7 +52,6 @@
 <script lang="ts" setup>
 import { shareView, bookmarksRecordOpen } from '@api'
 import { externalHref } from '@utils'
-import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
 definePageMeta({ layout: 'explore' })
 
