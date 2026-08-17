@@ -78,9 +78,9 @@ export const useBookmarkStore = defineStore('homeItems', {
     inflightUpdate: null as Promise<void> | null,
     // 进行中的批量导入任务，见 addImportLoadingBatch / checkImportBatches
     importBatches: [] as ImportBatch[],
-    // 已折叠的文件夹卡片（key 是 pages/index.vue 里的卡片 id，根目录卡片用 ROOT_CARD_ID）。
-    // 只记 true 的那些：折叠是少数派，展开的文件夹不该在 localStorage 里占一行。
-    // 纯展示状态，后端不知道也不需要知道，因此不进 /bookmark/sort 那条同步链路。
+    // 根目录卡片（它是前端合成节点，没有 user_layout_node 记录）的折叠状态，以及旧版本缓存的兜底。
+    // 真实文件夹的状态以节点上的 collapsed 为准，并通过 /bookmark/updateDirCollapsed 落库。
+    // 只记 true 的那些：折叠是少数派，展开的卡片不该在 localStorage 里占一行。
     collapsedFolders: {} as Record<string, boolean>,
   }),
 
@@ -439,6 +439,24 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.nodes[folderId] = { ...node, name }
     },
 
+    updateFolderColorLocal(folderId: string, color: string | null) {
+      const node = this.nodes[folderId]
+      if (!node) {
+        console.warn(`[bookmark] 更新颜色的文件夹在本地不存在，跳过: folderId=${folderId}`)
+        return
+      }
+      this.nodes[folderId] = { ...node, color }
+    },
+
+    updateFolderCollapsedLocal(folderId: string, collapsed: boolean) {
+      const node = this.nodes[folderId]
+      if (!node) {
+        console.warn(`[bookmark] 更新折叠状态的文件夹在本地不存在，跳过: folderId=${folderId}`)
+        return
+      }
+      this.nodes[folderId] = { ...node, collapsed }
+    },
+
     removeNode(id: string) {
       this.clearResolutionWatch(id)
       const from = this.parentKeyOf(id)
@@ -467,8 +485,8 @@ export const useBookmarkStore = defineStore('homeItems', {
       if (isRoot && import.meta.client) useNuxtApp().$track('folder-delete')
     },
 
-    // 折叠/展开一个文件夹卡片。展开时把键删掉而不是置 false，否则 localStorage 里会慢慢
-    // 攒下一批「曾经折叠过」的文件夹 id，其中相当一部分早已被删除。
+    // 根目录及旧版本数据的本地折叠兜底。真实文件夹由 updateFolderCollapsedLocal + API 维护。
+    // 展开时把键删掉而不是置 false，否则 localStorage 里会慢慢攒下一批「曾经折叠过」的 id。
     toggleFolderCollapsed(cardId: string) {
       if (this.collapsedFolders[cardId]) {
         const { [cardId]: _removed, ...rest } = this.collapsedFolders

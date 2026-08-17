@@ -27,6 +27,8 @@ data class UserLayoutNodeEntity(
 
     @field:Schema(description = "用户ID") val uid: String,
     @field:Schema(description = "节点(文件夹)名称") val name: String? = null,
+    @field:Schema(description = "文件夹颜色（十六进制，如 #F59E0B）") val color: String? = null,
+    @field:Schema(description = "文件夹是否折叠") val collapsed: Boolean = false,
     @field:Schema(description = "添加时间") var createdAt: LocalDateTime = LocalDateTime.now(),
 ) {
     constructor(uid: String, dir: SystemBookmarkStructure) : this(

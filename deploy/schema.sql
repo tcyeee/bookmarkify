@@ -488,6 +488,8 @@ CREATE TABLE public.user_layout_node (
     type character varying(30) DEFAULT 'BOOKMARK'::character varying NOT NULL,
     uid character varying(40) NOT NULL,
     name character varying(200),
+    color character varying(7),
+    collapsed boolean DEFAULT false NOT NULL,
     created_at timestamp without time zone DEFAULT now() NOT NULL
 );
 
@@ -1136,5 +1138,3 @@ ALTER TABLE ONLY public.background_config
 --
 -- PostgreSQL database dump complete
 --
-
-

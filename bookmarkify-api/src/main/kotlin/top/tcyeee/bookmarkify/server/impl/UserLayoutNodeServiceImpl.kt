@@ -9,6 +9,8 @@ import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.CreateDirParams
 import top.tcyeee.bookmarkify.entity.MoveNodeParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
+import top.tcyeee.bookmarkify.entity.UpdateDirColorParams
+import top.tcyeee.bookmarkify.entity.UpdateDirCollapsedParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.NodeTypeEnum
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
@@ -38,6 +40,7 @@ class UserLayoutNodeServiceImpl(
 ) : IUserLayoutNodeService, ServiceImpl<UserLayoutNodeMapper, UserLayoutNodeEntity>() {
 
     companion object {
+        private val HEX_COLOR = Regex("^#[0-9a-fA-F]{6}$")
         private const val ROOT_ID = "ROOT"
         private const val ROOT_NAME = "ROOT"
 
@@ -243,6 +246,43 @@ class UserLayoutNodeServiceImpl(
             .eq(UserLayoutNodeEntity::type, NodeTypeEnum.BOOKMARK_DIR)
             .set(UserLayoutNodeEntity::name, params.name)
             .update()
+
+    @Transactional
+    override fun updateDirColor(params: UpdateDirColorParams, uid: String): Boolean {
+        val color = params.color?.trim()?.takeIf { it.isNotEmpty() }
+        if (color != null && !HEX_COLOR.matches(color)) {
+            throw CommonException(ErrorType.E102, "文件夹颜色格式错误")
+        }
+
+        val updated = ktUpdate()
+            .eq(UserLayoutNodeEntity::id, params.nodeId)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .eq(UserLayoutNodeEntity::type, NodeTypeEnum.BOOKMARK_DIR)
+            .set(UserLayoutNodeEntity::color, color)
+            .update()
+
+        if (!updated) throw CommonException(ErrorType.E102, "文件夹不存在或无权访问")
+
+        // 颜色是文件夹节点本身的布局数据，沿用整树刷新契约让其它标签页/设备也能立即看到。
+        SocketUtils.homeLayoutRefresh(uid, layout(uid))
+        return true
+    }
+
+    @Transactional
+    override fun updateDirCollapsed(params: UpdateDirCollapsedParams, uid: String): Boolean {
+        val updated = ktUpdate()
+            .eq(UserLayoutNodeEntity::id, params.nodeId)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .eq(UserLayoutNodeEntity::type, NodeTypeEnum.BOOKMARK_DIR)
+            .set(UserLayoutNodeEntity::collapsed, params.collapsed)
+            .update()
+
+        if (!updated) throw CommonException(ErrorType.E102, "文件夹不存在或无权访问")
+
+        // 折叠状态属于布局数据，沿用整树刷新契约同步到其它标签页/设备。
+        SocketUtils.homeLayoutRefresh(uid, layout(uid))
+        return true
+    }
 
     private fun findByUid(uid: String): List<UserLayoutNodeEntity> =
         ktQuery().eq(UserLayoutNodeEntity::uid, uid).list() ?: emptyList()

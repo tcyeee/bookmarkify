@@ -17,6 +17,8 @@ import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
 import top.tcyeee.bookmarkify.entity.CreateDirParams
 import top.tcyeee.bookmarkify.entity.MoveNodeParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
+import top.tcyeee.bookmarkify.entity.UpdateDirColorParams
+import top.tcyeee.bookmarkify.entity.UpdateDirCollapsedParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
@@ -86,6 +88,16 @@ class BookmarksController(
     @Operation(summary = "修改文件夹名称")
     fun renameDir(@RequestBody params: RenameDirParams): Boolean =
         layoutNodeService.renameDir(params, BaseUtils.uid())
+
+    @PostMapping("/updateDirColor")
+    @Operation(summary = "修改文件夹颜色")
+    fun updateDirColor(@RequestBody params: UpdateDirColorParams): Boolean =
+        layoutNodeService.updateDirColor(params, BaseUtils.uid())
+
+    @PostMapping("/updateDirCollapsed")
+    @Operation(summary = "修改文件夹折叠状态")
+    fun updateDirCollapsed(@RequestBody params: UpdateDirCollapsedParams): Boolean =
+        layoutNodeService.updateDirCollapsed(params, BaseUtils.uid())
 
     @PostMapping("/moveNode")
     @Operation(summary = "移动书签节点（移入文件夹 / 移出到根目录）")
