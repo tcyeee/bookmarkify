@@ -25,9 +25,10 @@ import top.tcyeee.bookmarkify.utils.OssUtils
 /**
  * 把一次抓取结果落库。
  *
- * 只写 `scrape_snapshot` / `site_page_meta` / `site_asset` 三张表，**绝不触碰
- * `site_display_pref`** —— 那是人工调好的展示偏好，重抓不该把它冲掉。这条边界正是旧
- * `bookmark_logo` 把抓取事实与人工偏好混在一张表所缺失的。
+ * 只写 `scrape_snapshot` / `site_page_meta` / `site_asset` 三张表 —— 全是**抓取事实**。
+ * 旧的 `bookmark_logo` 把抓取事实、文件元数据与人工偏好混在一行，于是每次重抓都得做小心翼翼的
+ * 部分更新才不至于冲掉管理员的设置。人工偏好那张表（`site_display_pref`）已于 2026-08-17 移除，
+ * 但这条「本类只写抓取事实」的边界不随之作废：它同样是 `site_display_pref` 当初能被干净删掉的原因。
  */
 @Service
 class SiteAssetWriter(

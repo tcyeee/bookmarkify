@@ -237,22 +237,6 @@ class AssetRolePolicyTest {
         assertEquals("https://x/72.png", AssetRolePolicy.resolve(assets, DisplayMode.LIST)?.resolvedUrl)
     }
 
-    /** 人工钉死的资产无条件胜出，覆盖一切自动规则 */
-    @Test
-    fun `pinned asset wins over automatic selection`() {
-        val assets = AssetRolePolicy.assignRoles(
-            listOf(
-                asset(AssetExtractor.LINK_ICON, size = 32, url = "https://x/fav.png"),
-                asset(AssetExtractor.MANIFEST_ICON, size = 512, url = "https://x/logo.png"),
-            )
-        )
-        val pinned = assets.first { it.resolvedUrl == "https://x/fav.png" }
-        assertEquals(
-            "https://x/fav.png",
-            AssetRolePolicy.resolve(assets, DisplayMode.TILE, pinnedAssetId = pinned.id)?.resolvedUrl
-        )
-    }
-
     @Test
     fun `resolve returns null when nothing is renderable`() {
         val assets = AssetRolePolicy.assignRoles(

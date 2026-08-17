@@ -26,7 +26,6 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.entity.CategorySource
 import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
-import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.PageLockedField
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
@@ -38,7 +37,6 @@ import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.ISiteService
 import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
 import top.tcyeee.bookmarkify.server.asset.SiteAssetWriter
-import top.tcyeee.bookmarkify.server.asset.SiteDisplayPrefService
 import top.tcyeee.bookmarkify.server.liveness.PageScheduleWriter
 import top.tcyeee.bookmarkify.server.parse.PageParseStateWriter
 import top.tcyeee.bookmarkify.server.parse.PageParseStateWriter.Companion.isRefusedTarget
@@ -63,7 +61,6 @@ class BookmarkAdminService(
     private val siteService: ISiteService,
     private val siteAssetResolver: SiteAssetResolver,
     private val siteAssetWriter: SiteAssetWriter,
-    private val siteDisplayPrefService: SiteDisplayPrefService,
     private val bookmarkCategoryService: IBookmarkCategoryService,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val adminUserViewAssembler: AdminUserViewAssembler,
@@ -91,19 +88,14 @@ class BookmarkAdminService(
             val ids = page.records.map { it.id }
             val assetMap = siteAssetResolver.assetsOfBatch(ids)
             page.records.forEach { vo -> vo.assets = toAssetVOs(assetMap[vo.id].orEmpty(), ADMIN_LIST_ASSET_SIZE) }
-            // 图标管理页直接在列表上编辑内边距/背景色，列表不下发 displayPrefs 就只能显示默认值，
-            // 看起来像"保存没生效"。这里的查询条数只与展示模式个数有关，与行数无关
-            val prefMap = siteAssetResolver.prefsOfBatch(ids)
+            // 规则在两种模式下各选了哪张图 —— 取图优先级是反的，只看资产列表推不出结果，
+            // 所以必须随列表下发。批量解析，查询条数只与展示模式个数有关，与行数无关
             val resolvedByMode = DisplayMode.entries.associateWith { siteAssetResolver.resolveBatch(ids, it) }
             page.records.forEach { vo ->
-                vo.displayPrefs = DisplayMode.entries.map { mode ->
-                    val pref = prefMap[vo.id]?.firstOrNull { it.displayMode == mode }
+                vo.iconRenders = DisplayMode.entries.map { mode ->
                     val resolved = resolvedByMode[mode]?.get(vo.id)
-                    SiteDisplayPrefVO(
+                    IconRenderVO(
                         displayMode = mode,
-                        iconPadding = pref?.iconPadding ?: SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
-                        iconBgColor = pref?.iconBgColor,
-                        pinnedAssetId = pref?.pinnedAssetId,
                         previewUrl = resolved?.url,
                         monogram = resolved?.monogram ?: true,
                     )
@@ -153,34 +145,6 @@ class BookmarkAdminService(
             vo.ownerCount = rows.map { it.uid }.distinct().size
             vo.owner = firstUidOf[vo.id]?.let(users::get)
         }
-    }
-
-    override fun adminUpdateIcon(pageId: String, params: BookmarkIconUpdateParams) {
-        val bookmark = pageMapper.selectById(pageId) ?: throw CommonException(ErrorType.E102)
-        // appName 仍属于 bookmark 主表。手工填了值就加锁，清空则解锁——空的简称本来就会
-        // 被下一次抓取用 manifest.short_name 或 LLM 推断补上，锁住一个空值没有意义
-        if (params.appName.isNullOrBlank()) {
-            bookmark.unlock(PageLockedField.APP_NAME)
-        } else {
-            bookmark.lock(PageLockedField.APP_NAME)
-        }
-        pageMapper.update(
-            null,
-            KtUpdateWrapper(PageEntity::class.java)
-                .eq(PageEntity::id, pageId)
-                .set(PageEntity::appName, params.appName)
-                .set(PageEntity::lockedFields, bookmark.lockedFields)
-        )
-        // 显示设置按（站点 × 展示模式）分行：72px 大图上的内边距/背景色，与 16px 列表行
-        // 完全是两回事，不该互相影响；而它们调的都是站点图标的观感，所以键是站点而非书签
-        siteDisplayPrefService.save(
-            siteId = bookmark.siteId,
-            pageId = pageId,
-            mode = params.displayMode,
-            iconPadding = params.iconPadding,
-            iconBgColor = params.iconBgColor,
-            pinnedAssetId = params.pinnedAssetId,
-        )
     }
 
     override fun adminRefetch(pageId: String): BookmarkRefetchVO {
@@ -255,7 +219,8 @@ class BookmarkAdminService(
             bookmark.unlock(PageLockedField.TITLE)
         }
         // 资产是整体替换的：图标与 LOGO 同源于一次抓取，没法只采用其中一半而保持一致，
-        // 因此只要任一开关打开就整批落库（细粒度取舍改由 site_display_pref.pinnedAssetId 表达）
+        // 因此只要任一开关打开就整批落库。这两个开关是「要不要这一批新图」，不是「用哪一张」——
+        // 后者是规则的事（AssetRolePolicy），没有、也不再有人工逐张钉图的入口
         if (params.useNewIcon || params.useNewLogo) {
             // 回放的是 adminRefetch 暂存在 Redis 里的那次抓取结果，本次没发生网络请求，
             // 耗时记 0 是准确的（真实耗时属于当初那次抓取）
@@ -319,9 +284,32 @@ class BookmarkAdminService(
         // 手工改过的字段加锁，否则定期重抓会在下一个刷新周期把它静默改回抓取值
         params.title?.let { bookmark.title = it; bookmark.lock(PageLockedField.TITLE) }
         params.description?.let { bookmark.description = it; bookmark.lock(PageLockedField.DESCRIPTION) }
+        // 简称的加解锁与上面两个相反：**填了值才锁，清空则解锁** —— 空的简称本来就会被下一次
+        // 抓取用 manifest.short_name 或 LLM 推断补上，锁住一个空值只会让它永远补不上。
+        // 这段逻辑随 appName 一起从已删除的 adminUpdateIcon 搬过来（见 BookmarkBasicInfoUpdateParams）
+        params.appName?.let {
+            bookmark.appName = it.takeIf(String::isNotBlank)
+            if (bookmark.appName == null) bookmark.unlock(PageLockedField.APP_NAME)
+            else bookmark.lock(PageLockedField.APP_NAME)
+        }
         bookmark.updateTime = LocalDateTime.now()
-        pageMapper.updateById(bookmark)
-        log.debug("[adminUpdateBasicInfo] 管理员手动更新基础信息: pageId=$pageId, title=${bookmark.title}, lockedFields=${bookmark.lockedFields}")
+        // 逐列显式 set，不能用 updateById：它跳过 null 字段，而这里有**两列都能合法地变成 NULL**
+        // ——清空简称，以及解掉最后一把锁时 lockedFields 归 NULL（空集合存 NULL，见 LockedFieldCodec）。
+        // 用 updateById 的后果不是报错，是「清空按钮点了没反应」和「锁永远解不掉」
+        pageMapper.update(
+            null,
+            KtUpdateWrapper(PageEntity::class.java)
+                .eq(PageEntity::id, pageId)
+                .set(PageEntity::title, bookmark.title)
+                .set(PageEntity::description, bookmark.description)
+                .set(PageEntity::appName, bookmark.appName)
+                .set(PageEntity::lockedFields, bookmark.lockedFields)
+                .set(PageEntity::updateTime, bookmark.updateTime)
+        )
+        log.debug(
+            "[adminUpdateBasicInfo] 管理员手动更新基础信息: pageId=$pageId, title=${bookmark.title}, " +
+                "appName=${bookmark.appName}, lockedFields=${bookmark.lockedFields}"
+        )
         return adminDetail(pageId)
     }
 
@@ -493,7 +481,7 @@ class BookmarkAdminService(
     }
 
     /**
-     * 组装管理后台的书签详情：主表字段 + **全部**图片资产 + 各展示模式的设置。
+     * 组装管理后台的书签详情：主表字段 + **全部**图片资产 + 各展示模式下规则选出的渲染结果。
      *
      * 刻意返回全部资产而非仅选中的那张 —— 排查"这站为什么用了张丑图"时需要看到它到底
      * 声明了哪些图、各自出处是什么、有没有互相撞 hash。
@@ -506,14 +494,10 @@ class BookmarkAdminService(
 
         vo.assets = toAssetVOs(siteAssetResolver.assetsOf(pageId))
 
-        vo.displayPrefs = DisplayMode.entries.map { mode ->
-            val pref = siteDisplayPrefService.find(bookmark.siteId, mode)
+        vo.iconRenders = DisplayMode.entries.map { mode ->
             val resolved = siteAssetResolver.resolveOne(pageId, mode)
-            SiteDisplayPrefVO(
+            IconRenderVO(
                 displayMode = mode,
-                iconPadding = pref?.iconPadding ?: SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
-                iconBgColor = pref?.iconBgColor,
-                pinnedAssetId = pref?.pinnedAssetId,
                 previewUrl = resolved.url,
                 monogram = resolved.monogram,
             )

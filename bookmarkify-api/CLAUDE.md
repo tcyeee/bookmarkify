@@ -198,7 +198,7 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 | `user_preference` | Per-user preferences (background, layout, sort order) |
 | `background_config` / `background_image` / `background_gradient` | Background settings |
 | `oss_object` | **The ledger for every object in the OSS bucket** — one row per set of bytes, no owner. Replaced `user_file`; see root `FILE-SYSTEM-REFACTOR.md` |
-| `site_asset` / `page_meta` / `scrape_snapshot` / `site_display_pref` | Crawl results + display prefs (replaced `bookmark_logo`; see root `CLAUDE.md`) |
+| `site_asset` / `page_meta` / `scrape_snapshot` | Crawl results, one writer (`SiteAssetWriter`), crawl facts only (replaced `bookmark_logo`; see root `CLAUDE.md`). A fourth, `site_display_pref`, held admin icon tweaks and was dropped on 2026-08-17 — icon quality is a rules problem, see `ICON-DISPLAY-TODO.md` |
 | `page_ping_log` | One row per liveness probe (`outcome` = ALIVE/DEAD/UNKNOWN), purged after 90 days |
 | `sweep_log` | One row per **sweep round** — candidates/backlog/outcome counts/deferred/breaker reason. The sweep's only SLI; see "Liveness sweeps" |
 | `ai_call_log` | One row per DeepSeek call, **including request/response bodies** — see below |

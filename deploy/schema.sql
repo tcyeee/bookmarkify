@@ -418,23 +418,6 @@ CREATE TABLE public.site_asset (
 
 
 --
--- Name: site_display_pref; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.site_display_pref (
-    page_id character varying(64),
-    display_mode character varying(20) NOT NULL,
-    icon_padding integer DEFAULT 0 NOT NULL,
-    icon_bg_color character varying(32),
-    pinned_asset_id character varying(64),
-    updated_by character varying(64),
-    update_time timestamp without time zone DEFAULT now() NOT NULL,
-    id character varying(40) NOT NULL,
-    site_id character varying(40) NOT NULL
-);
-
-
---
 -- Name: sweep_log; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -700,14 +683,6 @@ ALTER TABLE ONLY public.scrapper_call_log
 
 ALTER TABLE ONLY public.site_asset
     ADD CONSTRAINT site_asset_pkey PRIMARY KEY (id);
-
-
---
--- Name: site_display_pref site_display_pref_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.site_display_pref
-    ADD CONSTRAINT site_display_pref_pkey PRIMARY KEY (id);
 
 
 --
@@ -1105,13 +1080,6 @@ CREATE UNIQUE INDEX uk_bookmark_uid_page ON public.bookmark USING btree (uid, pa
 --
 
 CREATE UNIQUE INDEX uk_page_canonical ON public.page USING btree (site_id, url_path, url_query, url_fragment);
-
-
---
--- Name: uk_site_display_pref_owner; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX uk_site_display_pref_owner ON public.site_display_pref USING btree (site_id, display_mode);
 
 
 --

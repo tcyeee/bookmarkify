@@ -7,7 +7,6 @@ import io.swagger.v3.oas.annotations.media.Schema
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
-import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import java.time.LocalDateTime
 
 /**
@@ -115,43 +114,10 @@ data class PageMetaEntity(
     @field:Schema(description = "更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
 )
 
-/**
- * 展示偏好：按（**站点** × [DisplayMode]）分行。
- *
- * **只由人工写入。** 重抓流程写 [PageMetaEntity] 与 [SiteAssetEntity]，永不触碰这张表 ——
- * 旧的 `bookmark_logo` 把抓取事实与人工偏好混在一起，导致每次重抓都得做小心翼翼的部分更新。
- *
- * 键从「书签」改成「站点」：内边距、背景色、钉死哪张图，调的都是**站点图标**的观感，
- * 同域名下每个页面各存一份等于让管理员把同一件事做 N 遍。
- */
-@TableName("site_display_pref")
-data class SiteDisplayPrefEntity(
-    @TableId var id: String = IdUtil.fastUUID(),
-    @field:Schema(description = "所属站点ID") var siteId: String = "",
-    /** 历史列：最初在哪个页面上调的，仅供溯源，业务代码不读。 */
-    @field:Schema(description = "最初在哪个页面上调的(溯源用)") var pageId: String? = null,
-    @field:Schema(description = "展示模式") var displayMode: DisplayMode = DisplayMode.TILE,
-    @field:Schema(description = "图片内边距") var iconPadding: Int = DEFAULT_ICON_PADDING,
-    @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
-    @field:Schema(description = "人工钉死的资产ID,覆盖自动选择") var pinnedAssetId: String? = null,
-    @field:Schema(description = "操作人") var updatedBy: String? = null,
-    @field:Schema(description = "更新时间") var updateTime: LocalDateTime = LocalDateTime.now(),
-) {
-    companion object {
-        /**
-         * 没有人工设置过时的内边距（百分比）。
-         *
-         * **0 = 图铺满图标卡片。** 原值是 25，那圈留白是照着 16px 列表行定的，可它同样落在
-         * TILE 模式 56px 的大磁贴上，观感是图标缩在一块白底中间盖不住背景。留白该由容器自己给，
-         * 不该由图片默认让出来 —— 真需要留白的站点由管理员按（站点 × 展示模式）单独调，
-         * 那正是 `site_display_pref` 存在的理由。
-         *
-         * 这个默认值散落在 VO / Params / 解析结果 / 建表语句里各写过一遍，改一处漏一处不会报错，
-         * 只会让同一个字段在不同接口上给出不同的默认值，所以收敛到这里。
-         */
-        const val DEFAULT_ICON_PADDING = 0
-    }
-}
+// 管理员自定义图标（内边距 / 背景色 / 钉图）整条链路已于 2026-08-17 移除，`SiteDisplayPrefEntity`
+// 与 `site_display_pref` 表一并删除。图标质量走规则（AssetRolePolicy）而非人工逐站点微调：
+// 规则是纯函数，改一次同时作用于全部站点以及所有还没被收藏的站点，人工设置只覆盖被调过的那一个，
+// 而用户对图标质量的感受由「刚添加的那一条」决定。理由与后续计划见根目录 `ICON-DISPLAY-TODO.md`。
 
 /**
  * scrapper 响应的原样留档。

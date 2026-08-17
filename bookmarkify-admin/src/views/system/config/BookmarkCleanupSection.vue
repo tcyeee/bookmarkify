@@ -40,7 +40,6 @@ const cascadeRows = computed(() => {
     { label: '分类关联', value: r.pageCategories },
     { label: '页面级图片(社交图/截图)', value: r.pageAssets },
     { label: '站点级图片(favicon/logo)', value: r.siteAssets },
-    { label: '站点展示偏好', value: r.displayPrefs },
   ].filter((row) => row.value > 0);
 });
 

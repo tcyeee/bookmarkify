@@ -6,7 +6,6 @@ import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.OssObjectEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
-import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
@@ -14,7 +13,6 @@ import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.mapper.PageMapper
 import top.tcyeee.bookmarkify.mapper.SiteAssetMapper
-import top.tcyeee.bookmarkify.mapper.SiteDisplayPrefMapper
 import top.tcyeee.bookmarkify.mapper.SiteMapper
 import top.tcyeee.bookmarkify.server.IOssObjectService
 import top.tcyeee.bookmarkify.utils.OssUtils
@@ -22,8 +20,8 @@ import top.tcyeee.bookmarkify.utils.OssUtils
 /**
  * 按展示模式解析出"这个书签该渲染哪张图、用什么显示参数"。
  *
- * 职责边界：[AssetRolePolicy] 是纯规则（可离线测试），本类负责取数据、签地址、
- * 套用人工偏好。前台每次列表渲染都会走这里，因此提供批量接口避免 N+1。
+ * 职责边界：[AssetRolePolicy] 是纯规则（可离线测试），本类负责取数据、签地址。
+ * 前台每次列表渲染都会走这里，因此提供批量接口避免 N+1。
  *
  * **对外接口一律只收 pageId，站点那一层由本类自己去查。** 图标现在挂在 site 上、
  * 社交图和截图挂在 bookmark 上（见 [AssetOwnerType]），但"这个书签该显示什么图"的调用方
@@ -33,7 +31,6 @@ import top.tcyeee.bookmarkify.utils.OssUtils
 @Service
 class SiteAssetResolver(
     private val siteAssetMapper: SiteAssetMapper,
-    private val siteDisplayPrefMapper: SiteDisplayPrefMapper,
     private val bookmarkMapper: PageMapper,
     private val siteMapper: SiteMapper,
     private val ossObjectService: IOssObjectService,
@@ -51,8 +48,6 @@ class SiteAssetResolver(
         val quality: AssetQuality? = null,
         val isVector: Boolean = false,
         val monogram: Boolean = true,
-        val iconPadding: Int = SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
-        val iconBgColor: String? = null,
     ) {
         companion object {
             /** 无任何可用资产时的空结果，前端据此走首字母色块 */
@@ -75,8 +70,7 @@ class SiteAssetResolver(
      * 批量解析**页面封面**（详情面板顶部那张宽图），与 [resolveBatch] 是两件事：
      * 那个选图标，这个选"页面长什么样"。选取规则见 [AssetRolePolicy.resolveCover]。
      *
-     * 只查 PAGE 层：封面的两个来源（SCREENSHOT / SOCIAL）都归属页面，不需要 site 那一跳，
-     * 也不需要 `site_display_pref`（它是站点级的，装不下按页面变化的封面）。
+     * 只查 PAGE 层：封面的两个来源（SCREENSHOT / SOCIAL）都归属页面，不需要 site 那一跳。
      *
      * @return 只含**有封面**的书签；没有的键直接缺席，让调用方 `?:` 成 null 而不是空串
      */
@@ -132,15 +126,13 @@ class SiteAssetResolver(
         resolveCoverBatch(listOf(pageId))[pageId]
 
     /**
-     * 批量解析。四次查询搞定（书签→站点、站点资产、页面资产、偏好），其余在内存里完成。
+     * 批量解析。三次查询搞定（书签→站点、站点资产、页面资产），其余在内存里完成。
      */
     fun resolveBatch(pageIds: List<String>, mode: DisplayMode): Map<String, ResolvedLogo> {
         val ids = pageIds.filter { it.isNotBlank() }.distinct()
         if (ids.isEmpty()) return emptyMap()
 
-        val siteIdOf = siteIdOf(ids)
-        val assetsByBookmark = assetsByBookmark(ids, siteIdOf)
-        val prefBySite = prefsBySite(siteIdOf.values, mode)
+        val assetsByBookmark = assetsByBookmark(ids, siteIdOf(ids))
 
         // 回退到源站直连是**降级**，不是正常形态：说明这些图没进我方 OSS，可用性依赖第三方站点。
         // 逐张打日志会把列表渲染刷爆，因此按批聚合成一行——这条降级以前是完全静默的，
@@ -151,7 +143,7 @@ class SiteAssetResolver(
 
         var hotlinked = 0
         val resolved = ids.associateWith { id ->
-            build(assetsByBookmark[id].orEmpty(), prefBySite[siteIdOf[id]], mode, objectByFileId) { hotlinked++ }
+            build(assetsByBookmark[id].orEmpty(), mode, objectByFileId) { hotlinked++ }
         }
         if (hotlinked > 0) log.warn(
             "[SiteAssetResolver] {}/{} 个书签回退到源站直连图片(未落 OSS)，" +
@@ -175,24 +167,6 @@ class SiteAssetResolver(
         val ids = pageIds.filter { it.isNotBlank() }.distinct()
         if (ids.isEmpty()) return emptyMap()
         return assetsByBookmark(ids, siteIdOf(ids))
-    }
-
-    /** 后台列表用：一次查出多个书签在全部模式下的人工偏好（实际按站点存）。 */
-    fun prefsOfBatch(pageIds: List<String>): Map<String, List<SiteDisplayPrefEntity>> {
-        val ids = pageIds.filter { it.isNotBlank() }.distinct()
-        if (ids.isEmpty()) return emptyMap()
-        val siteIdOf = siteIdOf(ids)
-        val bySite = prefsBySite(siteIdOf.values)
-        // 同站点的多个书签共享同一份偏好，这里按书签展开回去，调用方无需感知站点层
-        return ids.mapNotNull { id -> siteIdOf[id]?.let { site -> id to bySite[site].orEmpty() } }.toMap()
-    }
-
-    /** 后台用：读取某书签所属站点在某模式下的人工偏好，没有则返回默认值。 */
-    fun prefOf(pageId: String, mode: DisplayMode): SiteDisplayPrefEntity {
-        val siteId = siteIdOf(listOf(pageId))[pageId]
-        return siteId
-            ?.let { prefsBySite(listOf(it), mode)[it]?.firstOrNull() }
-            ?: SiteDisplayPrefEntity(siteId = siteId.orEmpty(), displayMode = mode)
     }
 
     // ────── 取数 ──────
@@ -258,20 +232,6 @@ class SiteAssetResolver(
         }
     }
 
-    /** siteId → 该站点的展示偏好行（可按模式过滤）。 */
-    private fun prefsBySite(
-        siteIds: Collection<String>,
-        mode: DisplayMode? = null,
-    ): Map<String, List<SiteDisplayPrefEntity>> {
-        val ids = siteIds.filter { it.isNotBlank() }.distinct()
-        if (ids.isEmpty()) return emptyMap()
-        return siteDisplayPrefMapper.selectList(
-            KtQueryWrapper(SiteDisplayPrefEntity::class.java)
-                .`in`(SiteDisplayPrefEntity::siteId, ids)
-                .apply { mode?.let { eq(SiteDisplayPrefEntity::displayMode, it) } }
-        ).groupBy { it.siteId }
-    }
-
     // ────── 组装 ──────
 
     /**
@@ -290,17 +250,11 @@ class SiteAssetResolver(
     /** @param onHotlink 选中的图没落 OSS、只能给源站直连地址时回调，供调用方聚合告警 */
     private fun build(
         assets: List<SiteAssetEntity>,
-        prefs: List<SiteDisplayPrefEntity>?,
         mode: DisplayMode,
         objectByFileId: Map<String, OssObjectEntity>,
         onHotlink: () -> Unit,
     ): ResolvedLogo {
-        val pref = prefs?.firstOrNull { it.displayMode == mode }
-        val chosen = AssetRolePolicy.resolve(assets, mode, pref?.pinnedAssetId)
-            ?: return ResolvedLogo.EMPTY.copy(
-                iconPadding = pref?.iconPadding ?: SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
-                iconBgColor = pref?.iconBgColor,
-            )
+        val chosen = AssetRolePolicy.resolve(assets, mode) ?: return ResolvedLogo.EMPTY
 
         // 大图模式下拿到的若是降级小图，宁可走首字母色块也不要拉伸
         if (mode == DisplayMode.TILE && AssetRolePolicy.shouldFallbackToMonogram(chosen)) {
@@ -309,8 +263,6 @@ class SiteAssetResolver(
                 role = chosen.role,
                 quality = chosen.quality,
                 monogram = true,
-                iconPadding = pref?.iconPadding ?: SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
-                iconBgColor = pref?.iconBgColor,
             )
         }
 
@@ -320,8 +272,6 @@ class SiteAssetResolver(
             quality = chosen.quality,
             isVector = chosen.isVector,
             monogram = false,
-            iconPadding = pref?.iconPadding ?: SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
-            iconBgColor = pref?.iconBgColor,
         )
     }
 

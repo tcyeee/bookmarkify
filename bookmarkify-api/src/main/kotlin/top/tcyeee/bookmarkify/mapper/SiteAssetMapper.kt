@@ -6,7 +6,6 @@ import org.apache.ibatis.annotations.Mapper
 import org.apache.ibatis.annotations.Param
 import top.tcyeee.bookmarkify.entity.entity.ScrapeSnapshotEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
-import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
 import top.tcyeee.bookmarkify.entity.entity.PageMetaEntity
 
 /** 网站图片资产（一行一图） */
@@ -16,10 +15,6 @@ interface SiteAssetMapper : BaseMapper<SiteAssetEntity>
 /** 页面文字元数据 */
 @Mapper
 interface PageMetaMapper : BaseMapper<PageMetaEntity>
-
-/** 展示偏好（书签 × 展示模式），只由人工写入 */
-@Mapper
-interface SiteDisplayPrefMapper : BaseMapper<SiteDisplayPrefEntity>
 
 /** scrapper 响应快照 */
 @Mapper

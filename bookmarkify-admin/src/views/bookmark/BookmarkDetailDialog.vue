@@ -263,7 +263,7 @@ async function refetchAssets() {
   try {
     const res = await refetchBookmarkAssetsApi(row.id);
     row.assets = res.bookmark.assets;
-    row.displayPrefs = res.bookmark.displayPrefs;
+    row.iconRenders = res.bookmark.iconRenders;
     emit("updated", row);
     if (res.success && res.scrapedAssetCount > 0) {
       ElMessage.success(`抓到 ${res.scrapedAssetCount} 张图片，已更新`);
@@ -576,8 +576,8 @@ function siblingUrl(row: BookmarkEntity) {
 
 // 各卡片内部的图片各成一组，放大后左右翻页只在同类图之间进行
 const assetUrls = computed(() => (current.value?.assets ?? []).map((a) => a.url));
-const displayPrefUrls = computed(() =>
-  (current.value?.displayPrefs ?? []).map((p) => p.previewUrl),
+const iconRenderUrls = computed(() =>
+  (current.value?.iconRenders ?? []).map((p) => p.previewUrl),
 );
 const siblingIconUrls = computed(() =>
   siblings.value.map((s) => logoOf(s) ?? faviconOf(s)),
@@ -1094,21 +1094,23 @@ const livenessImageUrls = computed(() => {
         <div v-else class="text-gray-400">该站没有抓到任何图片</div>
       </ElCard>
 
-      <!-- 卡片五：显示设置 —— 大图/列表两种模式的取图优先级相反，所以按模式分行 -->
+      <!-- 卡片五：渲染结果 —— 规则在两种模式下各选了哪张图。取图优先级相反，所以按模式分行。
+           纯只读：图标质量走规则(AssetRolePolicy)，管理员逐站点调内边距/背景色/钉图那条链路
+           已于 2026-08-17 移除（理由见根目录 ICON-DISPLAY-TODO.md） -->
       <ElCard v-if="scrapable" shadow="never" class="detail-card">
         <template #header>
-          <span class="font-medium">显示设置</span>
+          <span class="font-medium">渲染结果</span>
         </template>
-        <ul v-if="(current.displayPrefs ?? []).length > 0" class="space-y-2">
+        <ul v-if="(current.iconRenders ?? []).length > 0" class="space-y-2">
           <li
-            v-for="p in current.displayPrefs"
+            v-for="p in current.iconRenders"
             :key="p.displayMode"
             class="flex items-center gap-3 rounded border border-gray-100 p-2"
           >
             <BookmarkAssetCell
               :src="p.previewUrl"
               preview
-              @preview="openPreview(displayPrefUrls, $event)"
+              @preview="openPreview(iconRenderUrls, $event)"
             />
             <div class="min-w-0 flex-1 space-y-1">
               <div class="flex flex-wrap items-center gap-1 font-medium">
@@ -1121,21 +1123,11 @@ const livenessImageUrls = computed(() => {
                 >
                   首字母色块
                 </ElTag>
-                <ElTag v-if="p.pinnedAssetId" size="small" type="info">已钉图</ElTag>
-              </div>
-              <div class="text-gray-500">
-                内边距 {{ p.iconPadding }}% · 背景
-                <span
-                  v-if="p.iconBgColor"
-                  class="ml-1 inline-block h-3 w-3 rounded-sm border align-middle"
-                  :style="{ backgroundColor: p.iconBgColor }"
-                />
-                {{ p.iconBgColor || "默认" }}
               </div>
             </div>
           </li>
         </ul>
-        <div v-else class="text-gray-400">未设置，按默认值渲染</div>
+        <div v-else class="text-gray-400">尚未解析出渲染结果</div>
       </ElCard>
 
       <!-- 卡片六：关联网站 —— 同域名下已收录的其它页面 + AI 推荐的相似站点 -->

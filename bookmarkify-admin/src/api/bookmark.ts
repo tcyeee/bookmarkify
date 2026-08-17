@@ -79,13 +79,14 @@ export interface SiteAsset {
   errorMsg?: string;
 }
 
-/** 某展示模式下的图标设置（site_display_pref，按 书签×模式 分行） */
-export interface SiteDisplayPref {
+/**
+ * 某展示模式下**规则实际选出**的渲染结果，纯只读（后端 IconRenderVO）。
+ *
+ * 前身是 `SiteDisplayPref`，混着人工设置（内边距/背景色/钉图）与渲染结果两件事；人工设置那半边
+ * 随 `site_display_pref` 表一并移除（2026-08-17），留下的这半边是服务端现算的取图结果。
+ */
+export interface IconRender {
   displayMode: DisplayMode;
-  iconPadding: number;
-  iconBgColor?: string;
-  /** 人工钉死的资产ID，覆盖自动选择 */
-  pinnedAssetId?: string;
   /** 该模式下实际会渲染的地址 */
   previewUrl?: string;
   /** true 表示该模式下会走首字母色块 */
@@ -167,8 +168,8 @@ export interface BookmarkEntity {
   description?: string;
   // 该书签声明的全部图片资产（一行一图），后台刻意展示全部以便排查
   assets: SiteAsset[];
-  // 各展示模式下的图标设置
-  displayPrefs: SiteDisplayPref[];
+  // 各展示模式下规则实际选出的渲染结果
+  iconRenders: IconRender[];
   parseStatus: BookmarkParseStatus;
   isActivity: boolean;
   /** 抓取成功但页面疑似反爬虫/WAF挑战页，内容可能不可靠 */
@@ -247,24 +248,6 @@ export interface PageResult<T> {
  */
 export async function getBookmarkListApi(params: BookmarkSearchParams) {
   return requestClient.post<PageResult<BookmarkEntity>>('/admin/bookmark/all', params);
-}
-
-/**
- * 修改书签编辑设置（内边距、背景色、是否高清、AppName），单一保存端点
- */
-export async function updateBookmarkIconApi(
-  bookmarkId: string,
-  data: {
-    appName?: null | string;
-    /** 显示设置按展示模式分行：大图的内边距/背景色与列表行互不影响 */
-    displayMode: DisplayMode;
-    iconBgColor?: null | string;
-    iconPadding: number;
-    /** 人工钉死用哪张图；为空表示走自动选择 */
-    pinnedAssetId?: null | string;
-  },
-) {
-  return requestClient.post<void>(`/admin/bookmark/${bookmarkId}/icon`, data);
 }
 
 /** 重新获取预览结果：重新解析得到的网站标题、小图标与高清 LOGO（不落库） */
@@ -460,7 +443,8 @@ export async function getSiblingBookmarksApi(
 /** 手动编辑书签基础信息（标题/简介），返回更新后的书签 */
 export async function updateBookmarkBasicInfoApi(
   bookmarkId: string,
-  data: { title?: string; description?: string },
+  /** appName 传空串 = 清空并解锁；不传 = 不修改。它是 TILE 标题的主要来源，不是图标设置 */
+  data: { appName?: string; title?: string; description?: string },
 ) {
   return requestClient.post<BookmarkEntity>(
     `/admin/bookmark/${bookmarkId}/update`,

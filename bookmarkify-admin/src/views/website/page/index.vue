@@ -224,14 +224,19 @@ async function handleRefresh(row: BookmarkEntity) {
   }
 }
 
-// ── 行内「修改」：弹窗编辑标题 / 简介 ──
+// ── 行内「修改」：弹窗编辑简称 / 标题 / 简介 ──
+//
+// 简称(appName)原先只能从已删除的 `/admin/bookmark/{id}/icon` 端点改，而后台从来没有页面调过它
+// ——也就是说这个字段此前在后台**根本改不了**。它跟图标外观无关：它是 TILE 磁贴标题的主要来源
+// （生产 92 个首页里 75 个靠它出标题），所以随那个端点一起并进了这里。
 const editDialogVisible = ref(false);
 const editingRow = ref<BookmarkEntity | null>(null);
-const editForm = reactive({ title: "", description: "" });
+const editForm = reactive({ appName: "", title: "", description: "" });
 const savingBasicInfo = ref(false);
 
 function handleEdit(row: BookmarkEntity) {
   editingRow.value = row;
+  editForm.appName = row.appName ?? "";
   editForm.title = row.title ?? "";
   editForm.description = row.description ?? "";
   editDialogVisible.value = true;
@@ -242,6 +247,8 @@ async function handleSaveBasicInfo() {
   savingBasicInfo.value = true;
   try {
     const updated = await updateBookmarkBasicInfoApi(editingRow.value.id, {
+      // 空串是有意义的取值（清空简称并解锁 APP_NAME），不能因为 falsy 就省略不传
+      appName: editForm.appName,
       title: editForm.title,
       description: editForm.description,
     });
@@ -718,6 +725,12 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload(), {
 
       <ElDialog v-model="editDialogVisible" title="修改基础信息" width="480px">
         <ElForm :model="editForm" label-width="60px">
+          <ElFormItem label="简称">
+            <ElInput
+              v-model="editForm.appName"
+              placeholder="磁贴上显示的短名称，留空则由抓取/AI 推断补上"
+            />
+          </ElFormItem>
           <ElFormItem label="标题">
             <ElInput v-model="editForm.title" placeholder="书签标题" />
           </ElFormItem>

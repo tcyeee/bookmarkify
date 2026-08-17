@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.metadata.IPage
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkAssetRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkBasicInfoUpdateParams
-import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkLivenessVO
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
@@ -36,8 +35,6 @@ interface IBookmarkAdminService {
     /** 管理员查询全部书签 */
     fun adminListAll(params: BookmarkSearchParams): IPage<BookmarkAdminVO>
 
-    /** 管理员修改书签图标设置（图片内边距 iconPadding、图标背景色 iconBgColor） */
-    fun adminUpdateIcon(pageId: String, params: BookmarkIconUpdateParams)
 
     /** 管理员「重新获取」：重新解析网站标题与图标但不落库，暂存抓取结果供后续应用，返回预览数据 */
     fun adminRefetch(pageId: String): BookmarkRefetchVO

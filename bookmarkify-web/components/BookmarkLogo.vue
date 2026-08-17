@@ -92,10 +92,6 @@ const glyphStyle = computed(() => {
   return { width: `${glyph}px`, height: `${glyph}px` }
 })
 
-// 自定义背景色 / 内边距：管理台按展示模式设置，服务端已随 logo 一并下发
-const customBgColor = computed(() => props.value.logo?.iconBgColor || '')
-const effectivePadding = computed(() => props.value.logo?.iconPadding ?? 0)
-
 // 明文 http 曾经在这里额外叠一个「不支持 SSL」的感叹号蒙版，已移除：它与「不可访问」共用
 // 同一层灰蒙版和去色滤镜，在 20px 的列表格子里两者几乎分辨不出，实际效果是把一批活得好好的
 // 站点显示成失活；而判据是前端拿 urlFull 的协议现算的，后台没有任何对应字段可供核对。
@@ -155,18 +151,16 @@ const logoSizeStyle = computed(() => ({ width: `${logoSize.value}px`, height: `$
 const logoStyle = computed(() => {
   // 本地/IP：铺与「不可访问」蒙版同一个灰（叠在 bg-white 上合成同色），配白色图标
   if (isPlainCircle.value) return { backgroundColor: INACTIVE_GRAY }
-  // 后台按展示模式人工设过底色的，永远压过自动取色 —— 那是人的判断，取色只是没人管时的兜底
-  if (customBgColor.value) return { backgroundColor: customBgColor.value }
+  // 底色只有自动取色这一个来源了：管理员按展示模式人工设底色/内边距那条链路已于 2026-08-17
+  // 连同 site_display_pref 表一并移除（理由见根目录 ICON-DISPLAY-TODO.md）
   if (surfaceColor.value) return { backgroundColor: surfaceColor.value }
   return undefined
 })
 
-// 图片按内边距收缩；矢量图与大图都由服务端按模式缩放好，这里只做留白
-const imageStyle = computed(() => {
-  const shrink = 1 - Math.min(Math.max(effectivePadding.value, 0), 35) / 100
-  const px = Math.max(4, Math.round(logoSize.value * shrink))
-  return { width: `${px}px`, height: `${px}px`, objectFit: 'contain' as const }
-})
+// 图片铺满图标卡片。留白该由容器自己给，不由图片让出来 —— 人工内边距那条链路移除后
+// 这里恒等于铺满，`objectFit: contain` 保证非方形的图不被拉变形。
+// 矢量图与大图都已由服务端按模式缩放好，这里不再做任何尺寸计算
+const imageStyle = { width: '100%', height: '100%', objectFit: 'contain' as const }
 
 // ── 首字母色块 ──
 // 取标题/域名首字符；中文直接用该字，英文用大写字母
@@ -185,7 +179,7 @@ const monogramStyle = computed(() => {
   return {
     width: '100%',
     height: '100%',
-    backgroundColor: customBgColor.value || `hsl(${hue} 55% 55%)`,
+    backgroundColor: `hsl(${hue} 55% 55%)`,
     fontSize: `${Math.max(10, Math.round(logoSize.value * 0.42))}px`,
   }
 })

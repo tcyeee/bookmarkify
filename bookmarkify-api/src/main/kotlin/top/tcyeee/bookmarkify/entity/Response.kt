@@ -154,8 +154,6 @@ data class BookmarkLogoShowVO(
     @field:Schema(description = "可信度:TRUSTED/DEGRADED") val quality: AssetQuality? = null,
     @field:Schema(description = "是否矢量图") val isVector: Boolean = false,
     @field:Schema(description = "为 true 时前端应放弃图片,改用首字母色块") val monogram: Boolean = true,
-    @field:Schema(description = "图片内边距") val iconPadding: Int = SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
-    @field:Schema(description = "图标背景色") val iconBgColor: String? = null,
 ) {
     companion object {
         fun from(r: SiteAssetResolver.ResolvedLogo?): BookmarkLogoShowVO {
@@ -166,8 +164,6 @@ data class BookmarkLogoShowVO(
                 quality = r.quality,
                 isVector = r.isVector,
                 monogram = r.monogram,
-                iconPadding = r.iconPadding,
-                iconBgColor = r.iconBgColor,
             )
         }
     }
@@ -311,9 +307,9 @@ data class BookmarkAdminVO(
     @field:Schema(description = "书签标题") var title: String? = null,
     @field:Schema(description = "书签备注") var description: String? = null,
 
-    /* 图片资产（site_asset，一行一图）与各展示模式的设置 */
+    /* 图片资产（site_asset，一行一图）与各展示模式下的取图结果 */
     @field:Schema(description = "该书签的全部图片资产") var assets: List<SiteAssetAdminVO> = emptyList(),
-    @field:Schema(description = "各展示模式下的图标设置") var displayPrefs: List<SiteDisplayPrefVO> = emptyList(),
+    @field:Schema(description = "各展示模式下规则实际选出的渲染结果") var iconRenders: List<IconRenderVO> = emptyList(),
 
     /* 状态信息 */
     @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.PENDING,
@@ -523,12 +519,16 @@ data class SiteAdminVO(
     }
 }
 
-/** 管理后台某展示模式下的图标设置 */
-data class SiteDisplayPrefVO(
+/**
+ * 管理后台：某展示模式下**规则实际选出**的渲染结果，纯只读。
+ *
+ * 前身是 `SiteDisplayPrefVO`，那时它混着「人工设置」（内边距/背景色/钉图）与「渲染结果」两件事。
+ * 人工设置那半边随 `site_display_pref` 一并移除（2026-08-17），留下的这半边不来自任何偏好表，
+ * 而是 [SiteAssetResolver] 现算的 —— 它回答的是「这个书签在 TILE / LIST 下实际会渲染成什么」，
+ * 正是排图标规则时最需要的那个事实，所以读侧一并保留。
+ */
+data class IconRenderVO(
     @field:Schema(description = "展示模式") var displayMode: DisplayMode = DisplayMode.TILE,
-    @field:Schema(description = "图片内边距") var iconPadding: Int = SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
-    @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
-    @field:Schema(description = "人工钉死的资产ID") var pinnedAssetId: String? = null,
     @field:Schema(description = "当前该模式下实际会渲染的地址") var previewUrl: String? = null,
     @field:Schema(description = "为 true 表示该模式下会走首字母色块") var monogram: Boolean = true,
 )
@@ -1102,7 +1102,6 @@ data class OrphanCleanupReport(
     @field:Schema(description = "分类关联(page_category)") var pageCategories: Int = 0,
     @field:Schema(description = "页面级图片资产(社交图/截图)") var pageAssets: Int = 0,
     @field:Schema(description = "站点级图片资产(favicon/logo)") var siteAssets: Int = 0,
-    @field:Schema(description = "站点展示偏好(site_display_pref)") var displayPrefs: Int = 0,
     @field:Schema(
         description = "随之失去引用的对象存储文件数。这里**不删对象**，" +
             "它们会在下一轮 OSS 对账里被认定为孤儿后按既有策略回收"
