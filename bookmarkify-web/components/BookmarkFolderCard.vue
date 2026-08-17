@@ -3,7 +3,7 @@
     ref="cardRef"
     class="folder-card w-full rounded-lg bg-slate-50 dark:bg-slate-800/40 p-4 transition-shadow"
     :class="{ 'ring-2 ring-primary/60': dropTargetId === CARD_END_ID }">
-    <div class="flex items-center gap-2" :class="collapsed ? '' : 'mb-2'">
+    <div class="flex items-center gap-2">
       <Icon
         v-if="!isRoot"
         data-folder-handle
@@ -15,7 +15,10 @@
         :aria-expanded="!collapsed"
         :title="collapsed ? '展开' : '折叠'"
         @click="toggleCollapsed">
-        <Icon :icon="collapsed ? 'mdi:chevron-right' : 'mdi:chevron-down'" class="size-4" />
+        <Icon
+          icon="mdi:chevron-down"
+          class="size-4 transition-transform duration-200"
+          :class="collapsed ? '-rotate-90' : ''" />
       </button>
       <Icon
         :icon="isRoot ? 'mdi:home-variant' : collapsed ? 'mdi:folder' : 'mdi:folder-open'"
@@ -48,34 +51,38 @@
       </button>
     </div>
 
-    <!-- 折叠时整份列表卸载（而不是 v-show 藏起来）：行是拖拽放置区，留在 DOM 里会让人把书签
+    <!-- 折叠时整份列表最终会卸载（而不是 v-show 藏起来）：行是拖拽放置区，留在 DOM 里会让人把书签
          "拖进"一个看不见的位置。卡片容器自身的放置区仍在，所以折叠状态下依然能收下书签，
-         落到该文件夹末尾。列表重新挂载后要补一次 registerRows，见下方 watch。 -->
-    <template v-if="!collapsed">
-      <div
-        v-if="children.length === 0"
-        class="text-xs text-slate-400 dark:text-slate-500 py-3 text-center rounded border border-dashed"
-        :class="dropTargetId === CARD_END_ID ? 'border-primary text-primary' : 'border-transparent'">
-        暂无书签
-      </div>
-      <div v-else ref="listRef">
-        <div
-          v-for="child in children"
-          :key="child.id"
-          :data-row-id="child.id"
-          class="relative cursor-grab active:cursor-grabbing"
-          :class="{ 'opacity-40': draggingId === child.id }">
-          <span
-            v-if="dropTargetId === child.id && dropMode === 'above'"
-            class="pointer-events-none absolute inset-x-0 -top-px h-0.5 rounded-full bg-primary z-10" />
-          <BookmarkTreeRow :node="child" :depth="0" @edit="(n: UserLayoutNodeVO) => emit('edit', n)" />
-          <span
-            v-if="dropTargetId === child.id && dropMode === 'below'"
-            class="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary z-10" />
+         落到该文件夹末尾。动画开始时先清理行注册，展开动画结束后再补一次 registerRows。 -->
+    <Transition name="folder-content" @before-leave="unregisterRows" @after-enter="registerRows">
+      <div v-if="!collapsed" class="folder-content">
+        <div class="folder-content-inner">
+          <div
+            v-if="children.length === 0"
+            class="text-xs text-slate-400 dark:text-slate-500 py-3 text-center rounded border border-dashed"
+            :class="dropTargetId === CARD_END_ID ? 'border-primary text-primary' : 'border-transparent'">
+            暂无书签
+          </div>
+          <div v-else ref="listRef">
+            <div
+              v-for="child in children"
+              :key="child.id"
+              :data-row-id="child.id"
+              class="relative cursor-grab active:cursor-grabbing"
+              :class="{ 'opacity-40': draggingId === child.id }">
+              <span
+                v-if="dropTargetId === child.id && dropMode === 'above'"
+                class="pointer-events-none absolute inset-x-0 -top-px h-0.5 rounded-full bg-primary z-10" />
+              <BookmarkTreeRow :node="child" :depth="0" @edit="(n: UserLayoutNodeVO) => emit('edit', n)" />
+              <span
+                v-if="dropTargetId === child.id && dropMode === 'below'"
+                class="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary z-10" />
+            </div>
+            <span v-if="dropTargetId === CARD_END_ID" class="block h-0.5 rounded-full bg-primary mt-1" />
+          </div>
         </div>
-        <span v-if="dropTargetId === CARD_END_ID" class="block h-0.5 rounded-full bg-primary mt-1" />
       </div>
-    </template>
+    </Transition>
   </div>
 </template>
 
@@ -172,6 +179,11 @@ function registerRows() {
     )
   })
   rowsCleanup = combine(...disposers)
+}
+
+function unregisterRows() {
+  rowsCleanup?.()
+  rowsCleanup = null
 }
 
 function registerCard() {
@@ -273,11 +285,10 @@ async function persist(sourceId: string, fromKey: string, destKey: string) {
   }
 }
 
-// collapsed 一并盯住：折叠会把整份列表连同 listRef 卸载，展开时挂回来的是一批全新的元素，
-// 不补注册的话表现是「收起再展开之后，这个文件夹里的书签就拖不动了」——和 index.vue 里
-// 盯 folderColumns 的那处是同一个坑。
+// 子项变化会替换行元素，需要重新注册拖拽；折叠/展开则由 Transition 的 before-leave/after-enter
+// 钩子负责清理和恢复注册。
 watch(
-  [() => props.children.map((c) => c.id).join(','), collapsed],
+  () => props.children.map((c) => c.id).join(','),
   () => nextTick(registerRows),
 )
 onMounted(() =>
@@ -288,7 +299,7 @@ onMounted(() =>
   }),
 )
 onBeforeUnmount(() => {
-  rowsCleanup?.()
+  unregisterRows()
   cardCleanup?.()
   monitorCleanup?.()
 })
@@ -367,3 +378,45 @@ function openMenu(e: MouseEvent) {
   ContextMenu.showContextMenu({ items, x: e.x, y: e.y })
 }
 </script>
+
+<style scoped>
+.folder-content {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.folder-content-inner {
+  min-height: 0;
+}
+
+.folder-content-enter-active,
+.folder-content-leave-active {
+  transition:
+    grid-template-rows 200ms ease,
+    margin-top 200ms ease,
+    opacity 150ms ease;
+}
+
+.folder-content-enter-from,
+.folder-content-leave-to {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  opacity: 0;
+}
+
+.folder-content-enter-to,
+.folder-content-leave-from {
+  grid-template-rows: 1fr;
+  margin-top: 0.5rem;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folder-content-enter-active,
+  .folder-content-leave-active {
+    transition-duration: 1ms;
+  }
+}
+</style>
