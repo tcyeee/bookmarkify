@@ -537,6 +537,91 @@ class AssetRolePolicyTest {
         assertEquals(AssetRole.FAVICON, assertNotNull(chosen).role, "TILE 也不该挑中截图")
     }
 
+    // ── 截图绝不做图标：库里 role 被写歪时也一样 ──────────────────────────────
+
+    /** 库里的截图行，`role` 那一列可以被调用方摆成任意值（生产上就被写成了 FAVICON） */
+    private fun screenshotRow(size: Int = 1280, role: AssetRole = AssetRole.SCREENSHOT) =
+        SiteAssetEntity(
+            pageId = "bm-1",
+            ownerType = AssetOwnerType.PAGE,
+            ownerId = "bm-1",
+            extractor = AssetRolePolicy.SCREENSHOT_EXTRACTOR,
+            originUrl = "https://x/page",
+            resolvedUrl = "https://x/page",
+            storageUrl = "scrapper/shot/abc.webp",
+            width = size,
+            height = size * 9 / 16,
+        ).apply { this.role = role }
+
+    /**
+     * 上一条测试守的是"role 是对的"这个前提；这一条守的是前提不成立的时候。
+     *
+     * 生产实况（2026-08-18 查库）：`site_asset` 里 76 行 `extractor='HEADLESS_CAPTURE'` 的截图，
+     * **role 全部是 FAVICON**、其中 71 行还是 `is_primary`。成因见 [AssetRolePolicy.assignRoles]
+     * 第一遍的注释。截图归 PAGE 层，[AssetRolePolicy.resolve] 里的 `preferPageOwned` 一见到
+     * PAGE 层图标就把站点图标整批筛掉 —— 所以这不是"截图和 favicon 里挑一个"，而是候选池里
+     * **只剩截图**，两种模式一起中招。
+     *
+     * 因此读侧的判据必须是 `extractor` 这个事实，而不是 `role` 这个判定产物。
+     */
+    @Test
+    fun `a screenshot mis-roled as favicon still never becomes the icon`() {
+        for (mode in DisplayMode.entries) {
+            val chosen = AssetRolePolicy.resolve(
+                listOf(
+                    screenshotRow(role = AssetRole.FAVICON),
+                    siteIcon("aaa", role = AssetRole.FAVICON, size = 64),
+                ),
+                mode,
+            )
+            assertEquals(
+                "aaa",
+                assertNotNull(chosen, "$mode: 站点 favicon 才是图标").contentHash,
+                "$mode: 截图被写成 FAVICON 时也不能当图标",
+            )
+        }
+    }
+
+    /** 一个页面只有截图时，宁可走首字母色块 —— 缩略图当图标比没有图标更糟 */
+    @Test
+    fun `a page with only a screenshot resolves to no icon at all`() {
+        assertNull(
+            AssetRolePolicy.resolve(listOf(screenshotRow(role = AssetRole.FAVICON)), DisplayMode.TILE),
+            "只有截图就等于没有图标",
+        )
+    }
+
+    /**
+     * 写侧：重算把被写歪的截图行改回 SCREENSHOT，而不是跳过它。
+     *
+     * `AssetVerdictRecomputeService` 是按 owner 整组把库里的行喂回 [AssetRolePolicy.assignRoles]
+     * 的，所以让它认得截图不只是"别再写坏"，也是存量那 76 行唯一的修复路径。
+     */
+    @Test
+    fun `assign roles repairs a screenshot that was classified as an icon`() {
+        val shot = screenshotRow(role = AssetRole.FAVICON).apply { quality = AssetQuality.DEGRADED }
+        val favicon = asset(AssetExtractor.LINK_ICON, size = 32, hash = "f1")
+        val logo = asset(AssetExtractor.MANIFEST_ICON, size = 512, hash = "l1")
+
+        AssetRolePolicy.assignRoles(listOf(shot, favicon, logo))
+
+        assertEquals(AssetRole.SCREENSHOT, shot.role, "截图的角色由它自己的出处决定，不查 TABLE")
+        assertEquals(AssetQuality.TRUSTED, shot.quality, "我方渲染的图，出处百分之百确定")
+        assertEquals(AssetRole.FAVICON, favicon.role, "同组里页面声明的图照常判定")
+        assertEquals(AssetRole.LOGO, logo.role)
+        assertTrue(logo.isPrimary, "截图不参与图标那两层的 primary 之争")
+    }
+
+    /** 幂等：规则没变时重跑一次不该产生任何改动，这是"空跑验证"的依据 */
+    @Test
+    fun `assign roles leaves a healthy screenshot untouched`() {
+        val shot = screenshotRow()
+        AssetRolePolicy.assignRoles(listOf(shot))
+        assertEquals(AssetRole.SCREENSHOT, shot.role)
+        assertEquals(AssetQuality.TRUSTED, shot.quality)
+        assertTrue(shot.isPrimary, "同 role 里只有它一张，仍是 primary")
+    }
+
     @Test
     fun `no page assets means no cover`() {
         assertNull(AssetRolePolicy.resolveCover(emptyList()))

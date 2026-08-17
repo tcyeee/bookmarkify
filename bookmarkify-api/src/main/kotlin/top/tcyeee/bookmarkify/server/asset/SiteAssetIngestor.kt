@@ -164,7 +164,9 @@ object SiteAssetIngestor {
      * 截图单列一条 [AssetRole.SCREENSHOT]。
      *
      * 它不在 `assets[]` 里（截图不是页面"声明"的资源，是我们渲染出来的），所以不参与
-     * [AssetRolePolicy.assignRoles] 的角色判定，直接定死角色。
+     * [AssetRolePolicy.assignRoles] 的角色判定，直接定死角色。**但存量行会被重算服务
+     * 整组喂回 `assignRoles`**，所以那边也必须认得出截图 —— 见
+     * [AssetRolePolicy.SCREENSHOT_EXTRACTOR]。
      *
      * [originUrl]/[resolvedUrl] 记的是**被截图的那个页面**，不是截图文件本身 —— 截图没有
      * "源地址"可言。此前这两列填的是 object key，既不是 URL（后台详情页的"源地址"列会显示
@@ -193,7 +195,7 @@ object SiteAssetIngestor {
             ownerType = AssetOwnerType.PAGE,
             ownerId = pageId,
             role = AssetRole.SCREENSHOT,
-            extractor = "HEADLESS_CAPTURE",
+            extractor = AssetRolePolicy.SCREENSHOT_EXTRACTOR,
             quality = AssetQuality.TRUSTED,
             originUrl = source.take(1000),
             resolvedUrl = source.take(1000),
