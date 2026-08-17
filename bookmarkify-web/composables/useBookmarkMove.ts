@@ -16,9 +16,14 @@ import { useMovePickerStore } from '@stores/movePicker.store'
 export function useBookmarkMove() {
   const bookmarkStore = useBookmarkStore()
 
-  /** 本地顺序变更后统一落库。失败只记日志：下一次布局拉取会以服务端为准纠正 */
+  /**
+   * 本地顺序变更后统一落库。失败只记日志：下一次布局拉取会以服务端为准纠正。
+   *
+   * 返回 Promise 而不是即发即忘，是因为跨文件夹移动那条路必须先等它落库再调 moveNode
+   * ——理由见 [moveToFolder] 与 BookmarkFolderCard 的 persist()。
+   */
   function persistOrder(scene: string) {
-    bookmarksSort(bookmarkStore.fullOrderParams).catch((error) =>
+    return bookmarksSort(bookmarkStore.fullOrderParams).catch((error) =>
       console.error(`[useBookmarkMove] 排序保存失败(${scene})`, error),
     )
   }
@@ -61,7 +66,9 @@ export function useBookmarkMove() {
     // 追加到目标文件夹末尾；moveLocal 会在原文件夹因此只剩 ≤1 项时自动就地解散
     const destLength = (bookmarkStore.order[destKey] ?? []).length
     bookmarkStore.moveLocal(node.id, destKey, destLength)
-    persistOrder('move')
+    // 必须先落库再 moveNode：后者会用服务端当前的 sort 表拼出目标文件夹的 HOME_DIR_UPDATE 广播
+    // 回来（含本标签页），sort 没写完时那份顺序里这条书签还带着原文件夹的旧位置
+    await persistOrder('move')
     try {
       await bookmarksMoveNode(node.id, destKey === ROOT_KEY ? null : destKey)
       useToastStore().success('已移动')

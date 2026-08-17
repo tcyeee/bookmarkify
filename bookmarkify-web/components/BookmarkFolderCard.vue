@@ -246,11 +246,30 @@ function decide(sourceId: string, targetId: string, mode: 'above' | 'below' | nu
     bookmarkStore.moveLocal(sourceId, destKey, insertIndex)
   }
 
-  bookmarksSort(bookmarkStore.fullOrderParams).catch((error) => console.error('[BookmarkFolderCard] 排序保存失败', error))
-  if (fromKey !== destKey) {
-    bookmarksMoveNode(sourceId, destKey === ROOT_KEY ? null : destKey).catch((error) =>
-      console.error('[BookmarkFolderCard] 移动书签失败', error),
-    )
+  persist(sourceId, fromKey, destKey)
+}
+
+/**
+ * 落库。**两个调用的先后顺序是必须的，不能并发发出。**
+ *
+ * moveNode 在服务端会就地读 user_preference 的 sort 表，拼出目标文件夹的 HOME_DIR_UPDATE 广播给
+ * 该用户的全部会话——包括发起这次拖拽的本标签页。sort 还没落库时，被移动的这条书签带的仍是它在
+ * **原文件夹**里的旧 sort 值，推回来的顺序自然是错的，而 replaceFolder() 会拿它整体覆盖本地刚摆好
+ * 的顺序表。先 await sort 再 moveNode，那条推送才是对的。
+ *
+ * 失败只记日志：本地已经是用户要的样子，下一次全量拉取会以服务端为准纠正。
+ */
+async function persist(sourceId: string, fromKey: string, destKey: string) {
+  try {
+    await bookmarksSort(bookmarkStore.fullOrderParams)
+  } catch (error) {
+    console.error('[BookmarkFolderCard] 排序保存失败', error)
+  }
+  if (fromKey === destKey) return
+  try {
+    await bookmarksMoveNode(sourceId, destKey === ROOT_KEY ? null : destKey)
+  } catch (error) {
+    console.error('[BookmarkFolderCard] 移动书签失败', error)
   }
 }
 

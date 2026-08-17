@@ -40,6 +40,19 @@ class UserLayoutNodeServiceImpl(
     companion object {
         private const val ROOT_ID = "ROOT"
         private const val ROOT_NAME = "ROOT"
+
+        /**
+         * 同一层子节点的排列顺序。
+         *
+         * **凡是把子节点下发给前端的地方都必须用它**，无论走的是 [layout] 这条全量路径，还是
+         * [createDir] / [moveNode] 推的那条 HOME_DIR_UPDATE 单文件夹路径。此前只有前者排了序，
+         * 后两者直接把 `ktQuery().list()` 的结果原样塞进 `children` —— 那是 Postgres 的堆序，
+         * 与用户排好的顺序毫无关系：行被 UPDATE 过（建夹、移入移出都会 UPDATE `parent_id`）之后
+         * 新版本元组落在堆的另一处，扫描顺序就此与 `sort` 脱钩。生产库里已经能查到这样的文件夹。
+         * 前端 `replaceFolder()` 拿这份 children 整体覆盖该文件夹的顺序表，于是「从文件夹 A 拖一条
+         * 书签进文件夹 B」会顺带把 B 里原有书签的顺序打乱成堆序。
+         */
+        private val CHILD_ORDER = compareBy<UserLayoutNodeVO> { it.sort }.thenBy { it.name }
     }
 
     /**
@@ -89,7 +102,7 @@ class UserLayoutNodeServiceImpl(
         // 构建含子节点的目录 VO 并推送 WebSocket 通知
         val sortMap = preferenceService.queryByUid(uid).sortMap
         val bookmarkMap = bookmarkShowMap(uid)
-        val childVOs = listByIds(params.nodeIds).map { it.vo(sortMap[it.id], bookmarkMap[it.id], null) }
+        val childVOs = listByIds(params.nodeIds).map { it.vo(sortMap[it.id], bookmarkMap[it.id], null) }.sortedWith(CHILD_ORDER)
         val dirVO = dirNode.vo(sortMap[dirNode.id], null, null)
         dirVO.children.addAll(childVOs)
 
@@ -175,6 +188,7 @@ class UserLayoutNodeServiceImpl(
                 .eq(UserLayoutNodeEntity::uid, uid)
                 .list()
                 .map { it.vo(sortMap[it.id], bookmarkMap[it.id], null) }
+                .sortedWith(CHILD_ORDER)
             return dir.vo(sortMap[dir.id], null, null).also { it.children.addAll(children) }
         }
 
@@ -262,7 +276,7 @@ class UserLayoutNodeServiceImpl(
 
         // 深度排序
         fun sortChildren(current: UserLayoutNodeVO) {
-            current.children.sortWith(compareBy<UserLayoutNodeVO> { it.sort }.thenBy { it.name })
+            current.children.sortWith(CHILD_ORDER)
             current.children.forEach { sortChildren(it) }
         }
         sortChildren(root)
