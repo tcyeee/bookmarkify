@@ -11,7 +11,9 @@ import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.entity.AccessTokenCreateParams
 import top.tcyeee.bookmarkify.entity.AccessTokenCreatedVO
 import top.tcyeee.bookmarkify.entity.AccessTokenVO
+import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.server.IAccessTokenService
+import top.tcyeee.bookmarkify.server.IUserBehaviorLogService
 import top.tcyeee.bookmarkify.utils.BaseUtils
 
 /**
@@ -23,12 +25,19 @@ import top.tcyeee.bookmarkify.utils.BaseUtils
 @RestController
 @Tag(name = "插件访问令牌")
 @RequestMapping("/user/access-token")
-class AccessTokenController(private val accessTokenService: IAccessTokenService) {
+class AccessTokenController(
+    private val accessTokenService: IAccessTokenService,
+    private val userBehaviorLogService: IUserBehaviorLogService,
+) {
 
     @PostMapping("/create")
     @Operation(summary = "生成一个新的访问令牌，响应含明文 token(仅此一次)")
-    fun create(@RequestBody params: AccessTokenCreateParams): AccessTokenCreatedVO =
-        accessTokenService.create(params, BaseUtils.uid())
+    fun create(@RequestBody params: AccessTokenCreateParams): AccessTokenCreatedVO {
+        val uid = BaseUtils.uid()
+        val result = accessTokenService.create(params, uid)
+        userBehaviorLogService.record(uid, UserBehaviorType.CREATE_ACCESS_TOKEN, result.name)
+        return result
+    }
 
     @GetMapping("/list")
     @Operation(summary = "查看自己名下的全部访问令牌(不含明文)")
