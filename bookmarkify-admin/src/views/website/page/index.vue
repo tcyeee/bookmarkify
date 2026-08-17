@@ -20,6 +20,7 @@ import {
 import { getSiteDetailApi } from "#/api/site";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
+import UserQuerySelect from "#/components/user/UserQuerySelect.vue";
 
 import BookmarkAssetCell from "#/views/bookmark/BookmarkAssetCell.vue";
 import BookmarkDetailDialog from "#/views/bookmark/BookmarkDetailDialog.vue";
@@ -124,7 +125,7 @@ const scopedSiteId = ref(typeof route.query.siteId === "string" ? route.query.si
 const scopedSite = ref<null | SiteAdminVO>(null);
 
 const searchForm = reactive<
-  Pick<BookmarkSearchParams, "name" | "status"> & {
+  Pick<BookmarkSearchParams, "name" | "ownerUid" | "status"> & {
     /** 放开默认的 linkType=DOMAIN 限制，把本机 / IP / 未归类的页面也列出来 */
     includeNonDomain?: boolean;
   }
@@ -134,6 +135,7 @@ const searchForm = reactive<
   status: statusOptions.some((o) => o.value === route.query.status)
     ? (route.query.status as BookmarkParseStatus)
     : undefined,
+  ownerUid: "",
   includeNonDomain: undefined,
 });
 
@@ -421,6 +423,7 @@ const gridOptions: VxeGridProps<BookmarkEntity> = {
       query: async ({ page }) => {
         const res = await getBookmarkListApi({
           name: searchForm.name || undefined,
+          ownerUid: searchForm.ownerUid || undefined,
           status: searchForm.status || undefined,
           siteId: scopedSiteId.value || undefined,
           // 后台默认只看真实网站：localhost / 纯 IP / 未归类的地址不会被抓取，永远是一行
@@ -447,7 +450,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 // 初始状态可能来自 URL（从站点健康条某一段点进来），「重置」要清空而不是把它填回去，
 // 所以基线显式给成"什么都不筛"
 const { reset } = useAutoSearch(searchForm, () => gridApi.reload(), {
-  initial: { name: "", status: undefined, includeNonDomain: undefined },
+  initial: { name: "", ownerUid: "", status: undefined, includeNonDomain: undefined },
 });
 </script>
 
@@ -488,6 +491,9 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload(), {
       <FilterBar class="mb-4" :advanced-count="searchForm.includeNonDomain ? 1 : 0" @reset="reset">
         <FilterItem label="关键字" width="240px">
           <ElInput v-model="searchForm.name" placeholder="名称 / 标题 / 描述 / 域名" clearable />
+        </FilterItem>
+        <FilterItem label="收录用户" width="240px">
+          <UserQuerySelect v-model="searchForm.ownerUid" />
         </FilterItem>
         <FilterItem label="状态">
           <ElSelectV2 v-model="searchForm.status" :options="statusOptions" placeholder="全部状态" clearable>
