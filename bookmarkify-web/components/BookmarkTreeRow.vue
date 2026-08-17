@@ -2,7 +2,11 @@
   <div>
     <template v-if="node.type === HomeItemType.BOOKMARK_DIR">
       <div class="flex items-center gap-2 py-1.5" :style="indentStyle">
-        <Icon icon="mdi:folder" class="size-4 text-amber-500 shrink-0" />
+        <Icon
+          icon="mdi:folder"
+          class="size-4 shrink-0"
+          :class="folderColor ? '' : 'text-amber-500'"
+          :style="folderColor ? { color: folderColor } : undefined" />
         <span class="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{{ node.name || '文件夹' }}</span>
       </div>
       <BookmarkTreeRow
@@ -61,6 +65,7 @@ import { Icon } from '@iconify/vue'
 import { bookmarksDel, bookmarksPin, bookmarksRecordOpen } from '@api'
 import { HomeItemType, type UserLayoutNodeVO } from '@typing'
 import { externalHref } from '@utils'
+import { displayFolderColor } from '../constants/folder-colors'
 
 defineOptions({ name: 'BookmarkTreeRow' })
 
@@ -70,6 +75,7 @@ const emit = defineEmits<{ edit: [node: UserLayoutNodeVO] }>()
 const bookmarkStore = useBookmarkStore()
 const { moveWithin, moveToFolder, positionOf, hasMoveTargets } = useBookmarkMove()
 const contextMenuNodeId = ref<string | null>(null)
+const folderColor = computed(() => displayFolderColor(props.node.color))
 const children = computed(() =>
   props.node.type === HomeItemType.BOOKMARK_DIR ? bookmarkStore.childrenOf(props.node.id) : [],
 )

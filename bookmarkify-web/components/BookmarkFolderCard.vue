@@ -2,7 +2,6 @@
   <div
     ref="cardRef"
     class="folder-card w-full rounded-lg border border-transparent bg-slate-50 dark:bg-slate-800/40 p-4 transition-colors transition-shadow"
-    :style="folderStyle"
     :class="{
       'bg-slate-100 dark:bg-slate-800/60': contextMenuOpen,
       'ring-2 ring-primary/60': dropTargetId === CARD_END_ID,
@@ -24,11 +23,38 @@
           class="size-4 transition-transform duration-200"
           :class="collapsed ? '-rotate-90' : ''" />
       </button>
-      <Icon
-        :icon="isRoot ? 'mdi:home-variant' : collapsed ? 'mdi:folder' : 'mdi:folder-open'"
-        class="size-4 shrink-0"
-        :class="isRoot ? 'text-slate-400 dark:text-slate-500' : !color ? 'text-amber-500' : ''"
-        :style="!isRoot && color ? { color } : undefined" />
+      <Icon v-if="isRoot" icon="mdi:home-variant" class="size-4 shrink-0 text-slate-400 dark:text-slate-500" />
+      <div v-else ref="colorPickerRef" class="relative shrink-0" @click.stop>
+        <button
+          type="button"
+          class="block rounded p-0.5 hover:bg-slate-200/70 dark:hover:bg-slate-700/70"
+          :aria-expanded="showColorPalette"
+          aria-label="设置文件夹颜色"
+          title="设置文件夹颜色"
+          @click.stop="showColorPalette = !showColorPalette">
+          <Icon
+            :icon="collapsed ? 'mdi:folder' : 'mdi:folder-open'"
+            class="size-4"
+            :class="!displayColor ? 'text-amber-500' : ''"
+            :style="displayColor ? { color: displayColor } : undefined" />
+        </button>
+        <div
+          v-if="showColorPalette"
+          class="absolute left-0 top-full z-20 mt-2 grid w-40 grid-cols-6 gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+          role="group"
+          aria-label="文件夹颜色">
+          <button
+            v-for="paletteColor in FOLDER_COLORS"
+            :key="paletteColor.value"
+            type="button"
+            class="size-5 rounded-full border border-white/80 shadow-sm ring-offset-1 transition-transform hover:scale-110 dark:border-slate-700 dark:ring-offset-slate-800"
+            :class="{ 'ring-2 ring-primary': displayColor === paletteColor.value }"
+            :style="{ backgroundColor: paletteColor.value }"
+            :title="paletteColor.name"
+            :aria-label="paletteColor.name"
+            @click.stop="updateColor(paletteColor.value)" />
+        </div>
+      </div>
       <input
         v-if="renaming"
         ref="renameInputRef"
@@ -47,21 +73,6 @@
         {{ name }}
       </span>
       <span v-if="children.length" class="text-xs text-slate-400 dark:text-slate-500">({{ children.length }})</span>
-      <label
-        v-if="!isRoot"
-        class="ml-auto shrink-0 cursor-pointer rounded p-1 text-slate-400 hover:bg-slate-200/70 hover:text-primary dark:hover:bg-slate-700/70 transition-colors"
-        title="自定义文件夹颜色"
-        @click.stop>
-        <span
-          class="block size-3 rounded-full border border-white/80 shadow-sm"
-          :style="{ backgroundColor: color || DEFAULT_FOLDER_COLOR }" />
-        <input
-          type="color"
-          class="sr-only"
-          :value="color || DEFAULT_FOLDER_COLOR"
-          aria-label="自定义文件夹颜色"
-          @input="onColorInput" />
-      </label>
       <button
         type="button"
         class="shrink-0 reveal-on-hover-folder p-1 -m-1 text-slate-400 hover:text-primary dark:text-slate-500 dark:hover:text-primary transition-opacity transition-colors"
@@ -121,6 +132,7 @@ import {
 } from '@api'
 import { ROOT_KEY, type UserLayoutNodeVO } from '@typing'
 import BookmarkTreeRow from '@/components/BookmarkTreeRow.vue'
+import { FOLDER_COLORS, displayFolderColor, isFolderColor } from '../constants/folder-colors'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 
@@ -137,16 +149,18 @@ const props = defineProps<{
 const emit = defineEmits<{ edit: [node: UserLayoutNodeVO]; share: [folderId: string] }>()
 
 const bookmarkStore = useBookmarkStore()
-const DEFAULT_FOLDER_COLOR = '#f59e0b'
 
 const color = computed(() => props.color ?? null)
-const folderStyle = computed(() => {
-  if (!color.value) return undefined
-  return {
-    backgroundColor: `color-mix(in srgb, ${color.value} 10%, transparent)`,
-    borderColor: `color-mix(in srgb, ${color.value} 28%, transparent)`,
-  }
-})
+const displayColor = computed(() => displayFolderColor(color.value))
+const showColorPalette = ref(false)
+const colorPickerRef = ref<HTMLElement | null>(null)
+
+function closeColorPalette(event: PointerEvent) {
+  if (showColorPalette.value && !colorPickerRef.value?.contains(event.target as Node)) showColorPalette.value = false
+}
+
+onMounted(() => document.addEventListener('pointerdown', closeColorPalette))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', closeColorPalette))
 
 // ── 折叠 ──
 // 真实文件夹的折叠状态来自 user_layout_node，并在切换时写回数据库；根目录卡片是首页合成节点，
@@ -399,18 +413,16 @@ async function submitRename() {
 
 async function updateColor(nextColor: string | null) {
   const normalized = nextColor?.trim().toLowerCase() || null
+  if (normalized && !isFolderColor(normalized)) return
   if (normalized === color.value) return
   try {
     await bookmarksUpdateDirColor(props.folderId, normalized)
     bookmarkStore.updateFolderColorLocal(props.folderId, normalized)
+    showColorPalette.value = false
     useToastStore().success(normalized ? '文件夹颜色已更新' : '已恢复默认颜色')
   } catch (error) {
     console.error('[BookmarkFolderCard] 更新文件夹颜色失败', error)
   }
-}
-
-function onColorInput(event: Event) {
-  updateColor((event.target as HTMLInputElement).value)
 }
 
 // ── 删除 ──
