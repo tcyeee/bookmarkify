@@ -100,6 +100,7 @@
               target="_blank"
               rel="noopener noreferrer"
               class="group flex items-center gap-3 py-2 px-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
+              :class="{ 'bg-slate-100 dark:bg-slate-800/60': contextMenuItemId === item.id }"
               @click="recordOpen(item)"
               @contextmenu.prevent="openMyResultMenu($event.x, $event.y, item)">
               <BookmarkLogo :value="item.typeApp!" size="S" />
@@ -287,6 +288,7 @@ const { moveToFolder, hasMoveTargets } = useBookmarkMove()
 const { $track } = useNuxtApp()
 
 const isLoadingBookmarks = ref(false)
+const contextMenuItemId = ref<string | null>(null)
 // 骨架屏行宽随机化，避免整齐划一显得呆板
 const skeletonWidths = ['70%', '45%', '85%', '55%', '65%', '40%', '75%', '50%']
 const skeletonWidth = (i: number) => skeletonWidths[(i - 1) % skeletonWidths.length]
@@ -662,6 +664,7 @@ async function toggleMyResultPinned(item: UserLayoutNodeVO) {
 /** 右键与行尾 ⋯ 共用同一份菜单定义 —— 复制一份的话，以后加菜单项必然漏改一处 */
 function openMyResultMenu(x: number, y: number, item: UserLayoutNodeVO) {
   if (!item.typeApp) return
+  contextMenuItemId.value = item.id
   ContextMenu.showContextMenu({
     items: [
       { label: '修改', icon: h(Icon, { icon: 'mdi:pencil', class: 'size-4' }), onClick: () => openEditModal(item) },
@@ -676,10 +679,20 @@ function openMyResultMenu(x: number, y: number, item: UserLayoutNodeVO) {
         hidden: !hasMoveTargets.value,
         onClick: () => moveToFolder(item),
       },
-      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), divided: 'up', onClick: () => delMyResult(item) },
+      {
+        label: '删除',
+        icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }),
+        customClass: 'bookmark-context-menu-delete',
+        divided: 'up',
+        onClick: () => delMyResult(item),
+      },
     ],
     x,
     y,
+    customClass: 'bookmark-context-menu',
+    onClose: () => {
+      if (contextMenuItemId.value === item.id) contextMenuItemId.value = null
+    },
   })
 }
 
