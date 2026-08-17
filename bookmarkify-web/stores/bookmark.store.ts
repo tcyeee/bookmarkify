@@ -13,13 +13,25 @@ const MAX_ARMED_WATCHES = 20
 // 避免个别节点因我方抓取服务故障（E307）长期停在 LOADING 导致这批导入永远等不到"全部完成"
 const IMPORT_BATCH_TIMEOUT_MS = 45 * 60 * 1000
 
+/**
+ * 同一层子节点的排列顺序：以后端的 sort 为准，绝不沿用数组自带的顺序。
+ *
+ * 后端把子节点下发给前端有两条路径（全量 /bookmark/query 与单文件夹 HOME_DIR_UPDATE），
+ * 它们由不同的代码构造，**数组顺序不是契约的一部分**。此前只有 normalize() 排序，replaceFolder()
+ * 直接 `children.map(c => c.id)` 当成顺序表用，于是一条走 HOME_DIR_UPDATE 的推送就能把用户排好的
+ * 顺序覆盖成后端那次查询的返回顺序。排序放在这个函数里，是为了两条入口不会再各自演化。
+ */
+function sortedByServerSort(list?: Array<UserLayoutNodeVO> | null) {
+  return (list ?? []).slice().sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+}
+
 /** 后端树 → 扁平 { nodes, order }。nodes 不保留 children（归属/顺序唯一来源是 order）。 */
 function normalize(root?: UserLayoutNodeVO | null) {
   const nodes: Record<string, UserLayoutNodeVO> = {}
   const order: Record<string, string[]> = { [ROOT_KEY]: [] }
   const walk = (list: Array<UserLayoutNodeVO> | undefined, parentKey: string) => {
     order[parentKey] = []
-    const sorted = (list ?? []).slice().sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+    const sorted = sortedByServerSort(list)
     for (const n of sorted) {
       if (!n?.id) continue
       nodes[n.id] = { ...n, parentId: parentKey === ROOT_KEY ? null : parentKey, children: undefined }
@@ -345,7 +357,10 @@ export const useBookmarkStore = defineStore('homeItems', {
         console.warn(`[bookmark] 收到的 WS 文件夹节点类型不符，已忽略: nodeId=${node.id}, type=${node.type}`)
         return
       }
-      const children = node.children ?? []
+      // 必须按 sort 重排：这份 children 是后端按 parent_id 查出来的，顺序取决于那次查询的返回顺序，
+      // 而下面会拿它整体覆盖该文件夹的顺序表。照单全收的后果正是「从别的文件夹拖一条书签进来，
+      // 这个文件夹里原有书签的顺序被打乱」——本地刚摆好的顺序被一条自己触发的推送覆盖掉。
+      const children = sortedByServerSort(node.children)
       // 覆盖前先记下本地这份子列表，用来算出「谁被移出去了」（见下方兜底）
       const prevChildIds = this.order[node.id] ?? []
       const cur = this.nodes[node.id]
