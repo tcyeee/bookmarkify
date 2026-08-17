@@ -25,6 +25,7 @@ export type UserStatus = 'DELETED' | 'DISABLED' | 'NORMAL';
 
 export interface UserSearchParams {
   name?: string;
+  uid?: string;
   status?: undefined | UserStatus;
   currentPage?: number;
   pageSize?: number;
@@ -41,4 +42,3 @@ export interface PageResult<T> {
 export async function getAdminUserListApi(params: UserSearchParams) {
   return requestClient.post<PageResult<UserAdminVO>>('/admin/user/all', params);
 }
-
