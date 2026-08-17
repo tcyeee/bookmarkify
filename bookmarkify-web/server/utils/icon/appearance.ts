@@ -46,15 +46,35 @@ const ICON_FULL_BLEED_RATIO = 0.96
 // 又不至于把本来就不大的图标缩得更小
 export const ICON_FULL_BLEED_PADDING = 0.08
 
-/** 一张图标的外观：底色 + 留白比例。两者出自同一次像素采样 */
+// ── 去掉图标自带的边距 ──
+// 上面那条规则的**反方向**，也是同一条设定的另一半：**外缘自带颜色的图标不该有留白**。
+// 有一类图标本身就是一枚「卡片」—— 实心圆角方块 + 图形，即 iOS/Android 那种 app icon
+// （小红书的 manifest 512 图标就是典型：红色圆角方块，四周还烤进了 7.8% 的透明边距）。
+// 它铺进我们的圆角卡片时，那圈透明边距会把红方块缩在中间，露出一圈底色 —— 看起来正是
+// 「加了 padding」，只不过这一圈不是我们加的，是图片字节里本来就有的。视觉上是卡片套卡片，
+// 比图形贴边更难看，而 padding 判据（要求包围盒 ≥96%）永远管不到它。
+//
+// 判据同样要几条同时成立，且刻意比补留白那条更严 —— 放大是**不可逆的观感改动**：
+//
+//   ① 图形自己填满了它的包围盒 —— 这是「外缘带颜色」的可计算版本。实心圆角方块的填充率
+//      约 0.93，而线稿、字标、圆形徽标都在 0.8 以下（圆形理论值 π/4 ≈ 0.785），落不进来；
+//      圆形徽标缩在卡片中间本来就不难看，它不是「卡片套卡片」。
+//   ② 边距在一个正常范围内 —— 太小（≤6%）不值得动，太大说明那不是边距而是别的构图。
+const ICON_SELF_TILE_FILL_RATIO = 0.85
+const ICON_SELF_TILE_MAX_EXTENT = 0.94
+const ICON_SELF_TILE_MIN_EXTENT = 0.7
+
+/** 一张图标的外观：底色 + 留白比例 + 放大倍数。三者出自同一次像素采样 */
 export interface IconAppearance {
   /** 同色相的浅色底；算不出来（灰阶图标除外）时为 null，调用方用默认白底 */
   surfaceColor: string | null
   /** 该给这张图补多少留白，占卡片边长的比例。0 = 铺满 */
   padding: number
+  /** 该把这张图放大多少倍，用来顶掉它自带的透明边距。1 = 原样 */
+  scale: number
 }
 
-const EMPTY_APPEARANCE: IconAppearance = { surfaceColor: null, padding: 0 }
+const EMPTY_APPEARANCE: IconAppearance = { surfaceColor: null, padding: 0, scale: 1 }
 
 /**
  * 从像素里挑出主色：按量化桶统计出现次数最多的颜色，再用桶内像素的真实均值还原精度。
@@ -135,16 +155,21 @@ export function logoSurfaceColorOf(rgb: [number, number, number]): string {
 
 
 /**
- * 这张图是不是「透明底 + 图形顶到边」，需要我们补一圈留白。
+ * 这张图该**怎么摆进卡片**：补一圈留白，还是放大顶掉它自带的边距。
  *
- * 先看最外一圈像素透明不透明（不透明说明它自带底色，本就该铺满），再算 alpha 达标像素的
- * 包围盒占画布多大（不够大说明它自带留白）。两条都成立才返回 true。
+ * 两个判断读的是同一批量：最外一圈像素的透明比例（不透明说明它自带底色，本就该铺满）、
+ * alpha 达标像素的包围盒、以及包围盒内的填充率。**两者互斥**：补留白要求包围盒 ≥96%
+ * （图形顶到了边），放大要求 ≤94%（图形自带边距），中间那一档两边都不做。
+ *
+ * `w`/`h` 是相对**图片自身**的比例，而图片是被拉伸成正方形采样的（见 pixels.ts）——
+ * 对非方图，两轴的边距比例各自成立，取 max 等于先顶掉边距较小的那一轴，宁可少放大。
  */
-function needsFullBleedPadding(data: Uint8ClampedArray): boolean {
+function framingOf(data: Uint8ClampedArray): { padding: number; scale: number } {
+  const none = { padding: 0, scale: 1 }
   const n = ICON_SAMPLE_SIZE
   const alphaAt = (x: number, y: number) => data[(y * n + x) * 4 + 3] ?? 0
 
-  // ① 边缘一圈是不是透明的
+  // ① 边缘一圈是不是透明的。不透明 = 图标自带色块底，铺满即可，两件事都不用做
   let edge = 0
   let edgeTransparent = 0
   for (let i = 0; i < n; i++) {
@@ -153,27 +178,40 @@ function needsFullBleedPadding(data: Uint8ClampedArray): boolean {
       if (alphaAt(x, y) < ICON_ALPHA_THRESHOLD) edgeTransparent++
     }
   }
-  if (edge === 0 || edgeTransparent / edge < ICON_TRANSPARENT_EDGE_RATIO) return false
+  if (edge === 0 || edgeTransparent / edge < ICON_TRANSPARENT_EDGE_RATIO) return none
 
-  // ② 图形的包围盒有多大
+  // ② 图形的包围盒有多大，盒子里又填了多满
   let minX = n
   let minY = n
   let maxX = -1
   let maxY = -1
+  let opaque = 0
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
       if (alphaAt(x, y) < ICON_ALPHA_THRESHOLD) continue
+      opaque++
       if (x < minX) minX = x
       if (x > maxX) maxX = x
       if (y < minY) minY = y
       if (y > maxY) maxY = y
     }
   }
-  // 整张全透明：没有图形可言，补留白没有意义
-  if (maxX < 0) return false
+  // 整张全透明：没有图形可言，两件事都无从谈起
+  if (maxX < 0) return none
   const w = (maxX - minX + 1) / n
   const h = (maxY - minY + 1) / n
-  return Math.max(w, h) >= ICON_FULL_BLEED_RATIO
+  const extent = Math.max(w, h)
+
+  // 顶到边：补一档固定留白
+  if (extent >= ICON_FULL_BLEED_RATIO) return { padding: ICON_FULL_BLEED_PADDING, scale: 1 }
+
+  // 自带边距 + 图形填满自己的包围盒（实心色块，即「外缘带颜色」）：放大到刚好铺满
+  const fill = opaque / ((maxX - minX + 1) * (maxY - minY + 1))
+  if (extent <= ICON_SELF_TILE_MAX_EXTENT && extent >= ICON_SELF_TILE_MIN_EXTENT && fill >= ICON_SELF_TILE_FILL_RATIO) {
+    return { padding: 0, scale: 1 / extent }
+  }
+
+  return none
 }
 
 // 外观按图标缓存 key 记忆（同一张图在列表行 + 置顶区可能同时渲染多次）。
@@ -202,10 +240,7 @@ export async function resolveIconAppearance(url: string, blob: Blob): Promise<Ic
       const pixels = await iconPixelsOf(blob)
       if (pixels) {
         const rgb = dominantRgbOf(pixels)
-        appearance = {
-          surfaceColor: rgb ? logoSurfaceColorOf(rgb) : null,
-          padding: needsFullBleedPadding(pixels) ? ICON_FULL_BLEED_PADDING : 0,
-        }
+        appearance = { surfaceColor: rgb ? logoSurfaceColorOf(rgb) : null, ...framingOf(pixels) }
       }
     } catch {
       // 保持默认外观
