@@ -347,7 +347,8 @@ const folderColumns = computed(() => {
       if (heights[i]! < heights[shortest]!) shortest = i
     }
     columns[shortest]!.push(folder)
-    heights[shortest] += folder.children.length + 1
+    // 折叠的卡片只剩标题那一行，按子项数估高会把它当成一张长卡片，整栏就此空出一大截
+    heights[shortest] += bookmarkStore.isFolderCollapsed(folder.id) ? 1 : folder.children.length + 1
   }
   return columns
 })
