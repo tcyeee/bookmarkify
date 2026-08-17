@@ -14,6 +14,7 @@ import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.entity.enums.SiteLockedField
+import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.utils.BaseUtils
 import java.time.LocalDateTime
 
@@ -238,6 +239,29 @@ data class ScrapperCallLogSearchParams(
         createTimeFrom?.let { query.ge(ScrapperCallLogEntity::createTime, it) }
         createTimeTo?.let { query.le(ScrapperCallLogEntity::createTime, it) }
         return query.orderByDesc(ScrapperCallLogEntity::createTime)
+    }
+}
+
+/** 管理后台用户行为审计日志查询入参 */
+data class UserBehaviorLogSearchParams(
+    /** 昵称模糊匹配 或 uid 精确匹配，二选一命中即可 */
+    @field:Schema(description = "关键字：昵称快照模糊匹配 或 uid 精确匹配") var keyword: String? = null,
+    @field:Schema(description = "行为类型") var behaviorType: UserBehaviorType? = null,
+    @field:Schema(description = "发生时间下界(含)") var createTimeFrom: LocalDateTime? = null,
+    @field:Schema(description = "发生时间上界(含)") var createTimeTo: LocalDateTime? = null,
+) : PageBean() {
+    fun toWrapper(): Wrapper<UserBehaviorLogEntity> {
+        val query = KtQueryWrapper(UserBehaviorLogEntity::class.java)
+        if (!keyword.isNullOrBlank()) {
+            query.and {
+                it.like(UserBehaviorLogEntity::nickNameSnapshot, keyword)
+                    .or().eq(UserBehaviorLogEntity::uid, keyword)
+            }
+        }
+        behaviorType?.let { query.eq(UserBehaviorLogEntity::behaviorType, it) }
+        createTimeFrom?.let { query.ge(UserBehaviorLogEntity::createTime, it) }
+        createTimeTo?.let { query.le(UserBehaviorLogEntity::createTime, it) }
+        return query.orderByDesc(UserBehaviorLogEntity::createTime)
     }
 }
 

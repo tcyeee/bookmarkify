@@ -112,3 +112,13 @@ export const SiteLockedField = {
   SHORT_NAME: 'SHORT_NAME',
 } as const
 export type SiteLockedField = (typeof SiteLockedField)[keyof typeof SiteLockedField]
+
+/** 对应 Kotlin `UserBehaviorType` */
+export const UserBehaviorType = {
+  ADD_BOOKMARK: 'ADD_BOOKMARK',
+  PUBLISH_SHARE: 'PUBLISH_SHARE',
+  IMPORT_BOOKMARK: 'IMPORT_BOOKMARK',
+  CREATE_ACCESS_TOKEN: 'CREATE_ACCESS_TOKEN',
+  QUERY_BY_TOKEN: 'QUERY_BY_TOKEN',
+} as const
+export type UserBehaviorType = (typeof UserBehaviorType)[keyof typeof UserBehaviorType]

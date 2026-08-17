@@ -20,6 +20,7 @@ import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.entity.enums.SiteLockedField
+import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.entity.json.BookmarkDir
 import top.tcyeee.bookmarkify.server.asset.BookmarkDisplayPolicy
 import top.tcyeee.bookmarkify.server.asset.DisplayIcons
@@ -769,6 +770,24 @@ data class ScrapperCallLogVO(
         url = entity.url,
         urlHost = entity.urlHost,
         success = entity.success,
+    ) {
+        BeanUtil.copyProperties(entity, this)
+    }
+}
+
+/** 管理后台展示的用户行为审计日志条目 */
+data class UserBehaviorLogVO(
+    @field:Schema(description = "日志ID") var id: String,
+    @field:Schema(description = "所属用户ID") var uid: String,
+    @field:Schema(description = "行为发生时的昵称快照") var nickNameSnapshot: String? = null,
+    @field:Schema(description = "行为类型") var behaviorType: UserBehaviorType,
+    @field:Schema(description = "行为详情") var detail: String? = null,
+    @field:Schema(description = "发生时间") var createTime: LocalDateTime = LocalDateTime.now(),
+) {
+    constructor(entity: UserBehaviorLogEntity) : this(
+        id = entity.id,
+        uid = entity.uid,
+        behaviorType = entity.behaviorType,
     ) {
         BeanUtil.copyProperties(entity, this)
     }

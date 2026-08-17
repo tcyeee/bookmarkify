@@ -18,8 +18,10 @@ import top.tcyeee.bookmarkify.entity.CreateDirParams
 import top.tcyeee.bookmarkify.entity.MoveNodeParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
+import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
+import top.tcyeee.bookmarkify.server.IUserBehaviorLogService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
 import top.tcyeee.bookmarkify.utils.BaseUtils
@@ -36,6 +38,7 @@ class BookmarksController(
     private val bookmarkService: IBookmarkService,
     private val preferenceService: IUserPreferenceService,
     private val layoutNodeService: IUserLayoutNodeService,
+    private val userBehaviorLogService: IUserBehaviorLogService,
 ) {
 
     @Operation(summary = "按站点(域名/品牌名/短名)搜索已收录的站点首页，非 NSFW 站点专用")
@@ -63,8 +66,16 @@ class BookmarksController(
     fun upload(
         @RequestParam file: MultipartFile,
         @RequestParam(required = false) skipUrls: List<String>?,
-    ): List<UserLayoutNodeVO> =
-        bookmarkService.importBookmarkFile(file, BaseUtils.uid(), skipUrls?.toHashSet() ?: emptySet())
+    ): List<UserLayoutNodeVO> {
+        val uid = BaseUtils.uid()
+        val result = bookmarkService.importBookmarkFile(file, uid, skipUrls?.toHashSet() ?: emptySet())
+        userBehaviorLogService.record(
+            uid,
+            UserBehaviorType.IMPORT_BOOKMARK,
+            "${file.originalFilename ?: "未命名文件"} 共 ${result.size} 条",
+        )
+        return result
+    }
 
     /**
      * 这里的排序信息仅仅只更改用户配置中的排序数据库
@@ -151,7 +162,12 @@ class BookmarksController(
     @Throttle
     @PostMapping("/addOne")
     @Operation(summary = "通过URL添加书签")
-    fun addOne(@RequestParam url: String): UserLayoutNodeVO = bookmarkService.addOne(url, BaseUtils.uid())
+    fun addOne(@RequestParam url: String): UserLayoutNodeVO {
+        val uid = BaseUtils.uid()
+        val result = bookmarkService.addOne(url, uid)
+        userBehaviorLogService.record(uid, UserBehaviorType.ADD_BOOKMARK, url)
+        return result
+    }
 
     // 与上面的 addOne 同理：这里也会写 user_layout_node + bookmark_user_link 两张表，
     // 同样不该用 GET 承载（会被浏览器预取/代理缓存/爬虫意外重放）。addOne 当初改了，这条被漏掉。
