@@ -20,6 +20,7 @@
       rel="noopener noreferrer"
       draggable="false"
       class="group flex items-center gap-2 py-1.5 pr-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
+      :class="{ 'bg-slate-100 dark:bg-slate-800/60': contextMenuNodeId === node.id }"
       :style="bookmarkIndentStyle"
       @click="recordOpen(node)"
       @contextmenu.prevent="openMenu($event.x, $event.y, node)">
@@ -68,6 +69,7 @@ const emit = defineEmits<{ edit: [node: UserLayoutNodeVO] }>()
 
 const bookmarkStore = useBookmarkStore()
 const { moveWithin, moveToFolder, positionOf, hasMoveTargets } = useBookmarkMove()
+const contextMenuNodeId = ref<string | null>(null)
 const children = computed(() =>
   props.node.type === HomeItemType.BOOKMARK_DIR ? bookmarkStore.childrenOf(props.node.id) : [],
 )
@@ -114,6 +116,7 @@ async function togglePinned(node: UserLayoutNodeVO) {
 /** 右键与行尾 ⋯ 共用同一份菜单定义 —— 复制一份的话，以后加菜单项必然漏改一处 */
 function openMenu(x: number, y: number, node: UserLayoutNodeVO) {
   if (!node.typeApp) return
+  contextMenuNodeId.value = node.id
   ContextMenu.showContextMenu({
     items: [
       { label: '修改', icon: h(Icon, { icon: 'mdi:pencil', class: 'size-4' }), onClick: () => emit('edit', node) },
@@ -138,10 +141,20 @@ function openMenu(x: number, y: number, node: UserLayoutNodeVO) {
         hidden: !hasMoveTargets.value,
         onClick: () => moveToFolder(node),
       },
-      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), divided: 'up', onClick: () => delOne(node) },
+      {
+        label: '删除',
+        icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }),
+        customClass: 'bookmark-context-menu-delete',
+        divided: 'up',
+        onClick: () => delOne(node),
+      },
     ],
     x,
     y,
+    customClass: 'bookmark-context-menu',
+    onClose: () => {
+      if (contextMenuNodeId.value === node.id) contextMenuNodeId.value = null
+    },
   })
 }
 
