@@ -141,6 +141,18 @@ const routes: RouteRecordRaw[] = [
           title: '页面管理',
         },
       },
+      {
+        // 归在站点层下：图标是站点级资产（一个域名一套），不是某个页面的属性。
+        // 这一页不管数据本身，只量「选图规则在存量数据上判成了什么」——
+        // 改造计划见仓库根 docs/ICON-DISPLAY-TODO.md
+        name: 'IconVerdict',
+        path: '/website/icon-verdict',
+        component: () => import('#/views/website/icon-verdict/index.vue'),
+        meta: {
+          icon: 'carbon:image-search',
+          title: '图标判定总览',
+        },
+      },
     ],
   },
   {

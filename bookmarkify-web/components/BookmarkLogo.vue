@@ -9,11 +9,11 @@
       :class="{ 'inactive-logo': isInactive }"
       :style="[logoSizeStyle, logoStyle]">
       <!-- 本地/IP 类型书签：后端不抓取信息，用与「不可访问」同色的灰底 + 白色圆点图标 -->
-      <Icon v-if="isPlainCircle" icon="mdi:dots-circle" class="shrink-0 text-white" :style="glyphStyle" />
+      <Icon v-if="kind === 'plain'" icon="mdi:dots-circle" class="shrink-0 text-white" :style="glyphStyle" />
       <!-- 服务端已按展示模式选好唯一一张图，前端不再在多个图位之间取舍。
-           src 走本地持久缓存解析（见 resolveCachedIconBlob），命中时零网络请求 -->
+           src 走本地持久缓存解析（见 icon/cache），命中时零网络请求 -->
       <img
-        v-else-if="displaySrc && !iconError"
+        v-else-if="kind === 'image'"
         :key="displaySrc"
         :style="imageStyle"
         :src="displaySrc"
@@ -49,10 +49,10 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, toRef } from 'vue'
 import { Icon } from '@iconify/vue'
-import { BookmarkLinkType, type BookmarkShow } from '@typing'
-import { resolveCachedIconBlob, resolveLogoSurfaceColor } from '@utils'
+import type { BookmarkShow } from '@typing'
+import { useBookmarkIcon, type BookmarkIconVariant } from '../composables/useBookmarkIcon'
 
 defineOptions({ name: 'BookmarkLogo' })
 
@@ -69,21 +69,31 @@ type BookmarkLogoSize = keyof typeof SIZE_PRESETS
 
 // preferHd 已移除：用哪张图是服务端按展示模式决定的（AssetRolePolicy），
 // 前端再传一个偏好只会和服务端策略打架。原先这个 prop 也从未被任何调用方传过。
-const props = defineProps<{ value: BookmarkShow; size?: BookmarkLogoSize | number }>()
+const props = defineProps<{
+  value: BookmarkShow
+  size?: BookmarkLogoSize | number
+  /**
+   * 用哪一份解析结果。默认跟着 size 走：M（56px 磁贴）用 tile，其余用 list。
+   *
+   * 这个默认值就是「置顶区该拿 TILE 那一档」这条规则的落点 —— 调用方只说自己多大，
+   * 不必知道后端有两种展示模式。显式传值只在极少数尺寸与语义不一致的场景需要。
+   */
+  variant?: BookmarkIconVariant
+}>()
 
 // 统一的灰：「不可访问」蒙版与「本地/IP」底色共用，保证两种状态视觉一致
 const INACTIVE_GRAY = 'rgba(100, 116, 139, 0.62)'
 
-const iconError = ref(false)
 const logoSize = computed(() => {
   const size = props.size ?? SIZE_PRESETS.M
   return typeof size === 'number' ? size : SIZE_PRESETS[size]
 })
 
-// 本地(localhost/127.0.0.1)或纯 IP 地址类型的书签：后端不抓取网站信息，前端仅展示统一的 mdi 圆圈图标
-const isPlainCircle = computed(
-  () => props.value.linkType === BookmarkLinkType.LOCAL || props.value.linkType === BookmarkLinkType.IP,
-)
+// 没显式指定时按尺寸推断：只有 M 这一档（置顶区磁贴）是大图位
+const variant = computed<BookmarkIconVariant>(() => props.variant ?? (props.size === 'M' ? 'tile' : 'list'))
+
+const { kind, isInactive, displaySrc, surfaceColor, padding, monogramChar, monogramHue, onIconError } =
+  useBookmarkIcon(toRef(props, 'value'), variant)
 
 // 灰底上的白色图标（本地/IP 的圆点、不可访问的断网标识）共用一套尺寸，保证两种状态外观一致：
 // 取图标尺寸的 50%，并设 10px 下限，避免 20px 的列表小格子下细到看不清
@@ -97,104 +107,40 @@ const glyphStyle = computed(() => {
 // 站点显示成失活；而判据是前端拿 urlFull 的协议现算的，后台没有任何对应字段可供核对。
 // 站点用不用 SSL 也不该由书签图标来提示 —— 浏览器地址栏本来就在做这件事。
 
-// 网站不可访问：图标变灰并叠加断网标识
-const isInactive = computed(() => props.value?.isActivity === false)
-
-// monogram 为 true 表示"该站没有够格的图"，此时不渲染图片
-const imageUrl = computed(() => (props.value.logo?.monogram ? '' : props.value.logo?.url || ''))
-
-// 实际渲染用的地址：优先走本地持久缓存（命中则是 objectURL，零网络请求），
-// 缓存未命中/解析失败时退回签名地址直连，保证展示不受影响
-const displaySrc = ref('')
-let displayObjectUrl: string | null = null
-
-// 由图标自身算出的底色（同色相的浅色，见 resolveLogoSurfaceColor）。null = 没算出来，用默认白底
-const surfaceColor = ref<string | null>(null)
-
-function releaseDisplayObjectUrl() {
-  if (displayObjectUrl) {
-    URL.revokeObjectURL(displayObjectUrl)
-    displayObjectUrl = null
-  }
-}
-
-watch(
-  imageUrl,
-  async (url) => {
-    releaseDisplayObjectUrl()
-    surfaceColor.value = null
-    if (!url) {
-      displaySrc.value = ''
-      return
-    }
-    const blob = await resolveCachedIconBlob(url)
-    // 异步期间图片可能已经切换（换书签/换图），丢弃过期结果
-    if (imageUrl.value !== url) return
-    if (blob) {
-      displayObjectUrl = URL.createObjectURL(blob)
-      displaySrc.value = displayObjectUrl
-      // 主色只从本地字节算：缓存未命中时退回的是跨域签名地址，画进 canvas 会污染画布，
-      // getImageData 直接抛 SecurityError。取不到 blob 的那条分支索性不取色。
-      const color = await resolveLogoSurfaceColor(url, blob)
-      if (imageUrl.value === url) surfaceColor.value = color
-    } else {
-      displaySrc.value = url
-    }
-  },
-  { immediate: true },
-)
-
-onBeforeUnmount(releaseDisplayObjectUrl)
-
 const logoSizeStyle = computed(() => ({ width: `${logoSize.value}px`, height: `${logoSize.value}px` }))
 
 const logoStyle = computed(() => {
   // 本地/IP：铺与「不可访问」蒙版同一个灰（叠在 bg-white 上合成同色），配白色图标
-  if (isPlainCircle.value) return { backgroundColor: INACTIVE_GRAY }
-  // 底色只有自动取色这一个来源了：管理员按展示模式人工设底色/内边距那条链路已于 2026-08-17
-  // 连同 site_display_pref 表一并移除（理由见根目录 ICON-DISPLAY-TODO.md）
+  if (kind.value === 'plain') return { backgroundColor: INACTIVE_GRAY }
+  // 底色只有自动取色这一个来源：管理员按展示模式人工设底色/内边距那条链路已于 2026-08-17
+  // 连同 site_display_pref 表一并移除（理由见根目录 docs/ICON-DISPLAY-TODO.md）
   if (surfaceColor.value) return { backgroundColor: surfaceColor.value }
   return undefined
 })
 
-// 图片铺满图标卡片。留白该由容器自己给，不由图片让出来 —— 人工内边距那条链路移除后
-// 这里恒等于铺满，`objectFit: contain` 保证非方形的图不被拉变形。
-// 矢量图与大图都已由服务端按模式缩放好，这里不再做任何尺寸计算
-const imageStyle = { width: '100%', height: '100%', objectFit: 'contain' as const }
+/**
+ * 图片默认铺满卡片；**只有「透明底 + 图形顶到边」的图标才补一圈留白**。
+ *
+ * 那种图标铺满时图形正贴着圆角边缘，看着像被裁了一刀，而同屏那些自带留白的图标是缩在中间的，
+ * 两种摆法混在一起尤其难看。判据由 icon/appearance 从图标字节现算（服务端手里没有字节，
+ * 它只从 scrapper 收到宽高和哈希），保守到两个条件同时成立才生效 —— 漏判只是维持现状，
+ * 误判会让一批本来正常的图标集体缩水。
+ *
+ * `objectFit: contain` 保证非方形的图不被拉变形。矢量图与大图都已由服务端按模式缩放好。
+ */
+const imageStyle = computed(() => ({
+  width: '100%',
+  height: '100%',
+  objectFit: 'contain' as const,
+  padding: padding.value > 0 ? `${(padding.value * 100).toFixed(1)}%` : undefined,
+}))
 
-// ── 首字母色块 ──
-// 取标题/域名首字符；中文直接用该字，英文用大写字母
-const monogramChar = computed(() => {
-  const src = props.value.title || props.value.urlBase || props.value.urlFull || '?'
-  const ch = src.replace(/^https?:\/\//i, '').trim().charAt(0)
-  return (ch || '?').toUpperCase()
-})
-
-// 由标题散列出稳定的色相：同一个书签每次渲染颜色一致，不同书签易于区分
-const monogramStyle = computed(() => {
-  const src = props.value.title || props.value.urlBase || '?'
-  let hash = 0
-  for (let i = 0; i < src.length; i++) hash = (hash * 31 + src.charCodeAt(i)) >>> 0
-  const hue = hash % 360
-  return {
-    width: '100%',
-    height: '100%',
-    backgroundColor: `hsl(${hue} 55% 55%)`,
-    fontSize: `${Math.max(10, Math.round(logoSize.value * 0.42))}px`,
-  }
-})
-
-function onIconError() {
-  iconError.value = true
-}
-
-// 换书签或换图时重置错误状态，让新图有机会加载
-watch(
-  () => [props.value.bookmarkId, props.value.logo?.url],
-  () => {
-    iconError.value = false
-  },
-)
+const monogramStyle = computed(() => ({
+  width: '100%',
+  height: '100%',
+  backgroundColor: `hsl(${monogramHue.value} 55% 55%)`,
+  fontSize: `${Math.max(10, Math.round(logoSize.value * 0.42))}px`,
+}))
 </script>
 
 <style scoped>
@@ -224,4 +170,3 @@ watch(
   pointer-events: none;
 }
 </style>
-

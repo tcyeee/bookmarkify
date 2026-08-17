@@ -31,7 +31,7 @@ import top.tcyeee.bookmarkify.mapper.UserShareMapper
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.server.IUserShareService
-import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
+import top.tcyeee.bookmarkify.server.asset.IconResolver
 import top.tcyeee.bookmarkify.utils.SocketUtils
 import java.time.LocalDateTime
 
@@ -44,7 +44,7 @@ class UserShareServiceImpl(
     private val userService: IUserService,
     private val apiService: IApiService,
     private val eventPublisher: ApplicationEventPublisher,
-    private val siteAssetResolver: SiteAssetResolver,
+    private val iconResolver: IconResolver,
 ) : IUserShareService, ServiceImpl<UserShareMapper, UserShareEntity>() {
 
     @Transactional(rollbackFor = [Exception::class])
@@ -93,10 +93,9 @@ class UserShareServiceImpl(
         val share = getById(id) ?: throw CommonException(ErrorType.E122)
         if (share.effectiveStatus != ShareStatus.NORMAL) throw CommonException(ErrorType.E122)
         val user = userService.getById(share.uid) ?: throw CommonException(ErrorType.E122)
-        // 分享页与桌面一样是大图形态，按 TILE 解析图标；一次批量解析避免逐条查资产表
-        val bookmarks = userShareBookmarkMapper.bookmarksByShareId(id)
-        val logoMap = siteAssetResolver.resolveBatch(bookmarks.mapNotNull { it.pageId }, DisplayMode.TILE)
-        bookmarks.forEach { it.initDisplay(logoMap[it.pageId], DisplayMode.TILE) }
+        // 分享页渲染的是 20px 的列表行（pages/share/[code].vue），按 LIST 解析。
+        // 此前它走 TILE —— 256px 的签名图喂 20px 的格子，还会因 monogram 兜底把够用的小图换成色块
+        val bookmarks = iconResolver.decorate(userShareBookmarkMapper.bookmarksByShareId(id), DisplayMode.LIST)
         return SharePublicVO(
             id = share.id,
             note = share.note,
@@ -188,10 +187,8 @@ class UserShareServiceImpl(
     override fun adminDetail(id: String): ShareAdminDetailVO? {
         val share = getById(id) ?: return null
         val nickName = userService.getById(share.uid)?.nickName ?: "-"
-        // 与分享页同为大图形态，按 TILE 解析图标；一次批量解析避免逐条查资产表
-        val bookmarks = userShareBookmarkMapper.bookmarksByShareId(id)
-        val logoMap = siteAssetResolver.resolveBatch(bookmarks.mapNotNull { it.pageId }, DisplayMode.TILE)
-        bookmarks.forEach { it.initDisplay(logoMap[it.pageId], DisplayMode.TILE) }
+        // 与分享页同为列表形态，按 LIST 解析（后台详情弹窗里也是小图 + 全名）
+        val bookmarks = iconResolver.decorate(userShareBookmarkMapper.bookmarksByShareId(id), DisplayMode.LIST)
         return ShareAdminDetailVO(
             share = UserShareAdminVO(share, nickName, bookmarks.size),
             bookmarks = bookmarks.map { ShareAdminBookmarkVO(it) },

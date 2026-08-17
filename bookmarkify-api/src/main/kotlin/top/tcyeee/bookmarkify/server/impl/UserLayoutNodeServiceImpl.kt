@@ -19,7 +19,7 @@ import top.tcyeee.bookmarkify.server.ILayoutNodeFunctionService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
-import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
+import top.tcyeee.bookmarkify.server.asset.IconResolver
 import top.tcyeee.bookmarkify.utils.SocketUtils
 
 /**
@@ -34,7 +34,7 @@ class UserLayoutNodeServiceImpl(
     private val bookmarkUserLinkMapper: BookmarkMapper,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val layoutNodeFunctionService: ILayoutNodeFunctionService,
-    private val siteAssetResolver: SiteAssetResolver,
+    private val iconResolver: IconResolver,
 ) : IUserLayoutNodeService, ServiceImpl<UserLayoutNodeMapper, UserLayoutNodeEntity>() {
 
     companion object {
@@ -63,8 +63,9 @@ class UserLayoutNodeServiceImpl(
      */
     private fun bookmarkShowMap(uid: String): Map<String, BookmarkShow> {
         val shows = bookmarkUserLinkMapper.allBookmarkByUid(uid)
-        val logoMap = siteAssetResolver.resolveBatch(shows.mapNotNull { it.pageId }, DisplayMode.LIST)
-        return shows.onEach { it.initDisplay(logoMap[it.pageId], DisplayMode.LIST) }.associateBy { it.layoutNodeId!! }
+        // decorate 同时给出置顶区磁贴那一份图标（BookmarkShow.tileLogo）：同一棵树在首页被渲染
+        // 两次，置顶区是 56px 的大图位，拿 LIST 那份会糊。取数只做一次，纯函数跑两遍
+        return iconResolver.decorate(shows, DisplayMode.LIST).associateBy { it.layoutNodeId!! }
     }
 
     @Transactional

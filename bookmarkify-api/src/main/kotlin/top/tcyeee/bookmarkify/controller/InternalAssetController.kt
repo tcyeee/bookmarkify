@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.server.IOssObjectService
+import top.tcyeee.bookmarkify.server.asset.AssetUrlSigner
 import top.tcyeee.bookmarkify.utils.OssUtils
 
 /**
@@ -130,13 +131,18 @@ class InternalAssetController(
         const val HEADER_TOKEN = "X-Internal-Token"
 
         /**
-         * 允许的缩放边长。与 nginx 的 `map` 白名单、以及签名侧实际签发的尺寸三处必须一致：
-         * 64/256 = `SiteAssetResolver.renderSize(LIST/TILE)`，128 = 后台头像与对象预览，
-         * 300 = 用户头像，640 = [OssUtils.COVER_WIDTH]。
+         * 允许的缩放边长 = 签名侧实际会签发的全部尺寸。
          *
-         * 不在名单里的尺寸退化成原图直出（多下几 KB），而不是报错 —— 与
-         * [OssUtils.canImageProcess] 对 SVG/ICO 的处理同方向。
+         * 图标那两档（64 / 256）**直接引用 [AssetUrlSigner.ICON_SIZES]**，不再手抄 ——
+         * 从前这里是一行硬编码加一句「与 `SiteAssetResolver.renderSize` 保持一致」的注释，
+         * 而注释拦不住任何人改那个函数。剩下三个是本控制器之外的固定用途：
+         * 128 = 后台头像与对象预览，300 = 用户头像，640 = [OssUtils.COVER_WIDTH]。
+         *
+         * **nginx 的 `map` 白名单仍是手抄的第三份**（配置文件读不到 Kotlin 常量），
+         * 见 `deploy/nginx/file.bookmakify.cc.conf`。名单对不上不会报错，只会让那个尺寸
+         * 退化成原图直出（多下几百 KB 且无任何症状）—— 与 [OssUtils.canImageProcess]
+         * 对 SVG/ICO 的处理同方向。
          */
-        val ALLOWED_SIZES = setOf(64, 128, 256, 300, 640)
+        val ALLOWED_SIZES: Set<Int> = AssetUrlSigner.ICON_SIZES + setOf(128, 300, OssUtils.COVER_WIDTH)
     }
 }

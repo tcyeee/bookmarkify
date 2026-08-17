@@ -6,6 +6,7 @@ import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.AssetQuality
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
+import top.tcyeee.bookmarkify.entity.enums.IconVerdict
 import java.time.LocalDateTime
 
 /**
@@ -50,9 +51,12 @@ object AssetRolePolicy {
     )
 
     /**
-     * LOGO 缺位时，可以从哪些出处降级借用一张来充数。
+     * LOGO 缺位时，可以从哪些出处借一张来充数。
      *
-     * 借来的一律标 [AssetQuality.DEGRADED]，让渲染层知道"这不是真 LOGO"。
+     * **借用只改 role，不改 [AssetQuality]。** 借来的图仍然是它自己 —— 一张来自
+     * `<link rel="apple-touch-icon">` 的 512px 图，被当 LOGO 用之后并不会变得不可信。
+     * 从前这里会把它压成 DEGRADED，那是把「这张图派什么用场」和「这张图可不可信」混成了一件事，
+     * 代价见 [assignRoles] 第三遍的注释。
      */
     private val LOGO_FALLBACK_ORDER = listOf(
         AssetExtractor.APPLE_TOUCH_ICON,
@@ -183,15 +187,25 @@ object AssetRolePolicy {
             .filter { it.contentHash != null && it.contentHash in faviconHashes }
             .forEach { it.quality = AssetQuality.DEGRADED }
 
-        // 第三遍：没有任何可渲染的 LOGO 时，从 favicon 家族借一张顶上
+        // 第三遍：没有任何可渲染的 LOGO 时，从 favicon 家族借一张顶上。
+        //
+        // 两处细节在 2026-08-17 之前都是错的，且它们与 shouldFallbackToMonogram 串联成一条
+        // 净负收益的链（详见 `docs/ICON-DISPLAY-TODO.md` §3.1 ②③）：
+        //
+        // ① 借来的那张原本会被**改写成 DEGRADED**。APPLE_TOUCH_ICON 在 TABLE 里是
+        //    (FAVICON, TRUSTED)，借用把一张本来可信的资产主动降级；而 TILE 的 roleOrder 是
+        //    [LOGO, FAVICON]，LOGO 层一非空就 return、永不下探 —— 于是这张被自己降了级的图
+        //    挡住了旁边那张又大又 TRUSTED 的原图，再被当时的 quality 否决判成色块。
+        //    现在**保留原可信度**：借用改变的是"这张图派什么用场"，不是"这张图可不可信"。
+        // ② 从前取的是「第一张匹配 extractor 的」(firstOrNull)，纯看列表顺序。站点声明多张
+        //    不同尺寸的 apple-touch-icon 是常态，实测 live.bilibili.com 借到 32px 而同族的
+        //    512px 留在 FAVICON 层、jianshu 借到 57px 而不是 152px。现在取同族**最大的一张**。
         val hasUsableLogo = assets.any { it.role == AssetRole.LOGO && it.renderable() }
         if (!hasUsableLogo) {
             LOGO_FALLBACK_ORDER.firstNotNullOfOrNull { wanted ->
-                assets.firstOrNull { it.extractor == wanted.name && it.renderable() }
-            }?.let { borrowed ->
-                borrowed.role = AssetRole.LOGO
-                borrowed.quality = AssetQuality.DEGRADED
-            }
+                assets.filter { it.extractor == wanted.name && it.renderable() }
+                    .maxByOrNull { it.effectiveSize() }
+            }?.let { borrowed -> borrowed.role = AssetRole.LOGO }
         }
 
         // 第四遍：同 role 内选 primary —— 先看可信度，再看有效尺寸
@@ -246,8 +260,25 @@ object AssetRolePolicy {
         // 缩成"只有社交图"，图标一张不剩、这里直接返回 null。
         val pool = preferPageOwned(usable.filter { it.role in roleOrder })
 
+        // 大图模式下先按「够不够大」筛一道，role 与 quality 只在**撑得起大图的候选之间**做偏好。
+        //
+        // 不筛的话，roleOrder 就成了绝对闸门：LOGO 层一非空循环就 return，哪怕那张 LOGO 只有
+        // 48px、而 FAVICON 层躺着一张 192px 甚至矢量图。生产实测被这条挡住的有 gitlab.com
+        // （LOGO 尺寸未知 vs 两张 192px favicon）、element.eleme.cn / www.chiphell.com
+        // （小 LOGO vs 矢量 mask-icon）等。同一层内部也一样：hellogithub.com 的 LOGO 层里
+        // TRUSTED 48px 靠 `compareBy{quality}.thenBy{size}` 压过了 DEGRADED 192px。
+        //
+        // 这与 shouldFallbackToMonogram 里那个已经删掉的 `||` 是同一个错误：**出处/用途是偏好，
+        // 尺寸是硬要求**，把偏好放在硬要求前面，结果是宁可退成首字母色块也不用旁边那张大图。
+        // 一张都不够大时退回原池 —— 此时无论选谁都会走色块，让 role 偏好继续生效即可。
+        val viable = if (mode == DisplayMode.TILE) {
+            pool.filter { qualifiesForTile(it) }.ifEmpty { pool }
+        } else {
+            pool
+        }
+
         for (role in roleOrder) {
-            val candidates = pool.filter { it.role == role }
+            val candidates = viable.filter { it.role == role }
             if (candidates.isEmpty()) continue
             val best = when (mode) {
                 // 大图要尽量大：先可信度，再尺寸
@@ -327,12 +358,65 @@ object AssetRolePolicy {
     /**
      * 大图模式是否应当放弃图片、改用首字母色块。
      *
-     * 判据：选中的图要么不可信（只是 favicon 借来充数），要么实际像素撑不到
-     * [TILE_MIN_SIZE]。把 32px 的 favicon 拉伸到 72px 观感很差，宁可不用。
+     * **判据只有一条：实际像素撑不到 [TILE_MIN_SIZE]。** 把 32px 的 favicon 拉伸到 72px
+     * 观感很差，宁可不用；矢量图没有固有像素，永远够用。
+     *
+     * ## 这里曾经还 `||` 上了一个 `quality == DEGRADED`（2026-08-17 移除）
+     *
+     * 那是把两种不同性质的判断混成了一个：[AssetQuality] 是**出处判断**（「这不是品牌 LOGO，
+     * 只是 favicon 换了个 rel 名字」），而这个函数问的是**渲染判断**（「放大会不会糊」）。
+     * 只有后者是拒绝显示图片的理由 —— 一张 1024px 的 apple-touch-icon 放在 72px 磁贴上非常
+     * 好看，它算不算「真 logo」与这件事毫无关系。
+     *
+     * 代价是实测出来的：生产 163 个站点里有 **40 个**选中的图 ≥[TILE_MIN_SIZE]，却因为这半个
+     * 判据被渲染成首字母色块 —— 占全部站点的 25%，也是当时「正常显示率只有 17%」最大的一笔。
+     * `appstoreprice.org` 是典型：选中的是 1024px 的图，只因字节哈希撞上 favicon 被降级。
+     *
+     * 出处判断并没有被丢掉，它回到了该在的位置 —— [resolve] 的排序里 TRUSTED 优先于 DEGRADED。
+     * 那里它是**同等条件下挑哪一张**的依据，而不是**要不要显示图片**的否决权。
      */
     fun shouldFallbackToMonogram(chosen: SiteAssetEntity?): Boolean {
         if (chosen == null) return true
         if (chosen.isVector) return false
-        return chosen.quality == AssetQuality.DEGRADED || chosen.effectiveSize() < TILE_MIN_SIZE
+        return chosen.effectiveSize() < TILE_MIN_SIZE
+    }
+
+    /**
+     * 这一批图标在 [DisplayMode.TILE] 下最终会得到哪一档结论 —— 后台「图标判定总览」的分档依据。
+     *
+     * 与 [resolve] + [shouldFallbackToMonogram] 是同一次判断的两种表述，写在这里而不是在后台
+     * 服务里，是因为它必须**永远与它们一致**：把「够大却被判色块」和「确实太小」分开的那个条件，
+     * 正是 [shouldFallbackToMonogram] 里用 `||` 连着的两半（见 `docs/ICON-DISPLAY-TODO.md` §3.1①）。
+     * 在别处复刻一份，规则一改就会漂 —— 然后用一个错的数字证明改动有效，比没有这张表更糟。
+     *
+     * @return 结论，以及被选中的那张图（[IconVerdict.NO_ASSET] 时为 null）
+     */
+    fun tileVerdict(assets: List<SiteAssetEntity>): Pair<IconVerdict, SiteAssetEntity?> {
+        val chosen = resolve(assets, DisplayMode.TILE) ?: return IconVerdict.NO_ASSET to null
+        if (!shouldFallbackToMonogram(chosen)) return IconVerdict.IMAGE to chosen
+        // 分档的判据刻意写成「够大却仍然退回了色块」，而不是「quality 是不是 DEGRADED」：
+        // 前者问的是**还有没有尺寸之外的否决权**，后者是把当时唯一那个否决权的名字写死。
+        // 2026-08-17 移除 quality 否决之后 MONOGRAM_QUALITY 就恒为 0 了 —— 这正是它现在的用处：
+        // 它再次非零，就说明有人往 shouldFallbackToMonogram 里加回了一条与尺寸无关的判据
+        val verdict = if (chosen.effectiveSize() >= TILE_MIN_SIZE) {
+            IconVerdict.MONOGRAM_QUALITY
+        } else {
+            IconVerdict.MONOGRAM_SIZE
+        }
+        return verdict to chosen
+    }
+
+    /**
+     * 这张图单独放进磁贴，够不够格正常显示 —— [shouldFallbackToMonogram] 的**逐张版本**。
+     *
+     * 用途只有一个：判断「规则判了色块，可库里是不是本来就躺着一张能用的图」。这个数
+     * （`docs/ICON-DISPLAY-TODO.md` 基线里的 31）衡量的不是站点没提供好图，而是好图就在库里、
+     * 规则没选中它 —— 也就是规则本身的改进空间。放在这里与 [shouldFallbackToMonogram] 挨着，
+     * 是因为两者的判据互为镜像，必须一起改。
+     */
+    fun qualifiesForTile(asset: SiteAssetEntity): Boolean {
+        if (!asset.renderable()) return false
+        if (asset.isVector) return true
+        return asset.effectiveSize() >= TILE_MIN_SIZE
     }
 }

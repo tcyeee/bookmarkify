@@ -32,7 +32,10 @@ import top.tcyeee.bookmarkify.entity.dto.scrape.shortName
 import top.tcyeee.bookmarkify.entity.dto.scrape.socialUrl
 import top.tcyeee.bookmarkify.entity.dto.scrape.title
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
-import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
+import top.tcyeee.bookmarkify.server.asset.CoverResolver
+import top.tcyeee.bookmarkify.server.asset.DisplayIcons
+import top.tcyeee.bookmarkify.server.asset.IconResolver
+import top.tcyeee.bookmarkify.server.asset.SiteAssetQuery
 import top.tcyeee.bookmarkify.server.asset.SiteAssetWriter
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.config.cache.RedisType
@@ -87,7 +90,9 @@ class BookmarkServiceImpl(
     private val eventPublisher: ApplicationEventPublisher,
     private val apiService: IApiService,
     private val layoutNodeMapper: UserLayoutNodeMapper,
-    private val siteAssetResolver: SiteAssetResolver,
+    private val iconResolver: IconResolver,
+    private val coverResolver: CoverResolver,
+    private val siteAssetQuery: SiteAssetQuery,
     private val siteAssetWriter: SiteAssetWriter,
     private val siteService: ISiteService,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
@@ -179,7 +184,7 @@ class BookmarkServiceImpl(
         if (matched.isEmpty()) return emptyList()
 
         // 搜索结果是小图 + 全名的形态，按 LIST 模式解析图标
-        val logoMap = siteAssetResolver.resolveBatch(matched.map { it.second.id }, DisplayMode.LIST)
+        val logoMap = iconResolver.resolveBatch(matched.map { it.second.id }, DisplayMode.LIST)
         return matched.map { (site, page) -> BookmarkSearchVO(page, site, logoMap[page.id]) }
     }
 
@@ -302,8 +307,6 @@ class BookmarkServiceImpl(
         val pageIds: List<String> = result.records.mapNotNull { it.pageId }
         val bookmarkEntityMap =
             if (pageIds.isEmpty()) emptyMap() else baseMapper.selectByIds(pageIds).associateBy { it.id }
-        // 前台桌面是大图 + 短名的形态，按 TILE 模式解析图标
-        val logoMap = siteAssetResolver.resolveBatch(pageIds, DisplayMode.TILE)
         // 站点层带上品牌名/短名/NSFW：文案优先级要用它们，一次批量取回避免 N+1
         val siteMap = siteService.mapByIds(bookmarkEntityMap.values.map { it.siteId })
 
@@ -313,11 +316,16 @@ class BookmarkServiceImpl(
         val folderIds = layoutNodeMap.values.mapNotNull { it.parentId }.distinct()
         val folderMap = if (folderIds.isEmpty()) emptyMap() else layoutNodeMapper.selectByIds(folderIds).associateBy { it.id }
 
+        // 「设置 › 书签库」渲染的是 28px 的小格子，按 LIST 解析。此前它走 TILE ——
+        // 拿 256px 的签名图去喂一个 28px 的格子，还会因 monogram 兜底把本来够用的小 favicon
+        // 换成首字母色块。TILE 那一档是给置顶区磁贴的，见 BookmarkShow.tileLogo
+        val iconsByPage = iconResolver.resolveForDisplay(pageIds, DisplayMode.LIST)
+
         return result.convert {
             val folder = layoutNodeMap[it.layoutNodeId]?.parentId?.let { fid -> folderMap[fid] }
             val bookmark = bookmarkEntityMap[it.pageId]
             BookmarkShow(it, bookmark, siteMap[bookmark?.siteId])
-                .initDisplay(logoMap[it.pageId], DisplayMode.TILE).apply {
+                .initDisplay(iconsByPage[it.pageId] ?: DisplayIcons.empty(DisplayMode.LIST)).apply {
                 folderId = folder?.id
                 folderName = folder?.name
             }
@@ -801,7 +809,7 @@ class BookmarkServiceImpl(
                 .eq(BookmarkEntity::deleted, false)
         ) ?: return null
         val pageId = link.pageId?.takeIf { it.isNotBlank() } ?: return null
-        return siteAssetResolver.resolveCoverOne(pageId)
+        return coverResolver.resolveOne(pageId)
     }
 
     override fun captureScreenshot(pageId: String) {
@@ -817,7 +825,7 @@ class BookmarkServiceImpl(
         // 截图事件，而截图是全系统最贵的一次调用——强制无头浏览器，对端 Chrome 全局串行、
         // 生产容器只有 1GB。不拦这一道，稳态下截图池会长期占着对端那把锁，把用户当场触发的
         // 反爬无头回退饿死在锁上（那条路是有人在等结果的）。页面改版换封面的收益远抵不过这个代价。
-        if (siteAssetResolver.assetsOf(pageId).any { it.role == AssetRole.SCREENSHOT }) {
+        if (siteAssetQuery.assetsOf(pageId).any { it.role == AssetRole.SCREENSHOT }) {
             log.debug("[captureScreenshot] 已有截图，跳过: pageId=$pageId")
             return
         }
@@ -1398,8 +1406,7 @@ class BookmarkServiceImpl(
      * SQL 本身不再联图标表（图片已改为 site_asset 一行一图），漏了这一步前端就只能渲染首字母色块。
      */
     private fun showForDesktop(userLinkId: String): BookmarkShow =
-        bookmarkUserLinkMapper.findShowById(userLinkId)
-            .let { it.initDisplay(it.pageId?.let { id -> siteAssetResolver.resolveOne(id, DisplayMode.LIST) }, DisplayMode.LIST) }
+        iconResolver.decorateOne(bookmarkUserLinkMapper.findShowById(userLinkId), DisplayMode.LIST)
 
     /** 按 canonical 四元组精确命中一条页面记录。 */
     private fun getByCanonical(siteId: String, urlPath: String, urlQuery: String, urlFragment: String): PageEntity? =

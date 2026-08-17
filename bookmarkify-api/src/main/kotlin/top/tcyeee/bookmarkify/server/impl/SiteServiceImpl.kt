@@ -23,7 +23,7 @@ import top.tcyeee.bookmarkify.mapper.PageMapper
 import top.tcyeee.bookmarkify.mapper.SiteAssetMapper
 import top.tcyeee.bookmarkify.mapper.SiteMapper
 import top.tcyeee.bookmarkify.server.ISiteService
-import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
+import top.tcyeee.bookmarkify.server.asset.SiteAssetQuery
 import top.tcyeee.bookmarkify.utils.OssUtils
 import java.time.LocalDateTime
 
@@ -31,7 +31,7 @@ import java.time.LocalDateTime
 class SiteServiceImpl(
     private val pageMapper: PageMapper,
     private val siteAssetMapper: SiteAssetMapper,
-    private val siteAssetResolver: SiteAssetResolver,
+    private val siteAssetQuery: SiteAssetQuery,
 ) : ISiteService, ServiceImpl<SiteMapper, SiteEntity>() {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -127,7 +127,7 @@ class SiteServiceImpl(
      * 总数由各状态求和得到，不需要第二条查询。
      *
      * 走 `selectMaps` 而不是把结果映射回实体：这是投影查询，[PageEntity] 是没有无参构造的
-     * data class，接残缺列会在运行时抛 `No constructor found`（同 [SiteAssetResolver.siteIdOf]）。
+     * data class，接残缺列会在运行时抛 `No constructor found`（同 [SiteAssetQuery] 里的同类查询）。
      */
     private fun pageStatsBySite(siteIds: List<String>): Map<String, Map<ParseStatusEnum, Int>> =
         pageMapper.selectMaps(
@@ -170,7 +170,7 @@ class SiteServiceImpl(
         // 撞 hash 说明该站的 LOGO 其实就是它的 favicon 换了个 rel，后台据此一眼看出"没有独立 LOGO"
         val dupHashes = assets.mapNotNull { it.contentHash }
             .groupingBy { it }.eachCount().filterValues { it > 1 }.keys
-        val objectByFileId = siteAssetResolver.objectsOf(assets)
+        val objectByFileId = siteAssetQuery.objectsOf(assets)
 
         return assets.map { a ->
             val row = a.fileId?.let { objectByFileId[it] }
