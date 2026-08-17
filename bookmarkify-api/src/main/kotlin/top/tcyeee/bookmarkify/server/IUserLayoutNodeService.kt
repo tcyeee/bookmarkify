@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.extension.service.IService
 import top.tcyeee.bookmarkify.entity.CreateDirParams
 import top.tcyeee.bookmarkify.entity.MoveNodeParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
+import top.tcyeee.bookmarkify.entity.UpdateDirColorParams
+import top.tcyeee.bookmarkify.entity.UpdateDirCollapsedParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
@@ -39,6 +41,16 @@ interface IUserLayoutNodeService : IService<UserLayoutNodeEntity> {
     fun renameDir(params: RenameDirParams, uid: String): Boolean
 
     /**
+     * 修改文件夹颜色；传 null 恢复默认颜色
+     */
+    fun updateDirColor(params: UpdateDirColorParams, uid: String): Boolean
+
+    /**
+     * 修改文件夹折叠状态
+     */
+    fun updateDirCollapsed(params: UpdateDirCollapsedParams, uid: String): Boolean
+
+    /**
      * 移动书签节点：移入文件夹或移出到根目录
      * @param params 书签节点ID和目标文件夹节点ID（null 表示移到根目录）
      * @param uid 用户ID
@@ -52,4 +64,3 @@ interface IUserLayoutNodeService : IService<UserLayoutNodeEntity> {
      */
     fun deleteByIds(layoutNodeIds: List<String>, uid: String)
 }
-

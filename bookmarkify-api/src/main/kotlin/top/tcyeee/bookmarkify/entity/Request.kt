@@ -146,6 +146,16 @@ data class RenameDirParams(
     @field:Schema(description = "新名称") val name: String,
 )
 
+data class UpdateDirColorParams(
+    @field:Schema(description = "文件夹节点ID") val nodeId: String,
+    @field:Schema(description = "颜色（十六进制，如 #F59E0B），传 null 恢复默认") val color: String?,
+)
+
+data class UpdateDirCollapsedParams(
+    @field:Schema(description = "文件夹节点ID") val nodeId: String,
+    @field:Schema(description = "是否折叠") val collapsed: Boolean,
+)
+
 data class MoveNodeParams(
     @field:Schema(description = "要移动的书签节点ID") val nodeId: String,
     @field:Schema(description = "目标文件夹节点ID，为 null 时表示移出到根目录") val dirNodeId: String?,

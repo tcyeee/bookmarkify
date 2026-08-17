@@ -10,6 +10,10 @@ export interface UserLayoutNodeVO {
   type: HomeItemType
   parentId?: string | null
   name?: string | null
+  // 仅文件夹节点使用；null 表示使用首页默认颜色
+  color?: string | null
+  // 仅文件夹节点使用；服务端持久化的折叠状态
+  collapsed?: boolean
   typeApp?: BookmarkShow
   typeFuc?: BookmarkFunctionVO
   children?: Array<UserLayoutNodeVO>

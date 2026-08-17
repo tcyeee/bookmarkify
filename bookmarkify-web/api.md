@@ -46,6 +46,10 @@ interface UserLayoutNodeVO {
   sort: number
   type: NodeType
   name: string | null
+  /** 文件夹自定义颜色；null 表示使用默认颜色 */
+  color: string | null
+  /** 文件夹是否折叠 */
+  collapsed: boolean
   typeApp: BookmarkShow | null // 当 type === 'BOOKMARK' 时有值
   typeFuc: BookmarkFunctionVO | null // 当 type === 'FUNCTION' 时有值
   children: UserLayoutNodeVO[] // 当 type === 'BOOKMARK_DIR' 时包含子节点
@@ -196,3 +200,49 @@ const res = await fetch('/bookmark/renameDir', {
 })
 const { data } = await res.json() // data: boolean
 ```
+
+---
+
+### 修改文件夹颜色
+
+- **Method:** `POST`
+- **Path:** `/bookmark/updateDirColor`
+- **Auth:** 需要登录
+
+**Request Body**
+
+```ts
+interface UpdateDirColorParams {
+  /** 文件夹节点 ID（type 必须为 BOOKMARK_DIR） */
+  nodeId: string
+  /** 六位十六进制颜色，如 #F59E0B；传 null 恢复默认颜色 */
+  color: string | null
+}
+```
+
+**Response** `ApiResponse<boolean>`
+
+颜色会持久化到 `user_layout_node`，成功后通过 `HOME_LAYOUT_REFRESH` 推送最新桌面布局。
+
+---
+
+### 修改文件夹折叠状态
+
+- **Method:** `POST`
+- **Path:** `/bookmark/updateDirCollapsed`
+- **Auth:** 需要登录
+
+**Request Body**
+
+```ts
+interface UpdateDirCollapsedParams {
+  /** 文件夹节点 ID（type 必须为 BOOKMARK_DIR） */
+  nodeId: string
+  /** true 表示折叠，false 表示展开 */
+  collapsed: boolean
+}
+```
+
+**Response** `ApiResponse<boolean>`
+
+状态会持久化到 `user_layout_node`，成功后通过 `HOME_LAYOUT_REFRESH` 推送最新桌面布局。根目录是首页合成节点，不对应数据库记录，仍使用本地状态。

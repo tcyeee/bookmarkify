@@ -71,6 +71,8 @@
                     class="pointer-events-none absolute inset-x-0 -top-2 h-0.5 rounded-full bg-primary z-10" />
                   <BookmarkFolderCard
                     :name="folder.name"
+                    :color="folder.color"
+                    :initial-collapsed="folder.collapsed"
                     :is-root="folder.isRoot"
                     :folder-id="folder.id"
                     :children="folder.children"
@@ -310,10 +312,12 @@ const folderCards = computed(() => {
   const rootBookmarks = bookmarkStore.rootNodes.filter((node) => node.type !== HomeItemType.BOOKMARK_DIR)
   const dirs = bookmarkStore.rootNodes.filter((node) => node.type === HomeItemType.BOOKMARK_DIR)
   return [
-    { id: ROOT_CARD_ID, name: '根目录', isRoot: true, children: rootBookmarks },
+    { id: ROOT_CARD_ID, name: '根目录', color: null, collapsed: undefined, isRoot: true, children: rootBookmarks },
     ...dirs.map((dir) => ({
       id: dir.id,
       name: dir.name || '文件夹',
+      color: dir.color,
+      collapsed: dir.collapsed,
       isRoot: false,
       children: dir.children ?? [],
     })),
@@ -348,7 +352,7 @@ const folderColumns = computed(() => {
     }
     columns[shortest]!.push(folder)
     // 折叠的卡片只剩标题那一行，按子项数估高会把它当成一张长卡片，整栏就此空出一大截
-    heights[shortest] += bookmarkStore.isFolderCollapsed(folder.id) ? 1 : folder.children.length + 1
+    heights[shortest] += (folder.collapsed === true || bookmarkStore.isFolderCollapsed(folder.id)) ? 1 : folder.children.length + 1
   }
   return columns
 })

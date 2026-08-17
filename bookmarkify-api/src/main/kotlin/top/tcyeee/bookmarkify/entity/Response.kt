@@ -268,6 +268,8 @@ data class UserLayoutNodeVO(
     @field:Schema(description = "排序") val sort: Int = Int.MAX_VALUE,
     @field:Schema(description = "节点类型") val type: NodeTypeEnum = NodeTypeEnum.BOOKMARK,
     @field:Schema(description = "节点(文件夹)名称") val name: String? = null,
+    @field:Schema(description = "文件夹颜色（十六进制，如 #F59E0B）") val color: String? = null,
+    @field:Schema(description = "文件夹是否折叠") val collapsed: Boolean = false,
 
     /* 三选一 */
     @field:Schema(description = "书签信息") var typeApp: BookmarkShow? = null,
