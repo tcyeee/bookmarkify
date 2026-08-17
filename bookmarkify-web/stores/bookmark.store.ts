@@ -31,6 +31,19 @@ function normalize(root?: UserLayoutNodeVO | null) {
   return { nodes, order }
 }
 
+/**
+ * 归一化「新节点插到哪一层」：目标必须是本地确实存在的文件夹节点，否则一律退回根目录。
+ *
+ * 弹窗从打开到添加成功之间，那个文件夹完全可能已经被另一个标签页删掉（或因只剩一项被解散）。
+ * 不校验的话，order 里会多出一条谁都渲染不到的孤儿列表 —— 书签加成功了，桌面上却找不到。
+ */
+function insertKeyOf(nodes: Record<string, UserLayoutNodeVO>, parentKey: string): string {
+  if (parentKey === ROOT_KEY) return ROOT_KEY
+  if (nodes[parentKey]?.type === HomeItemType.BOOKMARK_DIR) return parentKey
+  console.warn(`[bookmark] 目标文件夹已不存在，新节点改落根目录: folderId=${parentKey}`)
+  return ROOT_KEY
+}
+
 // 一次批量导入任务的追踪记录，用于导入完成/超时后弹一次 toast，见 checkImportBatches
 interface ImportBatch {
   id: string // crypto.randomUUID()，仅用于日志区分，不与后端有任何关联
@@ -163,11 +176,18 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.checkImportBatches()
     },
 
-    // 插入加载占位项到根
-    addLoading(node: UserLayoutNodeVO) {
-      console.log(`[bookmark] 插入 LOADING 占位节点: nodeId=${node.id}, name=${node.name ?? ''}, 等待 WebSocket 推送解析结果`)
-      this.nodes[node.id] = { ...node, type: HomeItemType.BOOKMARK_LOADING, parentId: null, children: undefined }
-      this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []), node.id]
+    // 插入加载占位项。parentKey 缺省为根；从文件夹卡片菜单发起的「添加书签」会传该文件夹 id，
+    // 让占位格当场出现在那个文件夹里（服务端归属由调用方随后的 moveNode 落库，见 AddOneDialog）
+    addLoading(node: UserLayoutNodeVO, parentKey: string = ROOT_KEY) {
+      const key = insertKeyOf(this.nodes, parentKey)
+      console.log(`[bookmark] 插入 LOADING 占位节点: nodeId=${node.id}, name=${node.name ?? ''}, 父级=${key}, 等待 WebSocket 推送解析结果`)
+      this.nodes[node.id] = {
+        ...node,
+        type: HomeItemType.BOOKMARK_LOADING,
+        parentId: key === ROOT_KEY ? null : key,
+        children: undefined,
+      }
+      this.order[key] = [...(this.order[key] ?? []), node.id]
     },
 
     // 兜底：解析结果靠 WebSocket 推送，是尽力而为的——连接断开/消息丢失时后端不会重试推送。
@@ -292,10 +312,11 @@ export const useBookmarkStore = defineStore('homeItems', {
       }
     },
 
-    // 新增已就绪书签到根（AddOneDialog 关联/添加成功且已带 typeApp）
-    addNode(node: UserLayoutNodeVO) {
-      this.nodes[node.id] = { ...node, parentId: null, children: undefined }
-      this.order[ROOT_KEY] = [...(this.order[ROOT_KEY] ?? []), node.id]
+    // 新增已就绪书签（AddOneDialog 关联/添加成功且已带 typeApp）。parentKey 同 addLoading
+    addNode(node: UserLayoutNodeVO, parentKey: string = ROOT_KEY) {
+      const key = insertKeyOf(this.nodes, parentKey)
+      this.nodes[node.id] = { ...node, parentId: key === ROOT_KEY ? null : key, children: undefined }
+      this.order[key] = [...(this.order[key] ?? []), node.id]
     },
 
     // WebSocket 就地内容替换（LOADING→BOOKMARK）；仅改内容，保留归属，靠响应式重渲染

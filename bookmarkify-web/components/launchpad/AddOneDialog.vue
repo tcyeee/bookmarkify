@@ -9,6 +9,8 @@
           <div>
             <div class="text-lg font-semibold text-gray-800">添加 / 关联书签</div>
             <p class="text-sm text-gray-500">粘贴网址，我们会自动帮你匹配或创建</p>
+            <!-- 从文件夹菜单进来时必须说明落点：同一个弹窗、两种归属，不写出来用户无从分辨 -->
+            <p v-if="targetDir" class="mt-1 text-xs text-indigo-500 font-semibold">添加到「{{ targetDir.name }}」</p>
           </div>
         </div>
         <button
@@ -109,8 +111,8 @@
 </template>
 
 <script lang="ts" setup>
-import { bookmarksAddOne, bookmarksLinkOne, bookmarksSearch } from '@api'
-import type { UserLayoutNodeVO } from '@typing'
+import { bookmarksAddOne, bookmarksLinkOne, bookmarksMoveNode, bookmarksSearch } from '@api'
+import { HomeItemType, ROOT_KEY, type UserLayoutNodeVO } from '@typing'
 import { useBookmarkStore } from '@stores/bookmark.store'
 import { canonicalUrlKey, isBookmarkableUrl, isScrapableUrl } from '@utils'
 import { useDebounceFn } from '@vueuse/core'
@@ -166,9 +168,27 @@ const handleSearch = useDebounceFn(async (val: string) => {
   }
 }, 500)
 
+// 本次添加的目标文件夹（由文件夹卡片菜单的「添加书签」写进 sysStore）。
+// 节点可能在弹窗打开期间被删掉/解散，所以每次都按当前 store 校验类型，而不是信任那个 id
+const targetDir = computed(() => {
+  const id = sysStore.addBookmarkTargetDirId
+  if (!id) return null
+  const node = bookmarkStore.nodes[id]
+  return node?.type === HomeItemType.BOOKMARK_DIR ? node : null
+})
+
 watchEffect(() => {
   toggleAddDialog(sysStore.addBookmarkDialogVisible)
 })
+
+// 目标文件夹是一次性的：关闭即失效。清理放在这里而不是各个打开入口，是因为入口有三个
+// （工具栏、命令面板、文件夹菜单），漏掉任何一个都会让下一次添加悄悄落进上回那个文件夹
+watch(
+  () => sysStore.addBookmarkDialogVisible,
+  (visible) => {
+    if (!visible) sysStore.addBookmarkTargetDirId = null
+  },
+)
 
 onMounted(() => {
   dialogRef.value?.addEventListener('close', handleNativeClose)
@@ -226,10 +246,12 @@ function addOne() {
   }
 
   submitting.value = true
+  // 落点在提交这一刻就定下来：请求回来时弹窗早已开始关闭，targetDir 那时可能已被清空
+  const dirId = targetDir.value?.id ?? null
   bookmarksAddOne(data.input)
     .then((res: UserLayoutNodeVO) => {
       $track('bookmark-add')
-      handleSuccess(res)
+      handleSuccess(res, dirId)
       // typeApp 已就绪但标记为不可访问：说明命中了后端「近期已检测过」的跳过重抓窗口(10 分钟)，
       // 本次添加根本没有真正发起抓取——不给出说明的话，用户会误以为书签信息「没经过正常解析流程」
       const skippedRecrawl = res?.typeApp && res.typeApp.isActivity === false
@@ -287,10 +309,12 @@ const localOrIpNotice = computed(() =>
 function selectBookmark(item: any) {
   if (submitting.value) return
   submitting.value = true
+  // 同 addOne：关联走的是同一个落点规则，快照同样要在提交时取
+  const dirId = targetDir.value?.id ?? null
   bookmarksLinkOne(item.id)
     .then((res: UserLayoutNodeVO) => {
       $track('bookmark-link')
-      handleSuccess(res)
+      handleSuccess(res, dirId)
       data.notice = '关联成功!'
       data.input = undefined
       searchResults.value = []
@@ -311,19 +335,39 @@ function selectBookmark(item: any) {
     })
 }
 
-// 统一处理成功回调：通知外部并更新本地 store，用于立即显示占位或新书签
-function handleSuccess(res: UserLayoutNodeVO) {
+// 统一处理成功回调：通知外部并更新本地 store，用于立即显示占位或新书签。
+// dirId 非空表示这次添加是从某个文件夹的菜单发起的，新书签要落进那个文件夹
+function handleSuccess(res: UserLayoutNodeVO, dirId: string | null) {
   emit('success', res)
+  const parentKey = dirId ?? ROOT_KEY
   if (res?.typeApp) {
     // 后端同步返回了完整数据(无需重抓/命中跳过重抓窗口)，本次添加不会经过 WebSocket
     console.log(`[AddOneDialog] 后端同步返回已就绪数据，直接展示: nodeId=${res.id}, isActivity=${res.typeApp.isActivity}`)
-    bookmarkStore.addNode(res)
+    bookmarkStore.addNode(res, parentKey)
   } else {
     console.log(`[AddOneDialog] 后端返回 LOADING 占位，等待 WebSocket 推送解析结果: nodeId=${res.id}`)
-    bookmarkStore.addLoading(res)
+    bookmarkStore.addLoading(res, parentKey)
     // 解析结果靠 WebSocket 推送，是尽力而为的；超时未收到就主动重新拉取桌面布局兜底，避免卡死在 loading
     bookmarkStore.watchForResolution(res.id)
   }
+  if (dirId) placeIntoFolder(res.id, dirId)
+}
+
+/**
+ * 把刚添加的节点在服务端也挂到目标文件夹下。
+ *
+ * `addOne` / `linkOne` 一律把节点建在根目录（后端没有"建在某个文件夹里"的入参），所以归属得靠
+ * 随后这次 moveNode 落库 —— 上面的 addNode/addLoading 只是本地乐观更新。失败就把这一格退回根目录：
+ * 不退的话，页面上它在文件夹里、服务端在根，用户下次刷新会看到书签自己"搬了家"，而中间没有任何提示。
+ */
+function placeIntoFolder(nodeId: string, dirId: string) {
+  // 目标文件夹如果是收起的，新书签会落进一个看不见的地方——展开它，让这次添加有可见的结果
+  if (bookmarkStore.isFolderCollapsed(dirId)) bookmarkStore.toggleFolderCollapsed(dirId)
+  bookmarksMoveNode(nodeId, dirId).catch((error) => {
+    console.error('[AddOneDialog] 新书签移入文件夹失败', error)
+    bookmarkStore.moveLocal(nodeId, ROOT_KEY, Number.MAX_SAFE_INTEGER)
+    useToastStore().warning('书签已添加，但没能放进该文件夹')
+  })
 }
 
 </script>
