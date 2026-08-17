@@ -15,6 +15,8 @@ import top.tcyeee.bookmarkify.entity.ShareCreateParams
 import top.tcyeee.bookmarkify.entity.SharePublicVO
 import top.tcyeee.bookmarkify.entity.ShareUpdateParams
 import top.tcyeee.bookmarkify.entity.UserShareVO
+import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
+import top.tcyeee.bookmarkify.server.IUserBehaviorLogService
 import top.tcyeee.bookmarkify.server.IUserShareService
 import top.tcyeee.bookmarkify.utils.BaseUtils
 
@@ -27,12 +29,21 @@ import top.tcyeee.bookmarkify.utils.BaseUtils
 @RequestMapping("/share")
 class ShareController(
     private val userShareService: IUserShareService,
+    private val userBehaviorLogService: IUserBehaviorLogService,
 ) {
 
     @PostMapping("/create")
     @Operation(summary = "创建并发布分享")
-    fun create(@RequestBody params: ShareCreateParams): UserShareVO =
-        userShareService.createShare(params, BaseUtils.uid())
+    fun create(@RequestBody params: ShareCreateParams): UserShareVO {
+        val uid = BaseUtils.uid()
+        val result = userShareService.createShare(params, uid)
+        userBehaviorLogService.record(
+            uid,
+            UserBehaviorType.PUBLISH_SHARE,
+            "包含 ${result.bookmarkCount} 条书签" + (result.note?.let { " · $it" } ?: ""),
+        )
+        return result
+    }
 
     @SaIgnore
     @GetMapping("/view")

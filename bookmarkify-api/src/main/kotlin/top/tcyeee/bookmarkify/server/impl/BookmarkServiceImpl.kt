@@ -32,6 +32,7 @@ import top.tcyeee.bookmarkify.entity.dto.scrape.shortName
 import top.tcyeee.bookmarkify.entity.dto.scrape.socialUrl
 import top.tcyeee.bookmarkify.entity.dto.scrape.title
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
+import top.tcyeee.bookmarkify.server.asset.AssetRolePolicy
 import top.tcyeee.bookmarkify.server.asset.CoverResolver
 import top.tcyeee.bookmarkify.server.asset.DisplayIcons
 import top.tcyeee.bookmarkify.server.asset.IconResolver
@@ -49,7 +50,6 @@ import top.tcyeee.bookmarkify.entity.dto.ManifestIcon
 import top.tcyeee.bookmarkify.entity.dto.SimilarIngestUpdate
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
 import top.tcyeee.bookmarkify.entity.entity.*
-import top.tcyeee.bookmarkify.entity.enums.AssetRole
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.PageLockedField
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
@@ -825,7 +825,10 @@ class BookmarkServiceImpl(
         // 截图事件，而截图是全系统最贵的一次调用——强制无头浏览器，对端 Chrome 全局串行、
         // 生产容器只有 1GB。不拦这一道，稳态下截图池会长期占着对端那把锁，把用户当场触发的
         // 反爬无头回退饿死在锁上（那条路是有人在等结果的）。页面改版换封面的收益远抵不过这个代价。
-        if (siteAssetQuery.assetsOf(pageId).any { it.role == AssetRole.SCREENSHOT }) {
+        // 认「是不是截图」看 extractor 而不是 role：后者是判定的产物，被重算写歪过一次
+        // （2026-08-18，见 AssetRolePolicy.assignRoles 第一遍），而那次的代价恰恰是这道闸门
+        // 对 76 个页面永远不成立、每轮内容重抓白付一次 30s 无头
+        if (siteAssetQuery.assetsOf(pageId).any { AssetRolePolicy.isScreenshot(it) }) {
             log.debug("[captureScreenshot] 已有截图，跳过: pageId=$pageId")
             return
         }

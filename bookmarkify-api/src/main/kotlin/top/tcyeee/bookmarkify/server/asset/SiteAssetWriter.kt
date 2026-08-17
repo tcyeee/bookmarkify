@@ -243,7 +243,11 @@ class SiteAssetWriter(
         // 本次仍然发散：图标交给 replaceAssets 的整体替换，这里不插手
         if (projectedPageAssets.any { it.role in ICON_ROLES }) return
 
-        val stale = assetsOf(AssetOwnerType.PAGE, pageId).filter { it.role in ICON_ROLES }
+        // 删除的判据必须再加一条 extractor：截图的 role 被写歪成 FAVICON 过一次
+        // （2026-08-18，见 AssetRolePolicy.assignRoles 第一遍），而截图归的正是 PAGE 层 ——
+        // 只按 role 删，这里会把一张付了 30s 无头才截出来的图连同它的 OSS 对象一起清掉
+        val stale = assetsOf(AssetOwnerType.PAGE, pageId)
+            .filter { it.role in ICON_ROLES && !AssetRolePolicy.isScreenshot(it) }
         if (stale.isEmpty()) return
 
         siteAssetMapper.delete(
@@ -251,6 +255,7 @@ class SiteAssetWriter(
                 .eq(SiteAssetEntity::ownerType, AssetOwnerType.PAGE)
                 .eq(SiteAssetEntity::ownerId, pageId)
                 .`in`(SiteAssetEntity::role, ICON_ROLES)
+                .ne(SiteAssetEntity::extractor, AssetRolePolicy.SCREENSHOT_EXTRACTOR)
         )
         log.info(
             "[SiteAssetWriter] 该页已不再与站点发散，清理页面级图标: pageId={}, removed={}",

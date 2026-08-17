@@ -18,6 +18,7 @@
         rel="noopener noreferrer"
         draggable="false"
         class="group relative w-16 flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
+        :class="{ 'bg-slate-100 dark:bg-slate-800/60': contextMenuNodeId === node.id }"
         @click="recordOpen(node)"
         @contextmenu.prevent="openMenu($event.x, $event.y, node)">
         <BookmarkLogo :value="node.typeApp!" size="M" />
@@ -86,6 +87,7 @@ const gridRef = ref<HTMLElement | null>(null)
 const draggingId = ref<string | null>(null)
 const dropTargetId = ref<string | null>(null)
 const dropMode = ref<'before' | 'after' | null>(null)
+const contextMenuNodeId = ref<string | null>(null)
 
 let tilesCleanup: (() => void) | null = null
 let monitorCleanup: (() => void) | null = null
@@ -232,6 +234,7 @@ async function delOne(node: UserLayoutNodeVO) {
 function openMenu(x: number, y: number, node: UserLayoutNodeVO) {
   if (!node.typeApp) return
   const index = props.nodes.findIndex((n) => n.id === node.id)
+  contextMenuNodeId.value = node.id
   ContextMenu.showContextMenu({
     items: [
       { label: '取消置顶', icon: h(Icon, { icon: 'mdi:pin-off', class: 'size-4' }), onClick: () => unpinOne(node) },
@@ -250,10 +253,20 @@ function openMenu(x: number, y: number, node: UserLayoutNodeVO) {
         disabled: index < 0 || index >= props.nodes.length - 1,
         onClick: () => moveBy(node, 1),
       },
-      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), divided: 'up', onClick: () => delOne(node) },
+      {
+        label: '删除',
+        icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }),
+        customClass: 'bookmark-context-menu-delete',
+        divided: 'up',
+        onClick: () => delOne(node),
+      },
     ],
     x,
     y,
+    customClass: 'bookmark-context-menu',
+    onClose: () => {
+      if (contextMenuNodeId.value === node.id) contextMenuNodeId.value = null
+    },
   })
 }
 

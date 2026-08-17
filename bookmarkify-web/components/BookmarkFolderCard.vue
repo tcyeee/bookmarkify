@@ -1,9 +1,10 @@
 <template>
   <div
     ref="cardRef"
-    class="folder-card w-full rounded-lg bg-slate-50 dark:bg-slate-800/40 p-4 transition-shadow"
+    class="folder-card w-full rounded-lg border border-transparent bg-slate-50 dark:bg-slate-800/40 p-4 transition-colors transition-shadow"
+    :style="folderStyle"
     :class="{ 'ring-2 ring-primary/60': dropTargetId === CARD_END_ID }">
-    <div class="flex items-center gap-2" :class="collapsed ? '' : 'mb-2'">
+    <div class="flex items-center gap-2">
       <Icon
         v-if="!isRoot"
         data-folder-handle
@@ -15,12 +16,16 @@
         :aria-expanded="!collapsed"
         :title="collapsed ? '展开' : '折叠'"
         @click="toggleCollapsed">
-        <Icon :icon="collapsed ? 'mdi:chevron-right' : 'mdi:chevron-down'" class="size-4" />
+        <Icon
+          icon="mdi:chevron-down"
+          class="size-4 transition-transform duration-200"
+          :class="collapsed ? '-rotate-90' : ''" />
       </button>
       <Icon
         :icon="isRoot ? 'mdi:home-variant' : collapsed ? 'mdi:folder' : 'mdi:folder-open'"
         class="size-4 shrink-0"
-        :class="isRoot ? 'text-slate-400 dark:text-slate-500' : 'text-amber-500'" />
+        :class="isRoot ? 'text-slate-400 dark:text-slate-500' : !color ? 'text-amber-500' : ''"
+        :style="!isRoot && color ? { color } : undefined" />
       <input
         v-if="renaming"
         ref="renameInputRef"
@@ -39,43 +44,62 @@
         {{ name }}
       </span>
       <span v-if="children.length" class="text-xs text-slate-400 dark:text-slate-500">({{ children.length }})</span>
+      <label
+        v-if="!isRoot"
+        class="ml-auto shrink-0 cursor-pointer rounded p-1 text-slate-400 hover:bg-slate-200/70 hover:text-primary dark:hover:bg-slate-700/70 transition-colors"
+        title="自定义文件夹颜色"
+        @click.stop>
+        <span
+          class="block size-3 rounded-full border border-white/80 shadow-sm"
+          :style="{ backgroundColor: color || DEFAULT_FOLDER_COLOR }" />
+        <input
+          type="color"
+          class="sr-only"
+          :value="color || DEFAULT_FOLDER_COLOR"
+          aria-label="自定义文件夹颜色"
+          @input="onColorInput" />
+      </label>
       <button
         type="button"
-        class="ml-auto shrink-0 reveal-on-hover-folder text-slate-400 hover:text-primary dark:hover:text-primary transition-opacity transition-colors"
+        class="shrink-0 reveal-on-hover-folder text-slate-400 hover:text-primary dark:hover:text-primary transition-opacity transition-colors"
         title="更多操作"
         @click="openMenu">
         <Icon icon="mdi:dots-vertical" class="size-4" />
       </button>
     </div>
 
-    <!-- 折叠时整份列表卸载（而不是 v-show 藏起来）：行是拖拽放置区，留在 DOM 里会让人把书签
+    <!-- 折叠时整份列表最终会卸载（而不是 v-show 藏起来）：行是拖拽放置区，留在 DOM 里会让人把书签
          "拖进"一个看不见的位置。卡片容器自身的放置区仍在，所以折叠状态下依然能收下书签，
-         落到该文件夹末尾。列表重新挂载后要补一次 registerRows，见下方 watch。 -->
-    <template v-if="!collapsed">
-      <div
-        v-if="children.length === 0"
-        class="text-xs text-slate-400 dark:text-slate-500 py-3 text-center rounded border border-dashed"
-        :class="dropTargetId === CARD_END_ID ? 'border-primary text-primary' : 'border-transparent'">
-        暂无书签
-      </div>
-      <div v-else ref="listRef">
-        <div
-          v-for="child in children"
-          :key="child.id"
-          :data-row-id="child.id"
-          class="relative cursor-grab active:cursor-grabbing"
-          :class="{ 'opacity-40': draggingId === child.id }">
-          <span
-            v-if="dropTargetId === child.id && dropMode === 'above'"
-            class="pointer-events-none absolute inset-x-0 -top-px h-0.5 rounded-full bg-primary z-10" />
-          <BookmarkTreeRow :node="child" :depth="0" @edit="(n: UserLayoutNodeVO) => emit('edit', n)" />
-          <span
-            v-if="dropTargetId === child.id && dropMode === 'below'"
-            class="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary z-10" />
+         落到该文件夹末尾。动画开始时先清理行注册，展开动画结束后再补一次 registerRows。 -->
+    <Transition name="folder-content" @before-leave="unregisterRows" @after-enter="registerRows">
+      <div v-if="!collapsed" class="folder-content">
+        <div class="folder-content-inner">
+          <div
+            v-if="children.length === 0"
+            class="text-xs text-slate-400 dark:text-slate-500 py-3 text-center rounded border border-dashed"
+            :class="dropTargetId === CARD_END_ID ? 'border-primary text-primary' : 'border-transparent'">
+            暂无书签
+          </div>
+          <div v-else ref="listRef">
+            <div
+              v-for="child in children"
+              :key="child.id"
+              :data-row-id="child.id"
+              class="relative cursor-grab active:cursor-grabbing"
+              :class="{ 'opacity-40': draggingId === child.id }">
+              <span
+                v-if="dropTargetId === child.id && dropMode === 'above'"
+                class="pointer-events-none absolute inset-x-0 -top-px h-0.5 rounded-full bg-primary z-10" />
+              <BookmarkTreeRow :node="child" :depth="0" @edit="(n: UserLayoutNodeVO) => emit('edit', n)" />
+              <span
+                v-if="dropTargetId === child.id && dropMode === 'below'"
+                class="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary z-10" />
+            </div>
+            <span v-if="dropTargetId === CARD_END_ID" class="block h-0.5 rounded-full bg-primary mt-1" />
+          </div>
         </div>
-        <span v-if="dropTargetId === CARD_END_ID" class="block h-0.5 rounded-full bg-primary mt-1" />
       </div>
-    </template>
+    </Transition>
   </div>
 </template>
 
@@ -83,7 +107,14 @@
 import { h, nextTick, onBeforeUnmount } from 'vue'
 import { Icon } from '@iconify/vue'
 import ContextMenu from '@imengyu/vue3-context-menu'
-import { bookmarksRenameDir, bookmarksDel, bookmarksSort, bookmarksMoveNode } from '@api'
+import {
+  bookmarksRenameDir,
+  bookmarksUpdateDirColor,
+  bookmarksUpdateDirCollapsed,
+  bookmarksDel,
+  bookmarksSort,
+  bookmarksMoveNode,
+} from '@api'
 import { ROOT_KEY, type UserLayoutNodeVO } from '@typing'
 import BookmarkTreeRow from '@/components/BookmarkTreeRow.vue'
 import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
@@ -91,18 +122,53 @@ import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 
 defineOptions({ name: 'BookmarkFolderCard' })
 
-const props = defineProps<{ name: string; isRoot: boolean; folderId: string; children: UserLayoutNodeVO[] }>()
+const props = defineProps<{
+  name: string
+  color?: string | null
+  initialCollapsed?: boolean
+  isRoot: boolean
+  folderId: string
+  children: UserLayoutNodeVO[]
+}>()
 const emit = defineEmits<{ edit: [node: UserLayoutNodeVO]; share: [folderId: string] }>()
 
 const bookmarkStore = useBookmarkStore()
+const DEFAULT_FOLDER_COLOR = '#f59e0b'
+
+const color = computed(() => props.color ?? null)
+const folderStyle = computed(() => {
+  if (!color.value) return undefined
+  return {
+    backgroundColor: `color-mix(in srgb, ${color.value} 10%, transparent)`,
+    borderColor: `color-mix(in srgb, ${color.value} 28%, transparent)`,
+  }
+})
 
 // ── 折叠 ──
-// 折叠状态按卡片 id 记在 store 里（根目录卡片传进来的是 index.vue 的 ROOT_CARD_ID，不是 ROOT_KEY），
-// 随 localStorage 持久化：这是个用户主动摆好的视图，F5 之后弹回全展开等于每次都要重收一遍。
-const collapsed = computed(() => bookmarkStore.isFolderCollapsed(props.folderId))
+// 真实文件夹的折叠状态来自 user_layout_node，并在切换时写回数据库；根目录卡片是首页合成节点，
+// 没有对应的数据库行，才继续按卡片 id 保存在本地。
+const collapsed = computed(() =>
+  props.isRoot || props.initialCollapsed === undefined
+    ? bookmarkStore.isFolderCollapsed(props.folderId)
+    : props.initialCollapsed,
+)
 
-function toggleCollapsed() {
-  bookmarkStore.toggleFolderCollapsed(props.folderId)
+async function toggleCollapsed() {
+  const next = !collapsed.value
+  if (props.isRoot) {
+    // 根目录是前端合成节点，不对应 user_layout_node，只能保留在本地。
+    bookmarkStore.toggleFolderCollapsed(props.folderId)
+    return
+  }
+
+  // 先乐观更新，避免等待网络往返造成标题点击无响应；失败时回滚。
+  bookmarkStore.updateFolderCollapsedLocal(props.folderId, next)
+  try {
+    await bookmarksUpdateDirCollapsed(props.folderId, next)
+  } catch (error) {
+    bookmarkStore.updateFolderCollapsedLocal(props.folderId, !next)
+    console.error('[BookmarkFolderCard] 更新文件夹折叠状态失败', error)
+  }
 }
 
 // ── 书签拖动排序 / 跨文件夹移动 ──
@@ -172,6 +238,11 @@ function registerRows() {
     )
   })
   rowsCleanup = combine(...disposers)
+}
+
+function unregisterRows() {
+  rowsCleanup?.()
+  rowsCleanup = null
 }
 
 function registerCard() {
@@ -273,11 +344,10 @@ async function persist(sourceId: string, fromKey: string, destKey: string) {
   }
 }
 
-// collapsed 一并盯住：折叠会把整份列表连同 listRef 卸载，展开时挂回来的是一批全新的元素，
-// 不补注册的话表现是「收起再展开之后，这个文件夹里的书签就拖不动了」——和 index.vue 里
-// 盯 folderColumns 的那处是同一个坑。
+// 子项变化会替换行元素，需要重新注册拖拽；折叠/展开则由 Transition 的 before-leave/after-enter
+// 钩子负责清理和恢复注册。
 watch(
-  [() => props.children.map((c) => c.id).join(','), collapsed],
+  () => props.children.map((c) => c.id).join(','),
   () => nextTick(registerRows),
 )
 onMounted(() =>
@@ -288,7 +358,7 @@ onMounted(() =>
   }),
 )
 onBeforeUnmount(() => {
-  rowsCleanup?.()
+  unregisterRows()
   cardCleanup?.()
   monitorCleanup?.()
 })
@@ -320,6 +390,22 @@ async function submitRename() {
   } catch (error) {
     console.error('[BookmarkFolderCard] 重命名文件夹失败', error)
   }
+}
+
+async function updateColor(nextColor: string | null) {
+  const normalized = nextColor?.trim().toLowerCase() || null
+  if (normalized === color.value) return
+  try {
+    await bookmarksUpdateDirColor(props.folderId, normalized)
+    bookmarkStore.updateFolderColorLocal(props.folderId, normalized)
+    useToastStore().success(normalized ? '文件夹颜色已更新' : '已恢复默认颜色')
+  } catch (error) {
+    console.error('[BookmarkFolderCard] 更新文件夹颜色失败', error)
+  }
+}
+
+function onColorInput(event: Event) {
+  updateColor((event.target as HTMLInputElement).value)
 }
 
 // ── 删除 ──
@@ -361,9 +447,60 @@ function openMenu(e: MouseEvent) {
   if (!props.isRoot) {
     items.push(
       { label: '重命名', icon: h(Icon, { icon: 'mdi:pencil', class: 'size-4' }), onClick: () => startRename() },
+      ...(color.value
+        ? [
+            {
+              label: '恢复默认颜色',
+              icon: h(Icon, { icon: 'mdi:format-color-reset', class: 'size-4' }),
+              onClick: () => updateColor(null),
+            },
+          ]
+        : []),
       { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), onClick: () => delFolder() },
     )
   }
   ContextMenu.showContextMenu({ items, x: e.x, y: e.y })
 }
 </script>
+
+<style scoped>
+.folder-content {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.folder-content-inner {
+  min-height: 0;
+}
+
+.folder-content-enter-active,
+.folder-content-leave-active {
+  transition:
+    grid-template-rows 200ms ease,
+    margin-top 200ms ease,
+    opacity 150ms ease;
+}
+
+.folder-content-enter-from,
+.folder-content-leave-to {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  opacity: 0;
+}
+
+.folder-content-enter-to,
+.folder-content-leave-from {
+  grid-template-rows: 1fr;
+  margin-top: 0.5rem;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folder-content-enter-active,
+  .folder-content-leave-active {
+    transition-duration: 1ms;
+  }
+}
+</style>

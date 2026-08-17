@@ -55,9 +55,10 @@ export function useBookmarkIcon(
   const displaySrc = ref('')
   let displayObjectUrl: string | null = null
 
-  // 由图标自身字节算出的外观（底色 + 留白）。两者出自同一次像素采样，见 icon/appearance
+  // 由图标自身字节算出的外观（底色 + 留白 + 放大倍数）。三者出自同一次像素采样，见 icon/appearance
   const surfaceColor = ref<string | null>(null)
   const padding = ref(0)
+  const scale = ref(1)
 
   function releaseDisplayObjectUrl() {
     if (displayObjectUrl) {
@@ -72,6 +73,7 @@ export function useBookmarkIcon(
       releaseDisplayObjectUrl()
       surfaceColor.value = null
       padding.value = 0
+      scale.value = 1
       if (!url) {
         displaySrc.value = ''
         return
@@ -88,6 +90,7 @@ export function useBookmarkIcon(
         if (imageUrl.value === url) {
           surfaceColor.value = appearance.surfaceColor
           padding.value = appearance.padding
+          scale.value = appearance.scale
         }
       } else {
         displaySrc.value = url
@@ -133,6 +136,7 @@ export function useBookmarkIcon(
     displaySrc,
     surfaceColor,
     padding,
+    scale,
     monogramChar,
     monogramHue,
     onIconError: () => {

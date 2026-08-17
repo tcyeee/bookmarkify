@@ -455,6 +455,20 @@ CREATE TABLE public.system_config (
 
 
 --
+-- Name: user_behavior_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_behavior_log (
+    id character varying(40) NOT NULL,
+    uid character varying(40) NOT NULL,
+    nick_name_snapshot character varying(200),
+    behavior_type character varying(32) NOT NULL,
+    detail character varying(500),
+    create_time timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: user_info; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -488,6 +502,8 @@ CREATE TABLE public.user_layout_node (
     type character varying(30) DEFAULT 'BOOKMARK'::character varying NOT NULL,
     uid character varying(40) NOT NULL,
     name character varying(200),
+    color character varying(7),
+    collapsed boolean DEFAULT false NOT NULL,
     created_at timestamp without time zone DEFAULT now() NOT NULL
 );
 
@@ -739,6 +755,14 @@ ALTER TABLE ONLY public.page_category
 
 ALTER TABLE ONLY public.admin_grid_config
     ADD CONSTRAINT uq_admin_grid_config_admin_grid UNIQUE (admin_id, grid_id);
+
+
+--
+-- Name: user_behavior_log user_behavior_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_behavior_log
+    ADD CONSTRAINT user_behavior_log_pkey PRIMARY KEY (id);
 
 
 --
@@ -1034,6 +1058,20 @@ CREATE INDEX idx_uln_uid ON public.user_layout_node USING btree (uid);
 
 
 --
+-- Name: idx_user_behavior_log_type_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_behavior_log_type_time ON public.user_behavior_log USING btree (behavior_type, create_time DESC);
+
+
+--
+-- Name: idx_user_behavior_log_uid_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_behavior_log_uid_time ON public.user_behavior_log USING btree (uid, create_time DESC);
+
+
+--
 -- Name: idx_user_info_avatar_file; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1136,5 +1174,3 @@ ALTER TABLE ONLY public.background_config
 --
 -- PostgreSQL database dump complete
 --
-
-

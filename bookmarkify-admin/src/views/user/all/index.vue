@@ -9,6 +9,7 @@ import { formatDateTime } from "@vben/utils";
 import { getAdminUserListApi } from "#/api";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
+import UserQuerySelect from "#/components/user/UserQuerySelect.vue";
 import UserDetailDialog from "#/views/user/UserDetailDialog.vue";
 import UserIdentityCell from "#/views/user/UserIdentityCell.vue";
 
@@ -17,13 +18,6 @@ const ElCard = defineAsyncComponent(() =>
     import("element-plus/es/components/card/index"),
     import("element-plus/es/components/card/style/css"),
   ]).then(([res]) => res.ElCard)
-);
-
-const ElInput = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/input/index"),
-    import("element-plus/es/components/input/style/css"),
-  ]).then(([res]) => res.ElInput)
 );
 
 const ElTag = defineAsyncComponent(() =>
@@ -47,8 +41,8 @@ const ElOption = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElOption)
 );
 
-const searchForm = reactive<Pick<UserSearchParams, "name" | "status">>({
-  name: "",
+const searchForm = reactive<Pick<UserSearchParams, "status" | "uid">>({
+  uid: "",
   status: undefined,
 });
 
@@ -96,7 +90,7 @@ const gridOptions: VxeGridProps<UserAdminVO> = {
     ajax: {
       query: async ({ page }) => {
         const res = await getAdminUserListApi({
-          name: searchForm.name || undefined,
+          uid: searchForm.uid || undefined,
           status: searchForm.status || undefined,
           currentPage: page.currentPage,
           pageSize: page.pageSize,
@@ -121,8 +115,8 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
         </div>
       </template>
       <FilterBar class="mb-4" @reset="reset">
-        <FilterItem label="关键字" width="240px">
-          <ElInput v-model="searchForm.name" placeholder="昵称 / 邮箱 / 手机号" clearable />
+        <FilterItem label="用户" width="280px">
+          <UserQuerySelect v-model="searchForm.uid" />
         </FilterItem>
         <FilterItem label="状态" width="120px">
           <ElSelect v-model="searchForm.status" placeholder="全部" clearable>

@@ -92,7 +92,7 @@ const logoSize = computed(() => {
 // 没显式指定时按尺寸推断：只有 M 这一档（置顶区磁贴）是大图位
 const variant = computed<BookmarkIconVariant>(() => props.variant ?? (props.size === 'M' ? 'tile' : 'list'))
 
-const { kind, isInactive, displaySrc, surfaceColor, padding, monogramChar, monogramHue, onIconError } =
+const { kind, isInactive, displaySrc, surfaceColor, padding, scale, monogramChar, monogramHue, onIconError } =
   useBookmarkIcon(toRef(props, 'value'), variant)
 
 // 灰底上的白色图标（本地/IP 的圆点、不可访问的断网标识）共用一套尺寸，保证两种状态外观一致：
@@ -119,12 +119,15 @@ const logoStyle = computed(() => {
 })
 
 /**
- * 图片默认铺满卡片；**只有「透明底 + 图形顶到边」的图标才补一圈留白**。
+ * 图片默认铺满卡片，两个方向的例外都由 icon/appearance 从图标字节现算（服务端手里没有字节，
+ * 它只从 scrapper 收到宽高和哈希），且都刻意保守 —— 漏判只是维持现状，误判会让一批本来
+ * 正常的图标集体变形：
  *
- * 那种图标铺满时图形正贴着圆角边缘，看着像被裁了一刀，而同屏那些自带留白的图标是缩在中间的，
- * 两种摆法混在一起尤其难看。判据由 icon/appearance 从图标字节现算（服务端手里没有字节，
- * 它只从 scrapper 收到宽高和哈希），保守到两个条件同时成立才生效 —— 漏判只是维持现状，
- * 误判会让一批本来正常的图标集体缩水。
+ * - **「透明底 + 图形顶到边」补一圈留白**：那种图标铺满时图形正贴着圆角边缘，看着像被裁了
+ *   一刀，而同屏那些自带留白的图标是缩在中间的，两种摆法混在一起尤其难看。
+ * - **「外缘自带颜色的实心图标」放大顶掉它自带的透明边距**：小红书那类 app icon（红色圆角
+ *   方块）的 PNG 里烤进了一圈透明边距，铺进卡片就是卡片套卡片，看起来正像是我们给它加了
+ *   padding。`transform` 不占布局，超出的部分由外层 `overflow-hidden` 的圆角卡片裁掉。
  *
  * `objectFit: contain` 保证非方形的图不被拉变形。矢量图与大图都已由服务端按模式缩放好。
  */
@@ -133,6 +136,7 @@ const imageStyle = computed(() => ({
   height: '100%',
   objectFit: 'contain' as const,
   padding: padding.value > 0 ? `${(padding.value * 100).toFixed(1)}%` : undefined,
+  transform: scale.value > 1 ? `scale(${scale.value.toFixed(3)})` : undefined,
 }))
 
 const monogramStyle = computed(() => ({

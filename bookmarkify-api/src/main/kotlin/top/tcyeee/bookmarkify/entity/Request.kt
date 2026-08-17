@@ -14,6 +14,7 @@ import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 import top.tcyeee.bookmarkify.entity.enums.ShareStatus
 import top.tcyeee.bookmarkify.entity.enums.SiteLockedField
+import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.utils.BaseUtils
 import java.time.LocalDateTime
 
@@ -87,6 +88,8 @@ data class ChangePasswordParams(val oldPassword: String, val newPassword: String
 data class BookmarkSearchParams(
     var name: String?,
     var status: ParseStatusEnum?,
+    /** 按收录关系精确筛选用户 */
+    var ownerUid: String? = null,
     /**
      * 只看该站点下的页面（站点→页面的层级下钻）。
      *
@@ -113,6 +116,12 @@ data class BookmarkSearchParams(
             }
         }
         if (status != null) query.eq(PageEntity::parseStatus, status)
+        if (!ownerUid.isNullOrBlank()) {
+            query.apply(
+                "EXISTS (SELECT 1 FROM bookmark b WHERE b.page_id = page.id AND b.uid = {0} AND b.deleted = false)",
+                ownerUid,
+            )
+        }
         // 判据刻意写成「存在 site 行**且**类型不符才排除」，而不是更直觉的
         // `site_id IN (SELECT id FROM site WHERE link_type = X)`：后者会把 site_id 指不到任何
         // site 行的孤儿页面一并滤掉（空 site_id 确实存在，BookmarkServiceImpl 里另有一处
@@ -144,6 +153,16 @@ data class CreateDirParams(
 data class RenameDirParams(
     @field:Schema(description = "文件夹节点ID") val nodeId: String,
     @field:Schema(description = "新名称") val name: String,
+)
+
+data class UpdateDirColorParams(
+    @field:Schema(description = "文件夹节点ID") val nodeId: String,
+    @field:Schema(description = "颜色（十六进制，如 #F59E0B），传 null 恢复默认") val color: String?,
+)
+
+data class UpdateDirCollapsedParams(
+    @field:Schema(description = "文件夹节点ID") val nodeId: String,
+    @field:Schema(description = "是否折叠") val collapsed: Boolean,
 )
 
 data class MoveNodeParams(
@@ -180,6 +199,7 @@ enum class UserStatusFilter { NORMAL, DISABLED, DELETED }
 
 data class UserSearchParams(
     var name: String? = null,
+    var uid: String? = null,
     var status: UserStatusFilter? = null,
 ) : PageBean() {
     fun toWrapper(): Wrapper<UserInfoEntity> {
@@ -190,6 +210,7 @@ data class UserSearchParams(
                     .or().like(UserInfoEntity::email, name)
             }
         }
+        if (!uid.isNullOrBlank()) query.eq(UserInfoEntity::id, uid)
         when (status) {
             UserStatusFilter.NORMAL -> query.eq(UserInfoEntity::deleted, false).eq(UserInfoEntity::disabled, false)
             UserStatusFilter.DISABLED -> query.eq(UserInfoEntity::deleted, false).eq(UserInfoEntity::disabled, true)
@@ -238,6 +259,29 @@ data class ScrapperCallLogSearchParams(
         createTimeFrom?.let { query.ge(ScrapperCallLogEntity::createTime, it) }
         createTimeTo?.let { query.le(ScrapperCallLogEntity::createTime, it) }
         return query.orderByDesc(ScrapperCallLogEntity::createTime)
+    }
+}
+
+/** 管理后台用户行为审计日志查询入参 */
+data class UserBehaviorLogSearchParams(
+    /** 昵称模糊匹配 或 uid 精确匹配，二选一命中即可 */
+    @field:Schema(description = "关键字：昵称快照模糊匹配 或 uid 精确匹配") var keyword: String? = null,
+    @field:Schema(description = "行为类型") var behaviorType: UserBehaviorType? = null,
+    @field:Schema(description = "发生时间下界(含)") var createTimeFrom: LocalDateTime? = null,
+    @field:Schema(description = "发生时间上界(含)") var createTimeTo: LocalDateTime? = null,
+) : PageBean() {
+    fun toWrapper(): Wrapper<UserBehaviorLogEntity> {
+        val query = KtQueryWrapper(UserBehaviorLogEntity::class.java)
+        if (!keyword.isNullOrBlank()) {
+            query.and {
+                it.like(UserBehaviorLogEntity::nickNameSnapshot, keyword)
+                    .or().eq(UserBehaviorLogEntity::uid, keyword)
+            }
+        }
+        behaviorType?.let { query.eq(UserBehaviorLogEntity::behaviorType, it) }
+        createTimeFrom?.let { query.ge(UserBehaviorLogEntity::createTime, it) }
+        createTimeTo?.let { query.le(UserBehaviorLogEntity::createTime, it) }
+        return query.orderByDesc(UserBehaviorLogEntity::createTime)
     }
 }
 

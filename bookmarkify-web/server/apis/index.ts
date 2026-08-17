@@ -56,6 +56,10 @@ export const bookmarksCreateDir = (nodeIds: string[], name: string, sort: number
   http.post<t.UserLayoutNodeVO>('/bookmark/createDir', { nodeIds, name, sort })
 export const bookmarksRenameDir = (nodeId: string, name: string) =>
   http.post<boolean>('/bookmark/renameDir', { nodeId, name })
+export const bookmarksUpdateDirColor = (nodeId: string, color: string | null) =>
+  http.post<boolean>('/bookmark/updateDirColor', { nodeId, color })
+export const bookmarksUpdateDirCollapsed = (nodeId: string, collapsed: boolean) =>
+  http.post<boolean>('/bookmark/updateDirCollapsed', { nodeId, collapsed })
 export const bookmarksMoveNode = (nodeId: string, dirNodeId: string | null) =>
   http.post<t.UserLayoutNodeVO>('/bookmark/moveNode', { nodeId, dirNodeId })
 
