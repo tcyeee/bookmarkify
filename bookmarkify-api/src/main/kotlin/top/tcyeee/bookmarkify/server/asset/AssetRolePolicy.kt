@@ -204,17 +204,33 @@ object AssetRolePolicy {
         if (!hasUsableLogo) {
             LOGO_FALLBACK_ORDER.firstNotNullOfOrNull { wanted ->
                 assets.filter { it.extractor == wanted.name && it.renderable() }
-                    .maxByOrNull { it.effectiveSize() }
+                    // `thenBy { it.id }` 与第四遍同理：同族里两张同尺寸的图很常见，
+                    // 不定序就会让借哪一张取决于入参顺序
+                    .maxWithOrNull(compareBy<SiteAssetEntity> { it.effectiveSize() }.thenBy { it.id })
             }?.let { borrowed -> borrowed.role = AssetRole.LOGO }
         }
 
-        // 第四遍：同 role 内选 primary —— 先看可信度，再看有效尺寸
+        // 第四遍：同 role 内选 primary —— 先看可信度，再看有效尺寸，最后按 id 定序。
+        //
+        // **那条 `thenBy { it.id }` 不是装饰，它是这个函数成为纯函数的前提。** 没有它时
+        // `maxWithOrNull` 在完全同分的候选里取"第一个"，也就是取决于**入参的顺序** ——
+        // 而同分是常态：一个站点声明两张矢量图标（`<link rel=icon>` 一张 svg、
+        // `<link rel=mask-icon>` 一张 svg）时，两者 effectiveSize 同为 Int.MAX_VALUE、
+        // quality 同为 TRUSTED，一个字都分不开。
+        //
+        // 顺序为什么不可靠：抓取时的入参是 scrapper 的返回序，而重算（AssetVerdictRecomputeService）
+        // 读到的是数据库里的行序 —— 后者在 Postgres 里是**堆序**，一行被 UPDATE 过之后新版本
+        // 元组落在堆的另一处，扫描顺序就此改变（同 `UserLayoutNodeServiceImpl.CHILD_ORDER` 那条）。
+        // 于是 2026-08-17 生产上首次跑重算时，连跑两次得到了不同的 is_primary：第一次改 205 行，
+        // 紧接着空跑仍报 2 行待改。症状很轻（primary 只影响同分时的先后，判定三档一字未动），
+        // 但"重算幂等"正是空跑验证的全部依据，不能靠不住。
         assets.groupBy { it.role }.forEach { (_, group) ->
             group.forEach { it.isPrimary = false }
             group.filter { it.renderable() }
                 .maxWithOrNull(
                     compareBy<SiteAssetEntity> { if (it.quality == AssetQuality.TRUSTED) 1 else 0 }
                         .thenBy { it.effectiveSize() }
+                        .thenBy { it.id }
                 )
                 ?.isPrimary = true
         }
@@ -285,11 +301,13 @@ object AssetRolePolicy {
                 DisplayMode.TILE -> candidates.maxWithOrNull(
                     compareBy<SiteAssetEntity> { if (it.quality == AssetQuality.TRUSTED) 1 else 0 }
                         .thenBy { it.effectiveSize() }
+                        .thenBy { it.id }
                 )
                 // 小图要"刚好够用"：矢量图最优，其次是最接近 64px 且不小于它的那张
                 DisplayMode.LIST -> candidates.minWithOrNull(
                     compareBy<SiteAssetEntity> { if (it.isVector) 0 else 1 }
                         .thenBy { listSizePenalty(it.effectiveSize()) }
+                        .thenBy { it.id }
                 )
             }
             if (best != null) return best
@@ -321,6 +339,7 @@ object AssetRolePolicy {
                 .maxWithOrNull(
                     compareBy<SiteAssetEntity> { if (it.quality == AssetQuality.TRUSTED) 1 else 0 }
                         .thenBy { it.effectiveSize() }
+                        .thenBy { it.id }
                 )
         }
     }
