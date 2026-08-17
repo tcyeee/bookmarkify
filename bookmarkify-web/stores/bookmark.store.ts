@@ -53,6 +53,10 @@ export const useBookmarkStore = defineStore('homeItems', {
     inflightUpdate: null as Promise<void> | null,
     // 进行中的批量导入任务，见 addImportLoadingBatch / checkImportBatches
     importBatches: [] as ImportBatch[],
+    // 已折叠的文件夹卡片（key 是 pages/index.vue 里的卡片 id，根目录卡片用 ROOT_CARD_ID）。
+    // 只记 true 的那些：折叠是少数派，展开的文件夹不该在 localStorage 里占一行。
+    // 纯展示状态，后端不知道也不需要知道，因此不进 /bookmark/sort 那条同步链路。
+    collapsedFolders: {} as Record<string, boolean>,
   }),
 
   getters: {
@@ -79,6 +83,9 @@ export const useBookmarkStore = defineStore('homeItems', {
         for (const [k, ids] of Object.entries(state.order)) if (ids.includes(id)) return k
         return null
       }
+    },
+    isFolderCollapsed(state) {
+      return (cardId: string): boolean => state.collapsedFolders[cardId] === true
     },
     // 全部被置顶的书签节点（不区分所在文件夹），按用户在置顶区里排好的顺序。
     //
@@ -419,8 +426,20 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.clearResolutionWatch(id)
       delete this.nodes[id]
       delete this.order[id]
+      delete this.collapsedFolders[id]
       for (const k of Object.keys(this.order)) this.order[k] = (this.order[k] ?? []).filter((x) => x !== id)
       if (isRoot && import.meta.client) useNuxtApp().$track('folder-delete')
+    },
+
+    // 折叠/展开一个文件夹卡片。展开时把键删掉而不是置 false，否则 localStorage 里会慢慢
+    // 攒下一批「曾经折叠过」的文件夹 id，其中相当一部分早已被删除。
+    toggleFolderCollapsed(cardId: string) {
+      if (this.collapsedFolders[cardId]) {
+        const { [cardId]: _removed, ...rest } = this.collapsedFolders
+        this.collapsedFolders = rest
+      } else {
+        this.collapsedFolders = { ...this.collapsedFolders, [cardId]: true }
+      }
     },
 
     reorderLocal(parentKey: string, ids: Array<string>) {
@@ -476,6 +495,7 @@ export const useBookmarkStore = defineStore('homeItems', {
       this.order[ROOT_KEY] = [...rootIds, ...children]
       delete this.order[folderId]
       delete this.nodes[folderId]
+      delete this.collapsedFolders[folderId]
       // 本地解散只改了本地状态，后端仍认为文件夹和其残留子项存在 —— 不同步的话，下次全量刷新
       // （缓存过期 / F5）会让已"消失"的文件夹从后端重新长出来，把排序搅乱。这里把解散动作异步
       // 补写回后端：先把残留子项移出文件夹，再删除已空的文件夹节点本身；不阻塞、不影响本地已完成的即时反馈。
@@ -559,7 +579,7 @@ export const useBookmarkStore = defineStore('homeItems', {
   // 只在下次 setLayout() 才检查为时已晚——用户在这之前已经看到错误计数了。
   persist: {
     storage: piniaPluginPersistedstate.localStorage(),
-    pick: ['nodes', 'order', 'lastFetchedAt', 'importBatches'],
+    pick: ['nodes', 'order', 'lastFetchedAt', 'importBatches', 'collapsedFolders'],
     afterHydrate: (ctx) => {
       const order = ctx.store.order as Record<string, string[]>
       const seen = new Set<string>()

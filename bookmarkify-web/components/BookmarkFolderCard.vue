@@ -3,14 +3,22 @@
     ref="cardRef"
     class="folder-card w-full rounded-lg bg-slate-50 dark:bg-slate-800/40 p-4 transition-shadow"
     :class="{ 'ring-2 ring-primary/60': dropTargetId === CARD_END_ID }">
-    <div class="flex items-center gap-2 mb-2">
+    <div class="flex items-center gap-2" :class="collapsed ? '' : 'mb-2'">
       <Icon
         v-if="!isRoot"
         data-folder-handle
         icon="mdi:drag-vertical"
         class="size-4 shrink-0 -ml-1 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-400 dark:text-slate-600 dark:hover:text-slate-500" />
+      <button
+        type="button"
+        class="shrink-0 text-slate-400 hover:text-primary dark:text-slate-500 dark:hover:text-primary"
+        :aria-expanded="!collapsed"
+        :title="collapsed ? '展开' : '折叠'"
+        @click="toggleCollapsed">
+        <Icon :icon="collapsed ? 'mdi:chevron-right' : 'mdi:chevron-down'" class="size-4" />
+      </button>
       <Icon
-        :icon="isRoot ? 'mdi:home-variant' : 'mdi:folder'"
+        :icon="isRoot ? 'mdi:home-variant' : collapsed ? 'mdi:folder' : 'mdi:folder-open'"
         class="size-4 shrink-0"
         :class="isRoot ? 'text-slate-400 dark:text-slate-500' : 'text-amber-500'" />
       <input
@@ -23,7 +31,13 @@
         @keyup.enter="submitRename"
         @keyup.esc="cancelRename"
         @blur="submitRename" />
-      <span v-else class="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{{ name }}</span>
+      <!-- 标题本身也是折叠开关：箭头只有 16px，而「点标题展开/收起」是文件树的通用手势 -->
+      <span
+        v-else
+        class="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate cursor-pointer"
+        @click="toggleCollapsed">
+        {{ name }}
+      </span>
       <span v-if="children.length" class="text-xs text-slate-400 dark:text-slate-500">({{ children.length }})</span>
       <button
         type="button"
@@ -34,29 +48,34 @@
       </button>
     </div>
 
-    <div
-      v-if="children.length === 0"
-      class="text-xs text-slate-400 dark:text-slate-500 py-3 text-center rounded border border-dashed"
-      :class="dropTargetId === CARD_END_ID ? 'border-primary text-primary' : 'border-transparent'">
-      暂无书签
-    </div>
-    <div v-else ref="listRef">
+    <!-- 折叠时整份列表卸载（而不是 v-show 藏起来）：行是拖拽放置区，留在 DOM 里会让人把书签
+         "拖进"一个看不见的位置。卡片容器自身的放置区仍在，所以折叠状态下依然能收下书签，
+         落到该文件夹末尾。列表重新挂载后要补一次 registerRows，见下方 watch。 -->
+    <template v-if="!collapsed">
       <div
-        v-for="child in children"
-        :key="child.id"
-        :data-row-id="child.id"
-        class="relative cursor-grab active:cursor-grabbing"
-        :class="{ 'opacity-40': draggingId === child.id }">
-        <span
-          v-if="dropTargetId === child.id && dropMode === 'above'"
-          class="pointer-events-none absolute inset-x-0 -top-px h-0.5 rounded-full bg-primary z-10" />
-        <BookmarkTreeRow :node="child" :depth="0" @edit="(n: UserLayoutNodeVO) => emit('edit', n)" />
-        <span
-          v-if="dropTargetId === child.id && dropMode === 'below'"
-          class="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary z-10" />
+        v-if="children.length === 0"
+        class="text-xs text-slate-400 dark:text-slate-500 py-3 text-center rounded border border-dashed"
+        :class="dropTargetId === CARD_END_ID ? 'border-primary text-primary' : 'border-transparent'">
+        暂无书签
       </div>
-      <span v-if="dropTargetId === CARD_END_ID" class="block h-0.5 rounded-full bg-primary mt-1" />
-    </div>
+      <div v-else ref="listRef">
+        <div
+          v-for="child in children"
+          :key="child.id"
+          :data-row-id="child.id"
+          class="relative cursor-grab active:cursor-grabbing"
+          :class="{ 'opacity-40': draggingId === child.id }">
+          <span
+            v-if="dropTargetId === child.id && dropMode === 'above'"
+            class="pointer-events-none absolute inset-x-0 -top-px h-0.5 rounded-full bg-primary z-10" />
+          <BookmarkTreeRow :node="child" :depth="0" @edit="(n: UserLayoutNodeVO) => emit('edit', n)" />
+          <span
+            v-if="dropTargetId === child.id && dropMode === 'below'"
+            class="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary z-10" />
+        </div>
+        <span v-if="dropTargetId === CARD_END_ID" class="block h-0.5 rounded-full bg-primary mt-1" />
+      </div>
+    </template>
   </div>
 </template>
 
@@ -76,6 +95,15 @@ const props = defineProps<{ name: string; isRoot: boolean; folderId: string; chi
 const emit = defineEmits<{ edit: [node: UserLayoutNodeVO]; share: [folderId: string] }>()
 
 const bookmarkStore = useBookmarkStore()
+
+// ── 折叠 ──
+// 折叠状态按卡片 id 记在 store 里（根目录卡片传进来的是 index.vue 的 ROOT_CARD_ID，不是 ROOT_KEY），
+// 随 localStorage 持久化：这是个用户主动摆好的视图，F5 之后弹回全展开等于每次都要重收一遍。
+const collapsed = computed(() => bookmarkStore.isFolderCollapsed(props.folderId))
+
+function toggleCollapsed() {
+  bookmarkStore.toggleFolderCollapsed(props.folderId)
+}
 
 // ── 书签拖动排序 / 跨文件夹移动 ──
 // 根目录卡片（isRoot）在 store 顺序表中对应 ROOT_KEY，而非 index.vue 里仅用于 UI 分组的 ROOT_CARD_ID
@@ -226,8 +254,11 @@ function decide(sourceId: string, targetId: string, mode: 'above' | 'below' | nu
   }
 }
 
+// collapsed 一并盯住：折叠会把整份列表连同 listRef 卸载，展开时挂回来的是一批全新的元素，
+// 不补注册的话表现是「收起再展开之后，这个文件夹里的书签就拖不动了」——和 index.vue 里
+// 盯 folderColumns 的那处是同一个坑。
 watch(
-  () => props.children.map((c) => c.id).join(','),
+  [() => props.children.map((c) => c.id).join(','), collapsed],
   () => nextTick(registerRows),
 )
 onMounted(() =>
