@@ -12,6 +12,10 @@ export interface UserAdminVO {
   googleEmail?: null | string;
   /** 绑定的 GitHub 用户名，未绑定为 null */
   githubLogin?: null | string;
+  /** 用户当前有效书签数量 */
+  bookmarkCount: number;
+  /** 用户生成的访问令牌数量 */
+  tokenCount: number;
   role: string;
   deleted: boolean;
   disabled: boolean;
@@ -41,4 +45,3 @@ export interface PageResult<T> {
 export async function getAdminUserListApi(params: UserSearchParams) {
   return requestClient.post<PageResult<UserAdminVO>>('/admin/user/all', params);
 }
-

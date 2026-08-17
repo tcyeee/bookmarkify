@@ -645,12 +645,11 @@ class UserServiceImpl(
         val entityPage = baseMapper.selectPage(params.toPage(), params.toWrapper())
         val users = entityPage.records.toList()
         val page = entityPage.convert { UserAdminVO(it) }
-        // 头像签名要查 oss_object 账本。账本里查不到(旧数据/已清理)时留 null，
-        // 前端退回首字母色块 —— 不该因为一张头像让整个用户列表 500
+        // 头像与用户统计都走批量查询。展示性数据组装失败时保留基础用户列表，
+        // 避免后台因为一项附加信息异常而无法打开用户页。
         runCatching {
-            val avatars = adminUserViewAssembler.avatarUrls(users)
-            page.records.forEach { vo -> vo.avatarUrl = avatars[vo.id] }
-        }.onFailure { logger.warn("[adminListAll] 用户头像签名失败(忽略): {}", it.message) }
+            page.records = adminUserViewAssembler.toVOs(users)
+        }.onFailure { logger.warn("[adminListAll] 用户头像/统计组装失败(忽略): {}", it.message) }
         return page
     }
 }

@@ -31,6 +31,7 @@ import top.tcyeee.bookmarkify.mapper.UserShareMapper
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.server.IUserShareService
+import top.tcyeee.bookmarkify.server.admin.AdminUserViewAssembler
 import top.tcyeee.bookmarkify.server.asset.IconResolver
 import top.tcyeee.bookmarkify.utils.SocketUtils
 import java.time.LocalDateTime
@@ -45,6 +46,7 @@ class UserShareServiceImpl(
     private val apiService: IApiService,
     private val eventPublisher: ApplicationEventPublisher,
     private val iconResolver: IconResolver,
+    private val adminUserViewAssembler: AdminUserViewAssembler,
 ) : IUserShareService, ServiceImpl<UserShareMapper, UserShareEntity>() {
 
     @Transactional(rollbackFor = [Exception::class])
@@ -171,12 +173,14 @@ class UserShareServiceImpl(
     override fun adminListAll(params: ShareSearchParams): IPage<UserShareAdminVO> {
         val page = baseMapper.selectPage(params.toPage(), params.toWrapper())
         val uids = page.records.map { it.uid }.distinct()
-        val nickNameByUid = if (uids.isEmpty()) emptyMap() else userService.listByIds(uids).associate { it.id to it.nickName }
+        val userByUid = adminUserViewAssembler.findByIds(uids)
         return page.convert { entity ->
             val count = userShareBookmarkMapper.selectCount(
                 KtQueryWrapper(UserShareBookmarkEntity::class.java).eq(UserShareBookmarkEntity::shareId, entity.id)
             ).toInt()
-            UserShareAdminVO(entity, nickNameByUid[entity.uid] ?: "-", count)
+            UserShareAdminVO(entity, userByUid[entity.uid]?.nickName ?: "-", count).apply {
+                user = userByUid[entity.uid]
+            }
         }
     }
 
@@ -186,11 +190,12 @@ class UserShareServiceImpl(
      */
     override fun adminDetail(id: String): ShareAdminDetailVO? {
         val share = getById(id) ?: return null
-        val nickName = userService.getById(share.uid)?.nickName ?: "-"
+        val user = adminUserViewAssembler.findByIds(listOf(share.uid))[share.uid]
+        val nickName = user?.nickName ?: "-"
         // 与分享页同为列表形态，按 LIST 解析（后台详情弹窗里也是小图 + 全名）
         val bookmarks = iconResolver.decorate(userShareBookmarkMapper.bookmarksByShareId(id), DisplayMode.LIST)
         return ShareAdminDetailVO(
-            share = UserShareAdminVO(share, nickName, bookmarks.size),
+            share = UserShareAdminVO(share, nickName, bookmarks.size).apply { this.user = user },
             bookmarks = bookmarks.map { ShareAdminBookmarkVO(it) },
         )
     }

@@ -11,6 +11,8 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { getAdminShareListApi, takeDownShareApi } from "#/api/share";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
+import UserDetailDialog from "#/views/user/UserDetailDialog.vue";
+import UserIdentityCell from "#/views/user/UserIdentityCell.vue";
 
 import ShareDetailDialog from "./ShareDetailDialog.vue";
 import { SHARE_STATUS_META, shareStatusMeta } from "./shareStatus";
@@ -61,7 +63,7 @@ const gridOptions: VxeGridProps<UserShareAdminVO> = {
   id: "admin-share-all",
   columns: [
     { type: "seq", title: "#", width: 50 },
-    { field: "nickName", title: "分享人", minWidth: 140 },
+    { field: "nickName", title: "分享人", minWidth: 180, slots: { default: "user" } },
     { field: "note", title: "文案", minWidth: 220 },
     { field: "bookmarkCount", title: "书签数", width: 90 },
     { field: "status", title: "状态", width: 120, slots: { default: "status" } },
@@ -107,6 +109,14 @@ const gridOptions: VxeGridProps<UserShareAdminVO> = {
 // ── 详情弹窗 ────────────────────────────────────────────────────────────────
 const detailVisible = ref(false);
 const detailRow = ref<null | UserShareAdminVO>(null);
+const userVisible = ref(false);
+const currentUser = ref<null | UserShareAdminVO["user"]>(null);
+
+function handleUserClick(row: UserShareAdminVO) {
+  if (!row.user) return;
+  currentUser.value = row.user;
+  userVisible.value = true;
+}
 
 function handleCellClick({ row, column }: { column: any; row: UserShareAdminVO }) {
   if (column?.field === "rowActions") return;
@@ -164,6 +174,11 @@ async function handleTakeDown(row: UserShareAdminVO) {
         </FilterItem>
       </FilterBar>
       <Grid class="clickable-rows">
+        <template #user="{ row }">
+          <div class="user-cell" @click.stop="handleUserClick(row)">
+            <UserIdentityCell :user="row.user" />
+          </div>
+        </template>
         <template #status="{ row }">
           <ElTag :type="shareStatusMeta(row.status).type" size="small">
             {{ shareStatusMeta(row.status).label }}
@@ -182,6 +197,7 @@ async function handleTakeDown(row: UserShareAdminVO) {
     </ElCard>
 
     <ShareDetailDialog v-model="detailVisible" :row="detailRow" @takedown="handleTakeDown" />
+    <UserDetailDialog v-model="userVisible" :user="currentUser" />
   </Page>
 </template>
 
@@ -189,5 +205,14 @@ async function handleTakeDown(row: UserShareAdminVO) {
 /* 整行可点开详情，光标要说明这件事 —— 否则唯一能发现它的方法是乱点 */
 .clickable-rows :deep(.vxe-body--row) {
   cursor: pointer;
+}
+
+.user-cell {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.user-cell:hover {
+  color: var(--el-color-primary);
 }
 </style>

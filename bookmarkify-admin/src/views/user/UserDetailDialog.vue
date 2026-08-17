@@ -60,6 +60,18 @@ const status = computed<UserStatus>(() => {
         </div>
       </div>
 
+      <!-- 统计：与基础资料分开，管理员打开弹窗即可看到用户贡献规模 -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="stat-card">
+          <div class="stat-card__label">书签数量</div>
+          <div class="stat-card__value">{{ user.bookmarkCount }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__label">生成 Token</div>
+          <div class="stat-card__value">{{ user.tokenCount }}</div>
+        </div>
+      </div>
+
       <!-- 明细 -->
       <div class="grid grid-cols-1 gap-x-6 gap-y-2 text-sm md:grid-cols-2">
         <div class="col-span-1 md:col-span-2">
@@ -99,3 +111,24 @@ const status = computed<UserStatus>(() => {
     <div v-else class="py-6 text-center text-sm text-gray-400">没有关联的用户</div>
   </ElDialog>
 </template>
+
+<style scoped>
+.stat-card {
+  padding: 12px 14px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+}
+
+.stat-card__label {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.stat-card__value {
+  margin-top: 4px;
+  color: var(--el-text-color-primary);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+</style>
