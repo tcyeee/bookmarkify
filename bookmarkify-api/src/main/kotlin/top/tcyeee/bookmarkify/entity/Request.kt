@@ -87,6 +87,8 @@ data class ChangePasswordParams(val oldPassword: String, val newPassword: String
 data class BookmarkSearchParams(
     var name: String?,
     var status: ParseStatusEnum?,
+    /** 按收录关系精确筛选用户 */
+    var ownerUid: String? = null,
     /**
      * 只看该站点下的页面（站点→页面的层级下钻）。
      *
@@ -113,6 +115,12 @@ data class BookmarkSearchParams(
             }
         }
         if (status != null) query.eq(PageEntity::parseStatus, status)
+        if (!ownerUid.isNullOrBlank()) {
+            query.apply(
+                "EXISTS (SELECT 1 FROM bookmark b WHERE b.page_id = page.id AND b.uid = {0} AND b.deleted = false)",
+                ownerUid,
+            )
+        }
         // 判据刻意写成「存在 site 行**且**类型不符才排除」，而不是更直觉的
         // `site_id IN (SELECT id FROM site WHERE link_type = X)`：后者会把 site_id 指不到任何
         // site 行的孤儿页面一并滤掉（空 site_id 确实存在，BookmarkServiceImpl 里另有一处
@@ -190,6 +198,7 @@ enum class UserStatusFilter { NORMAL, DISABLED, DELETED }
 
 data class UserSearchParams(
     var name: String? = null,
+    var uid: String? = null,
     var status: UserStatusFilter? = null,
 ) : PageBean() {
     fun toWrapper(): Wrapper<UserInfoEntity> {
@@ -200,6 +209,7 @@ data class UserSearchParams(
                     .or().like(UserInfoEntity::email, name)
             }
         }
+        if (!uid.isNullOrBlank()) query.eq(UserInfoEntity::id, uid)
         when (status) {
             UserStatusFilter.NORMAL -> query.eq(UserInfoEntity::deleted, false).eq(UserInfoEntity::disabled, false)
             UserStatusFilter.DISABLED -> query.eq(UserInfoEntity::deleted, false).eq(UserInfoEntity::disabled, true)

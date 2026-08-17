@@ -11,6 +11,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { getAdminShareListApi, takeDownShareApi } from "#/api/share";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
+import UserQuerySelect from "#/components/user/UserQuerySelect.vue";
 
 import ShareDetailDialog from "./ShareDetailDialog.vue";
 import { SHARE_STATUS_META, shareStatusMeta } from "./shareStatus";
@@ -20,12 +21,6 @@ const ElCard = defineAsyncComponent(() =>
     import("element-plus/es/components/card/index"),
     import("element-plus/es/components/card/style/css"),
   ]).then(([res]) => res.ElCard),
-);
-const ElInput = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/input/index"),
-    import("element-plus/es/components/input/style/css"),
-  ]).then(([res]) => res.ElInput),
 );
 const ElSelect = defineAsyncComponent(() =>
   Promise.all([
@@ -150,8 +145,11 @@ async function handleTakeDown(row: UserShareAdminVO) {
         </div>
       </template>
       <FilterBar class="mb-4" @reset="reset">
-        <FilterItem label="用户ID" width="240px">
-          <ElInput v-model="searchForm.uid" placeholder="分享人用户ID" clearable />
+        <FilterItem label="分享人" width="280px">
+          <UserQuerySelect
+            v-model="searchForm.uid"
+            placeholder="输入分享人邮箱或昵称查询"
+          />
         </FilterItem>
         <FilterItem label="状态">
           <ElSelect v-model="searchForm.status" placeholder="全部状态" clearable>

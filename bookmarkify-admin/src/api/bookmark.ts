@@ -216,6 +216,8 @@ export type { BookmarkLockedField };
 
 export interface BookmarkSearchParams {
   name?: string;
+  /** 按收录关系精确筛选用户 */
+  ownerUid?: string;
   status?: BookmarkParseStatus;
   /**
    * 只看该站点下的页面（站点→页面的层级下钻）。
