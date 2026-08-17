@@ -68,6 +68,27 @@ object AssetRolePolicy {
     const val TILE_MIN_SIZE = 128
 
     /**
+     * 截图那一行的 `extractor` 取值。
+     *
+     * 它**不在** [AssetExtractor] 里，因为那个枚举是 scrapper 契约的一部分（"页面声明了什么"），
+     * 而截图是我方渲染出来的，不是页面的声明。写在这里而不是留在 [SiteAssetIngestor] 里当字面量，
+     * 是因为现在有两个地方要认出它 —— 写侧（别把它当成一张页面声明的图去分类）和读侧
+     * （别把它放进图标候选池），字面量抄第二遍就等于给了它漂移的机会。
+     */
+    const val SCREENSHOT_EXTRACTOR = "HEADLESS_CAPTURE"
+
+    /**
+     * 这一行是不是页面截图。
+     *
+     * **判据是 `extractor` 而不是 `role`**，这一点是全部意义所在：`role` 是判定的**产物**，
+     * 会被写错（见 [assignRoles] 第一遍的注释），而 `extractor` 是抓取当时记下的事实，
+     * 不参与任何判定，也就没有被判错的可能。两个都认，是为了同时覆盖"库里的 role 已经被
+     * 写歪了"和"将来有别的来源产出截图"。
+     */
+    fun isScreenshot(asset: SiteAssetEntity): Boolean =
+        asset.extractor == SCREENSHOT_EXTRACTOR || asset.role == AssetRole.SCREENSHOT
+
+    /**
      * 站点图标最多陈旧到什么程度，[divergesFromSite] 还敢据此下"这一页是另一个产品"的结论。
      *
      * 60 天 = 内容重抓周期（30 天）的两倍。首页每轮重抓都会整体替换站点图标，所以一个还
@@ -170,7 +191,31 @@ object AssetRolePolicy {
         if (assets.isEmpty()) return assets
 
         // 第一遍：查表定 role/quality
-        assets.forEach { asset ->
+        //
+        // **截图必须先摘出去。** 它的 extractor 是我方自造的 HEADLESS_CAPTURE，不在 scrapper
+        // 契约的 AssetExtractor 里，于是 `valueOf` 抛异常 → UNKNOWN → classify 的兜底
+        // (FAVICON, DEGRADED) —— 一张 1280×720 的截图就这样变成了这个页面的图标。
+        //
+        // 抓取那一刻不会发生（`SiteAssetIngestor.project` 只把页面声明的图喂进来，截图是之后
+        // 单独拼上的），但 `AssetVerdictRecomputeService` 是**按 owner 整组**从库里读出来重跑的，
+        // 截图行就在那一组里。2026-08-17 生产上跑完那次重算，全部 76 行截图的 role 都成了
+        // FAVICON、其中 71 行还是 is_primary —— 而截图归 PAGE 层，[preferPageOwned] 一见到
+        // PAGE 层图标就把站点图标整批筛掉，于是这些页面的图标不是"截图和 favicon 里挑一个"，
+        // 是**只剩截图**。两种模式一起中招。
+        //
+        // 顺带还坏了两处静默的东西：`captureScreenshot` 的跳过条件是「已有 SCREENSHOT 资产」，
+        // role 被改掉之后它永远不成立，这 76 个页面每轮内容重抓都要再付一次 30s 无头；
+        // 而 `SiteAssetWriter.dropStalePageIcons` 按 role 删 PAGE 层图标，会顺手把截图行删掉。
+        //
+        // 这里**改写**而不是跳过，是为了让重算成为存量数据的修复路径：规则修好之后跑一次
+        // 重算，库里被写歪的那批行就自己回到 SCREENSHOT 了。
+        val (screenshots, declared) = assets.partition { isScreenshot(it) }
+        screenshots.forEach {
+            it.role = AssetRole.SCREENSHOT
+            // 我方渲染的图，出处百分之百确定，不存在"借用别的用途凑数"
+            it.quality = AssetQuality.TRUSTED
+        }
+        declared.forEach { asset ->
             val extractor = runCatching { AssetExtractor.valueOf(asset.extractor) }
                 .getOrDefault(AssetExtractor.UNKNOWN)
             val (role, quality) = classify(extractor)
@@ -257,7 +302,16 @@ object AssetRolePolicy {
         assets: List<SiteAssetEntity>,
         mode: DisplayMode,
     ): SiteAssetEntity? {
-        val usable = assets.filter { it.renderable() }
+        // **截图永远不做图标，这一条先于所有排序生效。** 下面按 roleOrder 分流本来也排除了
+        // SCREENSHOT，但那道拦截建立在「role 一定是对的」之上，而 role 是判定的产物、被写歪过
+        // （见 [assignRoles] 第一遍）。这里按 extractor 这个**事实**再拦一道：判定写错时读侧
+        // 仍然选不出截图，也不必等一次全量重算落地。
+        //
+        // 为什么这条规则本身是对的：图标是方形的、代表"这个站"，尺寸从十几到几百像素；截图是
+        // 宽幅的、代表"这一页此刻长什么样"。TILE 模式按尺寸排序，一张 1280×720 的截图能压过
+        // 任何一张真图标 —— 磁贴上于是显示一张缩得看不清的网页缩略图，而不是品牌图标。
+        // 截图有它自己的去处：详情面板顶部的封面，见 [resolveCover]。
+        val usable = assets.filter { it.renderable() && !isScreenshot(it) }
         if (usable.isEmpty()) return null
 
         val roleOrder = when (mode) {
