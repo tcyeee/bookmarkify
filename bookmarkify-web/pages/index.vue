@@ -505,7 +505,8 @@ function onShareFolder(folderId: string) {
 
 // ── 搜索区工具栏：新增书签 / 新建文件夹 ──
 function openAddBookmark() {
-  useSysStore().addBookmarkDialogVisible = true
+  // 不带目标文件夹：工具栏这一路永远落到根目录（文件夹卡片菜单里的「添加书签」才带落点）
+  useSysStore().openAddBookmarkDialog()
 }
 
 // 后端 /bookmark/createDir 只支持「合并至少 2 个已有书签生成新文件夹」，不支持创建空文件夹，

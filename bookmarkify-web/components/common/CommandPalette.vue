@@ -140,7 +140,7 @@ rootGroups.set('常用操作', [
     hint: '打开添加书签窗口',
     run: () => {
       close()
-      sysStore.addBookmarkDialogVisible = true
+      sysStore.openAddBookmarkDialog()
     },
   },
   {

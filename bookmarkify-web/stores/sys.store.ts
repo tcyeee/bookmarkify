@@ -16,6 +16,10 @@ export const useSysStore = defineStore('sys', {
     settingTabIndex: 0,
     // “添加书签”对话框是否可见
     addBookmarkDialogVisible: false,
+    // “添加书签”对话框的目标文件夹节点 id，null 表示落到根目录。
+    // 由文件夹卡片菜单的「添加书签」写入，AddOneDialog 读取后把新书签直接放进该文件夹；
+    // 对话框关闭时由 AddOneDialog 清空，因此其它入口（工具栏、命令面板）不必关心它。
+    addBookmarkTargetDirId: null as string | null,
     // 邮箱验证码倒计时秒数
     emailCountdown: 0,
     // 邮箱验证码倒计时计时器句柄
@@ -24,6 +28,14 @@ export const useSysStore = defineStore('sys', {
 
   // 业务动作（异步/同步方法）
   actions: {
+    // 打开“添加书签”对话框。dirNodeId 非空时，这次添加的书签会直接落进该文件夹。
+    // 必须走这个入口而不是直接改 addBookmarkDialogVisible：目标文件夹是一次性的，
+    // 忘记重置就会让下一次「工具栏新增」把书签放进上一回选中的那个文件夹。
+    openAddBookmarkDialog(dirNodeId: string | null = null) {
+      this.addBookmarkTargetDirId = dirNodeId
+      this.addBookmarkDialogVisible = true
+    },
+
     // 触发键盘事件（在全局 keydown 监听中调用）
     triggerKeyEvent(keyCode: string, triggerPath: string) {
       const eventKey = this.eventName(keyCode, triggerPath)

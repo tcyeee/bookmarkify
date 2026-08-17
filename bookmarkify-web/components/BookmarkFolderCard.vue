@@ -326,6 +326,14 @@ type FolderMenuItem = NonNullable<Parameters<typeof ContextMenu.showContextMenu>
 function openMenu(e: MouseEvent) {
   const items: FolderMenuItem[] = [
     {
+      // 走的是与工具栏「新增书签」同一个弹窗，区别只在落点：加完直接进这个文件夹。
+      // 根目录卡片的 folderId 是 index.vue 里仅供 UI 分组用的 ROOT_CARD_ID，不是节点 id，
+      // 传给后端会当场 E102，所以这里必须换成 null（= 根目录）
+      label: '添加书签',
+      icon: h(Icon, { icon: 'mdi:plus', class: 'size-4' }),
+      onClick: () => useSysStore().openAddBookmarkDialog(props.isRoot ? null : props.folderId),
+    },
+    {
       label: '分享',
       icon: h(Icon, { icon: 'mdi:share-variant-outline', class: 'size-4' }),
       onClick: () => emit('share', props.folderId),
