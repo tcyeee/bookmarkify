@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.entity.UserAdminVO
 import top.tcyeee.bookmarkify.entity.entity.UserInfoEntity
+import top.tcyeee.bookmarkify.mapper.AccessTokenMapper
+import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.server.IOssObjectService
 
@@ -17,6 +19,8 @@ import top.tcyeee.bookmarkify.server.IOssObjectService
 @Component
 class AdminUserViewAssembler(
     private val userMapper: UserMapper,
+    private val bookmarkMapper: BookmarkMapper,
+    private val accessTokenMapper: AccessTokenMapper,
     private val ossObjectService: IOssObjectService,
 ) {
 
@@ -36,8 +40,18 @@ class AdminUserViewAssembler(
 
     /** 一批用户实体 → VO（顺序与入参一致），头像批量签名 */
     fun toVOs(users: Collection<UserInfoEntity>): List<UserAdminVO> {
+        if (users.isEmpty()) return emptyList()
         val avatars = avatarUrls(users)
-        return users.map { user -> UserAdminVO(user).apply { avatarUrl = avatars[user.id] } }
+        val ids = users.map { it.id }.distinct()
+        val bookmarkCounts = bookmarkMapper.countActiveByUids(ids).associate { it.uid to it.count }
+        val tokenCounts = accessTokenMapper.countByUids(ids).associate { it.uid to it.count }
+        return users.map { user ->
+            UserAdminVO(user).apply {
+                avatarUrl = avatars[user.id]
+                bookmarkCount = bookmarkCounts[user.id] ?: 0
+                tokenCount = tokenCounts[user.id] ?: 0
+            }
+        }
     }
 
     /** 按用户ID批量取回后台视图，uid → VO。查不到的ID直接缺席 */
