@@ -20,8 +20,10 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AccessTokenVO
 import top.tcyeee.bookmarkify.entity.ExtensionSiteInfoVO
+import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.server.IAccessTokenService
 import top.tcyeee.bookmarkify.server.IApiService
+import top.tcyeee.bookmarkify.server.IUserBehaviorLogService
 import top.tcyeee.bookmarkify.utils.ExtensionAuthUtils
 
 /**
@@ -33,7 +35,11 @@ import top.tcyeee.bookmarkify.utils.ExtensionAuthUtils
 @RestController
 @Tag(name = "插件专用接口")
 @RequestMapping("/extension")
-class ExtensionController(private val apiService: IApiService, private val accessTokenService: IAccessTokenService) {
+class ExtensionController(
+    private val apiService: IApiService,
+    private val accessTokenService: IAccessTokenService,
+    private val userBehaviorLogService: IUserBehaviorLogService,
+) {
 
     // 无 satoken 会话可用于限流键，会自动回退为按客户端 IP 限流(见 ThrottleAspect)
     @Throttle(interval = 300)
@@ -41,6 +47,7 @@ class ExtensionController(private val apiService: IApiService, private val acces
     @Operation(summary = "查询网站标题与图标，供插件在浏览页面时展示/预填")
     fun siteInfo(@RequestParam url: String): ExtensionSiteInfoVO {
         val scraped = apiService.queryWebsiteInfo(url)
+        userBehaviorLogService.record(ExtensionAuthUtils.currentUid(), UserBehaviorType.QUERY_BY_TOKEN, url)
         return ExtensionSiteInfoVO(title = scraped.title, favicon = scraped.faviconUrl)
     }
 
