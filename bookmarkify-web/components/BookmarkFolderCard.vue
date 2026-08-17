@@ -3,8 +3,11 @@
     ref="cardRef"
     class="folder-card w-full rounded-lg border border-transparent bg-slate-50 dark:bg-slate-800/40 p-4 transition-colors transition-shadow"
     :style="folderStyle"
-    :class="{ 'ring-2 ring-primary/60': dropTargetId === CARD_END_ID }">
-    <div class="flex items-center gap-2">
+    :class="{
+      'bg-slate-100 dark:bg-slate-800/60': contextMenuOpen,
+      'ring-2 ring-primary/60': dropTargetId === CARD_END_ID,
+    }">
+    <div class="flex items-center gap-2" @contextmenu.prevent="openMenu">
       <Icon
         v-if="!isRoot"
         data-folder-handle
@@ -61,10 +64,11 @@
       </label>
       <button
         type="button"
-        class="shrink-0 reveal-on-hover-folder text-slate-400 hover:text-primary dark:hover:text-primary transition-opacity transition-colors"
+        class="shrink-0 reveal-on-hover-folder p-1 -m-1 text-slate-400 hover:text-primary dark:text-slate-500 dark:hover:text-primary transition-opacity transition-colors"
         title="更多操作"
-        @click="openMenu">
-        <Icon icon="mdi:dots-vertical" class="size-4" />
+        aria-label="文件夹操作"
+        @click.stop="openMenuFromButton">
+        <Icon icon="mdi:dots-horizontal" class="size-4" />
       </button>
     </div>
 
@@ -182,6 +186,7 @@ const listRef = ref<HTMLElement | null>(null)
 const draggingId = ref<string | null>(null)
 const dropTargetId = ref<string | null>(null)
 const dropMode = ref<'above' | 'below' | null>(null)
+const contextMenuOpen = ref(false)
 
 let rowsCleanup: (() => void) | null = null
 let cardCleanup: (() => void) | null = null
@@ -429,6 +434,10 @@ async function delFolder() {
 type FolderMenuItem = NonNullable<Parameters<typeof ContextMenu.showContextMenu>[0]['items']>[number]
 
 function openMenu(e: MouseEvent) {
+  openMenuAt(e.x, e.y)
+}
+
+function openMenuAt(x: number, y: number) {
   const items: FolderMenuItem[] = [
     {
       // 走的是与工具栏「新增书签」同一个弹窗，区别只在落点：加完直接进这个文件夹。
@@ -456,10 +465,31 @@ function openMenu(e: MouseEvent) {
             },
           ]
         : []),
-      { label: '删除', icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }), onClick: () => delFolder() },
+      {
+        label: '删除',
+        icon: h(Icon, { icon: 'mdi:trash-can', class: 'size-4' }),
+        customClass: 'bookmark-context-menu-delete',
+        divided: 'up',
+        onClick: () => delFolder(),
+      },
     )
   }
-  ContextMenu.showContextMenu({ items, x: e.x, y: e.y })
+  contextMenuOpen.value = true
+  ContextMenu.showContextMenu({
+    items,
+    x,
+    y,
+    customClass: 'bookmark-context-menu',
+    onClose: () => {
+      contextMenuOpen.value = false
+    },
+  })
+}
+
+/** 按钮触发时用按钮自身的边缘定位菜单，与书签行的 ⋯ 入口保持一致。 */
+function openMenuFromButton(e: MouseEvent) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  openMenuAt(rect.right, rect.bottom)
 }
 </script>
 
