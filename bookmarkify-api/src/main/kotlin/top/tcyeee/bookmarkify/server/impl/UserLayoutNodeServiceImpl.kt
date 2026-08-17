@@ -279,8 +279,9 @@ class UserLayoutNodeServiceImpl(
 
         if (!updated) throw CommonException(ErrorType.E102, "文件夹不存在或无权访问")
 
-        // 折叠状态属于布局数据，沿用整树刷新契约同步到其它标签页/设备。
-        SocketUtils.homeLayoutRefresh(uid, layout(uid))
+        // 折叠是当前标签页的视图状态：只持久化供下次加载恢复，不向在线会话广播整棵布局。
+        // 广播会回到发起请求的标签页，而 HTTP 与 WebSocket 没有共同的顺序保证；连续操作时，
+        // 旧请求的布局快照会覆盖更新的乐观状态，表现成文件夹在用户停手后自己开合。
         return true
     }
 
