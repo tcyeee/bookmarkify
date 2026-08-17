@@ -29,8 +29,11 @@ class BookmarkCategoryServiceImpl(
     override fun categorize(bookmark: PageEntity) {
         runCatching {
             val categories = categoryService.activeCandidates()
-            if (categories.isEmpty()) {
-                logger.debug("[categorize] 字典为空，跳过: pageId=${bookmark.id}")
+            // 候选只有 0/1 个时结果是确定的（0 个没得选，1 个必然是它），DeepSeek 不可能给出
+            // 更多信息量——调用它只是白烧一次网络往返和 token。词表只有 1 条时直接判给这一条。
+            if (categories.size <= 1) {
+                logger.debug("[categorize] 候选分类数=${categories.size}，跳过 DeepSeek: pageId=${bookmark.id}")
+                categories.singleOrNull()?.let { replaceLinks(bookmark.id, listOf(it.id), CategorySource.DEEPSEEK) }
                 return
             }
             val candidates = categories.map { CategoryCandidate(it.slug, it.name, it.description) }
