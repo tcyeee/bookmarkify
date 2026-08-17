@@ -213,6 +213,53 @@ class AssetRolePolicyTest {
         )
     }
 
+    /**
+     * **判定必须与入参顺序无关。** 打乱同一批资产，结果必须逐字相同。
+     *
+     * 这不是理论洁癖，是 2026-08-17 生产上真出过的事：首次跑存量重算，第一次改了 205 行，
+     * 紧接着空跑仍报 2 行待改 —— `maxWithOrNull` 在完全同分的候选里取「第一个」，于是结果
+     * 取决于入参顺序，而抓取时的顺序是 scrapper 的返回序、重算时是数据库的**堆序**
+     * （一行被 UPDATE 过之后新版本元组落在堆的另一处，扫描顺序就此改变）。
+     *
+     * 同分是常态而非边角：一个站点声明两张矢量图标（`<link rel=icon>` 与 `<link rel=mask-icon>`
+     * 各一张 svg）时，两者 `effectiveSize()` 同为 `Int.MAX_VALUE`、quality 同为 TRUSTED，
+     * 一个字都分不开。下面这组用例就是照那个形态构造的。
+     */
+    @Test
+    fun `judgement does not depend on input order`() {
+        fun sample() = listOf(
+            // 两张矢量图：尺寸与可信度完全同分，只有 id 分得开
+            asset(AssetExtractor.LINK_ICON, vector = true, hash = "hv1", url = "https://x/a.svg"),
+            asset(AssetExtractor.LINK_MASK_ICON, vector = true, hash = "hv2", url = "https://x/b.svg"),
+            asset(AssetExtractor.LINK_ICON, size = 32, hash = "h32", url = "https://x/32.png"),
+            // 两张同尺寸的 apple-touch：借用时同样同分
+            asset(AssetExtractor.APPLE_TOUCH_ICON, size = 180, hash = "ha1", url = "https://x/a180.png"),
+            asset(AssetExtractor.APPLE_TOUCH_ICON, size = 180, hash = "ha2", url = "https://x/b180.png"),
+        )
+
+        // 固定 id，否则每次 sample() 生成的随机 id 会让「顺序无关」无从比较
+        fun fixture(order: List<Int>) =
+            order.map { idx -> sample()[idx].copy(id = "asset-$idx") }
+
+        val forward = AssetRolePolicy.assignRoles(fixture(listOf(0, 1, 2, 3, 4)))
+        val shuffled = AssetRolePolicy.assignRoles(fixture(listOf(4, 2, 0, 3, 1)))
+
+        fun fingerprint(rows: List<SiteAssetEntity>) =
+            rows.sortedBy { it.id }.joinToString("|") { "${it.id}:${it.role}:${it.quality}:${it.isPrimary}" }
+
+        assertEquals(fingerprint(forward), fingerprint(shuffled), "assignRoles 的结果不该取决于入参顺序")
+        assertEquals(
+            AssetRolePolicy.resolve(forward, DisplayMode.TILE)?.id,
+            AssetRolePolicy.resolve(shuffled, DisplayMode.TILE)?.id,
+            "TILE 选图不该取决于入参顺序",
+        )
+        assertEquals(
+            AssetRolePolicy.resolve(forward, DisplayMode.LIST)?.id,
+            AssetRolePolicy.resolve(shuffled, DisplayMode.LIST)?.id,
+            "LIST 选图不该取决于入参顺序",
+        )
+    }
+
     @Test
     fun `primary is chosen per role by quality then size`() {
         val assets = AssetRolePolicy.assignRoles(
