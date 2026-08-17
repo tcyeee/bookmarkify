@@ -1,9 +1,11 @@
 import { requestClient } from '#/api/request';
+import type { UserAdminVO } from '#/api/user-manage';
 
 export interface UserShareAdminVO {
   id: string;
   uid: string;
   nickName: string;
+  user?: null | UserAdminVO;
   note?: string;
   expireTime?: string | null;
   status: string;

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { UserAdminVO, UserSearchParams, UserStatus } from "#/api/user-manage";
 
-import { defineAsyncComponent, reactive } from "vue";
+import { defineAsyncComponent, reactive, ref } from "vue";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
@@ -10,6 +10,8 @@ import { getAdminUserListApi } from "#/api";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
 import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
 import UserQuerySelect from "#/components/user/UserQuerySelect.vue";
+import UserDetailDialog from "#/views/user/UserDetailDialog.vue";
+import UserIdentityCell from "#/views/user/UserIdentityCell.vue";
 
 const ElCard = defineAsyncComponent(() =>
   Promise.all([
@@ -50,11 +52,19 @@ function resolveStatus(row: UserAdminVO): UserStatus {
   return row.disabled ? "DISABLED" : "NORMAL";
 }
 
+const userVisible = ref(false);
+const currentUser = ref<null | UserAdminVO>(null);
+
+function handleUserClick(row: UserAdminVO) {
+  currentUser.value = row;
+  userVisible.value = true;
+}
+
 const gridOptions: VxeGridProps<UserAdminVO> = {
   id: "admin-user-all",
   columns: [
     { type: "seq", title: "#", width: 50 },
-    { field: "nickName", title: "昵称", minWidth: 160 },
+    { field: "nickName", title: "用户", minWidth: 180, slots: { default: "user" } },
     { field: "deviceId", title: "设备UID", minWidth: 220 },
     { field: "email", title: "邮箱", minWidth: 200 },
     { field: "phone", title: "手机号", minWidth: 160 },
@@ -117,6 +127,11 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
         </FilterItem>
       </FilterBar>
       <Grid>
+        <template #user="{ row }">
+          <div class="user-cell" @click.stop="handleUserClick(row)">
+            <UserIdentityCell :user="row" />
+          </div>
+        </template>
         <template #role="{ row }">
           <ElTag v-if="row.role === 'ADMIN'" type="danger" size="small">
             管理员
@@ -145,6 +160,19 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload());
           <ElTag v-else type="success" size="small"> 正常 </ElTag>
         </template>
       </Grid>
+
+      <UserDetailDialog v-model="userVisible" :user="currentUser" />
     </ElCard>
   </Page>
 </template>
+
+<style scoped>
+.user-cell {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.user-cell:hover {
+  color: var(--el-color-primary);
+}
+</style>

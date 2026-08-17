@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Description
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.dto.StuckLoadingItem
 import top.tcyeee.bookmarkify.entity.dto.StuckLoadingStats
+import top.tcyeee.bookmarkify.entity.dto.AdminUserCountRow
 import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import java.time.LocalDateTime
 
@@ -18,6 +19,21 @@ import java.time.LocalDateTime
  */
 @Mapper
 interface BookmarkMapper : BaseMapper<BookmarkEntity> {
+
+    @Select(
+        """
+            <script>
+            SELECT uid, COUNT(*) AS count
+            FROM bookmark
+            WHERE deleted = false
+              AND uid IN
+              <foreach item="uid" collection="uids" open="(" separator="," close=")">#{uid}</foreach>
+            GROUP BY uid
+            </script>
+            """
+    )
+    @Description("批量统计用户的有效书签数，避免后台用户列表与收录者列表产生 N+1 查询")
+    fun countActiveByUids(@Param("uids") uids: Collection<String>): List<AdminUserCountRow>
 
     @Select(
         """

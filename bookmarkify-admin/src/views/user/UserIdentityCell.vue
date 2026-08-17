@@ -57,10 +57,15 @@ const avatarStyle = computed(() => ({
   height: `${props.size}px`,
   fontSize: `${Math.round(props.size * 0.45)}px`,
 }));
+
+const identityStyle = computed(() => ({
+  // 首字母头像与容器使用同一色相；透明度足够低，不会抢昵称和表格数据的视觉重点。
+  backgroundColor: `${monogramColor.value}12`,
+}));
 </script>
 
 <template>
-  <div v-if="user" class="user-identity" :title="user.nickName">
+  <div v-if="user" class="user-identity" :style="identityStyle" :title="user.nickName">
     <img
       v-if="showAvatar"
       class="user-identity__avatar"
@@ -88,6 +93,9 @@ const avatarStyle = computed(() => ({
   gap: 8px;
   align-items: center;
   min-width: 0;
+  padding: 3px 8px 3px 4px;
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
 }
 
 /* 尺寸由 avatarStyle 内联给出 */
