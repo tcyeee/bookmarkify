@@ -20,6 +20,11 @@
 >
 > 正名的动机与执行见 `deploy/migrations/2026-08-03_rename_three_layers.sql`。
 
+> ⚠️ **`site_display_pref` 已于 2026-08-17 整表移除**，本文对它的每一处论述（§5 的 owner 泛化、
+> §8 的迁移顺序、§9 的溯源列、§10 的建表 bug）都只在描述历史，不再对应库里的任何东西。
+> 移除的不是这张表的设计，而是它背后那件事：管理员逐站点微调图标（内边距 / 背景色 / 钉图）。
+> 详见文末 **§11 后记**。
+
 代码中多处注释写了"详见根目录 SITE_LAYERING_DESIGN.md"，指的就是本文件。
 
 ## 1. 触发这次设计的具体故障
@@ -356,3 +361,36 @@ asset 只对站点图标有意义。
   —— MyBatis-Plus 的 `insert` 会带上一个不存在的列，「首次为某书签保存展示偏好」这条路径从来
   没成功过（已有行走 `update` 分支，所以只在新行上暴露）。`2026-07-31_site_asset_owner.sql`
   把列补上了。
+
+## 11. 后记：`site_display_pref` 于 2026-08-17 移除
+
+> 追记日期：2026-08-17 · 迁移：`deploy/migrations/2026-08-17_drop_site_display_pref.sql`
+
+上文 §5 把 `site_display_pref` 从挂 bookmark 改成挂 site，理由是「人工调 padding / 背景色 /
+pinned asset 只对站点图标有意义」。那个判断本身没错 —— 键确实该是站点。**错的是上一层：
+这件事根本不该由人来逐站点做。**
+
+三条结论，留给将来想重做这个功能的人：
+
+1. **覆盖面差一个量级，且差距永不消失。** 规则（`AssetRolePolicy`）是纯函数，改一次同时作用于
+   全部站点**以及所有还没被收藏的站点**；人工设置只覆盖被调过的那一个，而用户对图标质量的感受
+   由「刚添加的那一条」决定，那一条恒为未调过。这不是冷启动问题，是结构性的。
+2. **这张表在生产上一行都没有。** 从 2026-07-31 上线到删除，`site_display_pref` 总行数 0
+   —— 调过内边距 0 / 调过背景色 0 / 钉过图 0。它不是「用得少」，是从来没被用过。
+3. **钉图那一列的标的本来就不稳定。** `SiteAssetWriter.replaceLayer` 在资产集合有任何变化时
+   整层删除重插，新行是新 id；而读取侧是 `usable.firstOrNull { it.id == pinned }`，匹配不上就
+   静默回落自动排序，没有报错也没有日志。**将来真要做用户级图标覆盖，键必须是 `content_hash`**
+   —— `AssetRolePolicy.divergesFromSite` 已经在用字节哈希做跨抓取比对，那是现成的稳定身份。
+
+同批移除的还有 `POST /admin/bookmark/{pageId}/icon`。它捎带的 `appName` **不属于图标**：那是
+TILE 磁贴标题的主要来源（生产 92 个首页里 75 个靠它出标题，`site.short_name` 只有 15 个），
+所以随端点一起搬进了 `BookmarkBasicInfoUpdateParams` / `adminUpdateBasicInfo`，连同
+`PageLockedField.APP_NAME` 的加锁/解锁逻辑。漏掉这一步的代价是「后台再也改不了书签简称，
+而且不会报错」。
+
+后台的「显示设置」卡片只砍掉写侧，读侧改名为「渲染结果」保留：它的 `previewUrl` / `monogram`
+从来就不来自这张表，而是 `SiteAssetResolver` 现算的 —— 它回答「这个书签在两种模式下实际会
+渲染成什么」，正是接下来排图标规则时最需要的那个事实。
+
+剩下的工作（`shouldFallbackToMonogram` 把出处判断与渲染判断用 `||` 连在一起、TILE 模式下的
+借用机制是净负收益、借用取的是第一张而非最大的一张）记在根目录 `ICON-DISPLAY-TODO.md` §3。

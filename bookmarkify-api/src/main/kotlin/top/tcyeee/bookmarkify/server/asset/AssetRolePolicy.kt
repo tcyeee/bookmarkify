@@ -216,20 +216,19 @@ object AssetRolePolicy {
      * - [DisplayMode.LIST]（小图 16~24px）要 FAVICON 优先 —— 把 512px 的 LOGO 塞进
      *   16px 的行里既浪费带宽，观感也不比 favicon 好。
      *
-     * @param pinnedAssetId 人工钉死的资产，存在即无条件胜出（见 site_display_pref）
+     * 刻意**没有**「人工钉死某张图」的入口：那条链路（`site_display_pref`）已于 2026-08-17 移除。
+     * 它的标的本来就不稳定 —— [SiteAssetWriter.replaceLayer] 在资产集合有任何变化时整层删除重插，
+     * 新行是新 id，钉的 id 匹配不上就静默回落自动排序，没有报错也没有日志。将来若要重做用户级覆盖，
+     * 键必须是 `content_hash`（[divergesFromSite] 已经在用哈希做跨抓取比对，是现成的稳定身份）。
+     *
      * @return 选中的资产；一张可渲染的都没有时返回 null，调用方应回退到首字母色块
      */
     fun resolve(
         assets: List<SiteAssetEntity>,
         mode: DisplayMode,
-        pinnedAssetId: String? = null,
     ): SiteAssetEntity? {
         val usable = assets.filter { it.renderable() }
         if (usable.isEmpty()) return null
-
-        pinnedAssetId?.let { pinned ->
-            usable.firstOrNull { it.id == pinned }?.let { return it }
-        }
 
         val roleOrder = when (mode) {
             DisplayMode.TILE -> listOf(AssetRole.LOGO, AssetRole.FAVICON)

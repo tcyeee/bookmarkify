@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.extension.service.IService
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkBasicInfoUpdateParams
-import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO

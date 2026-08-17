@@ -298,7 +298,7 @@ resolved.parseStatus == PENDING ?   → 直接 return，节点保持 LOADING（�
 9. **改 `parse_status` 只能通过 `markParseSucceeded()` / `markParseUnreachable()`。** 那四个字段之间有约束（SUCCESS 必然 `isActivity=true` 且 `parseErrMsg` 为空），而漏掉调度列那一句不会报任何错——那条记录的 `next_check_at` 就停在旧值上，要么被每轮巡检重复选中，要么再也不被选中。这五行曾被逐字复制十遍。
 10. **`page_id = 'LOADING'` 表示"等着被绑定"，NULL 表示"确定没有 canonical 记录"。** 无源书签终结时必须把标记清成 NULL（`clearUnboundMarker`），否则 `assertNotPendingImport` 会永远把它当成还在导入队列里，用户之后添加同一个网址会撞上一个假的 E126。
 11. **本服务当前只能单实例运行。** `SessionManager` 的会话在进程内存里，`@Scheduled` 没有分布式锁。`SingleInstanceGuard` 会在检测到第二个实例时每分钟打一条 error——它只报警不阻止启动，看到那条日志就是真的出问题了。要横向扩容必须先接入 ShedLock **加上** WebSocket 推送的 Redis pub/sub 扇出，两者缺一不可。
-12. **显示偏好是全站级的，用户级差异只能存在于 `bookmark`。** `page` 是全站共享的可变记录：A 用户添加触发的重抓会改变 B 用户桌面上那条书签的标题和图标。`locked_fields` / `verifyFlag` 是**管理员级**的锁，解决不了"两个用户对同一页面有不同期望"。`site_display_pref` 按 `(bookmark, display_mode)` 而非 `(user, bookmark, mode)` 建键是同一个决定的延伸——真要做用户级图标覆盖时，这里需要一次迁移。
+12. **图标是全站级的，用户级差异只能存在于 `bookmark`。** `page` 是全站共享的可变记录：A 用户添加触发的重抓会改变 B 用户桌面上那条书签的标题和图标。`locked_fields` / `verifyFlag` 是**管理员级**的锁，解决不了"两个用户对同一页面有不同期望"。曾经有过一张 `site_display_pref`（按 `(site, display_mode)` 存人工调的内边距/背景色/钉图），它 2026-08-17 已整表移除——那条路走的是「人逐站点调」，而图标质量该由规则解决。**真要做用户级图标覆盖，键必须是 `content_hash` 而不是 `site_asset.id`**（资产每次重抓都换 id，钉住的 id 会静默失配），理由与现状见根目录 `ICON-DISPLAY-TODO.md`。
 
 ---
 

@@ -4,11 +4,10 @@ import type {
   BookmarkLockedField,
   DisplayMode,
   SiteAsset,
-  SiteDisplayPref,
 } from "#/api/bookmark";
 
 /**
- * 新资产模型（site_asset 一行一图 + site_display_pref 按模式分行）的读取helper。
+ * 新资产模型（site_asset 一行一图）的读取 helper。
  *
  * 后端下发的是**全部**资产而非选好的那一张 —— 后台需要看到该站到底声明了哪些图、
  * 各自出处是什么、有没有互相撞 hash。这里提供按用途取图的便捷入口。
@@ -42,29 +41,6 @@ export function logoOf(row: Pick<BookmarkEntity, "assets">): string | undefined 
 /** 社交分享图（旧代码里叫"og 图"；OG 是协议名不是类型名） */
 export function socialOf(row: Pick<BookmarkEntity, "assets">): string | undefined {
   return assetByRole(row.assets, "SOCIAL")?.url;
-}
-
-/** 取某展示模式的设置；没有则给出与后端一致的默认值 */
-export function prefOf(
-  prefs: SiteDisplayPref[] | undefined,
-  mode: DisplayMode,
-): SiteDisplayPref {
-  return (
-    (prefs ?? []).find((p) => p.displayMode === mode) ?? {
-      displayMode: mode,
-      iconPadding: 0,
-      iconBgColor: undefined,
-      pinnedAssetId: undefined,
-      previewUrl: undefined,
-      monogram: true,
-    }
-  );
-}
-
-/** 该书签是否根本没有独立 LOGO（所有 LOGO 都与 favicon 同字节或缺席） */
-export function lacksRealLogo(assets: SiteAsset[] | undefined): boolean {
-  const logo = assetByRole(assets, "LOGO");
-  return !logo || logo.quality === "DEGRADED";
 }
 
 /** 展示模式的中文名，用于后台标签 */

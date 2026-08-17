@@ -9,7 +9,6 @@ import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkAssetRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkBasicInfoUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkCategoriesParams
-import top.tcyeee.bookmarkify.entity.BookmarkIconUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkLivenessVO
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
@@ -36,17 +35,11 @@ class AdminBookmarkManageController(
     fun getAllBookmarks(@RequestBody params: BookmarkSearchParams): IPage<BookmarkAdminVO> =
         bookmarkAdminService.adminListAll(params)
 
-    // 修改单个书签基础信息（标题/简介），非空字段才会覆盖
+    // 修改单个书签基础信息（标题/简介/简称），非空字段才会覆盖；简称传空串表示清空
     @PostMapping("/{pageId}/update")
     fun updateBookmark(
         @PathVariable pageId: String, @RequestBody params: BookmarkBasicInfoUpdateParams
     ): BookmarkAdminVO = bookmarkAdminService.adminUpdateBasicInfo(pageId, params)
-
-    // 修改单个书签的图标设置（图片内边距 iconPadding、图标背景色 iconBgColor）
-    @PostMapping("/{pageId}/icon")
-    fun updateBookmarkIcon(
-        @PathVariable pageId: String, @RequestBody params: BookmarkIconUpdateParams
-    ) = bookmarkAdminService.adminUpdateIcon(pageId, params)
 
     // 重新获取：重新解析网站标题与图标（不落库），返回预览数据供前端对比选择
     @PostMapping("/{pageId}/refetch")

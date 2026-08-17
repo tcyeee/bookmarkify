@@ -32,8 +32,6 @@ export interface BookmarkLogo {
   isVector?: boolean
   // true = 该站没有够格的图，应渲染首字母色块而非硬拉伸小图
   monogram?: boolean
-  iconPadding?: number
-  iconBgColor?: string
 }
 
 // 书签详情（后端 BookmarkShow）

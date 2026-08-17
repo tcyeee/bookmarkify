@@ -13,7 +13,6 @@ import top.tcyeee.bookmarkify.entity.entity.PageMetaEntity
 import top.tcyeee.bookmarkify.entity.entity.PagePingLogEntity
 import top.tcyeee.bookmarkify.entity.entity.ScrapeSnapshotEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
-import top.tcyeee.bookmarkify.entity.entity.SiteDisplayPrefEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
@@ -25,7 +24,6 @@ import top.tcyeee.bookmarkify.mapper.PageMetaMapper
 import top.tcyeee.bookmarkify.mapper.PagePingLogMapper
 import top.tcyeee.bookmarkify.mapper.ScrapeSnapshotMapper
 import top.tcyeee.bookmarkify.mapper.SiteAssetMapper
-import top.tcyeee.bookmarkify.mapper.SiteDisplayPrefMapper
 import top.tcyeee.bookmarkify.mapper.SiteMapper
 import top.tcyeee.bookmarkify.utils.WebsiteParser
 import java.time.Duration
@@ -80,7 +78,6 @@ class OrphanCleanupService(
     private val pagePingLogMapper: PagePingLogMapper,
     private val pageCategoryMapper: PageCategoryMapper,
     private val siteAssetMapper: SiteAssetMapper,
-    private val siteDisplayPrefMapper: SiteDisplayPrefMapper,
 ) {
 
     /** [OWNERSHIP_REGISTRY] 里一张表的处置方式。 */
@@ -127,8 +124,6 @@ class OrphanCleanupService(
             PageCategory::class to Disposition.Cascade,
             // 归属其实是 (ownerType, ownerId)，pageId 只是溯源列；两种归属都由 purgeAssets 覆盖
             SiteAssetEntity::class to Disposition.Cascade,
-            // 键是 (site_id, display_mode)，随站点删
-            SiteDisplayPrefEntity::class to Disposition.Cascade,
             // 页面自己：带 site_id，站点删光名下页面才轮得到它
             PageEntity::class to Disposition.Cascade,
 
@@ -216,9 +211,6 @@ class OrphanCleanupService(
         // 只是溯源列，站点级图标那一行的 page_id 可能正指向本轮要删的页面，按它删会连站点图标一起删掉
         report.pageAssets = purgeAssets(AssetOwnerType.PAGE, doomedPageIds, dryRun, report)
         report.siteAssets = purgeAssets(AssetOwnerType.SITE, doomedSiteIds, dryRun, report)
-        report.displayPrefs = purge(siteDisplayPrefMapper, doomedSiteIds, dryRun) {
-            `in`(SiteDisplayPrefEntity::siteId, it)
-        }
 
         report.pages = purge(pageMapper, doomedPageIds, dryRun) { `in`(PageEntity::id, it) }
         report.sites = purge(siteMapper, doomedSiteIds, dryRun) { `in`(SiteEntity::id, it) }

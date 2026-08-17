@@ -1,5 +1,4 @@
 package top.tcyeee.bookmarkify.entity
-import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper
 import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
@@ -55,14 +54,6 @@ data class UserInfoUpdateParams(var nickName: String)
 data class BookmarkUpdatePrams(var linkId: String, var title: String, var description: String)
 data class BookmarkPinParams(var linkId: String, var pinned: Boolean)
 data class BookmarkOpenParams(var linkId: String)
-data class BookmarkIconUpdateParams(
-    // 显示设置按展示模式分行：72px 大图上的内边距/背景色与 16px 列表行是两回事
-    @field:Schema(description = "展示模式 TILE/LIST") var displayMode: DisplayMode = DisplayMode.TILE,
-    @field:Schema(description = "图片内边距") var iconPadding: Int = SiteDisplayPrefEntity.DEFAULT_ICON_PADDING,
-    @field:Schema(description = "图标背景色") var iconBgColor: String? = null,
-    @field:Schema(description = "人工钉死的资产ID,覆盖自动选择;为空表示走自动") var pinnedAssetId: String? = null,
-    @field:Schema(description = "书签简称") var appName: String? = null,
-)
 
 /** 管理后台「重新获取」后，应用预览结果：分别决定标题/小图标/大图标(高清 LOGO)是否采用新值 */
 data class BookmarkRefetchApplyParams(
@@ -71,10 +62,22 @@ data class BookmarkRefetchApplyParams(
     @field:Schema(description = "是否采用新大图标(高清 LOGO)") var useNewLogo: Boolean = false,
 )
 
-/** 管理后台手动编辑书签基础信息（标题/简介） */
+/**
+ * 管理后台手动编辑书签基础信息（标题/简介/简称）。
+ *
+ * [appName] 原先挂在已删除的 `BookmarkIconUpdateParams` 上（图标设置那个端点），但它跟图标外观
+ * 毫无关系 —— 它是 TILE 标题的候选来源（生产 92 个首页里 75 个靠它出标题，`site.short_name`
+ * 只有 15 个）。删图标端点时它必须跟着搬到这里，否则后台再也改不了书签简称，且不会报错。
+ */
 data class BookmarkBasicInfoUpdateParams(
     @field:Schema(description = "书签标题") var title: String? = null,
     @field:Schema(description = "书签简介") var description: String? = null,
+    /**
+     * 与 [title] / [description] 的 null 语义**不同**：那两个是「没传就不动」，这个是
+     * 「传了就写」——包括传空字符串表示清空。清空要能真正落库，因为空简称会被下一轮抓取用
+     * manifest.short_name 或 LLM 推断补上，而"没传"与"清空"若不可区分，管理员就没有清空的手段。
+     */
+    @field:Schema(description = "书签简称;传空串表示清空,不传表示不修改") var appName: String? = null,
 )
 data class AdminLoginParams(val account: String, val password: String)
 data class AccountLoginParams(val account: String, val password: String)

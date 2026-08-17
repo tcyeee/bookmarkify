@@ -16,14 +16,11 @@ BEGIN;
 SET search_path TO public;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 1. 站点数据(site_*)：抓取事实 + 人工显示偏好
+-- 1. 站点数据(site_*)：抓取事实
 -- ─────────────────────────────────────────────────────────────────────────────
--- site_display_pref 是人工调过的内边距/背景色，正常重抓时绝不该动它；
--- 但这里是「连书签一起删」，书签没了偏好也就成了孤儿行，必须一起清。
 TRUNCATE TABLE scrape_snapshot;
 TRUNCATE TABLE site_page_meta;
 TRUNCATE TABLE site_asset;
-TRUNCATE TABLE site_display_pref;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. 书签本体与用户关联
@@ -72,7 +69,6 @@ UNION ALL SELECT 'bookmark_user_link',   count(*) FROM bookmark_user_link
 UNION ALL SELECT 'bookmark_category',    count(*) FROM bookmark_category
 UNION ALL SELECT 'site_asset',           count(*) FROM site_asset
 UNION ALL SELECT 'site_page_meta',       count(*) FROM site_page_meta
-UNION ALL SELECT 'site_display_pref',    count(*) FROM site_display_pref
 UNION ALL SELECT 'scrape_snapshot',      count(*) FROM scrape_snapshot
 UNION ALL SELECT 'user_share',           count(*) FROM user_share
 UNION ALL SELECT 'user_share_bookmark',  count(*) FROM user_share_bookmark

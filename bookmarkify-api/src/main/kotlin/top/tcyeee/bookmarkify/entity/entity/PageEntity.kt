@@ -46,7 +46,7 @@ data class PageEntity(
     @field:Size(max = 200) @field:Schema(description = "书签标题") var title: String? = null,
     @field:Size(max = 1000) @JsonIgnore @field:Schema(description = "书签备注") var description: String? = null,
 
-    // 图标相关信息已迁往 site_asset / site_display_pref：一行一图 + 按展示模式分行的显示偏好。
+    // 图标相关信息已迁往 site_asset（一行一图），按展示模式选哪张是 AssetRolePolicy 的规则。
 
     /* 状态信息 */
     @JsonIgnore @field:Schema(description = "是否解析成功") var parseStatus: ParseStatusEnum = ParseStatusEnum.PENDING,

@@ -29,7 +29,6 @@ export interface OrphanCleanupReport {
   pageCategories: number;
   pageAssets: number;
   siteAssets: number;
-  displayPrefs: number;
   /** 随之失去引用的对象存储文件数；对象本身由下一轮 OSS 对账回收 */
   releasedFiles: number;
 

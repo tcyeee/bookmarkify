@@ -34,7 +34,6 @@ import top.tcyeee.bookmarkify.entity.dto.scrape.title
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.server.asset.SiteAssetResolver
 import top.tcyeee.bookmarkify.server.asset.SiteAssetWriter
-import top.tcyeee.bookmarkify.server.asset.SiteDisplayPrefService
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.config.entity.ProjectConfig
@@ -90,7 +89,6 @@ class BookmarkServiceImpl(
     private val layoutNodeMapper: UserLayoutNodeMapper,
     private val siteAssetResolver: SiteAssetResolver,
     private val siteAssetWriter: SiteAssetWriter,
-    private val siteDisplayPrefService: SiteDisplayPrefService,
     private val siteService: ISiteService,
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val userLayoutNodeService: IUserLayoutNodeService,
