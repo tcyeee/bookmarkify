@@ -37,7 +37,6 @@
 
 <script lang="ts" setup>
 import type { UserLayoutNodeVO } from '@typing'
-import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
 definePageMeta({ middleware: 'auth' })
 

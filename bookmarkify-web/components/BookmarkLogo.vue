@@ -2,9 +2,10 @@
   <!-- 外层容器：卡片圆角。shrink-0 必需——多处调用把本组件放进 flex 行里与超长标题同排，
        没有它时卡片会被 flex 横向压扁成长方形（overflow-hidden 再把图标裁掉） -->
   <div class="relative shrink-0 rounded-[22%] bg-gray-100 center overflow-hidden">
-    <!-- 内层 Logo：默认白底，必要时覆盖主色与淡白蒙版；不可访问时整体变灰 -->
+    <!-- 内层 Logo：默认白底，取到图标主色后换成同色系的浅色底；不可访问时整体变灰。
+         底色是异步算出来的（要先拿到图标字节），transition 让它淡入而不是硬跳一下 -->
     <div
-      class="bg-white flex justify-center items-center"
+      class="bg-white flex justify-center items-center transition-colors duration-300"
       :class="{ 'inactive-logo': isInactive }"
       :style="[logoSizeStyle, logoStyle]">
       <!-- 本地/IP 类型书签：后端不抓取信息，用与「不可访问」同色的灰底 + 白色圆点图标 -->
@@ -51,17 +52,33 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
 import { BookmarkLinkType, type BookmarkShow } from '@typing'
-import { resolveCachedIconBlob } from '@utils'
+import { resolveCachedIconBlob, resolveLogoSurfaceColor } from '@utils'
+
+defineOptions({ name: 'BookmarkLogo' })
+
+// 两档标准尺寸，对应桌面上书签图标仅有的两种形态：
+//   S —— 文件夹卡片里的书签行（小图 + 完整标题），后端 LIST 模式
+//   M —— 置顶区磁贴（大图 + 一行短文案），后端 TILE 模式
+// 这两个字母是**这个组件对外的尺寸词汇**，业务里新增用法一律用它们，不要再写像素数：
+// 服务端本来就只按 LIST / TILE 两种模式选图和缩放（AssetRolePolicy），前端散落一堆
+// 20/28/36/56 的魔法数字，等于在服务端只认两档的地方假装有无级尺寸。
+// 仍然接受任意像素值，是因为设置页/分享页几个列表当年就是按各自的行高定的，
+// 统一到两档会改动那几屏的观感，那是另一件事。
+const SIZE_PRESETS = { S: 20, M: 56 } as const
+type BookmarkLogoSize = keyof typeof SIZE_PRESETS
 
 // preferHd 已移除：用哪张图是服务端按展示模式决定的（AssetRolePolicy），
 // 前端再传一个偏好只会和服务端策略打架。原先这个 prop 也从未被任何调用方传过。
-const props = defineProps<{ value: BookmarkShow; size?: number }>()
+const props = defineProps<{ value: BookmarkShow; size?: BookmarkLogoSize | number }>()
 
 // 统一的灰：「不可访问」蒙版与「本地/IP」底色共用，保证两种状态视觉一致
 const INACTIVE_GRAY = 'rgba(100, 116, 139, 0.62)'
 
 const iconError = ref(false)
-const logoSize = computed(() => props.size ?? 80)
+const logoSize = computed(() => {
+  const size = props.size ?? SIZE_PRESETS.M
+  return typeof size === 'number' ? size : SIZE_PRESETS[size]
+})
 
 // 本地(localhost/127.0.0.1)或纯 IP 地址类型的书签：后端不抓取网站信息，前端仅展示统一的 mdi 圆圈图标
 const isPlainCircle = computed(
@@ -95,6 +112,9 @@ const imageUrl = computed(() => (props.value.logo?.monogram ? '' : props.value.l
 const displaySrc = ref('')
 let displayObjectUrl: string | null = null
 
+// 由图标自身算出的底色（同色相的浅色，见 resolveLogoSurfaceColor）。null = 没算出来，用默认白底
+const surfaceColor = ref<string | null>(null)
+
 function releaseDisplayObjectUrl() {
   if (displayObjectUrl) {
     URL.revokeObjectURL(displayObjectUrl)
@@ -106,6 +126,7 @@ watch(
   imageUrl,
   async (url) => {
     releaseDisplayObjectUrl()
+    surfaceColor.value = null
     if (!url) {
       displaySrc.value = ''
       return
@@ -116,6 +137,10 @@ watch(
     if (blob) {
       displayObjectUrl = URL.createObjectURL(blob)
       displaySrc.value = displayObjectUrl
+      // 主色只从本地字节算：缓存未命中时退回的是跨域签名地址，画进 canvas 会污染画布，
+      // getImageData 直接抛 SecurityError。取不到 blob 的那条分支索性不取色。
+      const color = await resolveLogoSurfaceColor(url, blob)
+      if (imageUrl.value === url) surfaceColor.value = color
     } else {
       displaySrc.value = url
     }
@@ -130,7 +155,9 @@ const logoSizeStyle = computed(() => ({ width: `${logoSize.value}px`, height: `$
 const logoStyle = computed(() => {
   // 本地/IP：铺与「不可访问」蒙版同一个灰（叠在 bg-white 上合成同色），配白色图标
   if (isPlainCircle.value) return { backgroundColor: INACTIVE_GRAY }
+  // 后台按展示模式人工设过底色的，永远压过自动取色 —— 那是人的判断，取色只是没人管时的兜底
   if (customBgColor.value) return { backgroundColor: customBgColor.value }
+  if (surfaceColor.value) return { backgroundColor: surfaceColor.value }
   return undefined
 })
 

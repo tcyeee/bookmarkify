@@ -41,7 +41,7 @@
                   :checked="checkedIds.has(node.id)"
                   :disabled="!shareable(node)"
                   @change="toggleNode(node.id)" />
-                <BookmarkLogo :value="node.typeApp!" :size="20" />
+                <BookmarkLogo :value="node.typeApp!" size="S" />
                 <div class="flex-1 min-w-0">
                   <p
                     :class="
@@ -123,7 +123,6 @@
 import { BookmarkLinkType, HomeItemType, ShareStatus, type UserLayoutNodeVO } from '@typing'
 import { shareCreate } from '@api'
 import { cn } from '@utils'
-import BookmarkLogo from '@/components/launchpad/cell/BookmarkLogo.vue'
 
 definePageMeta({ middleware: 'auth' })
 
