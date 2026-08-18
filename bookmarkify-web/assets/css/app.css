@@ -68,3 +68,18 @@ html {
     opacity: 1;
   }
 }
+
+/* 长按判定反馈，配合 composables/useLongPress.ts 的 pressingId 使用。长按有一段必然的等待
+   （默认 300ms），完全没有反馈时用户会以为按下没反应而提前松手，或者根本不知道"按住不放"
+   是个可用手势。transition 时长与 useLongPress 的 delay 对齐：按满全程缩放/变暗刚好走完，
+   松手/移动过多提前 clear() 时，同一份 transition 会把它带回原状，不会停在一半。 */
+.long-press-target {
+  transition:
+    transform 300ms ease,
+    opacity 300ms ease;
+}
+
+.long-press-target.long-press-active {
+  transform: scale(0.93);
+  opacity: 0.7;
+}

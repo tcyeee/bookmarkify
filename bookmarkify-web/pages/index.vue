@@ -4,7 +4,7 @@
   <div class="flex h-dvh w-full flex-col select-none">
     <CommonHeader />
     <div class="flex-1 overflow-y-auto bg-white dark:bg-slate-900">
-      <div class="max-w-6xl mx-auto px-20 py-6">
+      <div class="max-w-6xl mx-auto px-4 sm:px-20 py-6">
         <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-6">
           <label
             class="cy-input flex items-center gap-2 w-full sm:flex-1"
@@ -99,10 +99,17 @@
               :href="externalHref(item.typeApp!.urlFull)"
               target="_blank"
               rel="noopener noreferrer"
-              class="group flex items-center gap-3 py-2 px-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
-              :class="{ 'bg-slate-100 dark:bg-slate-800/60': contextMenuItemId === item.id }"
+              class="group flex items-center gap-3 py-2 px-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors long-press-target"
+              :class="{
+                'bg-slate-100 dark:bg-slate-800/60': contextMenuItemId === item.id,
+                'long-press-active': longPress.pressingId.value === item.id,
+              }"
+              @click.capture="longPress.guardClick"
               @click="recordOpen(item)"
-              @contextmenu.prevent="openMyResultMenu($event.x, $event.y, item)">
+              @contextmenu.prevent="openMyResultMenu($event.x, $event.y, item)"
+              @touchstart="(e) => longPress.start(e, item.id, (x, y) => openMyResultMenu(x, y, item))"
+              @touchmove="longPress.move"
+              @touchend="longPress.end">
               <BookmarkLogo :value="item.typeApp!" size="S" />
               <div class="flex flex-col overflow-hidden flex-1">
                 <span
@@ -116,8 +123,10 @@
                 </span>
                 <span class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ item.typeApp!.urlBase }}</span>
               </div>
-              <!-- 触屏没有右键，这个按钮是同一份菜单的第二个触发器 -->
+              <!-- 手机端没有右键，且已改由长按触发同一份菜单，故手机端不再渲染这个按钮，
+                   桌面端仍保留悬停显形的入口 -->
               <button
+                v-if="!isMobile"
                 type="button"
                 class="shrink-0 reveal-on-hover p-1 -m-1 text-slate-400 hover:text-primary transition-opacity"
                 aria-label="书签操作"
@@ -286,9 +295,13 @@ interface BookmarkSearchVO {
 const bookmarkStore = useBookmarkStore()
 const { moveToFolder, hasMoveTargets } = useBookmarkMove()
 const { $track } = useNuxtApp()
+const isMobile = useIsMobile()
+const longPress = useLongPress()
 
 const isLoadingBookmarks = ref(false)
-const contextMenuItemId = ref<string | null>(null)
+// 全局共享，不是本页面独有的一份本地 ref：同一份 @imengyu/vue3-context-menu 单例在全站所有
+// 书签行/磁贴之间复用，见 composables/useActiveMenuTarget.ts 的注释
+const contextMenuItemId = useActiveMenuTarget()
 // 骨架屏行宽随机化，避免整齐划一显得呆板
 const skeletonWidths = ['70%', '45%', '85%', '55%', '65%', '40%', '75%', '50%']
 const skeletonWidth = (i: number) => skeletonWidths[(i - 1) % skeletonWidths.length]

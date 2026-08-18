@@ -17,13 +17,22 @@
         target="_blank"
         rel="noopener noreferrer"
         draggable="false"
-        class="group relative w-16 flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
-        :class="{ 'bg-slate-100 dark:bg-slate-800/60': contextMenuNodeId === node.id }"
+        class="group relative w-16 flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors long-press-target"
+        :class="{
+          'bg-slate-100 dark:bg-slate-800/60': contextMenuNodeId === node.id,
+          'long-press-active': longPress.pressingId.value === node.id,
+        }"
+        @click.capture="longPress.guardClick"
         @click="recordOpen(node)"
-        @contextmenu.prevent="openMenu($event.x, $event.y, node)">
+        @contextmenu.prevent="openMenu($event.x, $event.y, node)"
+        @touchstart="(e) => longPress.start(e, node.id, (x, y) => openMenu(x, y, node))"
+        @touchmove="longPress.move"
+        @touchend="longPress.end">
         <BookmarkLogo :value="node.typeApp!" size="M" />
-        <!-- 触屏没有右键，这个按钮是同一份菜单的第二个触发器（桌面上悬停才显形，观感不变） -->
+        <!-- 手机端没有右键，且这个角标按钮已改由长按触发同一份菜单，故手机端不再渲染它，
+             只在桌面端保留悬停显形的入口 -->
         <button
+          v-if="!isMobile"
           type="button"
           class="absolute -right-0.5 -top-0.5 reveal-on-hover flex size-6 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow ring-1 ring-slate-200 transition-opacity hover:text-primary dark:bg-slate-800/90 dark:text-slate-300 dark:ring-slate-700"
           aria-label="书签操作"
@@ -63,6 +72,8 @@ const props = defineProps<{ nodes: UserLayoutNodeVO[] }>()
 const emit = defineEmits<{ edit: [node: UserLayoutNodeVO] }>()
 
 const bookmarkStore = useBookmarkStore()
+const isMobile = useIsMobile()
+const longPress = useLongPress()
 
 // 置顶区是「大图 + 一行短文案」的磁贴形态，文案取服务端按 TILE 模式算好的 tileTitle
 // （首页书签即站点短名）。桌面下方那份列表行仍用 title —— 同一条书签在首页被渲染两次，
@@ -87,7 +98,9 @@ const gridRef = ref<HTMLElement | null>(null)
 const draggingId = ref<string | null>(null)
 const dropTargetId = ref<string | null>(null)
 const dropMode = ref<'before' | 'after' | null>(null)
-const contextMenuNodeId = ref<string | null>(null)
+// 全局共享：同一时刻只可能有一个菜单真正打开，用各行各自的本地 ref 会在「长按 A 再长按 B」
+// 时把 A 的高亮永久卡住，见 composables/useActiveMenuTarget.ts 的注释
+const contextMenuNodeId = useActiveMenuTarget()
 
 let tilesCleanup: (() => void) | null = null
 let monitorCleanup: (() => void) | null = null

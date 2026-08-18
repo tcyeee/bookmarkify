@@ -223,7 +223,11 @@ const listRef = ref<HTMLElement | null>(null)
 const draggingId = ref<string | null>(null)
 const dropTargetId = ref<string | null>(null)
 const dropMode = ref<'above' | 'below' | null>(null)
-const contextMenuOpen = ref(false)
+// 全局共享，不是本卡片独有的一份本地 ref：同一份 @imengyu/vue3-context-menu 单例在全站所有
+// 文件夹卡片/书签行/磁贴之间复用，见 composables/useActiveMenuTarget.ts 的注释——
+// 「打开 A 文件夹的菜单，再打开 B 的」同样会让 A 的高亮永久卡住
+const activeMenuTarget = useActiveMenuTarget()
+const contextMenuOpen = computed(() => activeMenuTarget.value === props.folderId)
 
 let rowsCleanup: (() => void) | null = null
 let cardCleanup: (() => void) | null = null
@@ -511,14 +515,14 @@ function openMenuAt(x: number, y: number) {
       },
     )
   }
-  contextMenuOpen.value = true
+  activeMenuTarget.value = props.folderId
   ContextMenu.showContextMenu({
     items,
     x,
     y,
     customClass: 'bookmark-context-menu',
     onClose: () => {
-      contextMenuOpen.value = false
+      if (activeMenuTarget.value === props.folderId) activeMenuTarget.value = null
     },
   })
 }

@@ -23,11 +23,18 @@
       target="_blank"
       rel="noopener noreferrer"
       draggable="false"
-      class="group flex items-center gap-2 py-1.5 pr-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
-      :class="{ 'bg-slate-100 dark:bg-slate-800/60': contextMenuNodeId === node.id }"
+      class="group flex items-center gap-2 py-1.5 pr-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors long-press-target"
+      :class="{
+        'bg-slate-100 dark:bg-slate-800/60': contextMenuNodeId === node.id,
+        'long-press-active': longPress.pressingId.value === node.id,
+      }"
       :style="bookmarkIndentStyle"
+      @click.capture="longPress.guardClick"
       @click="recordOpen(node)"
-      @contextmenu.prevent="openMenu($event.x, $event.y, node)">
+      @contextmenu.prevent="openMenu($event.x, $event.y, node)"
+      @touchstart="(e) => longPress.start(e, node.id, (x, y) => openMenu(x, y, node))"
+      @touchmove="longPress.move"
+      @touchend="longPress.end">
       <BookmarkLogo :value="node.typeApp" size="S" />
       <span
         class="text-sm truncate"
@@ -38,8 +45,10 @@
         ">
         {{ node.typeApp.title || node.typeApp.urlBase }}
       </span>
-      <!-- 触屏没有右键，这个按钮是同一份菜单的第二个触发器（桌面上悬停才显形，观感不变） -->
+      <!-- 手机端没有右键，且已改由长按触发同一份菜单，故手机端不再渲染这个按钮，
+           桌面端仍保留悬停显形的入口 -->
       <button
+        v-if="!isMobile"
         type="button"
         class="ml-auto shrink-0 reveal-on-hover p-1 -m-1 text-slate-400 hover:text-primary transition-opacity"
         aria-label="书签操作"
@@ -74,7 +83,12 @@ const emit = defineEmits<{ edit: [node: UserLayoutNodeVO] }>()
 
 const bookmarkStore = useBookmarkStore()
 const { moveWithin, moveToFolder, positionOf, hasMoveTargets } = useBookmarkMove()
-const contextMenuNodeId = ref<string | null>(null)
+const isMobile = useIsMobile()
+const longPress = useLongPress()
+// 全局共享，而不是每个 BookmarkTreeRow 实例各自一份本地 ref：每一行都是独立的组件实例，
+// 若各存各的，「长按 A 再长按 B」时 A 的 onClose 永远等不到（同一份菜单单例被 B 直接顶掉），
+// A 的高亮就再也没人清得掉。见 composables/useActiveMenuTarget.ts 的注释
+const contextMenuNodeId = useActiveMenuTarget()
 const folderColor = computed(() => displayFolderColor(props.node.color))
 const children = computed(() =>
   props.node.type === HomeItemType.BOOKMARK_DIR ? bookmarkStore.childrenOf(props.node.id) : [],
