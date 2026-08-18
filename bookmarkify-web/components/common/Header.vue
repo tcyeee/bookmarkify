@@ -51,16 +51,29 @@
 <script lang="ts" setup>
 import { onClickOutside } from '@vueuse/core'
 import { cn } from '@utils'
+import { AuthStatusEnum } from '@typing'
 
 defineProps<{
   dark?: boolean
 }>()
 
-const pages = [
+const allPages = [
   { name: 'welcome', path: '/welcome' },
   { name: 'index', path: '/' },
   { name: 'setting', path: '/setting' },
 ]
+
+const authStore = useAuthStore()
+const route = useRoute()
+
+const pages = computed(() =>
+  allPages.filter(page => {
+    if (page.path === '/welcome' && authStore.authStatus !== AuthStatusEnum.NONE) return false
+    if (page.path === '/' && route.path === '/') return false
+    if (page.path === '/setting' && route.path.startsWith('/setting')) return false
+    return true
+  }),
+)
 
 const rootRef = ref<HTMLElement | null>(null)
 const menuOpen = ref(false)
@@ -68,7 +81,6 @@ const menuOpen = ref(false)
 onClickOutside(rootRef, () => (menuOpen.value = false))
 
 // 同路由点击不会触发导航，但菜单必须收起，否则会挡住页面
-const route = useRoute()
 watch(() => route.fullPath, () => (menuOpen.value = false))
 </script>
 
