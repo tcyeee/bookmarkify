@@ -19,7 +19,7 @@
       <div class="mx-auto w-full max-w-[400px]">
         <div v-if="!isVerifying" class="flex flex-col items-center pb-6">
           <div
-            class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 via-indigo-500 to-fuchsia-500 shadow-lg shadow-indigo-500/30">
+            class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-700 via-slate-900 to-black shadow-lg shadow-black/30">
             <Icon icon="mdi:bookmark" class="size-6 text-white" />
           </div>
           <h1 class="text-xl font-semibold text-white">欢迎登录 Bookmarkify</h1>
@@ -83,9 +83,9 @@ async function onSuccess() {
 /* 与 pages/welcome.vue 的 .welcome-hero / .halo 保持一致的深色玻璃拟态背景 */
 .login-mobile-bg {
   background:
-    radial-gradient(circle at 20% 20%, rgba(94, 234, 212, 0.15), transparent 40%),
-    radial-gradient(circle at 80% 30%, rgba(129, 140, 248, 0.18), transparent 45%),
-    radial-gradient(circle at 50% 80%, rgba(236, 72, 153, 0.12), transparent 50%), #0b1220;
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.12), transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(148, 163, 184, 0.16), transparent 45%),
+    radial-gradient(circle at 50% 80%, rgba(15, 23, 42, 0.32), transparent 50%), #0b1220;
 }
 
 .halo {
@@ -100,13 +100,13 @@ async function onSuccess() {
 }
 
 .halo-1 {
-  background: radial-gradient(circle, rgba(94, 234, 212, 0.38), transparent 55%);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.24), transparent 55%);
   top: -28%;
   left: -20%;
 }
 
 .halo-2 {
-  background: radial-gradient(circle, rgba(129, 140, 248, 0.35), transparent 52%);
+  background: radial-gradient(circle, rgba(148, 163, 184, 0.28), transparent 52%);
   top: 10%;
   right: -25%;
   animation-duration: 32s;
@@ -114,7 +114,7 @@ async function onSuccess() {
 }
 
 .halo-3 {
-  background: radial-gradient(circle, rgba(236, 72, 153, 0.28), transparent 60%);
+  background: radial-gradient(circle, rgba(71, 85, 105, 0.28), transparent 60%);
   bottom: -35%;
   left: 20%;
   animation-duration: 38s;

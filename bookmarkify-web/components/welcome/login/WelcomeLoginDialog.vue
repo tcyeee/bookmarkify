@@ -2,7 +2,7 @@
   <!-- 品牌头部 -->
   <div v-if="!isVerifying" class="flex flex-col items-center pb-6 pt-1">
     <div
-      class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 via-indigo-500 to-fuchsia-500 shadow-lg shadow-indigo-500/30">
+      class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-700 via-slate-900 to-black shadow-lg shadow-black/30">
       <Icon icon="mdi:bookmark" class="size-6 text-white" />
     </div>
     <h2 class="text-xl font-semibold text-white">欢迎登录 Bookmarkify</h2>
