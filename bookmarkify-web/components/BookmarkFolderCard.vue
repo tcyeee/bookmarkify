@@ -534,6 +534,9 @@ function openMenuFromButton(e: MouseEvent) {
 .folder-content {
   display: grid;
   grid-template-rows: 1fr;
+  /* 没有这一列约束，隐式列轨道会按内容最大宽度撑开——书签标题一长就把整行挤出卡片，
+     overflow: hidden 只能把溢出部分（含行尾的操作按钮）整个裁掉，而不是触发省略号截断。 */
+  grid-template-columns: minmax(0, 1fr);
   overflow: hidden;
   margin-top: 0.5rem;
 }
