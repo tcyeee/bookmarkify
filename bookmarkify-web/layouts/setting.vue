@@ -79,7 +79,6 @@ const { t } = useI18n()
 const tabs = computed(() => [
   { value: 0, label: t('settingLayout.tabs.profile'), icon: 'mdi:account-box' },
   { value: 1, label: t('settingLayout.tabs.importBookmarks'), icon: 'mdi:upload' },
-  { value: 2, label: t('settingLayout.tabs.background'), icon: 'mdi:cloud' },
   { value: 3, label: t('settingLayout.tabs.preference'), icon: 'mdi:toggle-switch-off' },
   // { value: 4, label: t('settingLayout.tabs.shortcuts'), icon: 'mdi:console' },
   { value: 5, label: t('settingLayout.tabs.bookmarkLibrary'), icon: 'mdi:bookmark-multiple' },
