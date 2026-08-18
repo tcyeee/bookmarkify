@@ -3,14 +3,14 @@
     <div class="cy-modal-box max-w-2xl bg-linear-to-b from-white to-slate-50 border border-gray-100 shadow-xl">
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-start gap-3">
-          <div class="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center shadow-inner">
+          <div class="h-12 w-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center shadow-inner">
             <span class="icon--add icon-size-20" />
           </div>
           <div>
             <div class="text-lg font-semibold text-gray-800">添加 / 关联书签</div>
             <p class="text-sm text-gray-500">粘贴网址，我们会自动帮你匹配或创建</p>
             <!-- 从文件夹菜单进来时必须说明落点：同一个弹窗、两种归属，不写出来用户无从分辨 -->
-            <p v-if="targetDir" class="mt-1 text-xs text-indigo-500 font-semibold">添加到「{{ targetDir.name }}」</p>
+            <p v-if="targetDir" class="mt-1 text-xs text-slate-700 font-semibold">添加到「{{ targetDir.name }}」</p>
           </div>
         </div>
         <button
@@ -23,7 +23,7 @@
 
       <div class="mt-6 space-y-3">
         <label
-          class="cy-input flex items-center gap-3 w-full shadow-sm focus-within:ring-2 focus-within:ring-indigo-100"
+          class="cy-input flex items-center gap-3 w-full shadow-sm focus-within:ring-2 focus-within:ring-slate-200"
           :class="data.urlIsTrue ? 'cy-input-success' : ''">
           <span class="icon--earth icon-size-24 text-gray-500" />
           <input
@@ -36,7 +36,7 @@
             @keyup.enter="addOne" />
           <button
             type="button"
-            class="px-3 py-1.5 rounded-lg bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600 active:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-black active:bg-slate-950 transition disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="!data.urlIsTrue || submitting"
             @click="addOne">
             {{ submitting ? '添加中...' : '添加' }}
@@ -67,7 +67,7 @@
           <div class="flex items-center justify-between text-xs text-gray-500">
             <span class="font-semibold">他人分享的书签</span>
             <div class="flex items-center gap-2">
-              <div v-if="isSearching" class="h-3 w-3 border-2 border-indigo-200 border-t-indigo-500 rounded-full animate-spin" />
+              <div v-if="isSearching" class="h-3 w-3 border-2 border-slate-200 border-t-slate-700 rounded-full animate-spin" />
               <span v-if="searchResults.length" class="text-gray-500">{{ searchResults.length }} 条匹配</span>
             </div>
           </div>
@@ -87,7 +87,7 @@
                   <span class="text-sm font-bold truncate text-gray-800">{{ item.title || item.appName || item.urlHost }}</span>
                   <span class="text-xs text-gray-500 truncate">{{ item.description || item.urlHost }}</span>
                 </div>
-                <span class="text-xs text-indigo-500 font-semibold">添加</span>
+                <span class="text-xs text-slate-700 font-semibold">添加</span>
               </div>
             </div>
             <div v-else-if="showEmptyState" class="flex items-center gap-3 text-sm text-gray-600 py-3">

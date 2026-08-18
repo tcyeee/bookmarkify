@@ -4,6 +4,16 @@
   prefix: 'cy-';
   themes: light --default, dark --prefersdark, cupcake;
 }
+
+/* Bookmarkify 的品牌强调色统一使用黑色，覆盖 DaisyUI 各内置主题默认的紫色 primary。 */
+:root,
+[data-theme='light'],
+[data-theme='dark'],
+[data-theme='cupcake'] {
+  --color-primary: #111827;
+  --color-primary-content: #ffffff;
+}
+
 @theme {
   --font-jersey10: 'Jersey10', ui-sans-serif, system-ui, sans-serif;
 }

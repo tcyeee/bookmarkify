@@ -15,7 +15,7 @@
           <Icon
             :icon="target.key === ROOT_KEY ? 'mdi:folder-home' : 'mdi:folder'"
             class="size-4 shrink-0"
-            :class="target.key === ROOT_KEY ? 'text-violet-500' : 'text-amber-500'" />
+            :class="target.key === ROOT_KEY ? 'text-slate-700 dark:text-slate-200' : 'text-amber-500'" />
           <span class="text-sm text-slate-700 dark:text-slate-200 truncate flex-1">{{ target.name }}</span>
           <span v-if="target.key === currentParentKey" class="text-xs text-slate-400 shrink-0">当前位置</span>
         </button>

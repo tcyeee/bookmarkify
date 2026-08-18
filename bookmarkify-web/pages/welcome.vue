@@ -23,7 +23,7 @@
           <!-- 开始使用按钮 -->
           <div
             @click="isLoggedIn ? navigateTo('/') : handleStart()"
-            class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-sky-200/80 via-indigo-200/80 to-fuchsia-200/80 px-6 sm:px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(56,189,248,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(129,140,248,0.65)] mt-10 sm:mt-15 cursor-pointer select-none">
+            class="group inline-flex items-center gap-2 rounded-full border border-white/15 bg-linear-to-r from-white/90 via-slate-200/90 to-slate-400/90 px-6 sm:px-10 py-2 text-base font-medium shadow-[0_10px_40px_-18px_rgba(0,0,0,0.55)] backdrop-blur transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-[0_16px_50px_-18px_rgba(0,0,0,0.65)] mt-10 sm:mt-15 cursor-pointer select-none">
             <ShimmerText
               :shimmerWidth="100"
               class="inline-flex dark:text-black/50! items-center justify-center px-4 py-1 transition ease-out hover:text-neutral-600 hover:duration-300 text-lg">
@@ -210,9 +210,9 @@ const backToTop = () => {
 <style scoped>
 .welcome-hero {
   background:
-    radial-gradient(circle at 20% 20%, rgba(94, 234, 212, 0.15), transparent 40%),
-    radial-gradient(circle at 80% 30%, rgba(129, 140, 248, 0.18), transparent 45%),
-    radial-gradient(circle at 50% 80%, rgba(236, 72, 153, 0.12), transparent 50%), #0b1220;
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.12), transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(148, 163, 184, 0.16), transparent 45%),
+    radial-gradient(circle at 50% 80%, rgba(15, 23, 42, 0.32), transparent 50%), #0b1220;
 }
 
 .halo {
@@ -227,13 +227,13 @@ const backToTop = () => {
 }
 
 .halo-1 {
-  background: radial-gradient(circle, rgba(94, 234, 212, 0.38), transparent 55%);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.24), transparent 55%);
   top: -28%;
   left: -20%;
 }
 
 .halo-2 {
-  background: radial-gradient(circle, rgba(129, 140, 248, 0.35), transparent 52%);
+  background: radial-gradient(circle, rgba(148, 163, 184, 0.28), transparent 52%);
   top: 10%;
   right: -25%;
   animation-duration: 32s;
@@ -241,7 +241,7 @@ const backToTop = () => {
 }
 
 .halo-3 {
-  background: radial-gradient(circle, rgba(236, 72, 153, 0.28), transparent 60%);
+  background: radial-gradient(circle, rgba(71, 85, 105, 0.28), transparent 60%);
   bottom: -35%;
   left: 20%;
   animation-duration: 38s;

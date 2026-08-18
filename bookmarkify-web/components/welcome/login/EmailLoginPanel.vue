@@ -26,7 +26,7 @@
         已向 <span class="text-white/75">{{ maskedEmail }}</span> 发送验证码
       </p>
       <p v-if="tagCode" class="text-center text-xs text-white/40">
-        请查收标识为 <span class="font-semibold tracking-widest text-indigo-300">{{ tagCode }}</span> 的邮件
+        请查收标识为 <span class="font-semibold tracking-widest text-slate-200">{{ tagCode }}</span> 的邮件
       </p>
 
       <!-- OTP 输入框 -->
@@ -46,7 +46,7 @@
             class="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-xl border-2 text-xl font-bold text-white transition-all duration-200"
             :class="
               form.code.length === i - 1
-                ? 'border-indigo-400 ring-2 ring-indigo-400/25 bg-indigo-400/5'
+                ? 'border-slate-300 ring-2 ring-white/25 bg-white/5'
                 : 'border-white/15 bg-white/5'
             ">
             {{ form.code[i - 1] || '' }}
@@ -80,7 +80,7 @@
         <button
           type="button"
           :disabled="countdown > 0 || sending"
-          :class="countdown > 0 ? 'text-white/25 cursor-not-allowed' : 'text-indigo-300 hover:text-indigo-200 transition-colors'"
+          :class="countdown > 0 ? 'text-white/25 cursor-not-allowed' : 'text-slate-200 hover:text-white transition-colors'"
           @click="resend">
           {{ countdown > 0 ? `${countdown}s 后重发` : '重新发送' }}
         </button>
@@ -96,10 +96,10 @@ import { useAuthStore } from '@stores/auth.store'
 const emit = defineEmits<{ (e: 'success'): void; (e: 'step', step: number): void }>()
 
 const INPUT_CLS =
-  'rounded-xl border border-white/10 bg-white/8 px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition-all duration-200 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-400/20'
+  'rounded-xl border border-white/10 bg-white/8 px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition-all duration-200 focus:border-white/60 focus:ring-2 focus:ring-white/20'
 const BTN_CLS =
-  'flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50'
-const BTN_STYLE = 'background: linear-gradient(to right, #0ea5e9, #6366f1, #a855f7)'
+  'flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white shadow-lg shadow-black/25 transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50'
+const BTN_STYLE = 'background: linear-gradient(to right, #374151, #111827, #000000)'
 
 const authStore = useAuthStore()
 const sysStore = useSysStore()
@@ -182,4 +182,3 @@ async function submit() {
   }
 }
 </script>
-

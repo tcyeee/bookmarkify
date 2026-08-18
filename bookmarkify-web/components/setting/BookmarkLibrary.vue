@@ -30,11 +30,11 @@
             class="shrink-0 md:w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left whitespace-nowrap transition-colors"
             :class="
               selectedFolderId === ROOT_KEY
-                ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-300 font-medium'
+                ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
             "
             @click="selectFolder(ROOT_KEY)">
-            <Icon icon="mdi:folder-home" class="size-4 shrink-0 text-violet-500" />
+            <Icon icon="mdi:folder-home" class="size-4 shrink-0 text-slate-700 dark:text-slate-200" />
             <span class="md:flex-1 truncate">{{ $t('bookmarkLibrary.folderPanel.root') }}</span>
             <span class="text-xs text-slate-400 shrink-0">{{ rootBookmarkCount }}</span>
           </button>
@@ -68,7 +68,7 @@
             <Icon
               :icon="isRootFolder ? 'mdi:folder-home' : 'mdi:folder'"
               class="size-4 shrink-0"
-              :class="isRootFolder ? 'text-violet-500' : 'text-amber-500'" />
+              :class="isRootFolder ? 'text-slate-700 dark:text-slate-200' : 'text-amber-500'" />
             <input
               v-if="renamingFolder"
               ref="renameInputRef"
