@@ -8,13 +8,21 @@
     class="bg-gray-100 text-gray-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen pt-20 md:pt-28 flex flex-col transition-colors">
     <div class="flex-1">
       <div class="mx-auto w-full px-3 sm:px-6 lg:px-8" :style="containerStyle">
-        <div class="flex flex-col md:flex-row md:items-start gap-4 md:gap-6 lg:gap-8 pb-[10vh]">
-          <!-- 窄屏下侧边栏放不下（240px 侧栏 + 间距会把正文挤到 80px 左右），改成横向滚动的标签条 -->
+        <div
+          class="grid grid-cols-1 md:flex md:flex-row md:items-start gap-4 md:gap-6 lg:gap-8 pb-[10vh] overflow-hidden md:overflow-visible">
+          <!-- 移动端把菜单和内容拆成两屏，纯靠水平位移做"推入/退出"的动画（不叠加透明度淡出，
+               否则观感会被拉扯成一次淡入淡出而不是干净的左右移动）；两者叠在同一个 grid 单元格里
+               （col-start-1 row-start-1）而不是用 display:none 互斥，这样容器高度始终取两者中较高的一个，
+               动画过程中不会有高度跳变。位移把非活动面板完全推出可视区（配合外层 overflow-hidden），
+               所以不需要靠透明度来隐藏它。桌面端 md:flex 接管后这套堆叠失效，两者按原先并排布局显示。 -->
           <aside
             :class="[
-              'w-full md:w-64 lg:w-72 shrink-0 space-y-3 md:space-y-6 md:sticky md:self-start transition-[top] duration-200 ease-out',
+              'col-start-1 row-start-1 w-full md:w-64 lg:w-72 shrink-0 space-y-3 md:space-y-6 md:sticky md:self-start transition-transform duration-300 ease-out md:translate-x-0 md:pointer-events-auto',
+              isMobileDetailView ? '-translate-x-full pointer-events-none' : 'translate-x-0 pointer-events-auto',
             ]"
+            :inert="isAsideInert"
             :style="asideStyle">
+            <!-- 返回首页：桌面端和移动端菜单页都固定在顶部 -->
             <NuxtLink to="/" class="block w-full">
               <div
                 class="cy-btn w-full cy-btn-sm md:cy-btn-xl cy-btn-ghost bg-white dark:bg-slate-900 dark:border-slate-700 rounded-xl text-base md:text-lg transition-colors">
@@ -22,18 +30,17 @@
               </div>
             </NuxtLink>
 
-            <!-- 侧边栏 -->
+            <!-- 菜单 -->
             <div
               class="p-2 md:p-6 bg-white dark:bg-slate-900 dark:border dark:border-slate-800 rounded-xl md:rounded-2xl shadow-sm transition-colors">
               <ul
                 ref="tabListRef"
-                class="setting-tabs relative flex flex-row md:flex-col gap-1 md:gap-3 bg-white dark:bg-slate-900 w-full text-gray-500 dark:text-slate-400 text-base md:text-lg font-medium select-none overflow-x-auto md:overflow-hidden transition-colors">
-                <!-- 滑块只在竖排下成立（它按 Y 轴平移），横排标签条改用各自的选中底色 -->
+                class="relative flex flex-col gap-1 md:gap-3 bg-white dark:bg-slate-900 w-full text-gray-500 dark:text-slate-400 text-base md:text-lg font-medium select-none transition-colors">
                 <span
-                  class="hidden md:block absolute left-0 right-0 rounded-lg bg-gray-100 dark:bg-slate-800 transition-[transform,height] duration-250 ease-out will-change-transform pointer-events-none"
+                  class="absolute left-0 right-0 rounded-lg bg-gray-100 dark:bg-slate-800 transition-[transform,height] duration-250 ease-out will-change-transform pointer-events-none"
                   :style="indicatorStyle"
                   aria-hidden="true" />
-                <li v-for="tab in tabs" :key="tab.value" class="relative z-0 shrink-0 md:shrink">
+                <li v-for="tab in tabs" :key="tab.value" class="relative z-0">
                   <a
                     :ref="setTabRef(tab.value)"
                     @click="selectOne(tab.value)"
@@ -52,7 +59,20 @@
             </div>
           </aside>
 
-          <main class="w-full flex-1 min-w-0">
+          <main
+            :class="[
+              'col-start-1 row-start-1 w-full flex-1 min-w-0 transition-transform duration-300 ease-out md:translate-x-0 md:pointer-events-auto',
+              isMobileDetailView ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none',
+            ]"
+            :inert="isMainInert">
+            <!-- 移动端详情页：顶部返回按钮回到菜单列表，而不是首页 -->
+            <button
+              type="button"
+              class="md:hidden cy-btn cy-btn-ghost cy-btn-sm gap-1 mb-3 px-2"
+              @click="backToMenu">
+              <Icon icon="mdi:chevron-left" class="size-5" />
+              {{ $t('settingLayout.back') }}
+            </button>
             <NuxtPage
               class="rounded-xl min-h-[70vh] bg-white dark:bg-slate-900 dark:border dark:border-slate-800 transition-colors" />
           </main>
@@ -66,6 +86,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CSSProperties, ComponentPublicInstance } from 'vue'
+import { breakpointsTailwind, useBreakpoints } from '@vueuse/core'
 
 const sysStore = useSysStore()
 
@@ -116,8 +137,26 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
 })
 
+// 移动端专用：是否已进入某个菜单项的详情视图。桌面端始终并排显示，不读这个状态。
+// 每次进入 /setting 该 layout 都会重新挂载，所以默认值天然满足“默认进入菜单页”的要求，无需手动重置。
+const isMobileDetailView = ref(false)
+
+// aside/main 现在始终挂载在 DOM 里（靠位移切出屏幕做动画，而不是 v-if 卸载），
+// 移动端下不在屏幕上的那一侧必须 inert，否则键盘 Tab 还能焦点到看不见、点不到的按钮上。
+// 断点必须和 Tailwind 的 md（768px）对齐，且只在移动端生效——桌面端两侧始终可交互，
+// 不能让 isMobileDetailView 的值（在窄屏下产生）意外让某一侧在宽屏下也变 inert。
+const breakpoints = useBreakpoints(breakpointsTailwind)
+const isMobileViewport = breakpoints.smaller('md')
+const isAsideInert = computed(() => isMobileViewport.value && isMobileDetailView.value)
+const isMainInert = computed(() => isMobileViewport.value && !isMobileDetailView.value)
+
 function selectOne(index: number) {
   sysStore.settingTabIndex = index
+  isMobileDetailView.value = true
+}
+
+function backToMenu() {
+  isMobileDetailView.value = false
 }
 
 const setTabRef = (key: number) => (el: Element | ComponentPublicInstance | null) => {
@@ -158,14 +197,3 @@ watch(
   }
 )
 </script>
-
-<style scoped>
-/* 窄屏标签条横向滚动：留着滚动条会在标签下方压出一条灰杠，手势本身已足够表达可滚动 */
-.setting-tabs {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.setting-tabs::-webkit-scrollbar {
-  display: none;
-}
-</style>
