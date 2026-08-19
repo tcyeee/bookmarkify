@@ -26,7 +26,7 @@ const routes: RouteRecordRaw[] = [
   {
     meta: {
       icon: 'lucide:bookmark',
-      title: '书签管理',
+      title: '书签集管理',
     },
     name: 'Bookmark',
     path: '/bookmark',
