@@ -90,9 +90,10 @@ interface IUserService : IService<UserInfoEntity> {
     /**
      * 更新用户信息
      * @param params 用户信息参数
+     * @param uid 用户ID
      * @return 是否更新成功
      */
-    fun updateInfo(params: UserInfoUpdateParams): Boolean
+    fun updateInfo(params: UserInfoUpdateParams, uid: String): Boolean
 
     /**
      * 更新用户名称

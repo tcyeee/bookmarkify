@@ -10,7 +10,7 @@ import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 import { ElNotification } from 'element-plus';
 import { defineStore } from 'pinia';
 
-import { getUserInfoApi, loginApi, logoutApi } from '#/api';
+import { getAvatarUrlApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
 
 export const useAuthStore = defineStore('auth', () => {
   const accessStore = useAccessStore();
@@ -98,6 +98,14 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchUserInfo() {
     let userInfo: null | UserInfo = null;
     userInfo = await getUserInfoApi();
+    // /admin/info 的 avatarUrl 是未签名的 OSS object key，不能直接当图片地址用——
+    // 这里换成签名 URL 再写入 avatar 字段，头部头像与个人中心才有图可显示
+    try {
+      const avatarUrl = await getAvatarUrlApi();
+      if (avatarUrl) userInfo.avatar = avatarUrl;
+    } catch {
+      // 静默降级，沿用默认头像
+    }
     userStore.setUserInfo(userInfo);
     return userInfo;
   }

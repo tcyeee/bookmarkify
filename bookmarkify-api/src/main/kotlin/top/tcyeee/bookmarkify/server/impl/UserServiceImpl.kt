@@ -498,9 +498,9 @@ class UserServiceImpl(
         return backSettingService.queryShowByUid(uid)
     }
 
-    override fun updateInfo(params: UserInfoUpdateParams): Boolean {
+    override fun updateInfo(params: UserInfoUpdateParams, uid: String): Boolean {
         if (params.nickName.isBlank()) return false
-        return ktUpdate().eq(UserInfoEntity::id, BaseUtils.uid()).set(UserInfoEntity::nickName, params.nickName).update()
+        return ktUpdate().eq(UserInfoEntity::id, uid).set(UserInfoEntity::nickName, params.nickName).update()
     }
 
     override fun addBacColor(params: GradientConfigParams, uid: String): Boolean {
@@ -548,7 +548,7 @@ class UserServiceImpl(
 
     override fun updateAvatar(multipartFile: MultipartFile, uid: String): String {
         val oldFileId = getById(uid)?.avatarFileId
-        val file = fileService.updateAvatar(BaseUtils.uid(), multipartFile)
+        val file = fileService.updateAvatar(uid, multipartFile)
         ktUpdate().eq(UserInfoEntity::id, uid).set(UserInfoEntity::avatarFileId, file.id).update()
         // 新头像已关联成功后，再清理旧头像，避免旧文件永久孤立在存储桶中
         if (!oldFileId.isNullOrBlank() && oldFileId != file.id) {
