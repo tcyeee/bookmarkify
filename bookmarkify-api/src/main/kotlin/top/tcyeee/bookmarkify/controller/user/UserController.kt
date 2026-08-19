@@ -39,7 +39,7 @@ class UserController(private val userService: IUserService) {
 
     @PostMapping("updateInfo")
     @Operation(summary = "修改用户信息")
-    fun updateUsername(@RequestBody params: UserInfoUpdateParams) = userService.updateInfo(params)
+    fun updateUsername(@RequestBody params: UserInfoUpdateParams) = userService.updateInfo(params, BaseUtils.uid())
 
     // 旧的手机号绑定/改绑接口直接改库且无验证，已随手机号功能一并下线。
     // 邮箱验证/绑定统一走 /auth/captcha/verifyEmail。
