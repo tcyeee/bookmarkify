@@ -113,6 +113,13 @@ export const SiteLockedField = {
 } as const
 export type SiteLockedField = (typeof SiteLockedField)[keyof typeof SiteLockedField]
 
+/** 对应 Kotlin `SystemCollectionStatus` */
+export const SystemCollectionStatus = {
+  PUBLISHED: 'PUBLISHED',
+  ARCHIVED: 'ARCHIVED',
+} as const
+export type SystemCollectionStatus = (typeof SystemCollectionStatus)[keyof typeof SystemCollectionStatus]
+
 /** 对应 Kotlin `UserBehaviorType` */
 export const UserBehaviorType = {
   ADD_BOOKMARK: 'ADD_BOOKMARK',

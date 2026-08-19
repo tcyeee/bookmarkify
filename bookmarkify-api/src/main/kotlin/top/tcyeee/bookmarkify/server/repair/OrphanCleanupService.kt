@@ -14,6 +14,7 @@ import top.tcyeee.bookmarkify.entity.entity.PagePingLogEntity
 import top.tcyeee.bookmarkify.entity.entity.ScrapeSnapshotEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteEntity
+import top.tcyeee.bookmarkify.entity.entity.SystemCollectionPageEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetOwnerType
 import top.tcyeee.bookmarkify.entity.enums.BookmarkLinkType
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
@@ -131,6 +132,11 @@ class OrphanCleanupService(
             BookmarkEntity::class to Disposition.Retained(
                 "它是引用方，不是附属行。只要有一行 bookmark 指向这个页面，页面就算「有人收藏」，" +
                     "压根走不到删除那一步 —— 反过来按 page_id 去删 bookmark，等于替用户把书签删了"
+            ),
+            SystemCollectionPageEntity::class to Disposition.Retained(
+                "系统书签集是管理员主动策展的展示内容，不该被「没人收藏」这条常规判据顺手拆掉一条——" +
+                    "目标页面一旦真被清理，这一行就成了悬空引用，读取时按缺行跳过处理" +
+                    "(BookmarkAdminService.loadSystemCollectionVO)，不报错也不崩前端，留给管理员事后核对"
             ),
         )
 

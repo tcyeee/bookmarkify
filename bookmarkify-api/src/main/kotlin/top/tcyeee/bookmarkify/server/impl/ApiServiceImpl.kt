@@ -12,6 +12,8 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.dto.AiReviewOutcome
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
+import top.tcyeee.bookmarkify.entity.dto.CollectionBookmark
+import top.tcyeee.bookmarkify.entity.dto.CollectionMetaResult
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekMessage
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekRequest
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekResponse
@@ -530,6 +532,71 @@ class ApiServiceImpl(
         return runCatching { objectMapper.readValue<List<SimilarSite>>(json) }.getOrElse { emptyList() }
     }
 
+    /** 剥离模型偶尔外加的 ```json 围栏，供 JSON 数组/对象解析共用 */
+    private fun stripJsonFence(content: String): String =
+        content.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+
+    override fun extractLinks(text: String): List<String> {
+        if (text.isBlank()) return emptyList()
+        val systemPrompt = """
+            你是一个链接提取助手。从用户给出的文本中找出所有可能是网页链接的内容——包括裸露的 URL、
+            Markdown 链接 [文字](链接) 里的地址、以及"网址："这类提示语后面跟着的地址。
+            严格只返回 JSON 数组，元素为提取到的完整链接字符串；缺少协议前缀的一律补全为 https://。
+            不要 markdown 代码块，不要任何解释文字。同一链接只保留一份。文本中没有任何链接时返回 []。
+        """.trimIndent()
+        val request = DeepSeekRequest(
+            messages = listOf(
+                DeepSeekMessage(role = "system", content = systemPrompt),
+                DeepSeekMessage(role = "user", content = text),
+            ),
+            // 大段聊天记录/文章可能包含成百上千个链接，默认 20 token 的上限远远不够
+            maxTokens = 8000,
+        )
+        // 输入可能长达十万字符，给足读取超时；用长度而非原文做 subject，原文本身不适合出现在检索日志里
+        val content = chatCompletion(AiCallScene.LINK_EXTRACT, "len=${text.length}", request, readTimeoutMs = 30_000)
+            ?: return emptyList()
+        val links = runCatching { objectMapper.readValue<List<String>>(stripJsonFence(content)) }
+            .getOrElse { emptyList() }
+        return links.map { it.trim() }
+            .filter { it.isNotBlank() }
+            .map { if (it.matches(Regex("^https?://.*"))) it else "https://$it" }
+            .distinct()
+            .take(MAX_EXTRACTED_LINKS)
+    }
+
+    override fun generateCollectionMeta(bookmarks: List<CollectionBookmark>): CollectionMetaResult {
+        // 兜底文案：AI 不可用时仍要给管理员一个可编辑的起点，不能让整个发布流程卡在这一步
+        val fallback = CollectionMetaResult(
+            title = "精选书签集 · ${bookmarks.size} 条",
+            description = bookmarks.mapNotNull { it.title }.take(5).joinToString("、")
+                .ifBlank { "一组精心整理的网站合集" },
+        )
+        if (bookmarks.isEmpty()) return fallback
+
+        val systemPrompt = """
+            你是一个书签集策展助手。用户会给出一组已收录网站的标题与简介，请据此生成一个书签集的
+            标题与描述，帮助别人一眼看懂这个集合是什么、适合谁用。
+            严格只返回 JSON 对象，格式为 {"title":"标题(不超过30字)","description":"描述(不超过150字)"}。
+            不要 markdown 代码块，不要任何额外解释文字。
+        """.trimIndent()
+        val userContent = bookmarks.take(MAX_META_BOOKMARKS).joinToString("\n") { b ->
+            val name = b.title?.takeIf { it.isNotBlank() } ?: b.rawUrl
+            val desc = b.description?.takeIf { it.isNotBlank() }?.let { "：$it" } ?: ""
+            "- $name$desc"
+        }
+        val request = DeepSeekRequest(
+            messages = listOf(
+                DeepSeekMessage(role = "system", content = systemPrompt),
+                DeepSeekMessage(role = "user", content = userContent),
+            ),
+            maxTokens = 300,
+        )
+        val content = chatCompletion(AiCallScene.COLLECTION_META, "count=${bookmarks.size}", request, readTimeoutMs = 20_000)
+            ?: return fallback
+        return runCatching { objectMapper.readValue<CollectionMetaResult>(stripJsonFence(content)) }
+            .getOrElse { fallback }
+    }
+
     /**
      * 活性探测。三态判定的归属与 [scrape] 完全一致，共用 [classifyScrapperError]：
      * 「目标站点打不开」(E304) 才是站点的事实，其余一律是我方链路的问题。
@@ -693,5 +760,11 @@ class ApiServiceImpl(
         /** slug / name 的截断长度，与 `category` 表列宽对齐 */
         private const val MAX_CATEGORY_SLUG_LEN = 50
         private const val MAX_CATEGORY_NAME_LEN = 20
+
+        /** 一次文本提取最多保留的链接数，防止模型偶发失控或粘贴内容异常大时拖垮后续批量抓取 */
+        private const val MAX_EXTRACTED_LINKS = 300
+
+        /** 生成集合标题/描述时最多喂给模型的书签条数，超出部分对摘要贡献有限，只会白耗 token */
+        private const val MAX_META_BOOKMARKS = 60
     }
 }

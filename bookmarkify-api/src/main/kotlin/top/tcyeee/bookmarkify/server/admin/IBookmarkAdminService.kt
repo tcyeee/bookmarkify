@@ -9,7 +9,11 @@ import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.CategoryVO
+import top.tcyeee.bookmarkify.entity.dto.CollectionMetaResult
+import top.tcyeee.bookmarkify.entity.dto.PublishSystemCollectionParams
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
+import top.tcyeee.bookmarkify.entity.dto.SystemCollectionVO
+import top.tcyeee.bookmarkify.entity.dto.CollectionBookmark
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 
 /**
@@ -77,4 +81,36 @@ interface IBookmarkAdminService {
     /** 管理员「一键收录」：异步顺序收录相似网站域名，逐站通过 WebSocket 回推进度（抓取失败=幻觉，删除并跳过） */
     fun adminIngestSimilar(adminUid: String, domains: List<String>)
 
-    fun adminGenerateAppName(pageId: String): String?}
+    fun adminGenerateAppName(pageId: String): String?
+
+    /* 系统书签集 · AI 批量发布流程，见根 CLAUDE.md「Site Assets & the Scrapper Contract」以外的
+     * 独立小节：这条流程不涉及 site_asset/AssetRolePolicy，是纯粹的「一批 URL → 一个展示集合」。 */
+
+    /**
+     * 步骤1：AI 从长文本中提取原始链接。仅供预览，不落库、不触发抓取。
+     */
+    fun adminExtractCollectionLinks(text: String): List<String>
+
+    /**
+     * 步骤2：异步顺序抓取一批链接（各自走 [getOrCreateCanonical][top.tcyeee.bookmarkify.server.IBookmarkService.getOrCreateCanonical]
+     * + 解析），逐条通过 WebSocket([top.tcyeee.bookmarkify.config.websocket.SocketMsgType.SYSTEM_COLLECTION_CRAWL_UPDATE])
+     * 推送给发起的管理员。顺序处理原因与 [adminIngestSimilar] 相同：批量不大，避免并发打爆 scrapper。
+     */
+    fun adminCrawlCollectionLinks(adminUid: String, jobId: String, urls: List<String>)
+
+    /**
+     * 步骤3：AI 根据已抓取成功的书签生成集合标题/描述建议，仅供预览，不落库。
+     */
+    fun adminGenerateCollectionMeta(bookmarks: List<CollectionBookmark>): CollectionMetaResult
+
+    /**
+     * 步骤3 确认后：发布为正式的系统书签集。
+     */
+    fun adminPublishSystemCollection(adminUid: String, params: PublishSystemCollectionParams): SystemCollectionVO
+
+    /** 管理员查询全部系统书签集 */
+    fun adminListSystemCollections(): List<SystemCollectionVO>
+
+    /** 管理员修改一条系统书签集（标题/描述/包含的书签，整体覆盖） */
+    fun adminUpdateSystemCollection(collectionId: String, params: PublishSystemCollectionParams): SystemCollectionVO
+}

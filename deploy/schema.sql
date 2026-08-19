@@ -442,6 +442,33 @@ CREATE TABLE public.sweep_log (
 
 
 --
+-- Name: system_collection; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.system_collection (
+    id character varying(64) NOT NULL,
+    title character varying(80) NOT NULL,
+    description character varying(500),
+    status character varying(20) DEFAULT 'PUBLISHED'::character varying NOT NULL,
+    created_by character varying(40) NOT NULL,
+    create_time timestamp without time zone DEFAULT now() NOT NULL,
+    update_time timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: system_collection_page; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.system_collection_page (
+    id character varying(64) NOT NULL,
+    collection_id character varying(64) NOT NULL,
+    page_id character varying(64) NOT NULL,
+    sort integer DEFAULT 0 NOT NULL
+);
+
+
+--
 -- Name: system_config; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -718,6 +745,22 @@ ALTER TABLE ONLY public.sweep_log
 
 
 --
+-- Name: system_collection system_collection_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.system_collection
+    ADD CONSTRAINT system_collection_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: system_collection_page system_collection_page_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.system_collection_page
+    ADD CONSTRAINT system_collection_page_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: system_config system_config_config_key_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -747,6 +790,14 @@ ALTER TABLE ONLY public.category
 
 ALTER TABLE ONLY public.page_category
     ADD CONSTRAINT uk_page_category UNIQUE (page_id, category_id);
+
+
+--
+-- Name: system_collection_page uk_system_collection_page; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.system_collection_page
+    ADD CONSTRAINT uk_system_collection_page UNIQUE (collection_id, page_id);
 
 
 --
@@ -1034,6 +1085,13 @@ CREATE INDEX idx_sweep_log_breaker ON public.sweep_log USING btree (create_time 
 --
 
 CREATE INDEX idx_sweep_log_create_time ON public.sweep_log USING btree (create_time DESC);
+
+
+--
+-- Name: idx_system_collection_page_collection_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_system_collection_page_collection_id ON public.system_collection_page USING btree (collection_id);
 
 
 --

@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.controller.admin
 
 import cn.dev33.satoken.annotation.SaCheckRole
+import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.core.metadata.IPage
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -14,8 +15,16 @@ import top.tcyeee.bookmarkify.entity.BookmarkRefetchApplyParams
 import top.tcyeee.bookmarkify.entity.BookmarkRefetchVO
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.CategoryVO
+import top.tcyeee.bookmarkify.entity.dto.CollectionMetaResult
+import top.tcyeee.bookmarkify.entity.dto.ExtractCollectionLinksParams
+import top.tcyeee.bookmarkify.entity.dto.ExtractCollectionLinksResult
+import top.tcyeee.bookmarkify.entity.dto.GenerateCollectionMetaParams
+import top.tcyeee.bookmarkify.entity.dto.PublishSystemCollectionParams
 import top.tcyeee.bookmarkify.entity.dto.SimilarIngestParams
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
+import top.tcyeee.bookmarkify.entity.dto.StartCollectionCrawlParams
+import top.tcyeee.bookmarkify.entity.dto.StartCollectionCrawlResult
+import top.tcyeee.bookmarkify.entity.dto.SystemCollectionVO
 import top.tcyeee.bookmarkify.server.admin.IBookmarkAdminService
 import top.tcyeee.bookmarkify.utils.StpKit
 
@@ -110,26 +119,37 @@ class AdminBookmarkManageController(
 
     // 获取全部系统书签集信息
     @GetMapping("/collections/system")
-    fun getAllSystemCollections(): ResponseEntity<List<Any>> {
-        // 实现获取全部系统书签集的逻辑
-        return ResponseEntity.ok(listOf())
+    fun getAllSystemCollections(): List<SystemCollectionVO> = bookmarkAdminService.adminListSystemCollections()
+
+    // 「AI 批量导出为集合」步骤1：把长文本交给 AI，提取并去重其中的原始链接（仅预览，不落库）
+    @PostMapping("/collections/system/ai/extract-links")
+    fun extractCollectionLinks(@RequestBody params: ExtractCollectionLinksParams): ExtractCollectionLinksResult =
+        ExtractCollectionLinksResult(bookmarkAdminService.adminExtractCollectionLinks(params.text))
+
+    // 步骤2：创建批量抓取任务，立即返回 jobId；每条链接的抓取结果经管理员 WebSocket 逐条推送
+    @PostMapping("/collections/system/crawl")
+    fun startCollectionCrawl(@RequestBody params: StartCollectionCrawlParams): StartCollectionCrawlResult {
+        val urls = params.urls.distinct()
+        val jobId = IdUtil.fastUUID()
+        bookmarkAdminService.adminCrawlCollectionLinks(StpKit.ADMIN.loginIdAsString, jobId, urls)
+        return StartCollectionCrawlResult(jobId, urls.size)
     }
 
-    // 添加一条系统书签集
-    @PostMapping("/collections/system")
-    fun addSystemCollection(@RequestBody collectionData: Map<String, Any>): ResponseEntity<Any> {
-        // 实现添加系统书签集的逻辑
-        return ResponseEntity.ok().build()
-    }
+    // 步骤3：根据已抓取的书签生成集合标题/描述建议（仅预览，不落库）
+    @PostMapping("/collections/system/ai/generate-meta")
+    fun generateCollectionMeta(@RequestBody params: GenerateCollectionMetaParams): CollectionMetaResult =
+        bookmarkAdminService.adminGenerateCollectionMeta(params.bookmarks)
 
-    // 修改一条系统书签集 (使用POST替换PUT)
+    // 发布一条系统书签集（上面三步确认后的最终提交）
+    @PostMapping("/collections/system/publish")
+    fun publishSystemCollection(@RequestBody params: PublishSystemCollectionParams): SystemCollectionVO =
+        bookmarkAdminService.adminPublishSystemCollection(StpKit.ADMIN.loginIdAsString, params)
+
+    // 修改一条系统书签集：标题/描述/包含的书签整体覆盖 (使用POST替换PUT)
     @PostMapping("/collections/system/{collectionId}/update")
     fun updateSystemCollection(
-        @PathVariable collectionId: Long, @RequestBody collectionData: Map<String, Any>
-    ): ResponseEntity<Any> {
-        // 实现修改系统书签集的逻辑
-        return ResponseEntity.ok().build()
-    }
+        @PathVariable collectionId: String, @RequestBody params: PublishSystemCollectionParams
+    ): SystemCollectionVO = bookmarkAdminService.adminUpdateSystemCollection(collectionId, params)
 
     // 获取全部的用户书签集
     @GetMapping("/collections/user")

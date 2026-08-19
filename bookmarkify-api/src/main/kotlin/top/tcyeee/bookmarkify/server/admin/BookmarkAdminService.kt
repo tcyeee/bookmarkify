@@ -1,17 +1,24 @@
 package top.tcyeee.bookmarkify.server.admin
 
 import com.baomidou.mybatisplus.core.metadata.IPage
+import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import com.baomidou.mybatisplus.extension.kotlin.KtUpdateWrapper
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.config.async.AsyncConfig
 import top.tcyeee.bookmarkify.config.cache.RedisType
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.*
+import top.tcyeee.bookmarkify.entity.dto.CollectionBookmark
+import top.tcyeee.bookmarkify.entity.dto.CollectionCrawlUpdate
+import top.tcyeee.bookmarkify.entity.dto.CollectionMetaResult
+import top.tcyeee.bookmarkify.entity.dto.PublishSystemCollectionParams
 import top.tcyeee.bookmarkify.entity.dto.SimilarIngestUpdate
 import top.tcyeee.bookmarkify.entity.dto.SimilarSite
+import top.tcyeee.bookmarkify.entity.dto.SystemCollectionVO
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.scrape.cached
@@ -26,10 +33,15 @@ import top.tcyeee.bookmarkify.entity.entity.BookmarkEntity
 import top.tcyeee.bookmarkify.entity.entity.CategorySource
 import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteAssetEntity
+import top.tcyeee.bookmarkify.entity.entity.SystemCollectionEntity
+import top.tcyeee.bookmarkify.entity.entity.SystemCollectionPageEntity
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.PageLockedField
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
+import top.tcyeee.bookmarkify.entity.enums.SystemCollectionStatus
 import top.tcyeee.bookmarkify.mapper.PageMapper
+import top.tcyeee.bookmarkify.mapper.SystemCollectionMapper
+import top.tcyeee.bookmarkify.mapper.SystemCollectionPageMapper
 import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkCategoryService
 import top.tcyeee.bookmarkify.server.IBookmarkService
@@ -70,6 +82,8 @@ class BookmarkAdminService(
     private val bookmarkService: IBookmarkService,
     private val parseStateWriter: PageParseStateWriter,
     private val scheduleWriter: PageScheduleWriter,
+    private val systemCollectionMapper: SystemCollectionMapper,
+    private val systemCollectionPageMapper: SystemCollectionPageMapper,
 ) : IBookmarkAdminService {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -431,6 +445,130 @@ class BookmarkAdminService(
         }
         log.debug("[adminGenerateAppName] 调用 DeepSeek 生成 appName: pageId=$pageId, title=$title")
         return apiService.inferAppName(title)?.takeIf { it.isNotBlank() }
+    }
+
+    /* ────── 系统书签集 · AI 批量发布流程 ────── */
+
+    override fun adminExtractCollectionLinks(text: String): List<String> {
+        log.debug("[adminExtractCollectionLinks] 提取链接: textLen=${text.length}")
+        return apiService.extractLinks(text)
+    }
+
+    private data class CollectionCrawlOutcome(
+        val status: String,
+        val bookmark: CollectionBookmark?,
+        val errorMsg: String?,
+    )
+
+    @Async(AsyncConfig.BOOKMARK_PARSE_EXECUTOR)
+    override fun adminCrawlCollectionLinks(adminUid: String, jobId: String, urls: List<String>) {
+        // 顺序处理、逐条回推：与 adminIngestSimilar 同一模式，一批链接数量有限，
+        // 避免并发把 scrapper 打爆。关弹窗后管理端会断开 WS，推送命中不到 session 即静默丢弃。
+        urls.distinct().forEach { rawUrl ->
+            val outcome = runCatching { crawlOneCollectionLink(rawUrl) }
+                .getOrElse {
+                    log.warn("[adminCrawlCollectionLinks] 抓取异常 rawUrl=$rawUrl: ${it.message}")
+                    CollectionCrawlOutcome("FAILED", null, it.message)
+                }
+            SocketUtils.systemCollectionCrawlUpdate(
+                adminUid, CollectionCrawlUpdate(jobId, rawUrl, outcome.status, outcome.bookmark, outcome.errorMsg),
+            )
+        }
+    }
+
+    /** 抓取单条候选链接：新建/复用 canonical 记录后同步解析一次，按最终落库状态判定成败。 */
+    private fun crawlOneCollectionLink(rawUrl: String): CollectionCrawlOutcome {
+        val url = if (rawUrl.matches(Regex("^https?://.*"))) rawUrl else "https://$rawUrl"
+        val page = bookmarkService.getOrCreateCanonical(url)
+        runCatching { bookmarkService.parseAndSave(page.id) }
+            .onFailure { log.warn("[crawlOneCollectionLink] 解析异常 rawUrl=$rawUrl: ${it.message}") }
+        val saved = pageMapper.selectById(page.id) ?: return CollectionCrawlOutcome("FAILED", null, "解析后记录丢失")
+        return if (saved.parseStatus == ParseStatusEnum.SUCCESS) {
+            CollectionCrawlOutcome("SUCCESS", toCollectionBookmark(saved), null)
+        } else {
+            CollectionCrawlOutcome("FAILED", null, saved.parseErrMsg ?: "抓取失败")
+        }
+    }
+
+    /** LIST 展示模式的取图优先级是"小图标+全名"，与这条批量导入列表的形状一致 */
+    private fun toCollectionBookmark(page: PageEntity): CollectionBookmark {
+        val iconUrl = runCatching { iconResolver.resolveOne(page.id, DisplayMode.LIST).url }.getOrNull()
+        return CollectionBookmark(
+            pageId = page.id,
+            rawUrl = page.rawUrl,
+            title = page.title,
+            description = page.description,
+            iconUrl = iconUrl,
+        )
+    }
+
+    override fun adminGenerateCollectionMeta(bookmarks: List<CollectionBookmark>): CollectionMetaResult =
+        apiService.generateCollectionMeta(bookmarks)
+
+    @Transactional
+    override fun adminPublishSystemCollection(adminUid: String, params: PublishSystemCollectionParams): SystemCollectionVO {
+        val title = params.title.trim().takeIf { it.isNotBlank() } ?: throw CommonException(ErrorType.E102)
+        val pageIds = params.pageIds.distinct()
+        if (pageIds.isEmpty()) throw CommonException(ErrorType.E102)
+        val collection = SystemCollectionEntity(title = title, description = params.description.trim(), createdBy = adminUid)
+        systemCollectionMapper.insert(collection)
+        replaceCollectionPages(collection.id, pageIds)
+        log.debug("[adminPublishSystemCollection] 发布系统书签集: id=${collection.id}, title=$title, count=${pageIds.size}")
+        return loadSystemCollectionVO(collection, pageIds)
+    }
+
+    override fun adminListSystemCollections(): List<SystemCollectionVO> {
+        val collections = systemCollectionMapper.selectList(
+            KtQueryWrapper(SystemCollectionEntity::class.java).orderByDesc(SystemCollectionEntity::createTime)
+        )
+        if (collections.isEmpty()) return emptyList()
+        val links = systemCollectionPageMapper.selectList(
+            KtQueryWrapper(SystemCollectionPageEntity::class.java)
+                .`in`(SystemCollectionPageEntity::collectionId, collections.map { it.id })
+                .orderByAsc(SystemCollectionPageEntity::sort)
+        )
+        val pageIdsByCollection = links.groupBy({ it.collectionId }, { it.pageId })
+        return collections.map { loadSystemCollectionVO(it, pageIdsByCollection[it.id].orEmpty()) }
+    }
+
+    @Transactional
+    override fun adminUpdateSystemCollection(collectionId: String, params: PublishSystemCollectionParams): SystemCollectionVO {
+        val collection = systemCollectionMapper.selectById(collectionId) ?: throw CommonException(ErrorType.E102)
+        val title = params.title.trim().takeIf { it.isNotBlank() } ?: throw CommonException(ErrorType.E102)
+        val pageIds = params.pageIds.distinct()
+        if (pageIds.isEmpty()) throw CommonException(ErrorType.E102)
+        collection.title = title
+        collection.description = params.description.trim()
+        collection.updateTime = LocalDateTime.now()
+        systemCollectionMapper.updateById(collection)
+        replaceCollectionPages(collectionId, pageIds)
+        log.debug("[adminUpdateSystemCollection] 更新系统书签集: id=$collectionId, title=$title, count=${pageIds.size}")
+        return loadSystemCollectionVO(collection, pageIds)
+    }
+
+    /** 覆盖式替换某集合下的全部书签：先删后插，与 IBookmarkCategoryService.replaceLinks 同一模式。 */
+    private fun replaceCollectionPages(collectionId: String, pageIds: List<String>) {
+        systemCollectionPageMapper.delete(
+            KtQueryWrapper(SystemCollectionPageEntity::class.java).eq(SystemCollectionPageEntity::collectionId, collectionId)
+        )
+        pageIds.forEachIndexed { index, pageId ->
+            systemCollectionPageMapper.insert(SystemCollectionPageEntity(collectionId = collectionId, pageId = pageId, sort = index))
+        }
+    }
+
+    private fun loadSystemCollectionVO(collection: SystemCollectionEntity, pageIds: List<String>): SystemCollectionVO {
+        val pages = if (pageIds.isEmpty()) emptyMap() else pageMapper.selectBatchIds(pageIds).associateBy { it.id }
+        // pageIds 的顺序就是集合内的展示顺序；已被删除的页面(pages 里缺行)直接跳过，不炸整个集合
+        val bookmarks = pageIds.mapNotNull { pages[it] }.map(::toCollectionBookmark)
+        return SystemCollectionVO(
+            id = collection.id,
+            title = collection.title,
+            description = collection.description,
+            status = collection.status,
+            bookmarks = bookmarks,
+            createTime = collection.createTime,
+            updateTime = collection.updateTime,
+        )
     }
 
     // ────── 管理后台：书签详情组装 ──────
