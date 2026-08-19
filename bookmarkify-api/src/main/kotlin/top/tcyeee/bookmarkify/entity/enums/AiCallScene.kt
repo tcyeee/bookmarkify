@@ -24,4 +24,10 @@ enum class AiCallScene {
 
     /** 分享发布前的内容合规审核（fail-closed） */
     CONTENT_REVIEW,
+
+    /** 系统书签集发布流程 · 步骤1：从长文本中提取原始链接 */
+    LINK_EXTRACT,
+
+    /** 系统书签集发布流程 · 步骤3：根据已抓取的书签生成集合标题/描述建议 */
+    COLLECTION_META,
 }

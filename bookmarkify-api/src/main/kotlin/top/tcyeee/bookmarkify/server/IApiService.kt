@@ -2,6 +2,8 @@ package top.tcyeee.bookmarkify.server
 
 import top.tcyeee.bookmarkify.entity.dto.AiReviewOutcome
 import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
+import top.tcyeee.bookmarkify.entity.dto.CollectionBookmark
+import top.tcyeee.bookmarkify.entity.dto.CollectionMetaResult
 import top.tcyeee.bookmarkify.entity.dto.NsfwCheckResult
 import top.tcyeee.bookmarkify.entity.dto.ProposedCategory
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
@@ -109,4 +111,19 @@ interface IApiService {
      * 详见 [PingOutcome]。
      */
     fun pingWebsite(url: String): PingOutcome
+
+    /**
+     * 通过 DeepSeek 从任意长文本（文章、聊天记录、Markdown…）中提取其中出现的原始链接。
+     * 用于系统书签集发布流程 · 步骤1。返回的链接已去重、已补全 `https://` 前缀；
+     * 可能包含模型误判的非链接文本，由后续抓取阶段（无法解析目标）自然过滤，调用方无需校验。
+     * 失败或未识别到任何链接时返回空列表。
+     */
+    fun extractLinks(text: String): List<String>
+
+    /**
+     * 通过 DeepSeek 根据一批已抓取的书签生成集合标题与描述建议，用于系统书签集发布流程 · 步骤3。
+     * 调用失败时返回按书签标题拼接的兜底文案，而不是抛异常——这里只是给管理员的初始建议，
+     * 发布前本就可编辑，没必要因为 AI 不可用而中断整个发布流程。
+     */
+    fun generateCollectionMeta(bookmarks: List<CollectionBookmark>): CollectionMetaResult
 }

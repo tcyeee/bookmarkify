@@ -26,4 +26,11 @@ enum class SocketMsgType {
 
     /** 分享状态发生变化（如异步 AI 审核未通过被下架），推送给分享人（USER realm） */
     SHARE_STATUS_CHANGED,
+
+    /**
+     * 系统书签集发布流程 · 步骤2 的逐条抓取进度（推送给 ADMIN realm 的会话）。
+     * 与 [SIMILAR_INGEST_UPDATE] 分开是同一条理由：形状不同的进度混进一个类型，
+     * 前端只能靠猜字段区分，稍不注意就会把一个流程的进度错当成另一个的。
+     */
+    SYSTEM_COLLECTION_CRAWL_UPDATE,
 }
