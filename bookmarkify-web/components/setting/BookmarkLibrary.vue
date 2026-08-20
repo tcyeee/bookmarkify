@@ -144,8 +144,6 @@
             class="flex items-center gap-3 px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
             <input type="checkbox" class="cy-checkbox cy-checkbox-sm" :checked="allChecked" :disabled="displayItems.length === 0" @change="toggleSelectAll" />
             <span class="flex-1">{{ $t('bookmarkLibrary.columns.bookmark') }}</span>
-            <span v-if="!selectedFolderId" class="w-32 shrink-0 text-center hidden sm:block">{{ $t('bookmarkLibrary.columns.folder') }}</span>
-            <span class="w-16 shrink-0 text-center">{{ $t('bookmarkLibrary.columns.status') }}</span>
             <span class="w-8 shrink-0" />
           </div>
 
@@ -178,12 +176,6 @@
                   >{{ item.urlFull }}</a
                 >
               </div>
-              <span v-if="!selectedFolderId" class="w-32 shrink-0 text-center text-xs truncate text-slate-500 dark:text-slate-400 hidden sm:block">{{
-                item.folderName || '—'
-              }}</span>
-              <span class="w-16 shrink-0 text-center">
-                <span v-if="item.isActivity === false" class="cy-badge cy-badge-error cy-badge-sm text-white">{{ $t('bookmarkLibrary.status.invalid') }}</span>
-              </span>
               <button
                 type="button"
                 class="w-8 shrink-0 cy-btn cy-btn-ghost cy-btn-xs cy-btn-circle"
