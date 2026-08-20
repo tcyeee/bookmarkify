@@ -119,12 +119,7 @@
       "invalid": "失効リンク"
     },
     "columns": {
-      "bookmark": "ブックマーク",
-      "folder": "所属フォルダ",
-      "status": "状態"
-    },
-    "status": {
-      "invalid": "失効"
+      "bookmark": "ブックマーク"
     },
     "loading": "ブックマークを読み込み中…",
     "empty": {
