@@ -1,4 +1,5 @@
 import type { UserBehaviorType } from '#/api/enums.generated';
+import type { UserAdminVO } from '#/api/user-manage';
 
 import { requestClient } from '#/api/request';
 
@@ -7,8 +8,10 @@ export type { UserBehaviorType };
 export interface UserBehaviorLogVO {
   id: string;
   uid: string;
-  /** 行为发生时的昵称快照；用户之后改名不影响历史记录 */
+  /** 行为发生时的昵称快照；用户之后改名不影响历史记录，仅用于关键字搜索的历史留痕 */
   nickNameSnapshot?: null | string;
+  /** 该用户当前的后台视图（实时昵称/头像等）；用户已注销等找不到的情况下为空 */
+  user?: null | UserAdminVO;
   behaviorType: UserBehaviorType;
   /** 行为详情，如 URL / 文件名+条数 / 令牌备注 */
   detail?: null | string;
