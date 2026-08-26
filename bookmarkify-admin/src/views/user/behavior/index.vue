@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { UserBehaviorLogVO, UserBehaviorType } from "#/api/user-behavior-log";
 
-import { reactive } from "vue";
+import { reactive, ref } from "vue";
 
 import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
@@ -21,6 +21,8 @@ import {
   getAdminUserBehaviorLogListApi,
   USER_BEHAVIOR_TYPE_DESC,
 } from "#/api/user-behavior-log";
+import UserDetailDialog from "#/views/user/UserDetailDialog.vue";
+import UserIdentityCell from "#/views/user/UserIdentityCell.vue";
 
 interface SearchForm {
   keyword: string;
@@ -38,11 +40,20 @@ function behaviorMetaOf(row: UserBehaviorLogVO) {
   return USER_BEHAVIOR_TYPE_DESC[row.behaviorType];
 }
 
+const userVisible = ref(false);
+const currentUser = ref<UserBehaviorLogVO["user"]>(null);
+
+function handleUserClick(row: UserBehaviorLogVO) {
+  if (!row.user) return;
+  currentUser.value = row.user;
+  userVisible.value = true;
+}
+
 const gridOptions: VxeGridProps<UserBehaviorLogVO> = {
   id: "admin-user-behavior-log",
   columns: [
     { type: "seq", title: "#", width: 50 },
-    { field: "nickNameSnapshot", title: "用户", minWidth: 160, slots: { default: "user" } },
+    { field: "user", title: "用户", minWidth: 180, slots: { default: "user" } },
     { field: "behaviorType", title: "行为类型", width: 140, slots: { default: "behaviorType" } },
     { field: "detail", title: "详情", minWidth: 260, showOverflow: "tooltip" },
     {
@@ -113,9 +124,8 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload(), {
       </FilterBar>
       <Grid>
         <template #user="{ row }">
-          <div class="flex flex-col leading-tight">
-            <span>{{ row.nickNameSnapshot || "未知昵称" }}</span>
-            <span class="font-mono text-xs text-gray-400">{{ row.uid }}</span>
+          <div class="user-cell" @click.stop="handleUserClick(row)">
+            <UserIdentityCell :user="row.user" />
           </div>
         </template>
         <template #behaviorType="{ row }">
@@ -128,6 +138,19 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload(), {
           <span v-else>{{ row.behaviorType }}</span>
         </template>
       </Grid>
+
+      <UserDetailDialog v-model="userVisible" :user="currentUser" />
     </ElCard>
   </Page>
 </template>
+
+<style scoped>
+.user-cell {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.user-cell:hover {
+  color: var(--el-color-primary);
+}
+</style>

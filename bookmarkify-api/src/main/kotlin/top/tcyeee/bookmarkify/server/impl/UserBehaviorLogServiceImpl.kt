@@ -11,6 +11,7 @@ import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.mapper.UserBehaviorLogMapper
 import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.server.IUserBehaviorLogService
+import top.tcyeee.bookmarkify.server.admin.AdminUserViewAssembler
 
 /**
  * @author tcyeee
@@ -18,6 +19,7 @@ import top.tcyeee.bookmarkify.server.IUserBehaviorLogService
 @Service
 class UserBehaviorLogServiceImpl(
     private val userMapper: UserMapper,
+    private val adminUserViewAssembler: AdminUserViewAssembler,
 ) : IUserBehaviorLogService, ServiceImpl<UserBehaviorLogMapper, UserBehaviorLogEntity>() {
 
     // ServiceImpl 自带的 log 是 MyBatis 的 Log 接口、没有 warn(String) 重载，同 ScrapperCallLogServiceImpl 的做法
@@ -30,6 +32,9 @@ class UserBehaviorLogServiceImpl(
         }.onFailure { logger.warn("[UserBehaviorLog] 记录用户行为失败 uid={} type={}: {}", uid, type, it.message) }
     }
 
-    override fun adminListAll(params: UserBehaviorLogSearchParams): IPage<UserBehaviorLogVO> =
-        baseMapper.selectPage(params.toPage(), params.toWrapper()).convert { UserBehaviorLogVO(it) }
+    override fun adminListAll(params: UserBehaviorLogSearchParams): IPage<UserBehaviorLogVO> {
+        val page = baseMapper.selectPage(params.toPage(), params.toWrapper())
+        val userByUid = adminUserViewAssembler.findByIds(page.records.map { it.uid }.distinct())
+        return page.convert { UserBehaviorLogVO(it).apply { user = userByUid[it.uid] } }
+    }
 }

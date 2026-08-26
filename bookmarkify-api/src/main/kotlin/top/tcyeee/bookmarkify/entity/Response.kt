@@ -784,6 +784,7 @@ data class UserBehaviorLogVO(
     @field:Schema(description = "日志ID") var id: String,
     @field:Schema(description = "所属用户ID") var uid: String,
     @field:Schema(description = "行为发生时的昵称快照") var nickNameSnapshot: String? = null,
+    @field:Schema(description = "该用户当前的后台视图；用户已注销等找不到的情况下为空") var user: UserAdminVO? = null,
     @field:Schema(description = "行为类型") var behaviorType: UserBehaviorType,
     @field:Schema(description = "行为详情") var detail: String? = null,
     @field:Schema(description = "发生时间") var createTime: LocalDateTime = LocalDateTime.now(),
