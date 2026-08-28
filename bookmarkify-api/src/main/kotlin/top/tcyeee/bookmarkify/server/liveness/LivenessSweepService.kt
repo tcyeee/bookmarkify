@@ -762,21 +762,20 @@ class LivenessSweepService(
             LivenessPolicy.shouldArchive(failures, config.maxRetryFailures)
         val markUnreachable = mayConfirmDeath && outcome == PingOutcome.DEAD &&
             LivenessPolicy.confirmsDead(failures, config.deadConfirmFailures)
+        // 归档是**终态**：没有任何定时任务再选它（三条巡检各自只认 SUCCESS / UNREACHABLE /
+        // PENDING）。游标仍然要往前推一格而不是留在过去 —— 它不再被查询用到，但一个停在
+        // 几个月前的 next_check_at 会让后台的「下次检查」列读起来像是巡检卡住了。
+        // 复活的唯一入口是新用户添加该网址，见 BookmarkServiceImpl.reviveOnAdd。
+        // 只能有一处 .set(nextCheckAt)：KtUpdateWrapper 不去重，两次会拼出
+        // `SET next_check_at=?, ... next_check_at=?`，PG 直接拒绝整条 UPDATE。
+        val nextCheckAt =
+            if (archived) LocalDateTime.now().plusDays(ARCHIVE_RECHECK_DAYS)
+            else bookmark.nextCheckAt
         val update = KtUpdateWrapper(PageEntity::class.java)
             .eq(PageEntity::id, bookmark.id)
             .set(PageEntity::lastCheckAt, bookmark.lastCheckAt)
-            .set(PageEntity::nextCheckAt, bookmark.nextCheckAt)
+            .set(PageEntity::nextCheckAt, nextCheckAt)
             .set(PageEntity::consecutiveFail, bookmark.consecutiveFail)
-        if (archived) {
-            // 归档是**终态**：没有任何定时任务再选它（三条巡检各自只认 SUCCESS / UNREACHABLE /
-            // PENDING）。游标仍然要往前推一格而不是留在过去 —— 它不再被查询用到，但一个停在
-            // 几个月前的 next_check_at 会让后台的「下次检查」列读起来像是巡检卡住了。
-            // 复活的唯一入口是新用户添加该网址，见 BookmarkServiceImpl.reviveOnAdd
-            update.set(
-                PageEntity::nextCheckAt,
-                LocalDateTime.now().plusDays(ARCHIVE_RECHECK_DAYS)
-            )
-        }
         if (markUnreachable || archived) {
             if (archived) {
                 log.warn(
