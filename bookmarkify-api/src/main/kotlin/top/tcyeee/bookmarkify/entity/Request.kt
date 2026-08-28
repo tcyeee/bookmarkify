@@ -561,3 +561,47 @@ data class ShareSearchParams(
 data class AccessTokenCreateParams(
     @field:Schema(description = "用户自定义备注，如「Chrome插件」") val name: String,
 )
+
+// ── 网站反馈组件 ──────────────────────────────────────────────────────────
+// 公开接口 POST /feedback/submit 的入参 + 后台收件箱的查询/维护入参。
+
+/**
+ * 公开反馈提交入参（无需登录）。
+ *
+ * [target] 必须命中当前的目标列表（`feedback_target`）——接口是公开的，不约束取值会让这张表
+ * 迅速被垃圾数据填满，而调用方（Agent）本就应当照抄提示语里给定的产品名。
+ */
+data class FeedbackSubmitParams(
+    @field:Schema(description = "所属产品，必须是后台维护的目标之一") val target: String? = null,
+    @field:Schema(description = "联系邮箱，选填") val email: String? = null,
+    @field:Schema(description = "反馈正文，必填") val content: String? = null,
+)
+
+/** 后台反馈收件箱查询入参 */
+data class FeedbackSearchParams(
+    @field:Schema(description = "按所属产品过滤") var target: String? = null,
+    @field:Schema(description = "按读取状态过滤；null 表示全部") var read: Boolean? = null,
+    @field:Schema(description = "正文 / 邮箱模糊搜索") var keyword: String? = null,
+) : PageBean() {
+    fun toWrapper(): Wrapper<FeedbackEntity> {
+        val query = KtQueryWrapper(FeedbackEntity::class.java)
+        if (!target.isNullOrBlank()) query.eq(FeedbackEntity::target, target)
+        read?.let { query.eq(FeedbackEntity::read, it) }
+        if (!keyword.isNullOrBlank()) {
+            query.and { it.like(FeedbackEntity::content, keyword).or().like(FeedbackEntity::email, keyword) }
+        }
+        // 未读优先，再按时间倒序 —— 与 idx_feedback_unread_time 对齐
+        return query.orderByAsc(FeedbackEntity::read).orderByDesc(FeedbackEntity::createTime)
+    }
+}
+
+/** 新增一个反馈目标 */
+data class FeedbackTargetSaveParams(
+    @field:Schema(description = "产品名") val name: String? = null,
+)
+
+/** 批量操作的 id 集合（标记已读 / 删除） */
+data class FeedbackBatchParams(
+    @field:Schema(description = "反馈 id 集合") val ids: List<String> = emptyList(),
+    @field:Schema(description = "标记已读接口专用：true=已读 false=未读；删除接口忽略") val read: Boolean = true,
+)

@@ -5,6 +5,7 @@ import { defineAsyncComponent } from 'vue';
 // ElMessage 是命令式调用的函数，没有组件那层异步加载可挂，样式只能在这里静态引一次。
 // 详见文件末尾 ElMessage 的导出注释。
 import 'element-plus/es/components/message/style/css';
+import 'element-plus/es/components/message-box/style/css';
 
 /**
  * 按需加载的 element-plus 组件。
@@ -113,3 +114,6 @@ export const ElTooltip = tooltipMod('ElTooltip');
  * 一并显式导入 —— 根 barrel 的自动样式注入在子路径导入下不生效。
  */
 export { ElMessage } from 'element-plus/es/components/message/index';
+
+/** 命令式确认框，与 {@link ElMessage} 同理只能静态导入；样式在文件顶部一并引入。 */
+export { ElMessageBox } from 'element-plus/es/components/message-box/index';

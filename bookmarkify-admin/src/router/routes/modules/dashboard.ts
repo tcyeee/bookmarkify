@@ -108,6 +108,17 @@ const routes: RouteRecordRaw[] = [
           title: 'AI检测管理',
         },
       },
+      {
+        // 一个对外的公开接口(无需登录)：外部 Agent / 集成脚本把对各产品的反馈 POST 过来，
+        // 这一页是它的收件箱 + 「所属产品」维护。归在第三方管理下 —— 它面向的是外部调用方。
+        name: 'FeedbackWidget',
+        path: '/feedback/inbox',
+        component: () => import('#/views/feedback/inbox/index.vue'),
+        meta: {
+          icon: 'carbon:chat',
+          title: '网站反馈组件',
+        },
+      },
     ],
   },
   {

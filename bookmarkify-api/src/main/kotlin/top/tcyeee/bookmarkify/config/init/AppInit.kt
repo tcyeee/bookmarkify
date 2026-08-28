@@ -14,6 +14,7 @@ import top.tcyeee.bookmarkify.entity.entity.BackgroundGradientEntity
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.server.IBackgroundGradientService
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.server.IFeedbackService
 
 /**
  * 项目初始化
@@ -26,6 +27,7 @@ class AppInit(
     private val backgroundGradientService: IBackgroundGradientService,
     private val projectConfig: ProjectConfig,
     private val bookmarkService: IBookmarkService,
+    private val feedbackService: IFeedbackService,
     private val eventPublisher: ApplicationEventPublisher,
 ) : ApplicationRunner {
 
@@ -49,6 +51,11 @@ class AppInit(
                     "这是 dev profile 的默认行为（本地连的是生产库，不该并行跑定时任务）。"
             )
         }
+
+        // 反馈组件的「所属产品」默认项：表为空时补种 Bookmarkify / Vialite / AgentTool。
+        // 迁移里也写了一份，这里兜住「全新库、没跑过那条迁移」的场景。
+        runCatching { feedbackService.ensureDefaultTargets() }
+            .onFailure { log.warn("[AppInit] 反馈目标初始化失败(忽略): ${it.message}") }
 
         // 检查是否有默认渐变数据,没有则初始化
         val gradients = backgroundGradientService.ktQuery().eq(BackgroundGradientEntity::isDefault, true).list()
