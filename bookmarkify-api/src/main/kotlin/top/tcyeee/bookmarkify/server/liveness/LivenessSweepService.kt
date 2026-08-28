@@ -16,6 +16,7 @@ import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.entity.SweepPreviewVO
 import top.tcyeee.bookmarkify.entity.dto.BookmarkLivenessConfigValue
+import top.tcyeee.bookmarkify.entity.dto.PingProbeResult
 import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.entity.PagePingLogEntity
 import top.tcyeee.bookmarkify.entity.entity.SiteEntity
@@ -97,7 +98,7 @@ class LivenessSweepService(
             // 而那恰恰是本项目投入最多精力去救的一类站点，`siteapi.rs` 整个模块就是为它写的。
             // 这些行本来就已经是 UNREACHABLE，多试一次几乎没有代价；真正的我方故障则由熔断
             // （UNKNOWN 过半即中止整轮）在更上游拦掉，不会演变成疯狂重试。
-            triggeredParseOf = { bookmark, outcome -> outcome != PingOutcome.DEAD && !bookmark.verifyFlag },
+            triggeredParseOf = { bookmark, outcome, _ -> outcome != PingOutcome.DEAD && !bookmark.verifyFlag },
         ) { bookmark, outcome, triggeredParse, evidence ->
             if (triggeredParse) {
                 // 调度状态交给重新解析那条链路去写（成功回到正常周期、失败继续退避），
@@ -128,7 +129,9 @@ class LivenessSweepService(
             statusFilter = ParseStatusEnum.SUCCESS,
             configuredIntervalHours = config.activeCheckIntervalHours,
             batchSize = LIVENESS_CHECK_BATCH_SIZE,
-            triggeredParseOf = { bookmark, outcome -> shouldRefreshContent(bookmark, outcome, config) },
+            triggeredParseOf = { bookmark, outcome, siteRefusal ->
+                shouldRefreshContent(bookmark, outcome, siteRefusal, config)
+            },
         ) { bookmark, outcome, triggeredParse, evidence ->
             if (triggeredParse) {
                 // 同上：调度状态由重新解析那条链路负责写
@@ -199,7 +202,8 @@ class LivenessSweepService(
             mayConfirmDeath = true,
             intervalHoursOf = { it.activeCheckIntervalHours },
             // 与 livenessCheckStaleBookmarks 的 triggeredParseOf 同一个判据，按"探测结果为 ALIVE"取上界
-            mayTriggerParse = { page, config -> shouldRefreshContent(page, PingOutcome.ALIVE, config) },
+            //（ALIVE 已经放行了 outcome 闸门，siteRefusal 传什么都不影响这个上界）
+            mayTriggerParse = { page, config -> shouldRefreshContent(page, PingOutcome.ALIVE, siteRefusal = false, config) },
         ),
         TASK_RETRY_UNREACHABLE to SweepSpec(
             status = ParseStatusEnum.UNREACHABLE,
@@ -302,13 +306,22 @@ class LivenessSweepService(
      *
      * 已手动认证(verifyFlag)的书签排除在外：那是人工确认过的终态，parseBookmark 也会短路跳过，
      * 投了事件只会白跑一趟并让这条记录每轮都被重新选中。
+     *
+     * [siteRefusal] 为真时（本轮 ping 是 403/406/412… —— 站点活着，只是反爬拦了 HEAD 探针），
+     * 也放行内容刷新：抓取链路有无头回退和 `siteapi.rs` 官方 API 救援，能力严格强于一个裸
+     * HEAD，值得让它去试。B 站视频页对机房 IP 恒回 412、ping 侧永远是 UNKNOWN，卡在
+     * `== ALIVE` 的话它们的标题/封面会永久陈旧 —— 而 `siteapi.rs` 整个模块就是为这类站点写的。
      */
     private fun shouldRefreshContent(
         bookmark: PageEntity,
         outcome: PingOutcome,
+        siteRefusal: Boolean,
         config: BookmarkLivenessConfigValue,
     ): Boolean {
-        if (outcome != PingOutcome.ALIVE || bookmark.verifyFlag) return false
+        if (bookmark.verifyFlag) return false
+        val probeAllowsRefresh = outcome == PingOutcome.ALIVE ||
+            (outcome == PingOutcome.UNKNOWN && siteRefusal)
+        if (!probeAllowsRefresh) return false
         // 从未成功抓过内容（老数据 / 一直失败的记录）也算过期，正好借这一轮补齐
         val lastParseAt = bookmark.lastParseAt ?: return true
         return lastParseAt.isBefore(LocalDateTime.now().minusDays(config.contentRefreshIntervalDays.toLong()))
@@ -334,7 +347,7 @@ class LivenessSweepService(
         statusFilter: ParseStatusEnum,
         configuredIntervalHours: Int,
         batchSize: Int,
-        triggeredParseOf: (bookmark: PageEntity, outcome: PingOutcome) -> Boolean,
+        triggeredParseOf: (bookmark: PageEntity, outcome: PingOutcome, siteRefusal: Boolean) -> Boolean,
         onResult: (bookmark: PageEntity, outcome: PingOutcome, triggeredParse: Boolean, evidence: ProbeEvidence) -> Unit,
     ) {
         val lockKey = ParseLock.sweep(taskLabel)
@@ -356,7 +369,7 @@ class LivenessSweepService(
         statusFilter: ParseStatusEnum,
         configuredIntervalHours: Int,
         batchSize: Int,
-        triggeredParseOf: (bookmark: PageEntity, outcome: PingOutcome) -> Boolean,
+        triggeredParseOf: (bookmark: PageEntity, outcome: PingOutcome, siteRefusal: Boolean) -> Boolean,
         onResult: (bookmark: PageEntity, outcome: PingOutcome, triggeredParse: Boolean, evidence: ProbeEvidence) -> Unit,
     ) {
         val startedAt = System.currentTimeMillis()
@@ -437,20 +450,26 @@ class LivenessSweepService(
 
         // 并行探测。串行时最坏耗时是 batchSize × 单条超时(15s)，200 条要 50 分钟、贴着调度周期；
         // 并发度受 scrapper 的全局并发上限约束，见 AsyncConfig.PING_CONCURRENCY 的说明。
-        val actuallyProbed: List<Pair<PageEntity, PingOutcome>> = (pagesOfLiveSites + revived)
+        val probeResults: List<Pair<PageEntity, PingProbeResult>> = (pagesOfLiveSites + revived)
             .map { bookmark ->
                 bookmark to CompletableFuture.supplyAsync({ apiService.pingWebsite(bookmark.rawUrl) }, pingExecutor)
             }
             // 先全部投递、再统一 join：边投边等就退化成串行了
             .map { (bookmark, future) -> bookmark to future.join() }
+        val actuallyProbed: List<Pair<PageEntity, PingOutcome>> = probeResults.map { (p, r) -> p to r.outcome }
+        // 这次 UNKNOWN 是不是「站点用状态码拒绝了我方」——只有熔断分母与内容刷新判据用它
+        val siteRefusalById: Map<String, Boolean> = probeResults.associate { (p, r) -> p.id to r.siteRefusal }
 
         // **熔断只看真正探测过的结果。** 短路出来的那些 DEAD 不是探测结论，是上一轮的结论在复用；
         // 把它们混进来会凭空拉高失联比例，让「>90% DEAD」这条规则在一个健康的系统里误触发 ——
         // 而那条规则本来是用来发现"scrapper 通着但出口坏了、于是诚实地把一切报成死"的。
         //
-        // 带上 urlHost：判据的比例按域名去重算，理由见 LivenessPolicy.breakerReason
+        // 带上 urlHost：判据的比例按域名去重算。带上 ourChainInconclusive：站点用 403/412 拒绝
+        // 我方的那种 UNKNOWN 证明链路够得着源站，不进熔断分母。理由都见 LivenessPolicy.breakerReason
         val breakerReason = LivenessPolicy.breakerReason(
-            actuallyProbed.map { (page, outcome) -> LivenessPolicy.HostOutcome(page.urlHost, outcome) }
+            probeResults.map { (page, r) ->
+                LivenessPolicy.HostOutcome(page.urlHost, r.outcome, ourChainInconclusive = r.ourChainInconclusive)
+            }
         )
 
         val probed = actuallyProbed + shortCircuited
@@ -484,7 +503,7 @@ class LivenessSweepService(
                 // 少了这一条，一个域名判死 + 根地址探测无结论，就会让该域名下**所有**页面
                 // 同时投递重新抓取 —— 正好是站点层短路当初要省掉的那笔开销，被原样放大回来
                 bookmark.id !in shortCircuitedIds &&
-                triggeredParseOf(bookmark, outcome)
+                triggeredParseOf(bookmark, outcome, siteRefusalById[bookmark.id] == true)
         }
         val triggeredParseOfEach = wantsParse.map { want ->
             (want && granted < parseBudget).also { if (it) granted++ }
@@ -607,7 +626,9 @@ class LivenessSweepService(
         if (distinct.isEmpty()) return emptyMap()
         return distinct
             .map { site -> site to CompletableFuture.supplyAsync({ apiService.pingWebsite(site.rootUrl) }, pingExecutor) }
-            .associate { (site, future) -> site.id to future.join() }
+            // 根地址探测只关心三态：站点级活性判定不区分「反爬拒绝」与「我方没探到」，
+            // 两者都是「无结论、保持原状」
+            .associate { (site, future) -> site.id to future.join().outcome }
     }
 
     /**

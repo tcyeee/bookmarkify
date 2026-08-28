@@ -5,6 +5,7 @@ import top.tcyeee.bookmarkify.entity.dto.CategoryCandidate
 import top.tcyeee.bookmarkify.entity.dto.CollectionBookmark
 import top.tcyeee.bookmarkify.entity.dto.CollectionMetaResult
 import top.tcyeee.bookmarkify.entity.dto.NsfwCheckResult
+import top.tcyeee.bookmarkify.entity.dto.PingProbeResult
 import top.tcyeee.bookmarkify.entity.dto.ProposedCategory
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
@@ -107,10 +108,13 @@ interface IApiService {
      * 通过 scrapper /ping 探测目标网站是否存活（走代理）。
      *
      * 返回三态而不是 Boolean：scrapper 不可达、鉴权失败、并发超限被限流，这些都属于
-     * 「我方没探到」而非「站点死了」，一律返回 [PingOutcome.UNKNOWN]，调用方不得据此改动书签状态。
-     * 详见 [PingOutcome]。
+     * 「我方没探到」而非「站点死了」，[PingProbeResult.outcome] 一律为 [PingOutcome.UNKNOWN]，
+     * 调用方不得据此改动书签状态。详见 [PingOutcome]。
+     *
+     * [PingProbeResult.siteRefusal] 进一步区分 UNKNOWN 的两种成因，只用于熔断判据，
+     * 不影响落库与退避。
      */
-    fun pingWebsite(url: String): PingOutcome
+    fun pingWebsite(url: String): PingProbeResult
 
     /**
      * 通过 DeepSeek 从任意长文本（文章、聊天记录、Markdown…）中提取其中出现的原始链接。

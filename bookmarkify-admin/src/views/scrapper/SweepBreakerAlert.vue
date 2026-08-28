@@ -47,6 +47,15 @@ let timer: null | ReturnType<typeof setInterval> = null;
  */
 const STALE_ROUND_HOURS = 3;
 
+/**
+ * 「连续熔断」的升级阈值（轮次数）。
+ *
+ * 一次熔断可能只是我方链路抖了一下，下一轮就恢复。但熔断轮次不推进有效游标，下一轮会选出
+ * **同一批**候选、得到同一个结论 —— 达到这个连续次数基本可以断定它进入了自我维持的停摆，
+ * 需要人工介入（2026-08-10 那次连续 25 轮字节级相同）。两个小时级巡检，3 轮约等于 3 小时。
+ */
+const STUCK_BREAKER_ROUNDS = 3;
+
 const hoursSinceLastRound = computed(() => {
   const at = health.value?.lastRoundAt;
   if (!at) return null;
@@ -62,11 +71,25 @@ const sweepStalled = computed(() => {
 const hasBreaker = computed(() => (health.value?.breakerCount ?? 0) > 0);
 const visible = computed(() => hasBreaker.value || sweepStalled.value);
 
+/** 连续熔断到阈值：已经不是偶发，而是自我维持的停摆，措辞要升级 */
+const breakerStuck = computed(
+  () => (health.value?.maxConsecutiveBreaker ?? 0) >= STUCK_BREAKER_ROUNDS,
+);
+
+const stuckTaskName = computed(() => {
+  const label = health.value?.maxConsecutiveBreakerTask;
+  if (!label) return '';
+  return SWEEP_TASK_LABELS[label] ?? label;
+});
+
 const title = computed(() => {
   if (!health.value) return '';
   if (sweepStalled.value) {
     const h = Math.floor(hoursSinceLastRound.value ?? 0);
     return `活性巡检已 ${h} 小时没有跑过`;
+  }
+  if (breakerStuck.value) {
+    return `「${stuckTaskName.value}」已连续 ${health.value.maxConsecutiveBreaker} 轮被熔断中止`;
   }
   return `近 ${health.value.windowHours} 小时内活性巡检熔断 ${health.value.breakerCount} 次`;
 });
@@ -82,7 +105,12 @@ const description = computed(() => {
   const b = health.value.latestBreaker;
   if (!b) return '';
   const task = SWEEP_TASK_LABELS[b.taskLabel] ?? b.taskLabel;
-  return `最近一次 ${formatDateTime(b.createTime)}「${task}」：${b.breakerReason}。熔断轮次不会改动任何书签，结论已被丢弃。`;
+  const base = `最近一次 ${formatDateTime(b.createTime)}「${task}」：${b.breakerReason}。熔断轮次不会改动任何书签，结论已被丢弃。`;
+  if (breakerStuck.value) {
+    // 熔断轮次不推进有效游标，下一轮选出同一批候选、得到同一个结论 —— 连续熔断没有自愈路径
+    return `${base}连续熔断说明这批候选每轮都触发同一条判据，不会自行恢复，需人工排查抓取链路或熔断阈值。`;
+  }
+  return base;
 });
 
 async function load() {

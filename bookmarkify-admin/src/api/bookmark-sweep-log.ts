@@ -56,6 +56,15 @@ export interface SweepHealthVO {
   windowHours: number;
   roundCount: number;
   breakerCount: number;
+  /**
+   * 某个任务连续被熔断的最新轮次数（按 taskLabel 分别计，取最大值）。
+   *
+   * 偶发熔断是「我方链路抖了一下」，连续熔断则是「自我维持的停摆」——熔断轮次不推进有效游标，
+   * 下一轮选出同一批候选、得到同一个结论，没有自愈路径。告警条据此升级措辞。
+   */
+  maxConsecutiveBreaker: number;
+  /** 连续熔断轮次最多的那个任务的 taskLabel；没有连续熔断时为空 */
+  maxConsecutiveBreakerTask: null | string;
   deferredParse: number;
   latestBreaker: BookmarkSweepLogVO | null;
   /**

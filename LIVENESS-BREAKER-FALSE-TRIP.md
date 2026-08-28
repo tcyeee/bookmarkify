@@ -1,8 +1,38 @@
 # 活性巡检熔断器误触发
 
-> 状态：**已定位，未修复** —— 2026-08-28 查生产日志时发现
-> 范围：`LivenessSweepService` / `LivenessPolicy.breakerReason` / `livenessCheckStaleBookmarks`
+> 状态：**C + B + 连续熔断告警 + shouldRefreshContent 盲区 已实现** —— 2026-08-28。A 仍待办，见 §4。
+> 范围：`LivenessSweepService` / `LivenessPolicy` / `ApiServiceImpl.pingWebsite` / `livenessCheckStaleBookmarks`
 > 关联：本轮同时修掉的两个 bug（`persistProbeResult` 的 `next_check_at` 双重赋值、`OssReconcileServiceImpl` 的 NPE）见提交记录；本文只讲第三个问题，它是**策略层的取舍**，不是一行 bug。
+
+---
+
+## 已实现（2026-08-28）
+
+**B：把 UNKNOWN 拆成「站点拒绝」与「我方链路没探到」。** `pingWebsite` 改返回
+`PingProbeResult(outcome, siteRefusal)`，`siteRefusal` 由 `LivenessPolicy.isSiteRefusal` 判定
+（拿到 403/406/412… 状态码 = 链路够得着源站）。`HostOutcome.ourChainInconclusive` 把这个维度
+带进 `breakerReason`：
+- **分子** = 整站都是「我方链路没探到」的域名；
+- **分母** = 全部域名 − 整站都是「站点拒绝」的域名（永久反爬是常驻噪声，剔除；ALIVE 域名仍留在
+  分母里正常稀释比例）。
+落库三态、退避、判死一律不变——`siteRefusal` 只影响熔断分母和内容刷新闸门。
+
+**C：`LivenessPolicy.MIN_UNKNOWN_HOSTS = 4`。** UNKNOWN 熔断判据的绝对下限——至少 4 个
+「我方链路没探到」的去重域名，才谈得上「系统性故障」。纯 `LivenessPolicy` 改动，零迁移。
+判据卡 `unknownHosts >= 4` 而非文档原稿的「非-ALIVE 域名 ≥ 4」。
+
+**shouldRefreshContent 反爬盲区。** 该判据从 `outcome == ALIVE` 放宽到「ALIVE 或 站点拒绝的
+UNKNOWN」：站点活着、只是反爬拦了 HEAD，而抓取链路有无头回退 + `siteapi.rs` 官方 API 救援，
+能力严格更强。此前 B 站视频页 ping 恒 UNKNOWN，标题/封面会永久陈旧。
+
+**连续熔断告警。** `SweepHealthVO` 新增 `maxConsecutiveBreaker` / `maxConsecutiveBreakerTask`
+（按 `task_label` 分别数最新连续熔断轮数，取最大）。`SweepBreakerAlert.vue` 在连续 ≥ 3 轮
+（`STUCK_BREAKER_ROUNDS`）时升级标题与描述文案，把「偶发抖动」和「自我维持的停摆」在告警条上
+区分开——后者是把 2026-08-10 那类死锁从静默拖成多日事故的根因。
+
+回归测试：`LivenessPolicyTest` 新增 `isSiteRefusal …` / `小体量部署里两个永久反爬域名不足以熔断`
+/ `一批反爬域名 + 少量我方探不到` / `我方探不到的域名数没到下限…` / `…达到下限且过半就照常熔断`，
+既有 breaker 用例按新语义调整（`ourChain = true/false` 显式区分）。
 
 ---
 
@@ -68,35 +98,33 @@ total >= MIN_SAMPLE_UNKNOWN(10) && unknownHosts * 100 >= hosts * UNKNOWN_PERCENT
 1. **这 13 条书签的活性判定与内容刷新永久停摆。** 30 天的 `contentRefreshIntervalDays` 周期对它们不再推进。
 2. **批次里真正失联的页面（`cron.qqe2.com`、`www.pansoso.com`）在这条任务里永远不会被确认 `DEAD` / 归档** —— 熔断在 `mayConfirmDeath` 分支之前就 `return` 了。（`retryUnreachableBookmarks` 本该兜底，但它被 `next_check_at` 双重赋值 bug 打死了 3 天，那个已随本轮修复。）
 3. **每 2 小时白打 11 次 `/ping`**，产出零可用结论。
-4. 后台「巡检健康」看板：`livenessCheckStaleBookmarks` 有 `sweep_log` 行、`breaker_reason` 非空，能看出在熔断，但没有任何告警会因「熔断连续 N 轮」而升级。
+4. 后台「巡检健康」看板：`livenessCheckStaleBookmarks` 有 `sweep_log` 行、`breaker_reason` 非空，能看出在熔断，但没有任何告警会因「熔断连续 N 轮」而升级。✅ 已修（连续熔断告警）
 
 ---
 
 ## 4. 候选修法
 
-没有动手，先记选项。倾向 **C + A 组合**。
+**B / C / D-的思路 / 告警 均已实现（见「已实现」段）。** 仅 A 仍待办，视上线后 `sweep_log` 观察再定。
 
-### A. 把长期 `UNKNOWN` 的域名 park 到更远的游标
+### A. 把长期 `UNKNOWN` 的域名 park 到更远的游标 —— 待办
 
-仿 `parkNonDomain`：某域名连续 N 轮直接探测都是 `UNKNOWN`，就把它名下页面的 `next_check_at` 推到 7 天而不是退避曲线上的 1h。这样它们不再每轮霸占候选、不再顶熔断分母。
+仿 `parkNonDomain`：某域名连续 N 轮直接探测都是「站点拒绝」的 UNKNOWN，就把它名下页面的 `next_check_at` 推到 7 天而不是退避曲线上的 1h。这样它们不再每轮霸占候选。
 
-- 代价：`UNKNOWN` 目前**刻意不累加** `consecutiveFail`，需要新引入一个「连续 UNKNOWN 次数」计数（`site` 层最自然，与 `updateSiteLiveness` 的根探测同源）。
+- B 落地后这已不是**正确性**问题（它们已被剔出熔断分母），只是省掉每轮几次白探。
+- 代价：需要新引入一个「连续 站点拒绝 次数」计数（`site` 层最自然，与 `updateSiteLiveness` 的根探测同源）。`PingProbeResult.siteRefusal` 已经把信号备好了，缺的只是持久化的计数列。
 - 风险：反爬策略/出口 IP 可能变化，7 天一次复查可接受；不要设成永久。
 
-### B. 把「已知反爬」的域名排除出熔断分母
+### B. 把「站点拒绝」的 UNKNOWN 排除出熔断分母 —— ✅ 已实现（内存版）
 
-`site` 层记录最近若干次 `/ping` 结论，某域名稳定回 403/406/412 即标记为「预期 UNKNOWN」。`breakerReason` 计算占比时只把**没有预期-UNKNOWN 历史**的域名计入分母。
+原稿设想在 `site` 加一列历史。实际实现不需要：探测那一刻 `outcomeOf(reachable, status, blocked)` 就知道这个 UNKNOWN 是站点属性（拿到 403/412 状态码）还是我方属性（blocked / 没状态码 / scrapper 挂）。把这个 bit 顺着 `PingProbeResult` → `HostOutcome.ourChainInconclusive` 在**内存流程**里传进 `breakerReason` 即可，不动枚举、不动 `page_ping_log`、不动前端。
 
-- 代价：要在 `site` 上加一列历史 / 状态，`LivenessPolicy` 从纯函数变成要吃这个状态。
-- 好处：真出我方故障时，这些域名一起变 `UNKNOWN` 也无所谓 —— 它们本来就按 `UNKNOWN` 处理。
+### C. 提高 UNKNOWN 熔断的「最小域名数」门槛 —— 最小改动 ✅ 已实现
 
-### C. 提高 UNKNOWN 熔断的「最小域名数」门槛 —— 最小改动
-
-现在 UNKNOWN 判据只要求 `total >= 10`（探测次数），对域名数没有下限。加一条：非-`ALIVE` 域名 `>= 4`（或 5）才允许这条判据触发。4 个域名里 2 个坏，不足以代表「系统性故障」。
+现在 UNKNOWN 判据只要求 `total >= 10`（探测次数），对域名数没有下限。加一条：`unknownHosts >= MIN_UNKNOWN_HOSTS(4)` 才允许这条判据触发。4 个域名里 2 个坏，不足以代表「系统性故障」。
 
 - 纯 `LivenessPolicy` 改动 + 单测，零迁移、零新列。
-- 代价：真正只有 2~3 个域名的部署遭遇我方故障时，这条判据要等域名更多才触发；但 `DEAD ≥ 90%` 那条判据、以及 `MIN_SAMPLE_UNKNOWN` 的探测次数下限都还在，兜底仍有。小部署本身可丢的东西也少。
-- **这条能立刻止血**，A/B 可以之后再补。
+- 实现时把判据从原稿的「非-`ALIVE` 域名 ≥ 4」改成「`unknownHosts` ≥ 4」——前者会把 DEAD 域名算进来，`2 UNKNOWN + 2 DEAD` 又恒真。
+- 代价：真正只有 2~3 个域名的部署遭遇我方故障时，这条判据要等域名更多才触发；但 `DEAD ≥ 90%` 那条判据、`MIN_SAMPLE_UNKNOWN` 的探测次数下限，以及「UNKNOWN 本就不写 `UNREACHABLE`」都还在，兜底仍有。
 
 ### D. 熔断改为「只丢弃本轮 UNKNOWN 结论」，而非整轮 abort
 

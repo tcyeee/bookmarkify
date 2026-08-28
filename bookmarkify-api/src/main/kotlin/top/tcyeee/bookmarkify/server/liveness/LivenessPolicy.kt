@@ -68,11 +68,46 @@ object LivenessPolicy {
         else -> PingOutcome.ALIVE
     }
 
+    /**
+     * 这个 UNKNOWN 是「站点还活着、只是拒绝了我方这一次请求」（403/406/412/429…），
+     * 而不是「我方链路压根没探到东西」。
+     *
+     * 关键在于：拿到这些状态码，意味着 TCP + TLS + HTTP 一整趟到达了源站并收到了回应 ——
+     * 恰恰证明我方出网链路对这个域名是通的。所以熔断判据要把这类域名**排除出分母**，
+     * 与「该域名下有一页 ALIVE」同等对待，否则一个只收藏了两三个反爬站点的小体量部署会
+     * 每一轮都撞上「UNKNOWN 过半」。
+     *
+     * [outcomeOf] 仍然把它折叠成 [PingOutcome.UNKNOWN]（不写 UNREACHABLE、不进退避），
+     * 这里只是给熔断多一个维度的信息，落库的三态不变。
+     */
+    fun isSiteRefusal(reachable: Boolean, status: Int?, blocked: Boolean): Boolean =
+        !blocked && reachable && status != null && status in INCONCLUSIVE_STATUSES
+
     // ────── 熔断阈值 ──────
 
     /** 「探不到」过半就该认为是我方的问题，而不是这半批站点恰好都出了状况 */
     private const val UNKNOWN_PERCENT = 50
     private const val MIN_SAMPLE_UNKNOWN = 10
+
+    /**
+     * UNKNOWN 熔断判据的**最小去重域名数下限**。
+     *
+     * 纯比例判据放在一个很小的分母上就是噪声。2026-08-28 生产实况：小体量部署里，久未检查
+     * 的候选只涉及三四个域名，其中两个（B 站 412、zfrontier 403）对机房出口 IP 是**永久性
+     * 反爬** —— `outcomeOf` 明确把它们映射成 UNKNOWN（判死等于拿我方网络位置给用户书签定罪），
+     * 于是「UNKNOWN 域名 2/4 = 50%」每一轮都成立，`livenessCheckStaleBookmarks` 半数轮次
+     * 直接熔断中止，这批书签的活性与内容刷新永远推进不了 —— 而抓取服务本身是好的。
+     *
+     * 加一条绝对下限：至少要有 [MIN_UNKNOWN_HOSTS] 个**互不相同**的域名整站探不到，才谈得上
+     * 「系统性故障」。4 个域名里 2 个探不到、另外 2 个答得好好的，后者恰恰是「我方链路正常」
+     * 的证据。真正的我方出网故障是**所有**域名一起探不到，去重后域名数远超这个下限，判得更准。
+     *
+     * 代价：真的只收藏了两三个域名的部署遭遇我方故障时，这条 UNKNOWN 判据要等域名更多才触发。
+     * 但兜底仍在 —— `DEAD >= 90%` 那条判据不受影响，且 UNKNOWN 本就**不写** `UNREACHABLE`
+     * （见 [outcomeOf] 的说明与 `persistProbeResult`），漏触发的实际损害仅限于「基于坏数据
+     * 多派了几条重新抓取」，而那又被 `parseBudget` 的背压截断挡着。
+     */
+    private const val MIN_UNKNOWN_HOSTS = 4
 
     /**
      * 判死的阈值取得比 UNKNOWN 高得多：这批候选本来就是「久未检查」的记录，
@@ -81,8 +116,19 @@ object LivenessPolicy {
     private const val DEAD_PERCENT = 90
     private const val MIN_SAMPLE_DEAD = 20
 
-    /** 一次探测的「哪个域名 → 什么结论」。[breakerReason] 需要域名，见那里的说明。 */
-    data class HostOutcome(val host: String, val outcome: PingOutcome)
+    /**
+     * 一次探测的「哪个域名 → 什么结论」。[breakerReason] 需要域名，见那里的说明。
+     *
+     * [ourChainInconclusive] 仅在 [outcome] 为 [PingOutcome.UNKNOWN] 时有意义：`true` 表示
+     * 「我方链路没探到东西」（scrapper 没起 / 鉴权错 / 被 load_shed / blocked / 契约不符），
+     * `false` 表示「站点主动拒绝了我方这次请求」（403/406/412…，见 [isSiteRefusal]）——
+     * 后者证明我方够得着这个域名，不该算进「系统性故障」的证据里。
+     */
+    data class HostOutcome(
+        val host: String,
+        val outcome: PingOutcome,
+        val ourChainInconclusive: Boolean,
+    )
 
     /**
      * 整批探测结果是否呈现「系统性失败」的形态；非 null 表示应当熔断，内容是给日志的原因。
@@ -109,18 +155,36 @@ object LivenessPolicy {
      *
      * 某个域名下混着 ALIVE 的，既不算 UNKNOWN 也不算 DEAD 域名 —— 有一页通了就说明这个域名
      * 我方够得着，它恰恰是「全局故障」这个结论的反证。
+     *
+     * **整站都是「站点主动拒绝我方探针」（403/412…，见 [HostOutcome.ourChainInconclusive]）的
+     * 域名，从 UNKNOWN 判据的分母里剔除。** 拿到状态码本身就证明链路通到了源站，这类反爬
+     * 域名是部署里的常驻噪声（B 站、zfrontier 对机房 IP 恒回 412/403），把它们算进分母会让
+     * 一个只收藏了三四个站点的部署每轮都撞上 50%。ALIVE 域名仍留在分母里正常稀释比例 ——
+     * 它是「我方这一轮确实探到了东西」的有效样本，不是噪声。
+     *
+     * UNKNOWN 判据另有一条按去重域名数的绝对下限 [MIN_UNKNOWN_HOSTS]。
      */
     fun breakerReason(probes: List<HostOutcome>): String? {
         val total = probes.size
         if (total == 0) return null
         val byHost = probes.groupBy { it.host }
         val hosts = byHost.size
-        fun hostsAll(outcome: PingOutcome) = byHost.count { (_, group) -> group.all { it.outcome == outcome } }
-        val unknownHosts = hostsAll(PingOutcome.UNKNOWN)
-        val deadHosts = hostsAll(PingOutcome.DEAD)
+        // 整站都是「站点用状态码拒绝了我方」的域名：常驻反爬噪声，剔除出 UNKNOWN 判据的分母
+        val pureSiteRefusalHosts = byHost.count { (_, group) ->
+            group.all { it.outcome == PingOutcome.UNKNOWN && !it.ourChainInconclusive }
+        }
+        // 分子：整站都是「我方链路没探到」的域名
+        val unknownHosts = byHost.count { (_, group) ->
+            group.all { it.outcome == PingOutcome.UNKNOWN && it.ourChainInconclusive }
+        }
+        val unknownDenominator = hosts - pureSiteRefusalHosts
+        // DEAD 判据的分母仍是全部域名：它防的是「出网链路断了、一切诚实地报 alive=false」，
+        // 那种形态下没有域名会是 ALIVE 或反爬拒绝，剔不剔除取值都一样
+        val deadHosts = byHost.count { (_, group) -> group.all { it.outcome == PingOutcome.DEAD } }
         return when {
-            total >= MIN_SAMPLE_UNKNOWN && unknownHosts * 100 >= hosts * UNKNOWN_PERCENT ->
-                "无结论 $unknownHosts/$hosts 个域名（共 $total 次探测）已达 $UNKNOWN_PERCENT%，抓取服务多半整体不可用"
+            total >= MIN_SAMPLE_UNKNOWN && unknownHosts >= MIN_UNKNOWN_HOSTS &&
+                unknownHosts * 100 >= unknownDenominator * UNKNOWN_PERCENT ->
+                "无结论 $unknownHosts/$unknownDenominator 个域名（共 $total 次探测）已达 $UNKNOWN_PERCENT%，抓取服务多半整体不可用"
             total >= MIN_SAMPLE_DEAD && deadHosts * 100 >= hosts * DEAD_PERCENT ->
                 "判定失联 $deadHosts/$hosts 个域名（共 $total 次探测）已达 $DEAD_PERCENT%，多半是我方出网链路故障而非站点集体下线"
             else -> null
