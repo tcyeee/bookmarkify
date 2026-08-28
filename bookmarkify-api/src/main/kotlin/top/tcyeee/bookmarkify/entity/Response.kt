@@ -1239,3 +1239,36 @@ data class OrphanCleanupReport(
 
     @field:Schema(description = "耗时(ms)") var durationMs: Long = 0,
 )
+
+// ── 网站反馈组件 ──────────────────────────────────────────────────────────
+
+/** 后台收件箱里的一条反馈 */
+data class FeedbackVO(
+    @field:Schema(description = "反馈ID") var id: String,
+    @field:Schema(description = "所属产品") var target: String,
+    @field:Schema(description = "联系邮箱，未留则为空") var email: String? = null,
+    @field:Schema(description = "反馈正文") var content: String,
+    @field:Schema(description = "是否已读") var read: Boolean = false,
+    @field:Schema(description = "提交来源 IP，可伪造，仅供排障") var sourceIp: String? = null,
+    @field:Schema(description = "提交方 User-Agent") var userAgent: String? = null,
+    @field:Schema(description = "提交时间") var createTime: LocalDateTime,
+    @field:Schema(description = "首次标记已读的时间") var readTime: LocalDateTime? = null,
+) {
+    constructor(entity: FeedbackEntity) : this(
+        id = entity.id,
+        target = entity.target,
+        content = entity.content,
+        createTime = entity.createTime,
+    ) {
+        BeanUtil.copyProperties(entity, this)
+    }
+}
+
+/** 反馈目标（所属产品）候选项 */
+data class FeedbackTargetVO(
+    @field:Schema(description = "目标ID") var id: String,
+    @field:Schema(description = "产品名") var name: String,
+    @field:Schema(description = "排序") var sort: Int = 0,
+    @field:Schema(description = "该产品下的反馈总数") var total: Long = 0,
+    @field:Schema(description = "该产品下的未读数") var unread: Long = 0,
+)

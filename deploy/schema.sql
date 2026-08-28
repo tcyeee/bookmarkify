@@ -210,6 +210,35 @@ CREATE TABLE public.config_change_log (
 
 
 --
+-- Name: feedback; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.feedback (
+    id character varying(40) NOT NULL,
+    target character varying(64) NOT NULL,
+    email character varying(200),
+    content character varying(5000) NOT NULL,
+    is_read boolean DEFAULT false NOT NULL,
+    source_ip character varying(64),
+    user_agent character varying(500),
+    create_time timestamp without time zone DEFAULT now() NOT NULL,
+    read_time timestamp without time zone
+);
+
+
+--
+-- Name: feedback_target; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.feedback_target (
+    id character varying(40) NOT NULL,
+    name character varying(64) NOT NULL,
+    sort integer DEFAULT 0 NOT NULL,
+    create_time timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: layout_node_function; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -657,6 +686,22 @@ ALTER TABLE ONLY public.config_change_log
 
 
 --
+-- Name: feedback feedback_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.feedback
+    ADD CONSTRAINT feedback_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: feedback_target feedback_target_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.feedback_target
+    ADD CONSTRAINT feedback_target_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: layout_node_function layout_node_function_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -931,6 +976,20 @@ CREATE INDEX idx_bookmark_uid_live ON public.bookmark USING btree (uid, page_id)
 --
 
 CREATE INDEX idx_config_change_log_key_time ON public.config_change_log USING btree (config_key, create_time DESC);
+
+
+--
+-- Name: idx_feedback_unread_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_feedback_unread_time ON public.feedback USING btree (is_read, create_time DESC);
+
+
+--
+-- Name: uk_feedback_target_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uk_feedback_target_name ON public.feedback_target USING btree (name);
 
 
 --
