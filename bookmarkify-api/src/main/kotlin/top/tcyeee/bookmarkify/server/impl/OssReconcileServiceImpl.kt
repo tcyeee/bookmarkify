@@ -229,6 +229,9 @@ class OssReconcileServiceImpl(
             KtQueryWrapper(SiteAssetEntity::class.java)
                 .select(SiteAssetEntity::storageUrl, SiteAssetEntity::fileId)
         ).forEach { asset ->
+            // storage_url 和 file_id 都为 NULL 的行（例如截图失败行），MyBatis 对「全 NULL 行」
+            // 返回 null 元素，直接解引用会 NPE 掉整轮对账
+            asset ?: return@forEach
             asset.fileId?.takeIf(String::isNotBlank)?.let(fileIds::add)
             // 存量的完整 URL 不是我方 key，signAsset 另有兼容路径处理，这里不参与对账
             asset.storageUrl?.trim()
