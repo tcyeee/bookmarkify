@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.entity.dto
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import top.tcyeee.bookmarkify.entity.enums.PingOutcome
 
 /**
  * bookmarkify-scrapper `POST /ping` 的契约。
@@ -13,6 +14,26 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 
 /** `POST /ping` 请求体 */
 data class PingRequest(val url: String)
+
+/**
+ * `pingWebsite` 的内部结论 —— 落库的三态 [outcome]，外加一个只在熔断里用到的维度。
+ *
+ * [outcome] 是唯一会写进 `page_ping_log` / 影响退避与判死的东西，语义完全不变。
+ *
+ * [siteRefusal] 仅在 [outcome] 为 [PingOutcome.UNKNOWN] 时有意义：`true` 表示这次 UNKNOWN
+ * 是「站点还活着、只是用 403/406/412 拒绝了我方这一次请求」（拿到状态码即证明链路到达了
+ * 源站），`false` 表示「我方链路压根没探到」（scrapper 没起 / 鉴权错 / load_shed / blocked
+ * / 契约不符）。两者对 [LivenessPolicy][top.tcyeee.bookmarkify.server.liveness.LivenessPolicy]
+ * 的熔断分母取值相反 —— 前者是「我方够得着」的反证，不进分母。见 `LivenessPolicy.isSiteRefusal`。
+ */
+data class PingProbeResult(
+    val outcome: PingOutcome,
+    val siteRefusal: Boolean = false,
+) {
+    /** 这次 UNKNOWN 是「我方链路没探到」——熔断判据要数的就是这类域名 */
+    val ourChainInconclusive: Boolean
+        get() = outcome == PingOutcome.UNKNOWN && !siteRefusal
+}
 
 /**
  * `POST /ping` 响应体 —— scrapper 报的**事实**，判死策略在

@@ -18,17 +18,29 @@ import kotlin.test.assertTrue
  */
 class LivenessPolicyTest {
 
-    /** 每条探测来自**各自不同**的域名——最分散的形态，域名比例与探测次数比例一致 */
+    /**
+     * 每条探测来自**各自不同**的域名——最分散的形态，域名比例与探测次数比例一致。
+     * `unknown` 一律按「我方链路没探到」(ourChainInconclusive=true) 计——这些用例建模的是我方故障。
+     * 「站点用状态码拒绝我方」那种 UNKNOWN 用 [siteRefused] 构造。
+     */
     private fun outcomes(alive: Int = 0, dead: Int = 0, unknown: Int = 0): List<LivenessPolicy.HostOutcome> {
         var n = 0
-        fun batch(count: Int, outcome: PingOutcome) =
-            List(count) { LivenessPolicy.HostOutcome("host-${n++}.example.com", outcome) }
-        return batch(alive, PingOutcome.ALIVE) + batch(dead, PingOutcome.DEAD) + batch(unknown, PingOutcome.UNKNOWN)
+        fun batch(count: Int, outcome: PingOutcome, ourChain: Boolean = false) =
+            List(count) { LivenessPolicy.HostOutcome("host-${n++}.example.com", outcome, ourChainInconclusive = ourChain) }
+        return batch(alive, PingOutcome.ALIVE) + batch(dead, PingOutcome.DEAD) +
+            batch(unknown, PingOutcome.UNKNOWN, ourChain = true)
     }
 
-    /** 同一域名下的 [count] 条页面，结论相同——现实里"一个站点收藏了好几条"的形态 */
-    private fun sameHost(host: String, count: Int, outcome: PingOutcome) =
-        List(count) { LivenessPolicy.HostOutcome(host, outcome) }
+    /** [count] 个各自不同的域名，全部是「站点主动拒绝我方探针」的 UNKNOWN（反爬） */
+    private fun siteRefused(count: Int): List<LivenessPolicy.HostOutcome> =
+        List(count) { LivenessPolicy.HostOutcome("refuser-$it.example.com", PingOutcome.UNKNOWN, ourChainInconclusive = false) }
+
+    /**
+     * 同一域名下的 [count] 条页面，结论相同——现实里"一个站点收藏了好几条"的形态。
+     * UNKNOWN 时 [ourChain] 默认 false（即「站点拒绝」的反爬语义）；建模我方故障时显式传 true。
+     */
+    private fun sameHost(host: String, count: Int, outcome: PingOutcome, ourChain: Boolean = false) =
+        List(count) { LivenessPolicy.HostOutcome(host, outcome, ourChainInconclusive = ourChain) }
 
     // ────── 由探测事实判定死活 ──────
 
@@ -56,6 +68,24 @@ class LivenessPolicyTest {
         listOf(403, 406, 412, 425, 429, 451).forEach {
             assertEquals(PingOutcome.UNKNOWN, outcomeOf(it), "status=$it")
         }
+    }
+
+    @Test
+    fun `isSiteRefusal 只认「拿到反爬状态码」这一种 —— 其余 UNKNOWN 都是我方的问题`() {
+        // 站点用状态码拒绝了我方 —— outcome 仍是 UNKNOWN，但这是「链路够得着源站」的证据
+        listOf(403, 406, 412, 425, 429, 451).forEach {
+            assertTrue(
+                LivenessPolicy.isSiteRefusal(reachable = true, status = it, blocked = false),
+                "status=$it",
+            )
+        }
+        // blocked（我方 SSRF 策略拒绝）、传输层失败、拿不到状态码（契约不符）：都是我方链路的问题
+        assertFalse(LivenessPolicy.isSiteRefusal(reachable = true, status = 403, blocked = true))
+        assertFalse(LivenessPolicy.isSiteRefusal(reachable = false, status = null, blocked = false))
+        assertFalse(LivenessPolicy.isSiteRefusal(reachable = true, status = null, blocked = false))
+        // 正常存活 / 真失联也不是「拒绝」
+        assertFalse(LivenessPolicy.isSiteRefusal(reachable = true, status = 200, blocked = false))
+        assertFalse(LivenessPolicy.isSiteRefusal(reachable = true, status = 404, blocked = false))
     }
 
     @Test
@@ -146,10 +176,11 @@ class LivenessPolicyTest {
     }
 
     @Test
-    fun `一个反爬站点收藏了很多条不足以熔断——比例按域名算`() {
+    fun `一个反爬站点收藏了很多条不足以熔断——按域名算且反爬不进分母`() {
         // 2026-08-10 生产实况：10 条候选里 4 条是同一个 B 站视频页（对机房 IP 恒定 412 判
-        // UNKNOWN），加上 zfrontier、reddit 各一条，按探测次数是 6/10=60% 必然熔断；
-        // 按域名去重是 3/7=43%，不该熔断。这是全部改动的判据。
+        // UNKNOWN），加上 zfrontier、reddit 各一条，按探测次数是 6/10=60% 必然熔断。
+        // 按域名去重已经降到 3/7；这三个又都是「站点用状态码拒绝我方」，整站剔出分母后
+        // 分子为 0，更不该熔断。
         val probes = sameHost("www.bilibili.com", 4, PingOutcome.UNKNOWN) +
             sameHost("www.zfrontier.com", 1, PingOutcome.UNKNOWN) +
             sameHost("www.reddit.com", 1, PingOutcome.UNKNOWN) +
@@ -161,11 +192,50 @@ class LivenessPolicyTest {
     }
 
     @Test
+    fun `小体量部署里两个永久反爬域名不足以熔断——被剔出分母`() {
+        // 2026-08-28 生产实况：久未检查的候选只涉及 4 个域名，其中 B 站(412)、zfrontier(403)
+        // 对机房出口 IP 是永久反爬 → 恒 UNKNOWN。按比例是 2/4=50% 每轮都成立，
+        // livenessCheckStaleBookmarks 半数轮次直接熔断，这批书签的活性与内容刷新永远推进不了。
+        // 整站都是「站点用状态码拒绝我方」的域名从分母里剔除后，分母只剩 2 个 ALIVE 域名、
+        // 分子 0 —— 不熔断。
+        val probes = sameHost("www.bilibili.com", 5, PingOutcome.UNKNOWN, ourChain = false) +
+            sameHost("www.zfrontier.com", 2, PingOutcome.UNKNOWN, ourChain = false) +
+            sameHost("caniuse.com", 2, PingOutcome.ALIVE) +
+            sameHost("developer.mozilla.org", 2, PingOutcome.ALIVE)
+        assertNull(LivenessPolicy.breakerReason(probes))
+    }
+
+    @Test
+    fun `一批反爬域名 + 少量我方探不到，也不熔断——反爬不进分母、我方那几个又不够下限`() {
+        // siteapi/反爬域名再多也不算「系统性故障」的证据；真正我方探不到的只有 2 个，2 < 4
+        val probes = siteRefused(6) +
+            (1..2).flatMap { sameHost("ourfail-$it.example.com", 3, PingOutcome.UNKNOWN, ourChain = true) } +
+            (1..2).map { LivenessPolicy.HostOutcome("ok-$it.example.com", PingOutcome.ALIVE, ourChainInconclusive = false) }
+        assertNull(LivenessPolicy.breakerReason(probes))
+    }
+
+    @Test
+    fun `我方探不到的域名数没到下限时即便比例百分之百也不熔断`() {
+        // 3 个域名整站是「我方链路没探到」、一个健康域名都没有：比例 100%，样本 12 次探测也够，
+        // 但去重域名数 3 < 4，仍判为「证据不足以说明是我方全局故障」
+        val probes = (1..3).flatMap { sameHost("ourfail-$it.example.com", 4, PingOutcome.UNKNOWN, ourChain = true) }
+        assertNull(LivenessPolicy.breakerReason(probes))
+    }
+
+    @Test
+    fun `我方探不到的域名达到下限且过半就照常熔断——下限与反爬剔除都不该挡住真故障`() {
+        // 4 个域名整站是「我方链路没探到」 + 3 个健康：4/7=57% 过半，且 4 >= 下限
+        val probes = (1..4).flatMap { sameHost("ourfail-$it.example.com", 3, PingOutcome.UNKNOWN, ourChain = true) } +
+            (1..3).map { LivenessPolicy.HostOutcome("ok-$it.example.com", PingOutcome.ALIVE, ourChainInconclusive = false) }
+        assertNotNull(LivenessPolicy.breakerReason(probes))
+    }
+
+    @Test
     fun `同一批里域名过半探不到仍要熔断——去重不该把真故障也稀释掉`() {
         // 与上一条只差"探不到的域名有几个"：我方链路故障时是**所有**域名一起探不到，
         // 去重之后比例反而更高，判得比按次数算更准
-        val probes = (1..5).flatMap { sameHost("dead-$it.example.com", 2, PingOutcome.UNKNOWN) } +
-            (1..5).map { LivenessPolicy.HostOutcome("ok-$it.example.com", PingOutcome.ALIVE) }
+        val probes = (1..5).flatMap { sameHost("dead-$it.example.com", 2, PingOutcome.UNKNOWN, ourChain = true) } +
+            (1..5).map { LivenessPolicy.HostOutcome("ok-$it.example.com", PingOutcome.ALIVE, ourChainInconclusive = false) }
         assertNotNull(LivenessPolicy.breakerReason(probes))
     }
 
@@ -174,9 +244,9 @@ class LivenessPolicyTest {
         // 有一页通了，恰恰证明这个域名我方够得着——它是"全局故障"的反证，不能记进分子。
         // 20 个域名里 10 个混合、10 个存活，按"任一页 UNKNOWN 即算"会得出 50% 触发熔断
         val probes = (1..10).flatMap {
-            sameHost("mixed-$it.example.com", 1, PingOutcome.UNKNOWN) +
+            sameHost("mixed-$it.example.com", 1, PingOutcome.UNKNOWN, ourChain = true) +
                 sameHost("mixed-$it.example.com", 1, PingOutcome.ALIVE)
-        } + (1..10).map { LivenessPolicy.HostOutcome("ok-$it.example.com", PingOutcome.ALIVE) }
+        } + (1..10).map { LivenessPolicy.HostOutcome("ok-$it.example.com", PingOutcome.ALIVE, ourChainInconclusive = false) }
         assertNull(LivenessPolicy.breakerReason(probes))
     }
 
@@ -186,7 +256,7 @@ class LivenessPolicyTest {
         // 不是我方链路故障。按次数算 30/33=91% 会误熔断，而误熔断的代价是这批书签
         // 永远判不了失联——巡检唯一的产出被这条规则挡在门外
         val probes = sameHost("shutdown.example.com", 30, PingOutcome.DEAD) +
-            (1..3).map { LivenessPolicy.HostOutcome("ok-$it.example.com", PingOutcome.ALIVE) }
+            (1..3).map { LivenessPolicy.HostOutcome("ok-$it.example.com", PingOutcome.ALIVE, ourChainInconclusive = false) }
         assertNull(LivenessPolicy.breakerReason(probes))
     }
 

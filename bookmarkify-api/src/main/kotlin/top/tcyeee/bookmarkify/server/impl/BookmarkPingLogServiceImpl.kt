@@ -54,10 +54,20 @@ class BookmarkPingLogServiceImpl(
                 .orderByDesc(SweepLogEntity::createTime)
         )
         val breakers = rounds.filter { !it.breakerReason.isNullOrBlank() }
+
+        // 连续熔断按 task_label 分别数：两个小时级巡检各自独立锁、轮次在时间线上交错，
+        // 混在一起数会把「A 熔断、B 正常、A 又熔断」误读成 A 连续熔断两轮。
+        // rounds 已按 createTime 倒序，每个任务取「最新往前数、连续非空 breakerReason」的长度。
+        val consecutiveByTask = rounds.groupBy { it.taskLabel }
+            .mapValues { (_, taskRounds) -> taskRounds.takeWhile { !it.breakerReason.isNullOrBlank() }.count() }
+        val maxConsecutive = consecutiveByTask.maxByOrNull { it.value }
+
         return SweepHealthVO(
             windowHours = windowHours,
             roundCount = rounds.size,
             breakerCount = breakers.size,
+            maxConsecutiveBreaker = maxConsecutive?.value ?: 0,
+            maxConsecutiveBreakerTask = maxConsecutive?.takeIf { it.value > 0 }?.key,
             deferredParse = rounds.sumOf { it.deferredParse },
             latestBreaker = breakers.firstOrNull(),
             // 刻意**不**限制在窗口内：窗口内一轮都没有，恰恰是最该报警的情形，

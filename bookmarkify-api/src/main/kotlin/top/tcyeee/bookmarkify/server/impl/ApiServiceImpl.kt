@@ -19,6 +19,7 @@ import top.tcyeee.bookmarkify.entity.dto.DeepSeekRequest
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekResponse
 import top.tcyeee.bookmarkify.entity.dto.DeepSeekUsage
 import top.tcyeee.bookmarkify.entity.dto.NsfwCheckResult
+import top.tcyeee.bookmarkify.entity.dto.PingProbeResult
 import top.tcyeee.bookmarkify.entity.dto.PingRequest
 import top.tcyeee.bookmarkify.entity.dto.PingResponse
 import top.tcyeee.bookmarkify.entity.dto.ProposedCategory
@@ -606,7 +607,7 @@ class ApiServiceImpl(
      * `scrape` 早就用 [isScrapperUnavailable][top.tcyeee.bookmarkify.server.impl.BookmarkServiceImpl]
      * 挡掉了同类问题，ping 这条路径一直是漏的——而它还是所有判定的第一道门。
      */
-    override fun pingWebsite(url: String): PingOutcome {
+    override fun pingWebsite(url: String): PingProbeResult {
         val targetUrl = buildUrl(url)
         val endpoint = "${scrapperConfig.baseUrl.trimEnd('/')}/ping"
 
@@ -616,7 +617,7 @@ class ApiServiceImpl(
         //   把"我们不去探"记成失联，会让这类书签在用户桌面上显示成失效。
         if (!ScrapeTargetGuard.isScrapable(targetUrl)) {
             log.warn("[pingWebsite] 目标不是域名(本机/IP)，跳过探测: url=$targetUrl")
-            return PingOutcome.UNKNOWN
+            return PingProbeResult(PingOutcome.UNKNOWN)
         }
 
         val httpResponse = runCatching {
@@ -630,12 +631,12 @@ class ApiServiceImpl(
             // 传输层异常必然发生在 API ↔ scrapper 之间：目标站点能否打开是由 scrapper
             // 判定后写在响应体里的，我方连响应都没拿到，对站点死活没有任何结论
             log.warn("[pingWebsite] 抓取服务不可达，本次探测无结论: url=$targetUrl, endpoint=$endpoint, err=${it.message}$scrapperStartupHint")
-            return PingOutcome.UNKNOWN
+            return PingProbeResult(PingOutcome.UNKNOWN)
         }
 
         if (!httpResponse.isOk) {
             val code = runCatching { objectMapper.readTree(httpResponse.body())?.path("error")?.asText(null) }.getOrNull()
-            return when (classifyScrapperError(code)) {
+            val outcome = when (classifyScrapperError(code)) {
                 // scrapper 明确判定目标站点打不开
                 ErrorType.E304 -> PingOutcome.DEAD
                 // URL 本身不合法：这条记录永远 ping 不通，结论确实是 DEAD，
@@ -658,22 +659,28 @@ class ApiServiceImpl(
                     PingOutcome.UNKNOWN
                 }
             }
+            // 这条非 2xx 分支里的 UNKNOWN 全是我方链路的问题（E308 / 鉴权 / load_shed / 契约），
+            // 没有一个是「站点拿状态码拒绝了我方」—— siteRefusal 一律 false
+            return PingProbeResult(outcome)
         }
 
         val body = runCatching { objectMapper.readValue<PingResponse>(httpResponse.body()) }.getOrElse {
             // 契约对不上是我方两侧代码不同步，同样不是站点的问题
             log.warn("[pingWebsite] 响应解析失败(契约不匹配)，本次探测无结论: url=$targetUrl, err=${it.message}")
-            return PingOutcome.UNKNOWN
+            return PingProbeResult(PingOutcome.UNKNOWN)
         }
 
         // 新契约：scrapper 只报事实，判死由 LivenessPolicy 决定
         body.reachable?.let { reachable ->
             val outcome = LivenessPolicy.outcomeOf(reachable, body.status, body.blocked)
+            // 站点用 403/406/412… 拿状态码拒绝了我方：outcome 仍是 UNKNOWN（不判死、不退避），
+            // 但这证明链路到达了源站，熔断判据要据此把该域名排除出分母
+            val siteRefusal = LivenessPolicy.isSiteRefusal(reachable, body.status, body.blocked)
             if (outcome != PingOutcome.ALIVE) log.debug(
-                "[pingWebsite] $outcome: url=$targetUrl, reachable=$reachable, status=${body.status}, " +
-                    "blocked=${body.blocked}, method=${body.method}, redirects=${body.redirects}"
+                "[pingWebsite] $outcome${if (siteRefusal) "(站点拒绝)" else ""}: url=$targetUrl, reachable=$reachable, " +
+                    "status=${body.status}, blocked=${body.blocked}, method=${body.method}, redirects=${body.redirects}"
             )
-            return outcome
+            return PingProbeResult(outcome, siteRefusal = siteRefusal)
         }
 
         // 旧版 scrapper（只有一个 alive 布尔）。两个服务各自独立发布，必然有版本错配的窗口；
@@ -681,11 +688,11 @@ class ApiServiceImpl(
         // 线上 scrapper 全部升级后可以连同 PingResponse.alive 一起删除。
         body.alive?.let { alive ->
             log.debug("[pingWebsite] 对端为旧版 scrapper，退回粗粒度判定: url=$targetUrl, alive=$alive")
-            return if (alive) PingOutcome.ALIVE else PingOutcome.DEAD
+            return PingProbeResult(if (alive) PingOutcome.ALIVE else PingOutcome.DEAD)
         }
 
         log.warn("[pingWebsite] 响应里既无 reachable 也无 alive，本次探测无结论: url=$targetUrl")
-        return PingOutcome.UNKNOWN
+        return PingProbeResult(PingOutcome.UNKNOWN)
     }
 
     override fun inferNsfw(title: String?, description: String?, host: String): NsfwCheckResult {

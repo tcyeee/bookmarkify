@@ -1136,6 +1136,13 @@ data class SweepHealthVO(
     @field:Schema(description = "统计窗口(小时)") var windowHours: Int = 24,
     @field:Schema(description = "窗口内的巡检轮次总数") var roundCount: Int = 0,
     @field:Schema(description = "窗口内被熔断中止的轮次数") var breakerCount: Int = 0,
+    @field:Schema(
+        description = "某个任务连续被熔断的最新轮次数（按 task_label 分别计，取最大值）。" +
+            "偶发熔断是「我方链路抖了一下」，连续熔断则是「自我维持的停摆」——熔断轮次不推进" +
+            "有效游标，下一轮选出同一批候选、得到同一个结论，没有自愈路径。这两种要区别对待。"
+    )
+    var maxConsecutiveBreaker: Int = 0,
+    @field:Schema(description = "连续熔断轮次最多的那个任务的 taskLabel；没有连续熔断时为空") var maxConsecutiveBreakerTask: String? = null,
     @field:Schema(description = "窗口内因解析队列拥堵被推迟的重新抓取条数") var deferredParse: Int = 0,
     @field:Schema(description = "最近一次熔断的轮次；窗口内没有熔断时为空") var latestBreaker: SweepLogEntity? = null,
     @field:Schema(
