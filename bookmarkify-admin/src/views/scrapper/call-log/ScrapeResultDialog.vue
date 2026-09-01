@@ -1,8 +1,9 @@
 <script lang="ts" setup>
 import type { WebsiteLivenessCheckResult } from "#/api/website";
 
-import { computed, defineAsyncComponent, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
+import { ElButton, ElDialog, ElTag } from "#/adapter/element";
 import { checkWebsiteLivenessApi } from "#/api/website";
 import { isScrapableUrl, LINK_TYPE_REASON, linkTypeOfUrl } from "#/views/bookmark/linkType";
 
@@ -12,27 +13,6 @@ const props = defineProps<{
 }>();
 
 const visible = defineModel<boolean>({ default: false });
-
-const ElDialog = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/dialog/index"),
-    import("element-plus/es/components/dialog/style/css"),
-  ]).then(([res]) => res.ElDialog)
-);
-
-const ElTag = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/tag/index"),
-    import("element-plus/es/components/tag/style/css"),
-  ]).then(([res]) => res.ElTag)
-);
-
-const ElButton = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/button/index"),
-    import("element-plus/es/components/button/style/css"),
-  ]).then(([res]) => res.ElButton)
-);
 
 const loading = ref(false);
 const result = ref<null | WebsiteLivenessCheckResult>(null);
@@ -105,7 +85,7 @@ const rawJson = computed(() => {
 </script>
 
 <template>
-  <ElDialog v-model="visible" title="书签解析" width="1000px" top="6vh">
+  <ElDialog v-model="visible" title="重新抓取" width="1000px" top="6vh">
     <div class="mb-3 flex items-center gap-2 text-sm">
       <span class="shrink-0 text-gray-500">URL</span>
       <span class="flex-1 break-all">{{ url }}</span>
@@ -115,8 +95,12 @@ const rawJson = computed(() => {
         :disabled="!!refusedReason"
         @click="parse"
       >
-        重新解析
+        重新抓取
       </ElButton>
+    </div>
+    <!-- 这不是只读操作：抓取成功且该 URL 已被某用户收藏时，会用新结果覆盖那条书签 -->
+    <div class="mb-3 text-xs text-amber-600 dark:text-amber-400">
+      抓取成功且该地址命中已有书签时，会用新的标题 / 描述 / 图标覆盖持久化那条书签（下方标「已同步至数据库」）。
     </div>
 
     <!-- 拒绝抓取：说清楚是「我方不抓」而不是「抓了但失败」，否则看着像一次故障 -->

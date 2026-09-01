@@ -261,8 +261,26 @@ data class ScrapperCallLogSearchParams(
      */
     @field:Schema(description = "调用时间下界(含)") var createTimeFrom: LocalDateTime? = null,
     @field:Schema(description = "调用时间上界(含)") var createTimeTo: LocalDateTime? = null,
+    /** 只看某个 scrapper 错误码（FETCH_FAILED / HEADLESS_UNAVAILABLE / …）。排障时按类过滤用 */
+    @field:Schema(description = "scrapper 错误码精确匹配") var errorCode: String? = null,
+    /** 只看某个抓取层（HTTP / HEADLESS / SITE_API） */
+    @field:Schema(description = "抓取层精确匹配") var layerUsed: String? = null,
+    /** 只看命中/未命中 scrapper 缓存的调用 */
+    @field:Schema(description = "是否命中缓存") var cached: Boolean? = null,
+    /**
+     * 只看「连上了但被反爬拦下」的调用（目标状态码 ∈ 403/406/412/429）。
+     * 这类换台机器/换条路可能就好了，与「连不上/DNS 挂了」处置相反，值得单独筛出来。
+     */
+    @field:Schema(description = "只看反爬类目标状态码(403/406/412/429)") var antiBotOnly: Boolean? = null,
 ) : PageBean() {
-    fun toWrapper(): Wrapper<ScrapperCallLogEntity> {
+    private companion object {
+        val ANTI_BOT_TARGET_STATUS = listOf(403, 406, 412, 429)
+    }
+
+    fun toWrapper(): Wrapper<ScrapperCallLogEntity> = baseWrapper().orderByDesc(ScrapperCallLogEntity::createTime)
+
+    /** 统计与列表共用同一套过滤条件，区别只在列表还要排序 —— 抽出来避免两处漂移 */
+    fun baseWrapper(): KtQueryWrapper<ScrapperCallLogEntity> {
         val query = KtQueryWrapper(ScrapperCallLogEntity::class.java)
         if (!urlHost.isNullOrBlank()) {
             query.like(ScrapperCallLogEntity::urlHost, urlHost)
@@ -270,7 +288,11 @@ data class ScrapperCallLogSearchParams(
         success?.let { query.eq(ScrapperCallLogEntity::success, it) }
         createTimeFrom?.let { query.ge(ScrapperCallLogEntity::createTime, it) }
         createTimeTo?.let { query.le(ScrapperCallLogEntity::createTime, it) }
-        return query.orderByDesc(ScrapperCallLogEntity::createTime)
+        if (!errorCode.isNullOrBlank()) query.eq(ScrapperCallLogEntity::errorCode, errorCode)
+        if (!layerUsed.isNullOrBlank()) query.eq(ScrapperCallLogEntity::layerUsed, layerUsed)
+        cached?.let { query.eq(ScrapperCallLogEntity::cached, it) }
+        if (antiBotOnly == true) query.`in`(ScrapperCallLogEntity::targetStatus, ANTI_BOT_TARGET_STATUS)
+        return query
     }
 }
 

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.entity.ScrapperCallLogSearchParams
+import top.tcyeee.bookmarkify.entity.ScrapperCallLogStatsVO
 import top.tcyeee.bookmarkify.entity.ScrapperCallLogVO
 import top.tcyeee.bookmarkify.entity.ScrapperErrorCodeCountVO
 import top.tcyeee.bookmarkify.entity.ScrapperFailedHostParams
@@ -31,6 +32,21 @@ class ScrapperCallLogServiceImpl(
         val faviconByHost = iconResolver.siteFaviconByHost(page.records.map { it.urlHost })
         page.records.forEach { it.faviconUrl = faviconByHost[it.urlHost] }
         return page
+    }
+
+    override fun adminStats(params: ScrapperCallLogSearchParams): ScrapperCallLogStatsVO {
+        // 汇总忽略「成功/失败」与「缓存」两个开关，其余范围限定沿用列表那一套（baseWrapper）。
+        // 三次 count 而不是一条 GROUP BY：过滤条件是动态拼的，复用 baseWrapper 才不会两处漂移。
+        val scope = params.copy(success = null, cached = null)
+        val total = baseMapper.selectCount(scope.baseWrapper())
+        val success = baseMapper.selectCount(scope.copy(success = true).baseWrapper())
+        val cached = baseMapper.selectCount(scope.copy(cached = true).baseWrapper())
+        return ScrapperCallLogStatsVO(
+            totalCalls = total,
+            successCalls = success,
+            failedCalls = total - success,
+            cachedCalls = cached,
+        )
     }
 
     override fun failedHostRanking(params: ScrapperFailedHostParams): List<ScrapperFailedHostVO> {

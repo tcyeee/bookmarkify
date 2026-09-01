@@ -1,7 +1,11 @@
 <script lang="ts" setup>
-import type { ScrapperCallLogSearchParams, ScrapperCallLogVO } from "#/api/scrapper-call-log";
+import type {
+  ScrapperCallLogSearchParams,
+  ScrapperCallLogStatsVO,
+  ScrapperCallLogVO,
+} from "#/api/scrapper-call-log";
 
-import { computed, defineAsyncComponent, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 
 import { useRoute, useRouter } from "vue-router";
 
@@ -9,7 +13,20 @@ import { Page } from "@vben/common-ui";
 import { formatDateTime } from "@vben/utils";
 
 import {
+  ElButton,
+  ElCard,
+  ElDatePicker,
+  ElInput,
+  ElMessageBox,
+  ElOption,
+  ElSelect,
+  ElSwitch,
+  ElTag,
+  ElTooltip,
+} from "#/adapter/element";
+import {
   getAdminScrapperCallLogListApi,
+  getAdminScrapperCallLogStatsApi,
   SCRAPPER_ERROR_CODE_DESC,
 } from "#/api/scrapper-call-log";
 import { useVbenVxeGrid, type VxeGridProps } from "#/adapter/vxe-table";
@@ -18,107 +35,95 @@ import { FilterBar, FilterItem, useAutoSearch } from "#/components/filter-bar";
 import BookmarkDetailDialog from "#/views/bookmark/BookmarkDetailDialog.vue";
 import { isScrapableUrl, LINK_TYPE_REASON, linkTypeOfUrl } from "#/views/bookmark/linkType";
 import SweepBreakerAlert from "#/views/scrapper/SweepBreakerAlert.vue";
+import {
+  errorCodeDescOf,
+  faviconSrc,
+  isAntiBotStatus,
+  onFaviconError,
+  SLOW_CALL_MS,
+} from "#/views/scrapper/shared";
 
 import ScrapeResultDialog from "./ScrapeResultDialog.vue";
-
-const ElCard = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/card/index"),
-    import("element-plus/es/components/card/style/css"),
-  ]).then(([res]) => res.ElCard)
-);
-
-const ElInput = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/input/index"),
-    import("element-plus/es/components/input/style/css"),
-  ]).then(([res]) => res.ElInput)
-);
-
-const ElSelect = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/select/index"),
-    import("element-plus/es/components/select/style/css"),
-  ]).then(([res]) => res.ElSelect)
-);
-
-const ElOption = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/select/index"),
-    import("element-plus/es/components/select/style/css"),
-  ]).then(([res]) => res.ElOption)
-);
-
-const ElButton = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/button/index"),
-    import("element-plus/es/components/button/style/css"),
-  ]).then(([res]) => res.ElButton)
-);
-
-const ElTag = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/tag/index"),
-    import("element-plus/es/components/tag/style/css"),
-  ]).then(([res]) => res.ElTag)
-);
-
-const ElTooltip = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/tooltip/index"),
-    import("element-plus/es/components/tooltip/style/css"),
-  ]).then(([res]) => res.ElTooltip)
-);
 
 const route = useRoute();
 const router = useRouter();
 
-// 巡检轮次页跳过来时带上筛选条件，直接落在目标数据上，省掉"再点一下筛选"。
-// 在 setup 里就写进初值而不是挂载后再改：后者会让表格先按"无筛选"查一次、再被自动搜索
-// 翻一次，中间那一版无关的数据还会闪一下（与巡检页的 onlyBreaker 是同一个套路）
-const searchForm = reactive<Pick<ScrapperCallLogSearchParams, "urlHost" | "success">>({
-  urlHost: typeof route.query.urlHost === "string" ? route.query.urlHost : "",
-  // 失败站点排行跳过来时带 success=false：从一张只讲失败的榜单点进来，落地却混着成功记录，
-  // 等于让人再手动筛一次。只认 "false"/"true" 两个串，其余取值当没传
-  success:
-    route.query.success === "false"
-      ? false
-      : route.query.success === "true"
-        ? true
-        : undefined,
-});
+/** 抓取层可选值。认不出的历史取值不在列表里，靠输入过滤也够用 */
+const LAYER_OPTIONS = ["HTTP", "HEADLESS", "SITE_API"];
+/** 错误码下拉：直接取释义表的键，顺带把中文标签摆出来 */
+const ERROR_CODE_OPTIONS = Object.entries(SCRAPPER_ERROR_CODE_DESC).map(
+  ([code, meta]) => ({ value: code, label: `${code} · ${meta.label}` })
+);
 
-/**
- * 时间窗。**只从 URL 来，页面上没有对应的输入框** —— 它不是一个日常筛选项，而是
- * 「从某一轮巡检跳过来看这一轮触发的重抓」这一条链路的载体：那些重抓是异步投递的，
- * scrapper_call_log 里既没有轮次 ID 也没有页面 ID，除了时间没有别的东西可以对上。
- *
- * 正因为它是近似（窗口内必然混进其它来源的抓取），一旦生效就要在页面上显式挂一条提示，
- * 否则管理员会把窗口里所有的行都当成那一轮的产物。
- */
-const timeWindow = computed(() => ({
-  from: typeof route.query.from === "string" ? route.query.from : undefined,
-  to: typeof route.query.to === "string" ? route.query.to : undefined,
-}));
+// 巡检轮次 / 失败站点排行跳过来时带的筛选条件，直接落在目标数据上，省掉"再点一下筛选"。
+// 在 setup 里就把 URL 参数读进初值，而不是挂载后再改：后者会让表格先按"无筛选"查一次、
+// 再被自动搜索翻一次，中间那一版无关的数据还会闪一下（与巡检页的 onlyBreaker 是同一个套路）
+function formFromQuery() {
+  const q = route.query;
+  const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+  return {
+    urlHost: str(q.urlHost) ?? "",
+    // 失败站点排行跳过来时带 success=false：从一张只讲失败的榜单点进来，落地却混着成功记录，
+    // 等于让人再手动筛一次。只认 "false"/"true" 两个串，其余取值当没传
+    success: q.success === "false" ? false : q.success === "true" ? true : undefined,
+    errorCode: str(q.errorCode),
+    layerUsed: str(q.layerUsed),
+    cached: q.cached === "true" ? true : q.cached === "false" ? false : undefined,
+    antiBotOnly: q.antiBot === "1" ? true : undefined,
+    // 时间窗：从巡检轮次跳过来时用来圈"这一轮触发的重抓"（见下方 fromSweep 提示条），
+    // 也可以在页面上用日期选择器直接改。`[from, to]`，清空时 ElDatePicker 给的是 null
+    dateRange: (str(q.from) || str(q.to)
+      ? [str(q.from) ?? "", str(q.to) ?? ""]
+      : null) as [string, string] | null,
+  };
+}
 
-/** 是不是从巡检轮次跳过来的（决定提示文案说不说"这一轮"） */
+type SearchForm = ReturnType<typeof formFromQuery>;
+
+const searchForm = reactive<SearchForm>(formFromQuery());
+
+/** 是不是从巡检轮次跳过来的（决定时间窗提示条说不说"这一轮"、以及那段近似关联的免责说明） */
 const fromSweep = computed(() => route.query.note === "sweep");
 
-/** 提示条上的可读区间，`YYYY-MM-DDTHH:mm:ss` 直接给人看太别扭 */
+const dateFrom = computed(() => searchForm.dateRange?.[0] || undefined);
+const dateTo = computed(() => searchForm.dateRange?.[1] || undefined);
+const hasTimeWindow = computed(() => !!(dateFrom.value || dateTo.value));
+
+/** 提示条上的可读区间 */
 const timeWindowText = computed(() => {
-  const { from, to } = timeWindow.value;
-  if (!from && !to) return "";
-  return `${from ? formatDateTime(from) : "不限"} ~ ${to ? formatDateTime(to) : "不限"}`;
+  if (!hasTimeWindow.value) return "";
+  return `${dateFrom.value ? formatDateTime(dateFrom.value) : "不限"} ~ ${
+    dateTo.value ? formatDateTime(dateTo.value) : "不限"
+  }`;
 });
+
+// 在页面内导航到本路由（比如从巡检轮次明细弹窗点"查看本轮触发的重抓"，而当前已在这一页）时，
+// Vue 会复用组件、不重新 setup，searchForm 若只在 setup 里读一次就会与新的 URL 参数脱节。
+// 这里把 query 变化同步回表单；useAutoSearch 会接着把表格刷新掉。
+watch(
+  () => route.query,
+  () => Object.assign(searchForm, formFromQuery())
+);
 
 // ── 书签解析对话框：失败行点"重试"后重新调用 scrapper 并展示其返回的全部信息 ──
 const parseDialogVisible = ref(false);
 const parseUrl = ref("");
 
-function handleRetry(row: ScrapperCallLogVO) {
+async function handleRetry(row: ScrapperCallLogVO) {
   // 本机/IP 地址重试多少次都是同一个结果：后端与 scrapper 都会直接拒绝(E309 /
   // FORBIDDEN_TARGET)。按钮已经禁用，这里再挡一道，防止有人从别处调进来
   if (!canRetry(row)) return;
+  // "重试"不是只读操作：打开的弹窗会立刻调 /admin/website/liveness-check，抓成功且该 URL
+  // 命中已有书签时会**覆盖持久化那条书签**（标题/描述/图标）。点之前先讲清楚。
+  try {
+    await ElMessageBox.confirm(
+      "将重新调用 scrapper 抓取该地址。若它已被某个用户收藏，抓取成功后会用新结果覆盖那条书签的标题、描述与图标。",
+      "重新抓取并可能覆盖书签",
+      { confirmButtonText: "继续", cancelButtonText: "取消", type: "warning" }
+    );
+  } catch {
+    return;
+  }
   parseUrl.value = row.url;
   parseDialogVisible.value = true;
 }
@@ -141,29 +146,6 @@ function handleCellClick({ row, column }: { row: ScrapperCallLogVO; column: any 
   if (column?.field === "rowActions") return;
   detailUrl.value = row.url;
   detailVisible.value = true;
-}
-
-// 兜底地球图标。内联 data URI 而非引用文件，保证它自身永远不会再发一次请求
-const FALLBACK_FAVICON = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`
-)}`;
-
-/**
- * 图标只认后端下发的 `faviconUrl`（我方 OSS 签名地址），拿不到就用本地兜底图。
- *
- * **不要**改回按域名拼 `https://${row.urlHost}/favicon.ico`。这个页面上失效域名的密度最高
- * ——域名打不开才会有失败日志——那样等于让管理员的浏览器挨个去连一批连我们的抓取服务都
- * 拒掉的站点：产品发出的请求不干净（管理员公网 IP 直接暴露给第三方），控制台还会被超时和
- * 证书错误刷屏，把真正的报错埋掉。图标为空本身就是有效信息：我方从没抓到过这个站的图标。
- */
-function faviconOf(row: ScrapperCallLogVO) {
-  return row.faviconUrl || FALLBACK_FAVICON;
-}
-
-function onFaviconError(event: Event) {
-  const img = event.target as HTMLImageElement;
-  // 已经是兜底图还报错就不再重置，避免 error 事件死循环
-  if (img.src !== FALLBACK_FAVICON) img.src = FALLBACK_FAVICON;
 }
 
 /**
@@ -222,13 +204,6 @@ const SOURCE_LEGEND: Array<[string, string]> = [
   ["headless", "普通 HTTP 抓取失败，由无头浏览器渲染后抓取，并附带页面截图"],
 ];
 
-/**
- * 耗时的"网络良好/较差"分界。3s 是这条链路上有意义的那道坎：Layer 1 的普通 HTTP 抓取
- * 正常都在 1~2s 内回来，越过 3s 基本意味着对端慢、重定向链长，或者已经退到无头浏览器
- * （生产实测无头单次 ~28s）。
- */
-const SLOW_CALL_MS = 3000;
-
 function durationClassOf(row: ScrapperCallLogVO) {
   return row.durationMs < SLOW_CALL_MS
     ? "text-green-600 dark:text-green-400"
@@ -243,17 +218,9 @@ function httpStatusClassOf(row: ScrapperCallLogVO) {
     : "text-red-600 dark:text-red-400";
 }
 
-/** 错误码释义；认不出的码（scrapper 新增而后台没跟上）返回空串，由模板只显示原始码 */
-function errorCodeDescOf(row: ScrapperCallLogVO) {
-  return row.errorCode ? (SCRAPPER_ERROR_CODE_DESC[row.errorCode]?.desc ?? "") : "";
-}
-
-/** 反爬类状态码：连上了但被拒，与"连不上"是完全不同的两件事，用橙色和红色分开 */
-const TARGET_STATUS_ANTI_BOT = new Set([403, 406, 412, 429]);
-
 function targetStatusClassOf(row: ScrapperCallLogVO) {
   if (row.targetStatus == null) return "text-gray-400";
-  return TARGET_STATUS_ANTI_BOT.has(row.targetStatus)
+  return isAntiBotStatus(row.targetStatus)
     ? "text-orange-500 dark:text-orange-400"
     : "text-red-600 dark:text-red-400";
 }
@@ -264,7 +231,7 @@ function targetStatusTip(row: ScrapperCallLogVO) {
       ? "成功的调用不记这一列（那恒为 2xx）"
       : "没有拿到目标站点的状态码：连接压根没建立起来（DNS 解析失败、连不上、超时），或者这次根本没走到目标站点";
   }
-  return TARGET_STATUS_ANTI_BOT.has(row.targetStatus)
+  return isAntiBotStatus(row.targetStatus)
     ? `目标返回 ${row.targetStatus}：连上了但被拒，典型的反爬。拒的多半是我方机房出口 IP 而非请求长相`
     : `目标站点返回 ${row.targetStatus}`;
 }
@@ -313,19 +280,60 @@ const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
   proxyConfig: {
     ajax: {
       query: async ({ page }) => {
+        const params = queryParams();
         const res = await getAdminScrapperCallLogListApi({
-          urlHost: searchForm.urlHost || undefined,
-          success: searchForm.success,
-          createTimeFrom: timeWindow.value.from,
-          createTimeTo: timeWindow.value.to,
+          ...params,
           currentPage: page.currentPage,
           pageSize: page.pageSize,
         });
+        // 汇总与列表同一套筛选，但独立于翻页 —— 翻到第 3 页看到的仍是整个范围的成功率。
+        // 不阻塞表格渲染，失败也不打断（它是附属信息）
+        loadStats(params);
         return { items: res.records, total: res.total };
       },
     },
   },
 };
+
+/** searchForm → 接口入参（空值一律转 undefined，别把空串发出去） */
+function queryParams(): ScrapperCallLogSearchParams {
+  return {
+    urlHost: searchForm.urlHost || undefined,
+    success: searchForm.success,
+    errorCode: searchForm.errorCode || undefined,
+    layerUsed: searchForm.layerUsed || undefined,
+    cached: searchForm.cached,
+    antiBotOnly: searchForm.antiBotOnly || undefined,
+    createTimeFrom: dateFrom.value,
+    createTimeTo: dateTo.value,
+  };
+}
+
+const stats = ref<null | ScrapperCallLogStatsVO>(null);
+// 汇总是 3 条 COUNT，翻页不会改变它，所以按筛选条件去重 —— 只在筛选真的变了时才重打
+let lastStatsKey = "";
+async function loadStats(params: ScrapperCallLogSearchParams) {
+  const key = JSON.stringify(params);
+  if (key === lastStatsKey) return;
+  lastStatsKey = key;
+  try {
+    stats.value = await getAdminScrapperCallLogStatsApi(params);
+  } catch {
+    stats.value = null;
+    lastStatsKey = "";
+  }
+}
+
+const successRateText = computed(() => {
+  const s = stats.value;
+  if (!s || s.totalCalls === 0) return "—";
+  return `${((s.successCalls / s.totalCalls) * 100).toFixed(1)}%`;
+});
+const cacheRateText = computed(() => {
+  const s = stats.value;
+  if (!s || s.totalCalls === 0) return "—";
+  return `${((s.cachedCalls / s.totalCalls) * 100).toFixed(1)}%`;
+});
 
 // 行点击必须走 gridEvents：Grid 包装组件的根节点是个 div，模板上写 @cell-click 只会
 // 作为原生监听落到那个 div 上（DOM 没有 cell-click 事件），内层 VxeGrid 收不到
@@ -334,26 +342,23 @@ const [Grid, gridApi] = useVbenVxeGrid({
   gridEvents: { cellClick: handleCellClick },
 });
 
-// 「重置」要还原成"什么都不筛"，而不是 URL 带进来的那个筛选态
+// 「重置」要还原成"什么都不筛"，而不是 URL 带进来的那个筛选态（时间窗也一并清）
 const { reset: resetForm } = useAutoSearch(searchForm, () => gridApi.reload(), {
-  initial: { urlHost: "", success: undefined },
+  initial: {
+    urlHost: "",
+    success: undefined,
+    errorCode: undefined,
+    layerUsed: undefined,
+    cached: undefined,
+    antiBotOnly: undefined,
+    dateRange: null,
+  },
 });
 
-/**
- * 清掉 URL 上的时间窗（以及跳转带来的域名筛选）。
- *
- * 时间窗不在 searchForm 里，所以 useAutoSearch 的 reset 碰不到它 —— 不一起清的话，
- * 「重置」按下去域名框空了、结果却还被一个看不见的时间窗卡着，比不给重置更难排查。
- * 改 query 不会重新 setup 组件，得手动 reload 一次表格。
- */
-function clearTimeWindow() {
-  router.replace({ path: route.path });
-  gridApi.reload();
-}
-
+/** 巡检轮次跳过来带的 URL 参数，重置后应当一起从地址栏抹掉，免得刷新页面又被读回来 */
 function reset() {
   resetForm();
-  if (timeWindowText.value || route.query.urlHost) clearTimeWindow();
+  if (Object.keys(route.query).length > 0) router.replace({ path: route.path });
 }
 </script>
 
@@ -363,17 +368,33 @@ function reset() {
     <SweepBreakerAlert />
     <ElCard shadow="never">
       <template #header>
-        <div class="flex items-center justify-between">
+        <div class="flex flex-wrap items-center justify-between gap-2">
           <span>Scrapper 调用日志</span>
+          <!-- 当前筛选范围下的汇总。翻它一行行看不出「这批抓取整体成不成、缓存有没有在起作用」
+               —— 生产上曾出现 449 次调用缓存只命中 2 次（0.4%）的情况 -->
+          <span
+            v-if="stats"
+            class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500"
+          >
+            <span>范围内 <b class="text-gray-700 dark:text-gray-200">{{ stats.totalCalls }}</b> 次调用</span>
+            <span>
+              成功率
+              <b :class="stats.totalCalls && stats.successCalls / stats.totalCalls < 0.9 ? 'text-orange-500' : 'text-green-600'">
+                {{ successRateText }}
+              </b>
+              <span class="text-gray-400">（失败 {{ stats.failedCalls }}）</span>
+            </span>
+            <span>缓存命中率 <b class="text-gray-700 dark:text-gray-200">{{ cacheRateText }}</b></span>
+          </span>
         </div>
       </template>
       <!--
-        时间窗生效时必须显式挂出来。它只从 URL 来、筛选栏里没有对应的输入框，不挂的话
-        就是一个看不见的筛选条件：管理员会以为"这个域名最近只被抓过 3 次"，而那是窗口截出来的。
-        同样要说清它是**近似**——按时间圈进来的行不都是那一轮触发的。
+        时间窗生效时必须显式挂出来：不挂的话它就是一个容易被忽略的筛选条件，管理员会以为
+        "这个域名最近只被抓过 3 次"，而那是窗口截出来的。从巡检轮次跳过来时还要说清它是
+        **近似**——按时间圈进来的行不都是那一轮触发的。
       -->
       <div
-        v-if="timeWindowText"
+        v-if="hasTimeWindow"
         class="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300"
       >
         <span>
@@ -383,26 +404,67 @@ function reset() {
           来自巡检轮次的「本轮触发的重抓」。重抓是异步投递的，日志里没有轮次 ID 也没有页面
           ID，只能按时间圈 —— 窗口内会混进其它来源的抓取，不是精确关联
         </span>
-        <ElButton link size="small" type="primary" @click="clearTimeWindow">
+        <ElButton link size="small" type="primary" @click="searchForm.dateRange = null">
           清除
         </ElButton>
       </div>
       <FilterBar class="mb-4" @reset="reset">
-        <FilterItem label="域名" width="240px">
+        <FilterItem label="域名" width="220px">
           <ElInput v-model="searchForm.urlHost" placeholder="urlHost 模糊匹配" clearable />
         </FilterItem>
-        <FilterItem label="状态" width="120px">
+        <FilterItem label="状态" width="110px">
           <ElSelect v-model="searchForm.success" placeholder="全部" clearable>
             <ElOption label="成功" :value="true" />
             <ElOption label="失败" :value="false" />
           </ElSelect>
+        </FilterItem>
+        <FilterItem label="错误码" width="220px">
+          <ElSelect
+            v-model="searchForm.errorCode"
+            placeholder="全部"
+            clearable
+            filterable
+          >
+            <ElOption
+              v-for="opt in ERROR_CODE_OPTIONS"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </ElSelect>
+        </FilterItem>
+        <FilterItem label="抓取层" width="130px">
+          <ElSelect v-model="searchForm.layerUsed" placeholder="全部" clearable>
+            <ElOption v-for="l in LAYER_OPTIONS" :key="l" :label="l" :value="l" />
+          </ElSelect>
+        </FilterItem>
+        <FilterItem label="缓存" width="110px">
+          <ElSelect v-model="searchForm.cached" placeholder="全部" clearable>
+            <ElOption label="命中" :value="true" />
+            <ElOption label="未命中" :value="false" />
+          </ElSelect>
+        </FilterItem>
+        <!-- 反爬类目标状态码（403/406/412/429）：连上了但被拒，与「连不上」处置相反，值得单独筛 -->
+        <FilterItem label="仅反爬拦截" width="auto">
+          <ElSwitch v-model="searchForm.antiBotOnly" />
+        </FilterItem>
+        <FilterItem label="时间窗" width="360px">
+          <ElDatePicker
+            v-model="searchForm.dateRange"
+            type="datetimerange"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            range-separator="~"
+            start-placeholder="起"
+            end-placeholder="止"
+            clearable
+          />
         </FilterItem>
       </FilterBar>
       <Grid>
         <template #urlHost="{ row }">
           <span class="inline-flex items-center justify-end gap-1.5">
             <img
-              :src="faviconOf(row)"
+              :src="faviconSrc(row.faviconUrl)"
               alt=""
               class="h-4 w-4 shrink-0 rounded-sm object-contain"
               @error="onFaviconError"
@@ -476,7 +538,7 @@ function reset() {
                      而"这属于哪一类失败"是看一眼就该得到的结论 -->
                 <div v-if="row.errorCode">
                   <span class="font-mono text-gray-300">{{ row.errorCode }}</span>
-                  <span v-if="errorCodeDescOf(row)"> · {{ errorCodeDescOf(row) }}</span>
+                  <span v-if="errorCodeDescOf(row.errorCode)"> · {{ errorCodeDescOf(row.errorCode) }}</span>
                 </div>
                 <div class="whitespace-pre-wrap">{{ row.errorMsg }}</div>
               </div>

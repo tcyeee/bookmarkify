@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import top.tcyeee.bookmarkify.entity.ScrapperCallLogSearchParams
+import top.tcyeee.bookmarkify.entity.ScrapperCallLogStatsVO
 import top.tcyeee.bookmarkify.entity.ScrapperCallLogVO
 import top.tcyeee.bookmarkify.entity.ScrapperFailedHostParams
 import top.tcyeee.bookmarkify.entity.ScrapperFailedHostVO
@@ -22,6 +23,13 @@ class AdminScrapperCallLogController(
     @PostMapping("/all")
     fun getAllLogs(@RequestBody params: ScrapperCallLogSearchParams): IPage<ScrapperCallLogVO> =
         scrapperCallLogService.adminListAll(params)
+
+    /**
+     * 当前筛选范围下的汇总（总数 / 成功率 / 缓存命中率）。与 [getAllLogs] 同一套入参。
+     */
+    @PostMapping("/stats")
+    fun stats(@RequestBody params: ScrapperCallLogSearchParams): ScrapperCallLogStatsVO =
+        scrapperCallLogService.adminStats(params)
 
     /**
      * 失败站点排行。不分页 —— 见 [ScrapperFailedHostParams] 的类注释。

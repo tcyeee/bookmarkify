@@ -8,31 +8,18 @@
  *
  * 一切正常时**整条不渲染**，不占版面也不制造"绿色仪表盘"式的噪音。
  */
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 import { useRouter } from 'vue-router';
 
 import { formatDateTime } from '@vben/utils';
 
+import { ElAlert, ElButton } from '#/adapter/element';
 import {
   getAdminSweepHealthApi,
   SWEEP_TASK_LABELS,
   type SweepHealthVO,
 } from '#/api/bookmark-sweep-log';
-
-const ElAlert = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/alert/index'),
-    import('element-plus/es/components/alert/style/css'),
-  ]).then(([res]) => res.ElAlert),
-);
-
-const ElButton = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/button/index'),
-    import('element-plus/es/components/button/style/css'),
-  ]).then(([res]) => res.ElButton),
-);
 
 const router = useRouter();
 const health = ref<SweepHealthVO | null>(null);
