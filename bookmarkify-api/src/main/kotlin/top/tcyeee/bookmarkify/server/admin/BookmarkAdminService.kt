@@ -46,6 +46,7 @@ import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.IBookmarkCategoryService
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
+import top.tcyeee.bookmarkify.server.ISimilarBookmarkService
 import top.tcyeee.bookmarkify.server.ISiteService
 import top.tcyeee.bookmarkify.server.asset.IconResolver
 import top.tcyeee.bookmarkify.server.asset.SiteAssetQuery
@@ -80,6 +81,7 @@ class BookmarkAdminService(
     private val adminUserViewAssembler: AdminUserViewAssembler,
     private val apiService: IApiService,
     private val bookmarkService: IBookmarkService,
+    private val similarBookmarkService: ISimilarBookmarkService,
     private val parseStateWriter: PageParseStateWriter,
     private val scheduleWriter: PageScheduleWriter,
     private val systemCollectionMapper: SystemCollectionMapper,
@@ -404,32 +406,13 @@ class BookmarkAdminService(
         // 异步顺序收录（站点不多，顺序处理即可，避免并发打爆 scrapper）；逐站通过 WebSocket 回推状态。
         // 关弹窗后管理端会断开 WS，此处推送命中不到 session 即静默丢弃，无需感知前端是否还在。
         domains.distinct().forEach { domain ->
-            val status = runCatching { ingestOneSimilar(domain) }
+            // 收录逻辑与用户端「更多相似书签」的冷计算完全一致，收在 SimilarBookmarkService 里
+            val status = runCatching { similarBookmarkService.ingestOne(domain) }
                 .getOrElse {
                     log.warn("[adminIngestSimilar] 收录异常 domain=$domain: ${it.message}")
                     "SKIPPED"
                 }
             SocketUtils.similarIngestUpdate(adminUid, SimilarIngestUpdate(domain, status))
-        }
-    }
-
-    /** 收录单个相似站点：本地已有→EXISTS；抓取失败(不可达=幻觉/失效)→删除记录并 SKIPPED；抓到(SUCCESS)→INGESTED。 */
-    private fun ingestOneSimilar(domain: String): String {
-        val url = "https://${domain.trim().substringAfter("://")}"
-        val wrapper = WebsiteParser.urlWrapper(url)
-        bookmarkService.findRootPageByHost(wrapper.urlHost)?.let { return "EXISTS" }
-        val bookmark = bookmarkService.getOrCreateCanonical(url)
-        // 抓取可能抛异常（本地解析器）或落 UNREACHABLE（scrapper 不可达）；统一以「最终落库状态」判定，
-        // 抓到正文(SUCCESS，反爬页面也算)才保留，其余一律删除——保证幻觉域名绝不留在库里。
-        runCatching { bookmarkService.parseAndSave(bookmark.id) }
-            .onFailure { log.warn("[ingestOneSimilar] 解析异常 domain=$domain: ${it.message}") }
-        val saved = pageMapper.selectById(bookmark.id)
-        val ok = saved != null && saved.parseStatus == ParseStatusEnum.SUCCESS
-        return if (ok) {
-            "INGESTED"
-        } else {
-            pageMapper.deleteById(bookmark.id)
-            "SKIPPED"
         }
     }
 

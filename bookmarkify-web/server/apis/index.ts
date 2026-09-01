@@ -12,6 +12,10 @@ export const authQuickLogin = () => http.get<t.UserInfo>('/auth/quickLogin')
 /* =========[ /bookmark ]========= */
 export const bookmarksShowAll = () => http.post<t.UserLayoutNodeVO>('/bookmark/query')
 export const bookmarksSearch = (name: string) => http.post<Array<any>>(`/bookmark/search?name=${encodeURIComponent(name)}`)
+// 「更多相似书签」：本地库共享分类的站点即时返回；DeepSeek 推荐的站点走加书签同链路在后台收录，
+// 命中缓存(60 天)则一并返回。res.computing 为 true 时前端应以 ~2s 间隔轮询直到它变 false。
+export const bookmarksSimilar = (pageId: string) =>
+  http.post<t.SimilarBookmarksVO>(`/bookmark/similar?pageId=${encodeURIComponent(pageId)}`)
 // addOne 会创建 bookmark/user_layout_node/bookmark_user_link 三张表的写入，改用 POST 承载（与 bookmarksSearch 一致的写法：
 // query string 传参 + POST 方法），避免 GET 请求被浏览器预取/代理缓存/爬虫意外重放触发非预期写操作
 export const bookmarksAddOne = (url: string) => http.post<t.UserLayoutNodeVO>(`/bookmark/addOne?url=${encodeURIComponent(url)}`)

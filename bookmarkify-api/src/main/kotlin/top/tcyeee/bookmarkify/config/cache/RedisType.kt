@@ -29,5 +29,9 @@ enum class RedisType(
     WECHAT_WORK_ACCESS_TOKEN(1, TimeUnit.HOURS),
 
     /* 管理后台「重新获取」书签的暂存抓取结果（预览与应用之间桥接，按 pageId 区分） */
-    BOOKMARK_REFETCH(10, TimeUnit.MINUTES)
+    BOOKMARK_REFETCH(10, TimeUnit.MINUTES),
+
+    /* 单用户 24h 内触发「更多相似书签」冷计算的次数（软限流，按 uid 计数）。
+     * 冷计算会烧一次 DeepSeek + 收录 ~8 个域名，频率不必高。 */
+    SIMILAR_COLD_BUDGET(24, TimeUnit.HOURS)
 }
