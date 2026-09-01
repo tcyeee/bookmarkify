@@ -17,35 +17,27 @@ import javax.sql.DataSource
 /**
  * 数据库层面的**并发与约束**保证 —— 也就是那些"只有数据库做得到、应用层做不到"的事。
  *
- * ## 为什么非补不可
+ * ## 覆盖范围
  *
- * `insertNodeAndLink` 的注释把这件事说得很清楚：
+ * 现在只剩 `uk_page_canonical`（canonical 页面一页一行的并发收敛）和 `insertNodeAndLink` 的
+ * 事务原子性。`uk_bookmark_uid_page`（同一用户不能重复收藏同一页面）于 2026-08-31 随
+ * 「允许重复收藏」一并删除 —— 用户桌面上现在可以有多个指向同一页面的磁贴，那几条测试也一并移除。
  *
- * > 唯一键冲突翻成 E126，**这里才是判重的权威**。上游的 `assertNotAlreadyLinked` 是
- * > check-then-act：查一次、再插入，两个并发请求可以同时通过那道检查。此前真正挡住重复磁贴的
- * > 其实是 `addOne` 上那个 1 秒的 `@Throttle` —— 而限流是 UX 设施不是正确性设施。
- *
- * 这个推理完全正确。问题是它**只活在注释里**：没有任何测试证明 `uk_bookmark_uid_page` 确实存在、
- * 谓词确实是那几个条件、并发双插确实只活一条。而这个索引是**手工应用**的迁移
- * （`deploy/migrations/`，没有 Flyway，部署流程也不跑迁移），所以"某个环境上它压根没建"
- * 是一个完全现实的状态 —— 那种环境下代码照常跑，只是重复磁贴又回来了，且没有任何报错。
- *
- * 项目已有的 222 个用例全部是纯函数测试（`AssetRolePolicy` / `LivenessPolicy` / `SsrfGuard`…），
+ * 项目已有的用例几乎全是纯函数测试（`AssetRolePolicy` / `LivenessPolicy` / `SsrfGuard`…），
  * 覆盖的恰好是最不容易错的那部分。这个文件补的是另一头。
  *
  * ## 为什么是真的 PostgreSQL
  *
- * 这里验的每一条都用不了 H2：**部分唯一索引的 `WHERE` 谓词**、并发插入时的
- * `unique_violation`、`ON CONFLICT` 的行为，都是 PostgreSQL 的具体语义。用一个"差不多的"
- * 数据库去验只会给出一个"差不多的"结论，而这几条约束的全部价值就在于它们是确定的。
+ * 这里验的每一条都用不了 H2：并发插入时的 `unique_violation`、`ON CONFLICT` 的行为、
+ * 事务在约束冲突后进入 aborted 状态，都是 PostgreSQL 的具体语义。用一个"差不多的"
+ * 数据库去验只会给出一个"差不多的"结论。
  *
- * 用 zonky 的嵌入式实例而不是 Testcontainers：后者要求本机有 Docker。这套约束的验证不该被
- * "开发机上装没装 Docker"挡住 —— 一个跑不起来的测试等于没有测试。
+ * 用 zonky 的嵌入式实例而不是 Testcontainers：后者要求本机有 Docker。
  *
  * ## DDL 从哪里来
  *
  * 逐字取自 `deploy/schema.sql`（那是 schema of record）。**刻意不做简化**：把索引谓词抄成
- * "差不多的样子"，测的就是另一个索引了。这也顺带让这个文件成为那两条索引定义的第二个副本，
+ * "差不多的样子"，测的就是另一个索引了。这也顺带让这个文件成为那条索引定义的第二个副本，
  * 改动 schema 时会在这里得到一次提醒。
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -98,11 +90,7 @@ class PageConstraintTest {
                     );
                     """.trimIndent()
                 )
-                // ⚠️ 这两条索引的定义必须与 deploy/schema.sql 逐字一致
-                st.execute(
-                    "CREATE UNIQUE INDEX uk_bookmark_uid_page ON bookmark USING btree (uid, page_id) " +
-                        "WHERE ((deleted = false) AND (page_id IS NOT NULL) AND ((page_id)::text <> 'LOADING'::text))"
-                )
+                // ⚠️ 这条索引的定义必须与 deploy/schema.sql 逐字一致
                 st.execute(
                     "CREATE UNIQUE INDEX uk_page_canonical ON page USING btree (site_id, url_path, url_query, url_fragment)"
                 )
@@ -137,18 +125,11 @@ class PageConstraintTest {
         }
     }
 
-    private fun countBookmarks(uid: String, pageId: String): Int = withConnection { c ->
-        c.prepareStatement("SELECT count(*) FROM bookmark WHERE uid = ? AND page_id = ? AND deleted = false").use { ps ->
-            ps.setString(1, uid); ps.setString(2, pageId)
-            ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) }
-        }
-    }
-
     /**
      * 让 [n] 个线程尽可能同时跑 [action]，返回其中失败的异常。
      *
      * 用闩锁对齐起跑线而不是直接 `submit` 了事：后者在小批量下经常退化成串行执行，
-     * 于是"并发双插"测出来的其实是"先后双插" —— 那两件事在这里恰好是不同的判据。
+     * 于是"并发双插"测出来的其实是"先后双插"。
      */
     private fun raceAndCollectFailures(n: Int, action: (Int) -> Unit): List<Throwable> {
         val pool = Executors.newFixedThreadPool(n)
@@ -168,11 +149,11 @@ class PageConstraintTest {
         return failures.toList()
     }
 
-    // ────── 判重的权威：uk_bookmark_uid_page ──────
+    // ────── 允许重复收藏：同一用户可以多次收藏同一页面 ──────
 
     @Test
-    @DisplayName("同一用户并发收藏同一页面，只有一条能活下来")
-    fun `concurrent duplicate links converge on the unique index`() {
+    @DisplayName("同一用户并发收藏同一页面，全部落地（不再判重）")
+    fun `concurrent duplicate links all succeed`() {
         val uid = "u-race"
         val pageId = "p-race"
 
@@ -180,58 +161,14 @@ class PageConstraintTest {
             withConnection { c -> insertBookmark(c, "b-race-$i", uid, pageId) }
         }
 
-        // 这正是 assertNotAlreadyLinked 那道 check-then-act 拦不住的情形：
-        // 8 个请求可以同时读到"还没收藏过"，然后 8 个都去插
-        assertThat(countBookmarks(uid, pageId))
-            .describedAs("并发插入之后应只剩一条 —— 多于一条意味着 uk_bookmark_uid_page 没生效，用户桌面上会出现重复磁贴")
-            .isEqualTo(1)
-        assertThat(failures).hasSize(7)
-        // 应用层把这个异常翻成 E126，判据是它必须是唯一键冲突而不是别的什么错
-        assertThat(failures).allSatisfy { e ->
-            assertThat(e).isInstanceOf(SQLException::class.java)
-            assertThat((e as SQLException).sqlState)
-                .describedAs("必须是 unique_violation(23505)，insertNodeAndLink 的 DuplicateKeyException 分支据此翻成 E126")
-                .isEqualTo("23505")
+        assertThat(failures).describedAs("uk_bookmark_uid_page 已删除，重复收藏不再冲突").isEmpty()
+        val count = withConnection { c ->
+            c.prepareStatement("SELECT count(*) FROM bookmark WHERE uid = ? AND page_id = ?").use { ps ->
+                ps.setString(1, uid); ps.setString(2, pageId)
+                ps.executeQuery().use { rs -> rs.next(); rs.getInt(1) }
+            }
         }
-    }
-
-    @Test
-    @DisplayName("索引谓词的三个例外都必须成立：LOADING 占位、软删行、NULL page_id")
-    fun `partial index predicate exempts placeholders and soft deleted rows`() {
-        val uid = "u-exempt"
-        withConnection { c ->
-            // 1. 批量导入的占位：page_id 是字符串常量 'LOADING'，同一用户可以同时挂几千条。
-            //    谓词里那句 `page_id <> 'LOADING'` 漏掉的话，导入第二条就会直接失败
-            insertBookmark(c, "b-load-1", uid, "LOADING")
-            insertBookmark(c, "b-load-2", uid, "LOADING")
-            insertBookmark(c, "b-load-3", uid, "LOADING")
-
-            // 2. page_id 为 NULL 的行同样不参与判重
-            insertBookmark(c, "b-null-1", uid, null)
-            insertBookmark(c, "b-null-2", uid, null)
-
-            // 3. 软删：删掉再加回来必须能成功。`deleted = false` 这个条件漏掉的话，
-            //    用户删过一次的书签就再也加不回来了 —— 而且报的是"重复收藏"
-            insertBookmark(c, "b-soft-old", uid, "p-soft", deleted = true)
-            insertBookmark(c, "b-soft-new", uid, "p-soft", deleted = false)
-        }
-        assertThat(countBookmarks(uid, "p-soft")).isEqualTo(1)
-    }
-
-    @Test
-    @DisplayName("软删一条之后重新收藏同一页面不该冲突，但活着的仍只能有一条")
-    fun `re-adding after soft delete works but still allows only one live row`() {
-        val uid = "u-resurrect"
-        withConnection { c -> insertBookmark(c, "b-r1", uid, "p-r") }
-        withConnection { c ->
-            c.prepareStatement("UPDATE bookmark SET deleted = true WHERE id = 'b-r1'").use { it.executeUpdate() }
-        }
-        withConnection { c -> insertBookmark(c, "b-r2", uid, "p-r") }
-        assertThat(countBookmarks(uid, "p-r")).isEqualTo(1)
-
-        // 再插第三条就该被挡住了
-        assertThat(runCatching { withConnection { c -> insertBookmark(c, "b-r3", uid, "p-r") } }.exceptionOrNull())
-            .isInstanceOf(SQLException::class.java)
+        assertThat(count).isEqualTo(8)
     }
 
     // ────── canonical 收敛：uk_page_canonical ──────
@@ -280,8 +217,8 @@ class PageConstraintTest {
     @DisplayName("布局节点与用户关联必须同生共死——第二条失败时第一条不能留下")
     fun `layout node and link insert is atomic`() {
         val uid = "u-tx"
-        // 先占住 (uid, page_id)，让下面那次插入必然冲突
-        withConnection { c -> insertBookmark(c, "b-tx-seed", uid, "p-tx") }
+        // 先占住 bookmark 主键，让下面那次 INSERT 必然撞 PK 冲突
+        withConnection { c -> insertBookmark(c, "b-tx-dup", uid, "p-tx") }
 
         val failure = runCatching {
             withConnection { c ->
@@ -290,7 +227,7 @@ class PageConstraintTest {
                     c.prepareStatement("INSERT INTO user_layout_node (id, uid) VALUES (?, ?)").use { ps ->
                         ps.setString(1, "node-orphan"); ps.setString(2, uid); ps.executeUpdate()
                     }
-                    // 这一条撞唯一索引
+                    // 这一条撞主键
                     insertBookmark(c, "b-tx-dup", uid, "p-tx")
                     c.commit()
                 } catch (e: Exception) {

@@ -1224,13 +1224,6 @@ CREATE UNIQUE INDEX uk_background_config_uid ON public.background_config USING b
 
 
 --
--- Name: uk_bookmark_uid_page; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX uk_bookmark_uid_page ON public.bookmark USING btree (uid, page_id) WHERE ((deleted = false) AND (page_id IS NOT NULL) AND ((page_id)::text <> 'LOADING'::text));
-
-
---
 -- Name: uk_page_canonical; Type: INDEX; Schema: public; Owner: -
 --
 
