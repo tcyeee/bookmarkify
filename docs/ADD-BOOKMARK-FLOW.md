@@ -19,7 +19,7 @@
 BookmarkServiceImpl.addOne
    ├─ 规范化 URL → canonical 四元组
    ├─ getOrCreateByUrl  ── 全站共享的 bookmark 记录
-   ├─ 判重（已收藏 / 已在导入队列 → E126）
+   ├─ （2026-08-31 起不再判重：同一网址可重复添加）
    ├─ 事务写入 user_layout_node + bookmark
    └─ needParse ? 返回 LOADING 占位 : 返回完整数据
    │
@@ -65,12 +65,11 @@ bookmarkParseExecutor（8~32 线程，队列 500）
 
 两者都是 `POST` 而非 `GET`——它们会写三张表，`GET` 有被浏览器预取 / 代理缓存 / 爬虫重放的风险。
 
-### 1.2 提交前的两道本地检查
+### 1.2 提交前的本地检查
 
 1. `isBookmarkableUrl()`（`server/utils/index.ts`）：只收 http(s)，拒绝含空白的输入，未显式写协议时要求主机名"像个域名"，并挡掉 `https://a..b` 这类 `new URL` 会放行的畸形主机名。
-2. `canonicalUrlKey()` 判重：把网址归一成 `host + path + 排序后的 query` 与本地已有节点比对。规则**刻意弱于**后端（不剥离追踪参数），所以只会漏判、不会误拦——判重的唯一权威始终是后端。
 
-搜索结果列表同样按 `ownedBookmarkIds` 过滤掉已收藏项，避免点下去只能得到一个错误提示。
+**不再做本地判重**（2026-08-31）：重复收藏已放开，同一网址可以在桌面上添加多次。「他人分享」的搜索结果列表仍按 `ownedPageIds` 筛掉你已有的项——那是「不必再列一遍」的展示取舍，不是拦截；要再加一份直接粘贴网址即可。
 
 ### 1.3 后端同步返回的两种形状
 
@@ -93,7 +92,7 @@ bookmarkParseExecutor（8~32 线程，队列 500）
 |---|---|---|
 | 1 | `WebsiteParser.urlWrapper(url)` | 补全协议、剥离追踪参数、query 按 key 排序、丢弃页内锚点 |
 | 2 | `getOrCreateByUrl(wrapper)` | 按 **(siteId, urlPath, urlQuery, urlFragment)** 四元组取或建 canonical 记录 |
-| 3 | `assertNotAlreadyLinked(uid, bookmark)` | 已收藏 → E126；顺带查导入队列（见下） |
+| 3 | ~~判重~~ | 2026-08-31 起不再判重，同一网址可重复添加 |
 | 4 | 判定 `needParse` | `checkFlag() \|\| needRecheckOnAdd()` |
 | 5 | 事务写 `user_layout_node` + `bookmark` | 两条必须原子 |
 | 6 | 返回 VO，并在事务提交后发事件 | |
@@ -102,7 +101,7 @@ bookmarkParseExecutor（8~32 线程，队列 500）
 
 **为什么第 5 步必须是一个事务**：分开写时第二条失败，用户桌面上会留下一个没有任何书签数据的孤儿节点——`layout()` 按 `layoutNodeId` 找不到对应的 `BookmarkShow`，前端只能渲染出一个点不开也删不掉的空格子。
 
-**判重为什么查两次**（`assertNotAlreadyLinked` / `assertNotPendingImport`）：主检查按 canonical `bookmarkId` 比对（同一页面的 `github.com/x`、`https://github.com/x/` 写法各异但记录是同一条）；而批量导入写下的关联行 `page_id` 是字符串常量 `'LOADING'`，永远匹配不上主检查，导入正在跑时手动添加同一网址就会多出一个磁贴。第二道检查先用 host 子串在 SQL 侧收窄，再把回捞的行规范化后比四元组。`linkOne` 走完全相同的两道检查。
+**重复收藏已放开**（2026-08-31）：`addOne` / `linkOne` 不再有前置判重，`uk_bookmark_uid_page` 唯一索引已删除，导入占位绑定也不再有 `discardDuplicatePlaceholder` 兜底。同一用户可以有多条指向同一 canonical 页面的关联行，桌面上出现多个磁贴。要清理时走「我的书签 › 重复」筛选（`duplicatesOnly`）。
 
 ### `needParse` 的判定
 
@@ -293,12 +292,11 @@ resolved.parseStatus == PENDING ?   → 直接 return，节点保持 LOADING（�
 4. **`scrapper` 只报事实，`API` 定策略。** `extractor` 由 scrapper 给，`role` / `quality` / 签名 URL / 缩放全在 API 侧（`AssetRolePolicy`、`OssUtils.signAsset`）。新增 `extractor` 取值必须给 `AssetRolePolicy.TABLE` 补一条映射，否则那张图会被静默降级丢掉——`AssetRolePolicyTest.every extractor has an explicit role mapping` 会拦下漏配。
 5. **WebSocket 推送不可靠，客户端必须能自愈。** 服务端没有离线队列也不重试；§7 那三件事缺一不可。
 6. **新增一种推送就新增一个消息类型**，不要复用 `HOME_ITEM_UPDATE`——三种布局消息的 payload 形状不同，客户端正是靠类型区分的。
-7. **判重永远落在 canonical 四元组上**，不是 URL 字符串；前端的本地判重只是省一次往返，规则必须弱于后端。
-8. **判重的权威是唯一索引 `uk_bookmark_uid_page`，不是 `assertNotAlreadyLinked`。** 那道检查是 check-then-act，两个并发请求可以同时通过；此前真正挡住重复磁贴的其实是 `addOne` 上那个 1 秒的 `@Throttle`——而限流是 UX 设施，参数会因为"加书签太慢"被调宽，`ThrottleAspect` 在 Redis 故障时更是**明确降级放行**。正确性不能挂在限流器上。新增写 `bookmark` 的入口时，记得走 `insertNodeAndLink`（它把 `DuplicateKeyException` 翻成 E126）。
-9. **改 `parse_status` 只能通过 `markParseSucceeded()` / `markParseUnreachable()`。** 那四个字段之间有约束（SUCCESS 必然 `isActivity=true` 且 `parseErrMsg` 为空），而漏掉调度列那一句不会报任何错——那条记录的 `next_check_at` 就停在旧值上，要么被每轮巡检重复选中，要么再也不被选中。这五行曾被逐字复制十遍。
-10. **`page_id = 'LOADING'` 表示"等着被绑定"，NULL 表示"确定没有 canonical 记录"。** 无源书签终结时必须把标记清成 NULL（`clearUnboundMarker`），否则 `assertNotPendingImport` 会永远把它当成还在导入队列里，用户之后添加同一个网址会撞上一个假的 E126。
-11. **本服务当前只能单实例运行。** `SessionManager` 的会话在进程内存里，`@Scheduled` 没有分布式锁。`SingleInstanceGuard` 会在检测到第二个实例时每分钟打一条 error——它只报警不阻止启动，看到那条日志就是真的出问题了。要横向扩容必须先接入 ShedLock **加上** WebSocket 推送的 Redis pub/sub 扇出，两者缺一不可。
-12. **图标是全站级的，用户级差异只能存在于 `bookmark`。** `page` 是全站共享的可变记录：A 用户添加触发的重抓会改变 B 用户桌面上那条书签的标题和图标。`locked_fields` / `verifyFlag` 是**管理员级**的锁，解决不了"两个用户对同一页面有不同期望"。曾经有过一张 `site_display_pref`（按 `(site, display_mode)` 存人工调的内边距/背景色/钉图），它 2026-08-17 已整表移除——那条路走的是「人逐站点调」，而图标质量该由规则解决。**真要做用户级图标覆盖，键必须是 `content_hash` 而不是 `site_asset.id`**（资产每次重抓都换 id，钉住的 id 会静默失配），理由与现状见根目录 `ICON-DISPLAY-TODO.md`。
+7. **重复收藏是允许的**（2026-08-31 起）。`uk_bookmark_uid_page` 已删除，`addOne` / `linkOne` / 导入绑定都不再拦「这个网址你加过了」。「是不是同一个页面」的判断（canonical 四元组）仍然重要——它决定多条书签**共享**同一条 `page` 抓取记录，只是不再据此拒绝新增。曾经的判重权威分析（check-then-act 拦不住并发、`@Throttle` 不是正确性设施）已随索引一起作废。
+8. **改 `parse_status` 只能通过 `markParseSucceeded()` / `markParseUnreachable()`。** 那四个字段之间有约束（SUCCESS 必然 `isActivity=true` 且 `parseErrMsg` 为空），而漏掉调度列那一句不会报任何错——那条记录的 `next_check_at` 就停在旧值上，要么被每轮巡检重复选中，要么再也不被选中。这五行曾被逐字复制十遍。
+9. **`page_id = 'LOADING'` 表示"等着被绑定"，NULL 表示"确定没有 canonical 记录"。** 无源书签终结时必须把标记清成 NULL（`clearUnboundMarker`），否则 `findStuckLoading` 的 unbound 分支会永远把它当成待办、每轮重投。
+10. **本服务当前只能单实例运行。** `SessionManager` 的会话在进程内存里，`@Scheduled` 没有分布式锁。`SingleInstanceGuard` 会在检测到第二个实例时每分钟打一条 error——它只报警不阻止启动，看到那条日志就是真的出问题了。要横向扩容必须先接入 ShedLock **加上** WebSocket 推送的 Redis pub/sub 扇出，两者缺一不可。
+11. **图标是全站级的，用户级差异只能存在于 `bookmark`。** `page` 是全站共享的可变记录：A 用户添加触发的重抓会改变 B 用户桌面上那条书签的标题和图标。`locked_fields` / `verifyFlag` 是**管理员级**的锁，解决不了"两个用户对同一页面有不同期望"。曾经有过一张 `site_display_pref`（按 `(site, display_mode)` 存人工调的内边距/背景色/钉图），它 2026-08-17 已整表移除——那条路走的是「人逐站点调」，而图标质量该由规则解决。**真要做用户级图标覆盖，键必须是 `content_hash` 而不是 `site_asset.id`**（资产每次重抓都换 id，钉住的 id 会静默失配），理由与现状见根目录 `ICON-DISPLAY-TODO.md`。
 
 ---
 
@@ -306,7 +304,7 @@ resolved.parseStatus == PENDING ?   → 直接 return，节点保持 LOADING（�
 
 ```
 bookmarkify-web/
-├── components/launchpad/AddOneDialog.vue     入口 + 本地校验/判重
+├── components/launchpad/AddOneDialog.vue     入口 + 本地 URL 校验
 ├── stores/bookmark.store.ts                  节点树、LOADING 占位、兜底轮询
 ├── stores/websocket.store.ts                 连接、心跳看门狗、重连补拉
 └── plugins/auth.ts                           启动时拉取 + 补挂兜底监听

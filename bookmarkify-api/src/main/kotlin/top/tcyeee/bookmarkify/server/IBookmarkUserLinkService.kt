@@ -35,8 +35,7 @@ interface IBookmarkUserLinkService : IService<BookmarkEntity> {
      * 没有 canonical 书签，不必再等。
      *
      * 只在无源书签的终结路径上调用（见 BookmarkServiceImpl.finishNodeWithoutBookmark）。
-     * 不清的话 assertNotPendingImport 会永远把它当成「还在导入队列里」，用户之后添加同一个
-     * 网址会拿到一个假的 E126。
+     * 不清的话 `findStuckLoading` 的 unbound 分支会永远把它当成待办、每轮重投。
      */
     fun clearUnboundMarker(userLinkId: String): Boolean
     /** 返回用户所有未删除书签的完整 URL 集合，用于导入时重复检测 */

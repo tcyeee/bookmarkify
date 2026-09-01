@@ -18,7 +18,6 @@ import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.async.AsyncConfig
 import top.tcyeee.bookmarkify.config.async.ParseLock
-import top.tcyeee.bookmarkify.entity.dto.StuckLoadingItem
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
 import top.tcyeee.bookmarkify.entity.dto.scrape.applyTo
@@ -189,12 +188,9 @@ class BookmarkServiceImpl(
     }
 
     override fun linkOne(pageId: String, uid: String): UserLayoutNodeVO {
-        // 与 addOne 同一套前置检查：这两个方法对用户是同一件事（把一个页面放到我的桌面上），
-        // 差别只在 canonical 记录是现查的还是现建的，重复判定自然也该一致——**包括导入队列里
-        // 那批还没绑定 canonical 记录的占位**，它们同样会在桌面上变成第二个一模一样的磁贴。
-        // 记录先查出来再判重：目标都不存在的话，重复与否根本无从谈起。
+        // 与 addOne 对用户是同一件事（把一个页面放到我的桌面上），差别只在 canonical 记录是现查
+        // 的还是现建的。重复收藏现已放开：同一个页面可以在桌面上出现多个磁贴，见 addOne。
         val bookmark = findById(pageId)
-        assertNotAlreadyLinked(uid, bookmark)
 
         val nodeEntity = UserLayoutNodeEntity(uid = uid)
         val userLink = BookmarkEntity(bookmark, nodeEntity.id, uid)
@@ -209,80 +205,14 @@ class BookmarkServiceImpl(
      * ——`layout()` 按 `layoutNodeId` 找不到对应的 `BookmarkShow`，前端只能渲染出一个点不开
      * 也删不掉的空格子。
      *
-     * **唯一键冲突翻成 E126，这里才是判重的权威。** 上游的 [assertNotAlreadyLinked] 是
-     * check-then-act：查一次、再插入，两个并发请求可以同时通过那道检查。此前真正挡住重复磁贴的
-     * 其实是 `addOne` 上那个 1 秒的 `@Throttle` —— 而限流是 UX 设施不是正确性设施，它的参数会
-     * 因为「加书签太慢」被调宽，`ThrottleAspect` 在 Redis 故障时更是**明确降级放行**。
-     * 现在由 `uk_bul_uid_bookmark` 兜底，与 `getOrCreateByUrl` 靠 `uk_bookmark_canonical`
-     * 收敛并发插入是同一个套路。
+     * 重复收藏已放开（`uk_bookmark_uid_page` 于 2026-08-31 删除）：同一用户可以有多条指向
+     * 同一 canonical 页面的关联行，这里不再有唯一键冲突需要翻成 E126。仍留着事务是为了上面
+     * 那条原子性保证。
      */
     private fun insertNodeAndLink(node: UserLayoutNodeEntity, link: BookmarkEntity) {
-        try {
-            txTemplate.execute {
-                layoutNodeMapper.insert(node)
-                bookmarkUserLinkMapper.insert(link)
-            }
-        } catch (e: DuplicateKeyException) {
-            // 事务已整体回滚，那个刚插进去的布局节点不会留下来
-            log.debug("[insertNodeAndLink] 唯一键冲突，判定为重复收藏: uid=${link.uid}, pageId=${link.pageId}, err=${e.message}")
-            throw CommonException(ErrorType.E126)
-        }
-    }
-
-    /**
-     * 该用户已经收藏过这个 canonical 页面时直接拒绝，避免桌面上出现两个一模一样的磁贴。
-     *
-     * `deleted = false` 不能省：本项目没有配置 MyBatis-Plus 的逻辑删除，`deleted` 全靠各查询手写
-     * 过滤。漏掉这个条件，用户删掉一条书签之后就再也加不回来了。
-     */
-    private fun assertNotAlreadyLinked(uid: String, bookmark: PageEntity) {
-        val exists = bookmarkUserLinkService.ktQuery()
-            .eq(BookmarkEntity::uid, uid)
-            .eq(BookmarkEntity::pageId, bookmark.id)
-            .eq(BookmarkEntity::deleted, false)
-            .exists()
-        if (exists) {
-            log.debug("[assertNotAlreadyLinked] 用户已收藏该页面，拒绝重复添加: uid=$uid, pageId=${bookmark.id}")
-            throw CommonException(ErrorType.E126)
-        }
-        assertNotPendingImport(uid, bookmark)
-    }
-
-    /**
-     * 导入还没抓完的那批占位是否已经包含了这个页面。
-     *
-     * 上面那道检查按 canonical `pageId` 比对，而批量导入写下的关联行 `page_id` 是字符串
-     * 常量 `'LOADING'`（canonical 记录要等 drainStuckLoading 抓完才绑上去），永远匹配不上——
-     * 导入正在跑的时候手动添加同一个网址，桌面上就会多出一个磁贴，等两边都抓完才看得出重复。
-     *
-     * 判定必须落在 canonical 四元组上而不是 URL 字符串上，理由与上面那道检查完全相同
-     * （`github.com/x` / `https://github.com/x/` 是同一个页面）。基准直接取自 canonical 记录
-     * 自己的那四列，而不是再解析一遍入参网址——addOne 与 linkOne 因此比的是同一份东西。
-     * 反过来占位行只有用户给的原始网址，库里没有可比的规范化列，只能取回来在内存里规范化：
-     * 所以先用 host 子串在 SQL 侧收窄（host 必然逐字出现在原始网址中），再逐条比对
-     * (path, query, fragment)。这样即使正在导入几千条，参与比对的也只是同域名下的那几条。
-     */
-    private fun assertNotPendingImport(uid: String, bookmark: PageEntity) {
-        val pending = bookmarkUserLinkService.ktQuery()
-            .eq(BookmarkEntity::uid, uid)
-            .eq(BookmarkEntity::pageId, StuckLoadingItem.UNBOUND_BOOKMARK_ID)
-            .eq(BookmarkEntity::deleted, false)
-            .like(BookmarkEntity::urlFull, bookmark.urlHost)
-            .last("LIMIT $IMPORT_DUPLICATE_SCAN_LIMIT")
-            .list()
-        if (pending.isEmpty()) return
-        // 规范化失败的占位行直接跳过：那种网址本来就进不了 canonical 体系，谈不上与它重复
-        val duplicated = pending.any { row ->
-            runCatching { WebsiteParser.urlWrapper(row.urlFull) }.getOrNull()?.let { other ->
-                other.urlHost == bookmark.urlHost &&
-                    (other.urlPath ?: "/") == bookmark.urlPath &&
-                    other.urlQuery == bookmark.urlQuery &&
-                    other.urlFragment == bookmark.urlFragment
-            } == true
-        }
-        if (duplicated) {
-            log.debug("[assertNotPendingImport] 该页面已在导入队列中，拒绝重复添加: uid=$uid, urlHost=${bookmark.urlHost}")
-            throw CommonException(ErrorType.E126)
+        txTemplate.execute {
+            layoutNodeMapper.insert(node)
+            bookmarkUserLinkMapper.insert(link)
         }
     }
 
@@ -694,13 +624,8 @@ class BookmarkServiceImpl(
         val bookmark = getOrCreateByUrl(bookmarkUrl)
         log.debug("[addOne] Step2 书签记录就绪: pageId=${bookmark.id}, urlHost=${bookmark.urlHost}, parseStatus=${bookmark.parseStatus}")
 
-        // 2.5 该用户是否已经收藏过这个页面。判定落在 canonical pageId 上而不是 URL 字符串上：
-        //     同一个页面用户可能写作 github.com/x、https://github.com/x、https://github.com/x/，
-        //     字符串各不相同，canonical 记录却是同一条。此前完全没有这道检查，同一个网址点两次
-        //     就在桌面上留下两个一模一样的磁贴（导入路径反倒有重复检测，两条入口行为不一致）。
-        //     除了按 canonical id 比对，还会盖住导入占位那一类：它们的 page_id 还是 'LOADING'，
-        //     光比 canonical id 匹配不上（见 assertNotPendingImport）。
-        assertNotAlreadyLinked(uid, bookmark)
+        // 2.5 重复收藏已放开（2026-08-31，删除 uk_bookmark_uid_page）：同一用户添加同一个页面
+        //     多次会在桌面上得到多个磁贴，不再拦截。要清理时走「我的书签 › 重复」筛选。
 
         // 3. 判断书签是否需要重新解析（首次添加 / 上次解析距今超过有效期 / 已有记录处于失效状态）。
         //    先判断再插入：需要解析的节点以 BOOKMARK_LOADING 落库等待推送，不需要的直接落 BOOKMARK，
@@ -987,19 +912,15 @@ class BookmarkServiceImpl(
         // 抓取已结束，下面两处写入（重绑 userLink + 更新节点类型）需原子提交，放进短事务。
         // 节点找不到不是异常：抓取要花几十秒，这期间用户完全可能把还在转圈的书签删掉。
         // 原先抛 E999 只会在日志里留下一条误导性的错误堆栈，实际什么都不用做。
-        val layoutNode: UserLayoutNodeEntity? = try {
-            txTemplate.execute {
-                layoutNodeMapper.selectById(layoutNodeId)
-                    ?.apply { type = NodeTypeEnum.BOOKMARK }
-                    ?.also {
-                        bookmarkUserLinkService.resetPageId(uid, userLinkId, entity.id)
-                        layoutNodeMapper.updateById(it)
-                    }
-            }
-        } catch (e: DuplicateKeyException) {
-            // 事务已整体回滚，占位行仍是 page_id='LOADING'，节点仍是 BOOKMARK_LOADING
-            discardDuplicatePlaceholder(uid, userLinkId, layoutNodeId, entity.id, e)
-            return
+        // 重复收藏已放开（2026-08-31）：绑定到一个用户已收藏过的 canonical 页面不再冲突，
+        // 直接多出一个磁贴，与 addOne 的行为一致。
+        val layoutNode: UserLayoutNodeEntity? = txTemplate.execute {
+            layoutNodeMapper.selectById(layoutNodeId)
+                ?.apply { type = NodeTypeEnum.BOOKMARK }
+                ?.also {
+                    bookmarkUserLinkService.resetPageId(uid, userLinkId, entity.id)
+                    layoutNodeMapper.updateById(it)
+                }
         }
         if (layoutNode == null) {
             log.debug("[parseAndResetUserItem] 布局节点已被删除，放弃推送: nodeId=$layoutNodeId, uid=$uid")
@@ -1331,52 +1252,6 @@ class BookmarkServiceImpl(
     }
 
     /**
-     * 导入的占位抓完之后，发现它指向的页面**这个用户已经收藏过了** —— 丢弃这条多余的占位。
-     *
-     * 这是 E126 的语义迟到地落在导入路径上。`addOne` 早就有两道防线（[assertNotAlreadyLinked]
-     * 前置查、[insertNodeAndLink] 兜 `uk_bookmark_uid_page` 唯一键），但导入路径的绑定不是
-     * INSERT 而是 [IBookmarkUserLinkService.resetPageId] 这条 UPDATE：写占位行的时候
-     * `page_id` 还是 `'LOADING'`，重不重复要等抓完拿到 canonical id 才知道，前置查根本无从查起。
-     * 于是唯一键在这里是**唯一**的防线，而它原先没人接。
-     *
-     * 后果不是"报个错"那么轻：异常从这里冒到 [BookmarkParseEventListener] 的 runCatching 被吞掉，
-     * 节点原样留在 BOOKMARK_LOADING，下一轮 [drainStuckLoading] 又把它捞出来重投，再撞同一个
-     * 唯一键 —— 一个没有出口的循环，按 DISPATCH_LOCK_TTL 每 5 分钟刷一屏堆栈。最终由
-     * `dispatch_attempts` 耗尽收场，但那条路径 ([finishNodeWithoutBookmark]) 是给「这个网址
-     * 永远抓不成书签」准备的，用在这里等于把一条**完全正常、只是重复**的记录降级成无源磁贴：
-     * 用户桌面上于是有两个同名格子，其中一个没图标没标题。2026-08-04 线上就是这个状态。
-     *
-     * 正确的终局是让重复的那个消失，跟 `addOne` 撞到 E126 时不留下任何东西一致。已经存在的那条
-     * 书签是先到的，原样保留。
-     *
-     * 删除必须连节点带关联行一起，且推一次整树重置：这条占位此刻正在用户桌面上转圈，只删库不
-     * 推送的话，那个格子会一直转到用户手动刷新为止 —— 比留个降级磁贴还糟。[SocketMsgType.HOME_ITEM_UPDATE]
-     * 在这里用不了，它只能表达"某个节点变成了什么"，表达不了"某个节点没了"。
-     */
-    private fun discardDuplicatePlaceholder(
-        uid: String, userLinkId: String, layoutNodeId: String, pageId: String, cause: DuplicateKeyException
-    ) {
-        // 用插值而非占位符：ServiceImpl 自带的 org.apache.ibatis.logging.Log 把全局 log 扩展
-        // 遮蔽掉了，那个接口既没有 info() 也没有占位符重载（见 bookmarkify-api/CLAUDE.md › 日志）
-        log.warn("[parseAndResetUserItem] 导入占位与既有书签重复，丢弃占位: uid=$uid, userLinkId=$userLinkId, pageId=$pageId, err=${cause.message}")
-        runCatching {
-            txTemplate.execute {
-                // 按 (nodeId, uid) 删关联行，而不是按 userLinkId 直删：与 UserLayoutNodeServiceImpl
-                // 的删除路径用同一个 uid 收窄的助手，越权删不到别人的行
-                bookmarkUserLinkService.deleteOneByNodeId(layoutNodeId, uid)
-                layoutNodeMapper.deleteById(layoutNodeId)
-            }
-        }.onFailure {
-            // 删不掉就退回原有的终结方式：留个降级磁贴，总好过继续无限重投刷屏
-            log.warn("[parseAndResetUserItem] 丢弃重复占位失败，退回无源收口: userLinkId=$userLinkId, err=${it.message}")
-            runCatching { finishNodeWithoutBookmark(uid, userLinkId, layoutNodeId) }
-            return
-        }
-        runCatching { SocketUtils.homeLayoutRefresh(uid, userLayoutNodeService.layout(uid)) }
-            .onFailure { log.warn("[parseAndResetUserItem] 丢弃重复占位后推送失败(忽略): uid=$uid, err=${it.message}") }
-    }
-
-    /**
      * 把一个布局节点从 BOOKMARK_LOADING 收口成 BOOKMARK，但不绑定任何 canonical 书签。
      *
      * 用于「这个网址永远抓不成书签」的终局（如 javascript: 小书签，或补投递到达上限仍不收口）：
@@ -1384,14 +1259,13 @@ class BookmarkServiceImpl(
      * 用户自己填的那份。
      *
      * 关联行的 `page_id` 必须从 `'LOADING'` 改成 NULL，不能原样留着：那个字面量的含义是
-     * 「等着被绑定」，[assertNotPendingImport] 正是靠它判断「这个网址已经在导入队列里了」。
-     * 留着的话，用户日后再添加同一个网址会撞上一个**假的 E126**，而且再也解释不清 ——
-     * 队列里那条其实早就终结了。语义收敛成：`'LOADING'` = 待绑定，NULL = 确定没有 canonical 记录。
+     * 「等着被绑定」，`findStuckLoading` 的 unbound 分支正是靠它把这条记录当作待办。
+     * 语义收敛成：`'LOADING'` = 待绑定，NULL = 确定没有 canonical 记录。
      */
     private fun finishNodeWithoutBookmark(uid: String, userLinkId: String, layoutNodeId: String) {
         val node = layoutNodeMapper.selectById(layoutNodeId) ?: return
-        // 两处写入放进同一个短事务：节点翻了而标记没清，就是上面说的假 E126；
-        // 标记清了而节点没翻，这条记录会掉出 findStuckLoading 的 unbound 分支永远转圈
+        // 两处写入放进同一个短事务：节点翻了而标记没清，这条记录会被 findStuckLoading 的
+        // unbound 分支永远当作待办反复重投；标记清了而节点没翻，它会掉出那个分支永远转圈
         txTemplate.execute {
             bookmarkUserLinkService.clearUnboundMarker(userLinkId)
             node.type = NodeTypeEnum.BOOKMARK
@@ -1506,9 +1380,6 @@ class BookmarkServiceImpl(
          */
         private val SCREENSHOT_FUTILE_TTL: Duration = Duration.ofDays(35)
         private const val MAX_IMPORT_BOOKMARK_COUNT = 2000
-        // addOne 判重时最多回捞多少条「同域名的导入占位」做规范化比对（见 assertNotPendingImport）。
-        // 同一用户在同一域名下同时挂着几百条待抓占位已经极端，够用且不会让判重本身变成慢查询。
-        private const val IMPORT_DUPLICATE_SCAN_LIMIT = 200
         // 对应 `bookmark_user_link.url_full varchar(1000)`（见 deploy/schema.sql）。
         // 与 WebsiteParser 里的入口校验同源，只是导入路径不经过那里：它刻意保留 javascript:
         // 这类解析不出来的网址，所以只能在这里单独按列宽兜一道。

@@ -1,0 +1,22 @@
+-- 允许同一用户重复收藏同一个页面。
+--
+-- 产品决定：主页添加书签、搜索关联、批量导入三条入口一律不再拦「这个网址你已经加过了」，
+-- 用户桌面上可以出现指向同一 canonical 页面的多个磁贴。
+--
+-- 此前挡住重复磁贴的**唯一**权威是这条部分唯一索引（`assertNotAlreadyLinked` 只是 check-then-act
+-- 的前置过滤，拦不住并发）。把它删掉之后：
+--   - addOne / linkOne 去掉了前置判重与 DuplicateKeyException→E126 的翻译
+--   - 导入占位绑定（parseAndResetUserItem）去掉了 discardDuplicatePlaceholder 这条兜底
+--
+-- 部署顺序无关紧要，两个方向都安全：
+--   - 先删索引后部署：旧代码仍会跑 assertNotAlreadyLinked 前置查，行为不变（只是并发下能漏进重复），
+--     不会报错。
+--   - 先部署后删索引：新代码不再做前置查，但索引还在，第二次添加会撞唯一键 → DuplicateKeyException
+--     一路冒泡（新代码已不翻 E126），addOne 会 500、导入占位会卡在 LOADING 重投。窗口内有噪音但无数据风险。
+-- 稳妥起见按「先删索引、后部署」执行。
+--
+-- 保留 idx_bookmark_uid_live (uid, page_id) WHERE deleted = false —— 那是普通检索索引，
+-- 不是唯一约束，(uid, page_id) 的点查仍然用得上。
+-- duplicatePageIds / duplicatesOnly（后台与「我的书签 › 重复」筛选）不受影响，反而更有用了。
+
+DROP INDEX IF EXISTS public.uk_bookmark_uid_page;
