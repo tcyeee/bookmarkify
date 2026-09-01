@@ -43,7 +43,8 @@ const ElOption = defineAsyncComponent(() =>
 
 const searchForm = reactive<Pick<UserSearchParams, "status" | "uid">>({
   uid: "",
-  status: undefined,
+  // 默认只看「正常」用户；下拉可清空查看禁用/已删除或全部
+  status: "NORMAL",
 });
 
 /** deleted / disabled 是两个独立标记，这里收敛成一个互斥状态用于展示 */

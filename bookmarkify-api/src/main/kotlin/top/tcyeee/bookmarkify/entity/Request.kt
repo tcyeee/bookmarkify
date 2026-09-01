@@ -229,6 +229,7 @@ data class UserSearchParams(
             UserStatusFilter.DELETED -> query.eq(UserInfoEntity::deleted, true)
             null -> Unit
         }
+        query.orderByDesc(UserInfoEntity::createTime)
         return query
     }
 }
