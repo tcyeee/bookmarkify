@@ -19,17 +19,27 @@
 import type { BookmarkPingLogVO, PingOutcome } from '#/api/bookmark-ping-log';
 import type { BookmarkSweepLogVO } from '#/api/bookmark-sweep-log';
 
-import { computed, defineAsyncComponent, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useRouter } from 'vue-router';
 
 import { formatDateTime } from '@vben/utils';
 
 import {
+  ElButton,
+  ElDialog,
+  ElPagination,
+  ElRadioButton,
+  ElRadioGroup,
+  ElTag,
+  ElTooltip,
+} from '#/adapter/element';
+import {
   getAdminBookmarkPingLogListApi,
   PING_OUTCOME_META,
 } from '#/api/bookmark-ping-log';
 import { SWEEP_TASK_LABELS } from '#/api/bookmark-sweep-log';
+import { toLocalIso } from '#/views/scrapper/shared';
 
 const props = defineProps<{
   /** 要下钻的轮次；null 表示还没选中任何一行 */
@@ -44,55 +54,6 @@ const emit = defineEmits<{
 const visible = defineModel<boolean>({ default: false });
 
 const router = useRouter();
-
-const ElDialog = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/dialog/index'),
-    import('element-plus/es/components/dialog/style/css'),
-  ]).then(([res]) => res.ElDialog),
-);
-
-const ElTag = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/tag/index'),
-    import('element-plus/es/components/tag/style/css'),
-  ]).then(([res]) => res.ElTag),
-);
-
-const ElButton = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/button/index'),
-    import('element-plus/es/components/button/style/css'),
-  ]).then(([res]) => res.ElButton),
-);
-
-const ElRadioGroup = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/radio/index'),
-    import('element-plus/es/components/radio/style/css'),
-  ]).then(([res]) => res.ElRadioGroup),
-);
-
-const ElRadioButton = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/radio/index'),
-    import('element-plus/es/components/radio/style/css'),
-  ]).then(([res]) => res.ElRadioButton),
-);
-
-const ElPagination = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/pagination/index'),
-    import('element-plus/es/components/pagination/style/css'),
-  ]).then(([res]) => res.ElPagination),
-);
-
-const ElTooltip = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/tooltip/index'),
-    import('element-plus/es/components/tooltip/style/css'),
-  ]).then(([res]) => res.ElTooltip),
-);
 
 const PAGE_SIZE = 50;
 
@@ -192,15 +153,6 @@ watch(outcomeFilter, () => {
 });
 
 watch(currentPage, () => load());
-
-/** 后端的 LocalDateTime 走 Jackson 默认的 ISO（无时区），按本地时间原样还原再格式化回去 */
-function toLocalIso(date: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-    `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-  );
-}
 
 /**
  * 跳到调用日志页看「本轮触发的重抓后来成没成」。

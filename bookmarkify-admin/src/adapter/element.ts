@@ -87,6 +87,33 @@ const tooltipMod = mod(
   () => import('element-plus/es/components/tooltip/index'),
   () => import('element-plus/es/components/tooltip/style/css'),
 );
+// tabs/collapse/radio: 一个模块导出两个组件（容器 + 子项），共用一次加载。
+// 各自的样式子路径分开引 —— 只引容器那份，子项渲染出来会缺内边距/选中态。
+const tabsMod = mod(
+  () => import('element-plus/es/components/tabs/index'),
+  () =>
+    Promise.all([
+      import('element-plus/es/components/tabs/style/css'),
+      import('element-plus/es/components/tab-pane/style/css'),
+    ]),
+);
+const collapseMod = mod(
+  () => import('element-plus/es/components/collapse/index'),
+  () =>
+    Promise.all([
+      import('element-plus/es/components/collapse/style/css'),
+      import('element-plus/es/components/collapse-item/style/css'),
+    ]),
+);
+const radioMod = mod(
+  () => import('element-plus/es/components/radio/index'),
+  () =>
+    Promise.all([
+      import('element-plus/es/components/radio/style/css'),
+      import('element-plus/es/components/radio-group/style/css'),
+      import('element-plus/es/components/radio-button/style/css'),
+    ]),
+);
 
 export const ElAlert = alertMod('ElAlert');
 export const ElButton = buttonMod('ElButton');
@@ -105,6 +132,13 @@ export const ElSelect = selectMod('ElSelect');
 export const ElSwitch = switchMod('ElSwitch');
 export const ElTag = tagMod('ElTag');
 export const ElTooltip = tooltipMod('ElTooltip');
+export const ElTabs = tabsMod('ElTabs');
+export const ElTabPane = tabsMod('ElTabPane');
+export const ElCollapse = collapseMod('ElCollapse');
+export const ElCollapseItem = collapseMod('ElCollapseItem');
+export const ElRadio = radioMod('ElRadio');
+export const ElRadioGroup = radioMod('ElRadioGroup');
+export const ElRadioButton = radioMod('ElRadioButton');
 
 /**
  * 命令式提示。是个函数不是组件，没法走上面的异步组件那条路，只能静态导入。

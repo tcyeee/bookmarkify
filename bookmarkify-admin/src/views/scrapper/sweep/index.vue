@@ -8,7 +8,7 @@
  */
 import type { BookmarkSweepLogVO } from '#/api/bookmark-sweep-log';
 
-import { defineAsyncComponent, onUnmounted, reactive, ref } from 'vue';
+import { onMounted, onUnmounted, reactive, ref } from 'vue';
 
 import { useRoute } from 'vue-router';
 
@@ -16,7 +16,16 @@ import { Page } from '@vben/common-ui';
 import { CircleHelp } from '@vben/icons';
 import { formatDateTime } from '@vben/utils';
 
-import { ElButton, ElMessage } from '#/adapter/element';
+import {
+  ElButton,
+  ElCard,
+  ElMessage,
+  ElOption,
+  ElSelect,
+  ElSwitch,
+  ElTag,
+  ElTooltip,
+} from '#/adapter/element';
 import { useVbenVxeGrid, type VxeGridProps } from '#/adapter/vxe-table';
 import {
   getAdminSweepLogListApi,
@@ -26,52 +35,11 @@ import {
 } from '#/api/bookmark-sweep-log';
 import { FilterBar, FilterItem, useAutoSearch } from '#/components/filter-bar';
 import BookmarkDetailDialog from '#/views/bookmark/BookmarkDetailDialog.vue';
+import SweepBreakerAlert from '#/views/scrapper/SweepBreakerAlert.vue';
 
 import { formatDuration } from '../duration';
 import SweepRoundDetailDialog from './SweepRoundDetailDialog.vue';
 import SweepTriggerDialog from './SweepTriggerDialog.vue';
-
-const ElCard = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/card/index'),
-    import('element-plus/es/components/card/style/css'),
-  ]).then(([res]) => res.ElCard),
-);
-
-const ElSelect = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/select/index'),
-    import('element-plus/es/components/select/style/css'),
-  ]).then(([res]) => res.ElSelect),
-);
-
-const ElOption = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/select/index'),
-    import('element-plus/es/components/select/style/css'),
-  ]).then(([res]) => res.ElOption),
-);
-
-const ElSwitch = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/switch/index'),
-    import('element-plus/es/components/switch/style/css'),
-  ]).then(([res]) => res.ElSwitch),
-);
-
-const ElTag = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/tag/index'),
-    import('element-plus/es/components/tag/style/css'),
-  ]).then(([res]) => res.ElTag),
-);
-
-const ElTooltip = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/tooltip/index'),
-    import('element-plus/es/components/tooltip/style/css'),
-  ]).then(([res]) => res.ElTooltip),
-);
 
 /**
  * 三种巡检任务各管哪一批书签。
@@ -353,10 +321,26 @@ function onTriggered(taskLabel: string) {
 // 离开页面时必须停：轮询挂在定时器上，组件销毁后它还会继续打接口，
 // 并且回调里 gridApi 已经指向一个卸载了的表格
 onUnmounted(stopPolling);
+
+// 轮次表自动刷新：巡检是小时级的，盯健康的人不该为了看到新一行去手动点刷新。
+// 用 gridApi.query() 而非 reload() —— 后者会跳回第 1 页，翻着历史看时很烦。
+// 手动触发后已有专门的轮询在等新轮次（awaitingTask），那期间不重复刷。
+const AUTO_REFRESH_MS = 60_000;
+let autoRefreshTimer: null | ReturnType<typeof setInterval> = null;
+onMounted(() => {
+  autoRefreshTimer = setInterval(() => {
+    if (!awaitingTask.value) gridApi.query();
+  }, AUTO_REFRESH_MS);
+});
+onUnmounted(() => {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+});
 </script>
 
 <template>
   <Page auto-content-height>
+    <!-- 巡检熔断/停摆的常驻告警。轮次表在下面，但告警要出现在人一进页面就看到的地方 -->
+    <SweepBreakerAlert />
     <ElCard shadow="never">
       <template #header>
         <div class="flex items-center justify-between">

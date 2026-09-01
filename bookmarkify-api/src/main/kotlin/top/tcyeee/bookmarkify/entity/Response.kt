@@ -779,6 +779,23 @@ data class ScrapperCallLogVO(
     }
 }
 
+/**
+ * 调用日志页当前筛选范围下的汇总。
+ *
+ * 一行行翻看不出「这批抓取整体成不成、缓存到底有没有在起作用」。CLAUDE.md 记过一笔：
+ * 生产上 449 次调用只覆盖 249 个 URL、缓存命中仅 2 次（0.4%）—— 那个缓存当时等于不存在，
+ * 只在占内存。这个数就该在页面上直接看得见。
+ *
+ * 统计口径**忽略**「成功/失败」和「缓存命中」两个开关（否则筛了失败再看成功率恒为 0），
+ * 但沿用域名 / 时间窗 / 错误码 / 抓取层 / 反爬 这些范围限定。
+ */
+data class ScrapperCallLogStatsVO(
+    @field:Schema(description = "范围内总调用数") var totalCalls: Long = 0,
+    @field:Schema(description = "其中成功数") var successCalls: Long = 0,
+    @field:Schema(description = "其中失败数") var failedCalls: Long = 0,
+    @field:Schema(description = "其中命中 scrapper 缓存的数") var cachedCalls: Long = 0,
+)
+
 /** 管理后台展示的用户行为审计日志条目 */
 data class UserBehaviorLogVO(
     @field:Schema(description = "日志ID") var id: String,

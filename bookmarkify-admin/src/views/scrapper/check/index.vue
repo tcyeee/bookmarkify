@@ -11,93 +11,31 @@ import type {
   WaitUntil,
 } from "#/api/scrapper";
 
-import { computed, defineAsyncComponent, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
+
+import { useRoute } from "vue-router";
 
 import { Page } from "@vben/common-ui";
 
-import { ElMessage } from "element-plus";
-
+import {
+  ElButton,
+  ElCard,
+  ElCollapse,
+  ElCollapseItem,
+  ElInput,
+  ElInputNumber,
+  ElMessage,
+  ElOption,
+  ElSelect,
+  ElSwitch,
+  ElTabPane,
+  ElTabs,
+  ElTag,
+  ElTooltip,
+} from "#/adapter/element";
 import { scrapeDebugApi } from "#/api/scrapper";
 import { isScrapableUrl, LINK_TYPE_REASON, linkTypeOfUrl } from "#/views/bookmark/linkType";
-
-const ElCard = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/card/index"),
-    import("element-plus/es/components/card/style/css"),
-  ]).then(([res]) => res.ElCard),
-);
-const ElButton = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/button/index"),
-    import("element-plus/es/components/button/style/css"),
-  ]).then(([res]) => res.ElButton),
-);
-const ElInput = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/input/index"),
-    import("element-plus/es/components/input/style/css"),
-  ]).then(([res]) => res.ElInput),
-);
-const ElTag = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/tag/index"),
-    import("element-plus/es/components/tag/style/css"),
-  ]).then(([res]) => res.ElTag),
-);
-const ElSelect = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/select/index"),
-    import("element-plus/es/components/select/style/css"),
-  ]).then(([res]) => res.ElSelect),
-);
-const ElOption = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/select/index"),
-    import("element-plus/es/components/select/style/css"),
-  ]).then(([res]) => res.ElOption),
-);
-const ElSwitch = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/switch/index"),
-    import("element-plus/es/components/switch/style/css"),
-  ]).then(([res]) => res.ElSwitch),
-);
-const ElInputNumber = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/input-number/index"),
-    import("element-plus/es/components/input-number/style/css"),
-  ]).then(([res]) => res.ElInputNumber),
-);
-const ElTooltip = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/tooltip/index"),
-    import("element-plus/es/components/tooltip/style/css"),
-  ]).then(([res]) => res.ElTooltip),
-);
-const ElTabs = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/tabs/index"),
-    import("element-plus/es/components/tabs/style/css"),
-  ]).then(([res]) => res.ElTabs),
-);
-const ElTabPane = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/tabs/index"),
-    import("element-plus/es/components/tabs/style/css"),
-  ]).then(([res]) => res.ElTabPane),
-);
-const ElCollapse = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/collapse/index"),
-    import("element-plus/es/components/collapse/style/css"),
-  ]).then(([res]) => res.ElCollapse),
-);
-const ElCollapseItem = defineAsyncComponent(() =>
-  Promise.all([
-    import("element-plus/es/components/collapse/index"),
-    import("element-plus/es/components/collapse/style/css"),
-  ]).then(([res]) => res.ElCollapseItem),
-);
+import SweepBreakerAlert from "#/views/scrapper/SweepBreakerAlert.vue";
 
 /** 说明是给第一次来的人看的，常驻展开只会把参数区挤到屏幕外，所以默认折叠 */
 const docOpen = ref(false);
@@ -106,39 +44,56 @@ const docOpen = ref(false);
 // 请求参数
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** 与 scrapper 侧 Default 实现保持一致的初始值 */
-const form = reactive({
-  url: "",
-  renderMode: "AUTO" as RenderMode,
-  timeoutMs: null as null | number,
-  waitUntil: "LOAD" as WaitUntil,
-  viewportEnabled: false,
-  viewportWidth: 1280,
-  viewportHeight: 720,
-  viewportDpr: 2,
-  userAgent: "",
-  locale: "",
-  colorScheme: "" as "" | "DARK" | "LIGHT",
-  extract: {
-    meta: true,
-    assets: true,
-    manifest: true,
-    jsonld: true,
-    opengraph: true,
-    twitter: true,
-    feeds: false,
-    alternates: false,
-    text: false,
-  },
-  download: "PROBE" as AssetDownload,
-  maxBytes: 2_097_152,
-  maxCount: 20,
-  screenshotEnabled: false,
-  screenshotFullPage: false,
-  screenshotFormat: "WEBP" as ImageFormat,
-  screenshotQuality: 80,
-  cacheMode: "BYPASS" as CacheMode,
-  robotsRespect: true,
+/**
+ * 与 scrapper 侧 Default 实现保持一致的初始值。
+ *
+ * 是个**工厂函数**而不是散落的字段：`resetForm` 从前把这三十来个默认值又手抄了一遍，抄漏
+ * （viewport 尺寸、url 都没还原）和抄错都不会报错。现在「恢复默认」就是 `Object.assign(form, makeDefaultForm())`。
+ */
+function makeDefaultForm() {
+  return {
+    url: "",
+    renderMode: "AUTO" as RenderMode,
+    timeoutMs: null as null | number,
+    waitUntil: "LOAD" as WaitUntil,
+    viewportEnabled: false,
+    viewportWidth: 1280,
+    viewportHeight: 720,
+    viewportDpr: 2,
+    userAgent: "",
+    locale: "",
+    colorScheme: "" as "" | "DARK" | "LIGHT",
+    extract: {
+      meta: true,
+      assets: true,
+      manifest: true,
+      jsonld: true,
+      opengraph: true,
+      twitter: true,
+      feeds: false,
+      alternates: false,
+      text: false,
+    },
+    download: "PROBE" as AssetDownload,
+    maxBytes: 2_097_152,
+    maxCount: 20,
+    screenshotEnabled: false,
+    screenshotFullPage: false,
+    screenshotFormat: "WEBP" as ImageFormat,
+    screenshotQuality: 80,
+    cacheMode: "BYPASS" as CacheMode,
+    robotsRespect: true,
+  };
+}
+
+const form = reactive(makeDefaultForm());
+
+// 失败站点排行 / 其它页面可以带 `?url=` 跳过来，直接把地址填进去，省掉复制粘贴。
+// 不自动开跑：测试台的每次抓取都强制走一遍完整链路（可能 30s 无头），要不要跑由人决定。
+const route = useRoute();
+onMounted(() => {
+  const q = route.query.url;
+  if (typeof q === "string" && q) form.url = normalizeUrl(q);
 });
 
 /**
@@ -248,34 +203,10 @@ async function run() {
   }
 }
 
+/** 「恢复默认」保留已输入的 url（刚跑完想换个参数重试是常态），其余全部回到出厂值 */
 function resetForm() {
-  form.renderMode = "AUTO";
-  form.timeoutMs = null;
-  form.waitUntil = "LOAD";
-  form.viewportEnabled = false;
-  form.userAgent = "";
-  form.locale = "";
-  form.colorScheme = "";
-  Object.assign(form.extract, {
-    meta: true,
-    assets: true,
-    manifest: true,
-    jsonld: true,
-    opengraph: true,
-    twitter: true,
-    feeds: false,
-    alternates: false,
-    text: false,
-  });
-  form.download = "PROBE";
-  form.maxBytes = 2_097_152;
-  form.maxCount = 20;
-  form.screenshotEnabled = false;
-  form.screenshotFullPage = false;
-  form.screenshotFormat = "WEBP";
-  form.screenshotQuality = 80;
-  form.cacheMode = "BYPASS";
-  form.robotsRespect = true;
+  const { url } = form;
+  Object.assign(form, makeDefaultForm(), { url });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -451,7 +382,7 @@ const PARAM_TIP: Record<string, string> = {
   locale:
     "<b>render.locale</b>：请求携带的 Accept-Language。多语言站点靠它决定返回哪种语言的标题与描述。留空 = 不发送。",
   screenshotEnabled:
-    "<b>screenshot.enabled</b>：截图只有无头浏览器能出，开启会把 AUTO 提升为 HEADLESS。<br>注意<b>显式选 HTTP 时不会提升</b>，那条组合永远出不了图，服务端会在 diagnostics.warnings 里说明。<br><b style='color:#e6a23c'>已知问题</b>：截图目前仍然只能截出<b>裸 HTML</b>（无 CSS / 图片 / 字体）。放开资源拦截并未解决 —— 实测拦截全开/全关/完全禁用三种配置下截出的图逐字节相同，原因仍未定位。请暂不要把截图当作可用功能。",
+    "<b>screenshot.enabled</b>：截图只有无头浏览器能出，开启会把 AUTO 提升为 HEADLESS。<br>注意<b>显式选 HTTP 时不会提升</b>，那条组合永远出不了图，服务端会在 diagnostics.warnings 里说明。<br>2026-08-09 无头链路重写（改为直接驱动 CDP）之前，截图只能截出<b>裸 HTML</b>（无 CSS / 图片 / 字体），且字节数/状态码/storageKey 全都正常、光看指标发现不了 —— 现已修复：截图时整套子资源放开，截的是渲染完成的一帧。它仍强制走无头浏览器，成本较高。",
   screenshotFullPage:
     "<b>screenshot.fullPage</b>：关 = 只截视口内的首屏；开 = 滚动整页拼接。长页面会显著变慢，且产出体积很大。",
   screenshotFormat:
@@ -484,6 +415,8 @@ const EXTRACT_TIP: Record<string, string> = {
 <template>
   <Page auto-content-height>
     <div class="flex flex-col gap-4">
+      <!-- 巡检熔断/停摆的常驻告警：在这里排查抓取失败时，"我方出网链路挂了"是必须先知道的 -->
+      <SweepBreakerAlert />
       <!-- ── 说明（默认折叠） ──────────────────────────────────────────── -->
       <ElCard shadow="never" :body-style="docOpen ? undefined : { display: 'none' }">
         <template #header>
@@ -569,7 +502,7 @@ const EXTRACT_TIP: Record<string, string> = {
 
             <ElCollapseItem title="已知未实现 / 易踩的坑" name="gotchas">
               <ul class="ml-4 list-disc space-y-1 text-xs text-gray-600">
-                <li><strong>截图仍只能截出裸 HTML（未修复）</strong>：无 CSS / 图片 / 字体。而字节数、状态码、storageKey 全都正常，光看指标发现不了 —— 这也是它长期没被察觉的原因。曾以为是资源拦截所致，实测证伪（拦截全开/全关/禁用三种配置下截出的图逐字节相同），真正原因仍未定位</li>
+                <li><strong>截图曾长期只截出裸 HTML（无 CSS / 图片 / 字体），2026-08-09 已随无头链路重写修好</strong>：根因是旧代码走的是爬虫的 <code>scrape()</code> 路径（收集"爬到的页面"），而非"导航到这一页、等它渲染好、再截一帧"。改为直接驱动 CDP 后正常。字节数 / 状态码 / storageKey 当年一直正常，光看指标发现不了 —— 这是它长期没被察觉的原因</li>
                 <li><code>render.mode</code> 显式选 <code>HTTP</code> 时开截图<strong>不会</strong>提升为无头，永远出不了图；此时 <code>diagnostics.warnings</code> 会说明</li>
                 <li>被反爬拦下并走了<strong>站点 API 救援</strong>时同样没有截图：页面压根没渲染过，<code>fetch.layerUsed</code> 会是 <code>SITE_API</code></li>
                 <li><code>fetch.tls</code> 恒为空：reqwest 当前不透出证书细节，刻意留空而非编造</li>

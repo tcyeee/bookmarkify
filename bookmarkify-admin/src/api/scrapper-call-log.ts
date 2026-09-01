@@ -40,8 +40,36 @@ export interface ScrapperCallLogSearchParams {
    */
   createTimeFrom?: string;
   createTimeTo?: string;
+  /** 只看某个 scrapper 错误码 */
+  errorCode?: string;
+  /** 只看某个抓取层（HTTP / HEADLESS / SITE_API） */
+  layerUsed?: string;
+  /** 只看命中/未命中 scrapper 缓存 */
+  cached?: boolean;
+  /** 只看反爬类目标状态码（403/406/412/429） */
+  antiBotOnly?: boolean;
   currentPage?: number;
   pageSize?: number;
+}
+
+/**
+ * 调用日志页当前筛选范围下的汇总。统计口径忽略「成功/失败」和「缓存」两个开关
+ * （否则筛了失败再看成功率恒为 0），其余范围限定沿用。
+ */
+export interface ScrapperCallLogStatsVO {
+  totalCalls: number;
+  successCalls: number;
+  failedCalls: number;
+  cachedCalls: number;
+}
+
+export async function getAdminScrapperCallLogStatsApi(
+  params: ScrapperCallLogSearchParams,
+) {
+  return requestClient.post<ScrapperCallLogStatsVO>(
+    '/admin/scrapper-call-log/stats',
+    params,
+  );
 }
 
 export interface PageResult<T> {

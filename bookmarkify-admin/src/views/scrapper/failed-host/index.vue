@@ -16,7 +16,7 @@ import type {
   ScrapperFailedHostVO,
 } from '#/api/scrapper-call-log';
 
-import { defineAsyncComponent, reactive, ref } from 'vue';
+import { reactive, ref } from 'vue';
 
 import { useRouter } from 'vue-router';
 
@@ -24,6 +24,15 @@ import { Page } from '@vben/common-ui';
 import { CircleHelp } from '@vben/icons';
 import { formatDateTime } from '@vben/utils';
 
+import {
+  ElButton,
+  ElCard,
+  ElOption,
+  ElSelect,
+  ElSwitch,
+  ElTag,
+  ElTooltip,
+} from '#/adapter/element';
 import { useVbenVxeGrid, type VxeGridProps } from '#/adapter/vxe-table';
 import {
   getAdminFailedHostRankingApi,
@@ -32,50 +41,15 @@ import {
 import { FilterBar, FilterItem, useAutoSearch } from '#/components/filter-bar';
 import BookmarkDetailDialog from '#/views/bookmark/BookmarkDetailDialog.vue';
 import SweepBreakerAlert from '#/views/scrapper/SweepBreakerAlert.vue';
+import {
+  faviconSrc,
+  isAntiBotStatus,
+  onFaviconError,
+  SLOW_CALL_MS,
+  toLocalIso,
+} from '#/views/scrapper/shared';
 
 import { formatDuration } from '../duration';
-
-const ElCard = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/card/index'),
-    import('element-plus/es/components/card/style/css'),
-  ]).then(([res]) => res.ElCard),
-);
-
-const ElSelect = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/select/index'),
-    import('element-plus/es/components/select/style/css'),
-  ]).then(([res]) => res.ElSelect),
-);
-
-const ElOption = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/select/index'),
-    import('element-plus/es/components/select/style/css'),
-  ]).then(([res]) => res.ElOption),
-);
-
-const ElButton = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/button/index'),
-    import('element-plus/es/components/button/style/css'),
-  ]).then(([res]) => res.ElButton),
-);
-
-const ElTag = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/tag/index'),
-    import('element-plus/es/components/tag/style/css'),
-  ]).then(([res]) => res.ElTag),
-);
-
-const ElTooltip = defineAsyncComponent(() =>
-  Promise.all([
-    import('element-plus/es/components/tooltip/index'),
-    import('element-plus/es/components/tooltip/style/css'),
-  ]).then(([res]) => res.ElTooltip),
-);
 
 const router = useRouter();
 
@@ -83,6 +57,8 @@ const DEFAULT_FILTERS = {
   days: 30,
   minFailures: 3,
   sortField: 'failedDurationMs' as FailedHostSortField,
+  // 客户端过滤：败因全部是我方故障的行不下发（数据已经在手，不必回后端）
+  hideOurs: false,
 };
 
 const searchForm = reactive({ ...DEFAULT_FILTERS });
@@ -114,9 +90,6 @@ const SORT_OPTIONS: { desc: string; label: string; value: FailedHostSortField }[
       desc: '看谁最彻底。低频站点容易靠 3/3 冲到榜首，配合调高失败次数门槛使用',
     },
   ];
-
-/** 单次调用超过它就算慢。与调用日志页同一个口径 */
-const SLOW_CALL_MS = 3000;
 
 function failRate(row: ScrapperFailedHostVO) {
   return row.totalCalls === 0 ? 0 : row.failedCalls / row.totalCalls;
@@ -217,7 +190,7 @@ function targetStatusTip(row: ScrapperFailedHostVO) {
   if (status == null) {
     return '最近一次失败没有拿到目标站点的状态码：连接就没建立起来（DNS 解析失败、连不上、超时）。这类是站点真的没了，交给活性巡检判失联即可';
   }
-  if ([403, 406, 412, 429].includes(status)) {
+  if (isAntiBotStatus(status)) {
     return `最近一次失败时目标返回 ${status}：连上了但被拒，典型的反爬。值得考虑的是写一个站点官方 API 适配器把失败变成成功，而不是不再重试`;
   }
   if (status === 404 || status === 410) {
@@ -226,12 +199,10 @@ function targetStatusTip(row: ScrapperFailedHostVO) {
   return `最近一次失败时目标站点返回 ${status}`;
 }
 
-const TARGET_STATUS_ANTI_BOT = new Set([403, 406, 412, 429]);
-
 function targetStatusTone(row: ScrapperFailedHostVO) {
   const status = row.lastTargetStatus;
   if (status == null) return 'text-gray-400';
-  return TARGET_STATUS_ANTI_BOT.has(status)
+  return isAntiBotStatus(status)
     ? 'text-orange-500 dark:text-orange-400'
     : 'text-red-600 dark:text-red-400';
 }
@@ -287,11 +258,27 @@ const gridOptions: VxeGridProps<ScrapperFailedHostVO> = {
           minFailures: searchForm.minFailures,
           sortField: searchForm.sortField,
         });
-        return { items: records };
+        return { items: searchForm.hideOurs ? records.filter(isSiteAttributable) : records };
       },
     },
   },
 };
+
+/**
+ * 这一行值不值得按「站点」去看。
+ *
+ * 榜单默认把 `SCRAPPER_UNREACHABLE` / `HEADLESS_UNAVAILABLE` / `CONTRACT_MISMATCH` 这类
+ * **我方**的故障也按域名排了进来（它确实发生在这个域名上），但据此说「这个站点抓不动」
+ * 就是错的。开「隐藏我方问题」后，败因**全部**是我方类的行会被滤掉；只要还有一条是站点类
+ * （反爬、连不上、超时）就保留 —— 那部分仍是关于这个站点的信号。
+ * 完全没有败因分布的行无法判断，一律保留。
+ */
+function isSiteAttributable(row: ScrapperFailedHostVO) {
+  if (row.errorBreakdown.length === 0) return true;
+  return row.errorBreakdown.some(
+    (it) => (SCRAPPER_ERROR_CODE_DESC[it.errorCode]?.blame ?? 'site') === 'site',
+  );
+}
 
 // ── 下钻 ──
 // 聚合行说得出"这个域名 30 天失败 12 次"，说不出"具体是哪几次、报了什么"。那份现场在调用日志里
@@ -326,34 +313,15 @@ function jumpToCalls(row: ScrapperFailedHostVO) {
   });
 }
 
-/** 后端的 LocalDateTime 走 Jackson 默认的 ISO（无时区），按本地时间原样拼 */
-function toLocalIso(date: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-    `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-  );
-}
-
-// 兜底地球图标。内联 data URI 而非引用文件，保证它自身永远不会再发一次请求
-const FALLBACK_FAVICON = `data:image/svg+xml;utf8,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`,
-)}`;
-
 /**
- * 图标只认后端下发的 `faviconUrl`（我方 OSS 签名地址），拿不到就用本地兜底图。
+ * 拿这个域名最近一次失败的地址去测试台实抓一次。
  *
- * **这个页面尤其不能**改回按域名拼 `https://${row.urlHost}/favicon.ico`：整张表就是一批
- * 抓不动的域名，那等于让管理员的浏览器挨个去连一批连我方抓取服务都拒掉的站点 —— 管理员的
- * 公网 IP 直接暴露给第三方，控制台还会被超时和证书错误刷屏。图标为空本身就是有效信息。
+ * 看到一个反复失败的站点，下一步往往就是「用 BYPASS 缓存实抓看看到底卡在哪」。测试台默认
+ * 就是 cache=BYPASS、不写库的纯调试通道，把地址带过去省掉复制粘贴。
  */
-function faviconOf(row: ScrapperFailedHostVO) {
-  return row.faviconUrl || FALLBACK_FAVICON;
-}
-
-function onFaviconError(event: Event) {
-  const img = event.target as HTMLImageElement;
-  if (img.src !== FALLBACK_FAVICON) img.src = FALLBACK_FAVICON;
+function jumpToCheck(row: ScrapperFailedHostVO) {
+  const url = row.lastFailedUrl || `https://${row.urlHost}/`;
+  router.push({ path: '/scrapper/check', query: { url } });
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -477,6 +445,16 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload(), {
             </ElOption>
           </ElSelect>
         </FilterItem>
+        <!-- 榜单立意是「按站点归因」，而我方故障（SCRAPPER_UNREACHABLE / HEADLESS_UNAVAILABLE /
+             CONTRACT_MISMATCH）是纯噪音。打开后：败因全是我方类的行滤掉，混着站点类的保留 -->
+        <FilterItem label="隐藏我方问题" width="auto">
+          <ElTooltip
+            content="败因全部属于我方故障的域名不再显示；只要还有一条是站点类败因（反爬/连不上/超时）就保留"
+            placement="top"
+          >
+            <ElSwitch v-model="searchForm.hideOurs" />
+          </ElTooltip>
+        </FilterItem>
       </FilterBar>
       <Grid>
         <!--
@@ -495,7 +473,7 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload(), {
         <template #urlHost="{ row }">
           <span class="inline-flex items-center gap-1.5">
             <img
-              :src="faviconOf(row)"
+              :src="faviconSrc(row.faviconUrl)"
               alt=""
               class="h-4 w-4 shrink-0 rounded-sm object-contain"
               @error="onFaviconError"
@@ -647,9 +625,14 @@ const { reset } = useAutoSearch(searchForm, () => gridApi.reload(), {
         </template>
 
         <template #action="{ row }">
-          <ElButton link type="primary" size="small" @click.stop="jumpToCalls(row)">
-            查看日志
-          </ElButton>
+          <div class="flex flex-col items-start">
+            <ElButton link type="primary" size="small" @click.stop="jumpToCalls(row)">
+              查看日志
+            </ElButton>
+            <ElButton link type="primary" size="small" @click.stop="jumpToCheck(row)">
+              去测试台
+            </ElButton>
+          </div>
         </template>
       </Grid>
     </ElCard>
