@@ -5,10 +5,14 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
+import top.tcyeee.bookmarkify.entity.ApplyReclassifyParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
 import top.tcyeee.bookmarkify.entity.CreateDirParams
 import top.tcyeee.bookmarkify.entity.MoveNodeParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
+import top.tcyeee.bookmarkify.entity.dto.ReclassifyGroup
+import top.tcyeee.bookmarkify.entity.dto.ReclassifyItem
+import top.tcyeee.bookmarkify.entity.dto.ReclassifyPlan
 import top.tcyeee.bookmarkify.entity.UpdateDirColorParams
 import top.tcyeee.bookmarkify.entity.UpdateDirCollapsedParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
@@ -17,6 +21,7 @@ import top.tcyeee.bookmarkify.entity.entity.UserLayoutNodeEntity
 import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.mapper.BookmarkMapper
 import top.tcyeee.bookmarkify.mapper.UserLayoutNodeMapper
+import top.tcyeee.bookmarkify.server.IApiService
 import top.tcyeee.bookmarkify.server.ILayoutNodeFunctionService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
@@ -37,12 +42,19 @@ class UserLayoutNodeServiceImpl(
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val layoutNodeFunctionService: ILayoutNodeFunctionService,
     private val iconResolver: IconResolver,
+    private val apiService: IApiService,
 ) : IUserLayoutNodeService, ServiceImpl<UserLayoutNodeMapper, UserLayoutNodeEntity>() {
 
     companion object {
         private val HEX_COLOR = Regex("^#[0-9a-fA-F]{6}$")
         private const val ROOT_ID = "ROOT"
         private const val ROOT_NAME = "ROOT"
+
+        /**
+         * 「重新归类」一次最多处理多少条书签。上限的意义是 prompt 体积与延迟：一个文件夹塞了
+         * 几十条书签时，一次判定要几十秒且 token 成本陡增，超过就让用户先手动拆一下。
+         */
+        private const val RECLASSIFY_MAX_ITEMS = 40
 
         /**
          * 同一层子节点的排列顺序。
@@ -211,6 +223,142 @@ class UserLayoutNodeServiceImpl(
             oldParentId != null -> buildDirVO(oldParentId).also { SocketUtils.homeLayoutRefresh(uid, layout(uid)) }
             else -> layout(uid)
         }
+    }
+
+    override fun planReclassify(dirNodeId: String, uid: String): ReclassifyPlan {
+        val dir = ktQuery()
+            .eq(UserLayoutNodeEntity::id, dirNodeId)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .eq(UserLayoutNodeEntity::type, NodeTypeEnum.BOOKMARK_DIR)
+            .one() ?: throw CommonException(ErrorType.E102, "文件夹不存在或无权访问")
+
+        val children = ktQuery()
+            .eq(UserLayoutNodeEntity::parentId, dirNodeId)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .eq(UserLayoutNodeEntity::type, NodeTypeEnum.BOOKMARK)
+            .list()
+        if (children.size < 2) throw CommonException(ErrorType.E102, "该文件夹书签太少，无需归类")
+        if (children.size > RECLASSIFY_MAX_ITEMS) throw CommonException(ErrorType.E128)
+
+        val showMap = bookmarkShowMap(uid)
+        val items = children.map { c ->
+            val show = showMap[c.id]
+            ReclassifyItem(
+                layoutNodeId = c.id,
+                title = show?.title ?: c.name,
+                description = show?.description,
+                host = show?.urlHost,
+            )
+        }
+
+        val allDirs = findByUid(uid).filter { it.type == NodeTypeEnum.BOOKMARK_DIR }
+        val otherDirNames = allDirs.filter { it.id != dirNodeId }.mapNotNull { it.name }.distinct()
+        val sourceName = dir.name ?: ""
+
+        val assignment = apiService.classifyIntoFolders(sourceName, otherDirNames, items)
+        if (assignment.isEmpty()) throw CommonException(ErrorType.E102, "AI 未能给出归类结果，请稍后再试")
+
+        val dirIdByName = allDirs
+            .filter { !it.name.isNullOrBlank() }
+            .associate { it.name!!.trim().lowercase() to it.id }
+
+        val raw = items.groupBy { assignment[it.layoutNodeId]?.takeIf(String::isNotBlank) ?: sourceName }
+        val keepIds = mutableListOf<String>()
+        val groups = mutableListOf<ReclassifyGroup>()
+        for ((folderName, groupItems) in raw) {
+            val nodeIds = groupItems.map { it.layoutNodeId }
+            val existingId = dirIdByName[folderName.trim().lowercase()]
+            when {
+                folderName.equals(sourceName, ignoreCase = true) -> keepIds += nodeIds
+                existingId != null -> groups += ReclassifyGroup(folderName, isNew = false, folderId = existingId, nodeIds = nodeIds)
+                // 新建文件夹至少要 2 条书签（与手动建夹一致）；落单的那条留在原文件夹
+                nodeIds.size < 2 -> keepIds += nodeIds
+                else -> groups += ReclassifyGroup(folderName, isNew = true, folderId = null, nodeIds = nodeIds)
+            }
+        }
+        groups.sortByDescending { it.nodeIds.size }
+        if (keepIds.isNotEmpty()) {
+            groups += ReclassifyGroup(sourceName, isNew = false, folderId = dirNodeId, nodeIds = keepIds, keep = true)
+        }
+
+        return ReclassifyPlan(dirNodeId, sourceName, groups)
+    }
+
+    @Transactional
+    override fun applyReclassify(params: ApplyReclassifyParams, uid: String): UserLayoutNodeVO {
+        val source = ktQuery()
+            .eq(UserLayoutNodeEntity::id, params.sourceFolderId)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .eq(UserLayoutNodeEntity::type, NodeTypeEnum.BOOKMARK_DIR)
+            .one() ?: throw CommonException(ErrorType.E102, "文件夹不存在或无权访问")
+
+        // 只允许移动此刻确实在源文件夹里的书签节点（方案生成到确认之间可能已有别的标签页动过）
+        val movable = ktQuery()
+            .eq(UserLayoutNodeEntity::parentId, source.id)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .eq(UserLayoutNodeEntity::type, NodeTypeEnum.BOOKMARK)
+            .list().map { it.id }.toSet()
+
+        val existingDirs = findByUid(uid).filter { it.type == NodeTypeEnum.BOOKMARK_DIR }
+        val existingDirIds = existingDirs.map { it.id }.toSet()
+        val dirIdByName = existingDirs
+            .filter { !it.name.isNullOrBlank() }
+            .associateTo(mutableMapOf()) { it.name!!.trim().lowercase() to it.id }
+
+        var nextSort = (preferenceService.queryByUid(uid).sortMap.values.maxOrNull() ?: 0) + 1
+        val newDirSorts = mutableMapOf<String, Int>()
+
+        for (group in params.groups) {
+            val nodeIds = group.nodeIds.filter { it in movable }
+            if (nodeIds.isEmpty()) continue
+
+            val nameKey = group.folderName.trim().lowercase()
+            val targetId = when {
+                group.folderId != null && group.folderId in existingDirIds -> group.folderId
+                dirIdByName[nameKey] != null -> dirIdByName.getValue(nameKey)
+                group.folderName.isBlank() -> continue
+                else -> {
+                    val newDir = UserLayoutNodeEntity(
+                        uid = uid, name = group.folderName.trim().take(30), type = NodeTypeEnum.BOOKMARK_DIR,
+                    )
+                    save(newDir)
+                    dirIdByName[nameKey] = newDir.id
+                    newDirSorts[newDir.id] = nextSort++
+                    newDir.id
+                }
+            }
+            if (targetId == source.id) continue
+
+            ktUpdate()
+                .`in`(UserLayoutNodeEntity::id, nodeIds)
+                .eq(UserLayoutNodeEntity::uid, uid)
+                .set(UserLayoutNodeEntity::parentId, targetId)
+                .update()
+        }
+
+        if (newDirSorts.isNotEmpty()) preferenceService.sort(uid, newDirSorts)
+
+        // 源文件夹可能被搬空 / 只剩一项 —— 复用 moveNode 的解散规则
+        val remaining = ktQuery()
+            .eq(UserLayoutNodeEntity::parentId, source.id)
+            .eq(UserLayoutNodeEntity::uid, uid)
+            .list()
+        when {
+            remaining.isEmpty() -> removeById(source.id)
+            remaining.size == 1 -> {
+                val last = remaining.first()
+                val folderSort = preferenceService.queryByUid(uid).sortMap[source.id]
+                ktUpdate()
+                    .eq(UserLayoutNodeEntity::id, last.id)
+                    .eq(UserLayoutNodeEntity::uid, uid)
+                    .set(UserLayoutNodeEntity::parentId, null)
+                    .update()
+                if (folderSort != null) preferenceService.sort(uid, mapOf(last.id to folderSort))
+                removeById(source.id)
+            }
+        }
+
+        return layout(uid).also { SocketUtils.homeLayoutRefresh(uid, it) }
     }
 
     @Transactional

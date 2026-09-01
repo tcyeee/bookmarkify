@@ -166,6 +166,60 @@ const { data } = await res.json() // data: UserLayoutNodeVO（源文件夹，chi
 
 ---
 
+### AI 重新归类 · 生成方案
+
+把一个文件夹里的书签交给 DeepSeek 重新分组，返回方案但**不落库**。后端会现场调用 AI，响应可能要几秒到几十秒。
+
+- **Method:** `POST`
+- **Path:** `/bookmark/dir/reclassify/plan?dirNodeId=<文件夹节点ID>`
+- **Auth:** 需要登录
+- **限流:** 5s
+
+**Response** `ApiResponse<ReclassifyPlan>`
+
+```ts
+interface ReclassifyPlan {
+  sourceFolderId: string
+  sourceFolderName: string
+  groups: Array<{
+    folderName: string
+    isNew: boolean // 该文件夹当前不存在，确认后需新建
+    folderId: string | null // 已有文件夹时的节点 ID
+    nodeIds: string[] // 该组内书签的布局节点 ID
+    keep?: boolean // 这一组＝「保留在原文件夹」，确认时不移动
+  }>
+}
+```
+
+错误：`E102`（文件夹不存在 / 书签少于 2 条 / AI 无结果）、`E128`（书签超过 40 条）。
+
+---
+
+### AI 重新归类 · 应用方案
+
+- **Method:** `POST`
+- **Path:** `/bookmark/dir/reclassify/apply`
+- **Auth:** 需要登录
+
+**Request Body**
+
+```ts
+interface ApplyReclassifyParams {
+  sourceFolderId: string
+  // 只传用户勾选、且不是「保留」的那些组
+  groups: Array<{
+    folderName: string
+    folderId?: string | null // 已有文件夹时带上；新建时省略
+    nodeIds: string[]
+  }>
+}
+```
+
+**Response** `ApiResponse<UserLayoutNodeVO>` — 操作后的整棵桌面树，同时通过 WebSocket 推 `HOME_LAYOUT_REFRESH`。
+新建文件夹会自动创建；源文件夹被搬空或只剩 1 项时按 `moveNode` 的规则就地解散。
+
+---
+
 ### 修改文件夹名称
 
 - **Method:** `POST`

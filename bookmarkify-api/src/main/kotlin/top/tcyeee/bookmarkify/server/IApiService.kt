@@ -7,6 +7,7 @@ import top.tcyeee.bookmarkify.entity.dto.CollectionMetaResult
 import top.tcyeee.bookmarkify.entity.dto.NsfwCheckResult
 import top.tcyeee.bookmarkify.entity.dto.PingProbeResult
 import top.tcyeee.bookmarkify.entity.dto.ProposedCategory
+import top.tcyeee.bookmarkify.entity.dto.ReclassifyItem
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeResponse
@@ -84,6 +85,21 @@ interface IApiService {
         host: String,
         existing: List<CategoryCandidate>,
     ): List<ProposedCategory>
+
+    /**
+     * 通过 DeepSeek 把一个文件夹里的书签重新分配到文件夹（首页「重新归类」）。
+     *
+     * 每条书签会被判给三类目标之一：某个 [existingFolderNames] 里的已有文件夹、[sourceFolderName]
+     * 本身（表示「保留不动」）、或一个模型新提出的文件夹（名称用简短中文）。
+     *
+     * @return `layoutNodeId -> 目标文件夹名`；模型没给到的书签不出现在结果里（调用方按「保留」处理）。
+     *   调用失败 / 解析失败 / 无有效结果一律返回空 Map。
+     */
+    fun classifyIntoFolders(
+        sourceFolderName: String,
+        existingFolderNames: List<String>,
+        items: List<ReclassifyItem>,
+    ): Map<String, String>
 
     /**
      * 通过 DeepSeek（纯知识，不联网）推荐若干功能/定位相似的网站。

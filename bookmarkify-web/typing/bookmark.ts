@@ -80,6 +80,25 @@ export interface BookmarkDir {
   bookmarkList: Array<BookmarkShow>
 }
 
+// AI「重新归类」方案（后端 ReclassifyPlan / ReclassifyGroup）
+export interface ReclassifyGroup {
+  folderName: string
+  // 该文件夹当前不存在，确认后需新建
+  isNew: boolean
+  // 已存在时的目标文件夹节点 id；isNew 时为 null
+  folderId?: string | null
+  // 该组内书签的布局节点 id 列表
+  nodeIds: Array<string>
+  // 这一组就是「保留在原文件夹」，确认时不产生移动
+  keep?: boolean
+}
+
+export interface ReclassifyPlan {
+  sourceFolderId: string
+  sourceFolderName: string
+  groups: Array<ReclassifyGroup>
+}
+
 export interface BookmarkUpdateParams {
   id: string
   iconActivity?: boolean

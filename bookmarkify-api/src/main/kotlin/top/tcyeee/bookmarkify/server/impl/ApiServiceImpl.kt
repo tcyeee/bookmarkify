@@ -2,6 +2,7 @@ package top.tcyeee.bookmarkify.server.impl
 
 import cn.hutool.http.HttpRequest
 import cn.hutool.http.HttpUtil
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.springframework.stereotype.Service
@@ -23,6 +24,7 @@ import top.tcyeee.bookmarkify.entity.dto.PingProbeResult
 import top.tcyeee.bookmarkify.entity.dto.PingRequest
 import top.tcyeee.bookmarkify.entity.dto.PingResponse
 import top.tcyeee.bookmarkify.entity.dto.ProposedCategory
+import top.tcyeee.bookmarkify.entity.dto.ReclassifyItem
 import top.tcyeee.bookmarkify.entity.dto.scrape.AssetDownload
 import top.tcyeee.bookmarkify.entity.dto.scrape.AssetOptions
 import top.tcyeee.bookmarkify.entity.dto.scrape.CacheMode
@@ -506,6 +508,77 @@ class ApiServiceImpl(
             .take(MAX_CATEGORY_SLUG_LEN)
             .trim('-')
 
+    override fun classifyIntoFolders(
+        sourceFolderName: String,
+        existingFolderNames: List<String>,
+        items: List<ReclassifyItem>,
+    ): Map<String, String> {
+        if (items.isEmpty()) return emptyMap()
+
+        val folderList = existingFolderNames
+            .filter { it.isNotBlank() && !it.equals(sourceFolderName, ignoreCase = true) }
+            .distinct()
+            .joinToString("\n") { "- $it" }
+            .ifBlank { "（暂无其它文件夹）" }
+
+        val catalogue = items.mapIndexed { i, it ->
+            "$i. ${it.title ?: it.host ?: "未命名"}${it.host?.let { h -> "（$h）" } ?: ""}" +
+                (it.description?.take(60)?.takeIf { d -> d.isNotBlank() }?.let { d -> "：$d" } ?: "")
+        }.joinToString("\n")
+
+        val systemPrompt = """
+            你是一个书签整理助手。用户有一个名为「$sourceFolderName」的文件夹，现在要把里面的书签重新归类。
+            已有的其它文件夹：
+            $folderList
+            请给每一条书签指定一个目标文件夹，遵循以下规则：
+            1. 能归进上面某个已有文件夹时，必须复用它的名称，一字不差；
+            2. 书签本身就符合「$sourceFolderName」这个主题时，目标就填「$sourceFolderName」，表示保留不动；
+            3. 以上都不合适时，可以新建文件夹：名称用简短中文（不超过 8 个字），语义相近的书签要归到同一个新文件夹名下；
+            4. 每条书签必须且只能出现一次。
+            严格只返回 JSON 数组，元素形如 {"i":0,"folder":"文件夹名"}；不要 markdown 代码块，不要任何解释文字。
+        """.trimIndent()
+
+        val request = DeepSeekRequest(
+            messages = listOf(
+                DeepSeekMessage(role = "system", content = systemPrompt),
+                DeepSeekMessage(role = "user", content = catalogue),
+            ),
+            // 每条书签一行 {"i":12,"folder":"效率工具"} 约 12 token，给足余量
+            maxTokens = 60 + items.size * 24,
+        )
+
+        val content = chatCompletion(
+            AiCallScene.FOLDER_RECLASSIFY, "dir=$sourceFolderName n=${items.size}", request, readTimeoutMs = 40_000,
+        ) ?: return emptyMap()
+
+        return parseFolderAssignments(content, items)
+    }
+
+    /** 单条归类结果：`i` 是书签序号，`folder` 是目标文件夹名。字段名容错 index/folderName。 */
+    internal data class FolderAssignment(
+        val i: Int? = null,
+        val index: Int? = null,
+        val folder: String? = null,
+        @JsonProperty("folderName") val folderName: String? = null,
+    ) {
+        val idx: Int? get() = i ?: index
+        val name: String? get() = folder?.trim()?.takeIf { it.isNotBlank() } ?: folderName?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    /** 把模型返回的 JSON 数组解析为 `layoutNodeId -> 目标文件夹名`；越界序号、空名字、重复项一律丢弃。 */
+    internal fun parseFolderAssignments(content: String, items: List<ReclassifyItem>): Map<String, String> {
+        val json = content.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+        val parsed = runCatching { objectMapper.readValue<List<FolderAssignment>>(json) }.getOrElse { return emptyMap() }
+        val result = LinkedHashMap<String, String>()
+        for (a in parsed) {
+            val idx = a.idx ?: continue
+            val name = a.name?.take(FOLDER_NAME_MAX_LEN) ?: continue
+            val node = items.getOrNull(idx) ?: continue
+            result.putIfAbsent(node.layoutNodeId, name)
+        }
+        return result
+    }
+
     override fun inferSimilarSites(title: String?, description: String?, host: String): List<SimilarSite> {
         val systemPrompt = """
             你是一个网站推荐助手。根据用户给出的网站信息，推荐 8~10 个功能或定位相似的其它网站。
@@ -773,5 +846,8 @@ class ApiServiceImpl(
 
         /** 生成集合标题/描述时最多喂给模型的书签条数，超出部分对摘要贡献有限，只会白耗 token */
         private const val MAX_META_BOOKMARKS = 60
+
+        /** 「重新归类」里目标文件夹名的截断长度，与 user_layout_node.name 的前端限制（30）留出余量 */
+        private const val FOLDER_NAME_MAX_LEN = 20
     }
 }
