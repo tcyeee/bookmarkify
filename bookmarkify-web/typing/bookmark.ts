@@ -147,3 +147,34 @@ export interface BookmarkImportPreviewVO {
   duplicateCount: number
   items: BookmarkImportItemVO[]
 }
+
+// 搜索 / 相似结果里的一个站点（后端 BookmarkSearchVO）。
+// id 是 canonical pageId，可直接传给 bookmarksLinkOne 关联到桌面。
+export interface BookmarkSearchVO {
+  id: string
+  urlHost: string
+  urlScheme: string
+  appName?: string
+  title?: string
+  logo: BookmarkLogo
+}
+
+// 「更多相似书签」聚合结果（后端 SimilarBookmarksVO）。
+// computing 为 true 时表示还有 AI 推荐的站点在后台抓取，前端应轮询。
+export interface SimilarBookmarksVO {
+  computing: boolean
+  items: SimilarBookmarkItemVO[]
+}
+
+export interface SimilarBookmarkItemVO {
+  // LOCAL = 本地库里共享分类的站点；AI = DeepSeek 推荐并已收录
+  source: 'LOCAL' | 'AI'
+  // 归一化主域名，列表去重 key
+  domain: string
+  name: string
+  // 一句话相似理由，仅 AI 来源有
+  reason?: string
+  // 已抓到内容时的完整信息（id 供关联、logo 供渲染）；AI 尚未抓到时为 null
+  bookmark?: BookmarkSearchVO | null
+  alreadyBookmarked: boolean
+}

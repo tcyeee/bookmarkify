@@ -286,6 +286,8 @@ In-process Spring events (`config/event/`), dispatched by `BookmarkParseEventLis
 | `BookmarkParseAndNoticeEvent` | `bookmarkParseExecutor` | Parse + WebSocket push (single add) |
 | `BookmarkParseAndResetUserItemEvent` | `bookmarkParseExecutor` | Parse + bind user link (import) |
 | `BookmarkEnrichEvent` | `bookmarkEnrichExecutor` | Category + NSFW (DeepSeek); deliberately off the parse pool |
+| `BookmarkScreenshotEvent` | `bookmarkScreenshotExecutor` | Page screenshot (forces headless); single-thread pool |
+| `SimilarColdComputeEvent` | `bookmarkEnrichExecutor` | 「更多相似书签」cold compute: DeepSeek recommend → ingest each domain via the add-bookmark chain (`SimilarBookmarkServiceImpl`) |
 
 `ParseLock` (Redis SETNX) guards two things: one scrape at a time per canonical bookmark (concurrent adds of the same URL would otherwise interleave `SiteAssetWriter`'s delete-then-insert and corrupt the asset rows), and one in-flight re-dispatch per user link.
 
@@ -387,7 +389,8 @@ The deadlock came from the abort path returning *before* the persist loop, so `n
 - `DEFAULT_BACKGROUND_*` — Cached default backgrounds (12h TTL)
 - `WECHAT_WORK_ACCESS_TOKEN` — OAuth token (1h TTL)
 - `throttle:<uid>:<method>` — Rate limit locks
-- `parse:lock:bookmark:<id>` / `parse:lock:dispatch:<userLinkId>` / `parse:lock:sweep:<taskLabel>` — `ParseLock` mutexes (5 min / 5 min / 30 min TTL)
+- `parse:lock:bookmark:<id>` / `parse:lock:dispatch:<userLinkId>` / `parse:lock:sweep:<taskLabel>` / `parse:lock:screenshot:<pageId>` / `parse:lock:similar:<siteId>` — `ParseLock` mutexes (5 min / 5 min / 30 min / 35 day / 30 min TTL)
+- `SIMILAR_COLD_BUDGET:<uid>` — per-user 24h counter for 「更多相似书签」 cold computes (soft limit, see `SimilarBookmarkServiceImpl`)
 
 ## Coding Conventions
 

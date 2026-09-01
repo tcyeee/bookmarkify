@@ -18,6 +18,7 @@ import top.tcyeee.bookmarkify.entity.BookmarkUpdatePrams
 import top.tcyeee.bookmarkify.entity.CreateDirParams
 import top.tcyeee.bookmarkify.entity.MoveNodeParams
 import top.tcyeee.bookmarkify.entity.RenameDirParams
+import top.tcyeee.bookmarkify.entity.SimilarBookmarksVO
 import top.tcyeee.bookmarkify.entity.UpdateDirColorParams
 import top.tcyeee.bookmarkify.entity.UpdateDirCollapsedParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
@@ -25,6 +26,7 @@ import top.tcyeee.bookmarkify.entity.dto.ReclassifyPlan
 import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
+import top.tcyeee.bookmarkify.server.ISimilarBookmarkService
 import top.tcyeee.bookmarkify.server.IUserBehaviorLogService
 import top.tcyeee.bookmarkify.server.IUserLayoutNodeService
 import top.tcyeee.bookmarkify.server.IUserPreferenceService
@@ -40,6 +42,7 @@ import top.tcyeee.bookmarkify.utils.BaseUtils
 class BookmarksController(
     private val bookmarkUserLinkService: IBookmarkUserLinkService,
     private val bookmarkService: IBookmarkService,
+    private val similarBookmarkService: ISimilarBookmarkService,
     private val preferenceService: IUserPreferenceService,
     private val layoutNodeService: IUserLayoutNodeService,
     private val userBehaviorLogService: IUserBehaviorLogService,
@@ -48,6 +51,13 @@ class BookmarksController(
     @Operation(summary = "按站点(域名/品牌名/短名)搜索已收录的站点首页，非 NSFW 站点专用")
     @PostMapping("/search")
     fun search(@RequestParam name: String): List<BookmarkSearchVO> = bookmarkService.search(name)
+
+    // 不加 @Throttle：前端会以 ~2s 间隔轮询等 AI 结果，节流会把轮询挡死。真正的限流是
+    // 冷计算的单用户每日预算 + 60 天缓存（见 SimilarBookmarkServiceImpl），命中缓存的读几乎免费。
+    @Operation(summary = "更多相似书签(本地共享分类 + DeepSeek 推荐并收录)；computing=true 时前端应轮询")
+    @PostMapping("/similar")
+    fun similar(@RequestParam pageId: String): SimilarBookmarksVO =
+        similarBookmarkService.similarFor(pageId, BaseUtils.uid())
 
     @Operation(summary = "查看我的全部书签")
     @PostMapping("/list")

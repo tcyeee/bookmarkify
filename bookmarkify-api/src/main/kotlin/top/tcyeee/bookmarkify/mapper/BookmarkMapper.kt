@@ -67,6 +67,10 @@ interface BookmarkMapper : BaseMapper<BookmarkEntity> {
                      LEFT JOIN site st
                                ON st.id = b.site_id
             where a.uid = #{uid}
+              -- 批量导入的占位关联 page_id='LOADING'，join 不到任何 page。带上它 vo() 会把节点
+              -- 从 BOOKMARK_LOADING 翻成 BOOKMARK，桌面上那一格就从「首字母+脉冲动画+原始标题」
+              -- 变成一条 urlBase='://'、没有图标的坏书签行。排除掉，让它保持加载态。
+              and a.page_id <> 'LOADING'
             """
     )
     @Description("查看用户的全部书签信息")

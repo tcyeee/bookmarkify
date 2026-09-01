@@ -447,6 +447,23 @@ CREATE TABLE public.site_asset (
 
 
 --
+-- Name: site_similar_item; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.site_similar_item (
+    id character varying(40) NOT NULL,
+    site_id character varying(40) NOT NULL,
+    rank integer DEFAULT 0 NOT NULL,
+    name character varying(200) NOT NULL,
+    domain character varying(200) NOT NULL,
+    reason character varying(500),
+    status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    create_time timestamp without time zone DEFAULT now() NOT NULL,
+    update_time timestamp without time zone
+);
+
+
+--
 -- Name: sweep_log; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -771,6 +788,14 @@ ALTER TABLE ONLY public.scrapper_call_log
 
 ALTER TABLE ONLY public.site_asset
     ADD CONSTRAINT site_asset_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: site_similar_item site_similar_item_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.site_similar_item
+    ADD CONSTRAINT site_similar_item_pkey PRIMARY KEY (id);
 
 
 --
@@ -1123,6 +1148,13 @@ CREATE INDEX idx_site_asset_role ON public.site_asset USING btree (owner_type, o
 --
 
 CREATE UNIQUE INDEX idx_site_asset_unique ON public.site_asset USING btree (owner_type, owner_id, extractor, resolved_url);
+
+
+--
+-- Name: uk_site_similar_item; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uk_site_similar_item ON public.site_similar_item USING btree (site_id, domain);
 
 
 --

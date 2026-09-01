@@ -204,6 +204,27 @@ data class BookmarkSearchVO(
     )
 }
 
+/**
+ * 「更多相似书签」聚合结果。见 `SimilarBookmarkServiceImpl` / `POST /bookmark/similar?pageId=`。
+ *
+ * 两路来源合并：LOCAL（本地库里共享分类的站点，即时）在前，AI（DeepSeek 推荐并已收录的站点）在后。
+ * [computing] 为 true 时表示还有 AI 推荐的域名在后台抓取，前端应轮询本接口。
+ */
+data class SimilarBookmarksVO(
+    @field:Schema(description = "true=还有 AI 推荐站点在后台抓取，前端应轮询") var computing: Boolean = false,
+    @field:Schema(description = "相似站点列表，LOCAL 来源在前") var items: List<SimilarBookmarkItemVO> = emptyList(),
+)
+
+data class SimilarBookmarkItemVO(
+    @field:Schema(description = "来源：LOCAL=本地库共享分类；AI=DeepSeek 推荐") var source: String,
+    @field:Schema(description = "归一化主域名，前端去重 key") var domain: String,
+    @field:Schema(description = "展示名称") var name: String,
+    @field:Schema(description = "一句话相似理由，仅 AI 来源有") var reason: String? = null,
+    @field:Schema(description = "已抓到内容时的完整信息(id 供关联、logo 供渲染)；AI 尚未抓到时为 null")
+    var bookmark: BookmarkSearchVO? = null,
+    @field:Schema(description = "当前用户是否已收藏该站点") var alreadyBookmarked: Boolean = false,
+)
+
 data class UserInfoShow(
     @field:Schema(description = "UID") var uid: String,
     @field:Schema(description = "用户名称") var nickName: String,
@@ -1238,6 +1259,7 @@ data class OrphanCleanupReport(
     @field:Schema(description = "分类关联(page_category)") var pageCategories: Int = 0,
     @field:Schema(description = "页面级图片资产(社交图/截图)") var pageAssets: Int = 0,
     @field:Schema(description = "站点级图片资产(favicon/logo)") var siteAssets: Int = 0,
+    @field:Schema(description = "「更多相似书签」AI 缓存(site_similar_item)") var similarItems: Int = 0,
     @field:Schema(
         description = "随之失去引用的对象存储文件数。这里**不删对象**，" +
             "它们会在下一轮 OSS 对账里被认定为孤儿后按既有策略回收"

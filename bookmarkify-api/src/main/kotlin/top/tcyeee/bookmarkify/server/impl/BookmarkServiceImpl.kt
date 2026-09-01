@@ -324,19 +324,23 @@ class BookmarkServiceImpl(
                         if (!it) log.warn("[importBookmarkFile] 网址超出字段上限，已跳过该条: uid=$uid, length=${raw.url.length}, title=${raw.title.take(50)}")
                     }
                 }
+            // 占位节点带上导入文件里的原始标题：抓取完成前，桌面上那一格显示的就是这个名字
+            // （BookmarkTreeRow 渲染 `node.name || '加载中…'`）。不写的话，刷新页面后
+            // `/bookmark/query` 拿到的占位节点 name 为空，只能显示「加载中…」。
+            fun loadingNode(raw: ChromeBookmarkRawData, parentId: String? = null) = UserLayoutNodeEntity(
+                uid = uid,
+                type = NodeTypeEnum.BOOKMARK_LOADING,
+                name = raw.title.take(BookmarkEntity.MAX_TITLE_LENGTH),
+                parentId = parentId,
+            )
             when (kept.size) {
                 0    -> null
-                1    -> {
-                    val node = UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING)
-                    FolderSlice(null, listOf(Pair(kept[0], node)))
-                }
+                1    -> FolderSlice(null, listOf(Pair(kept[0], loadingNode(kept[0]))))
                 else -> if (s.folderName == "ROOT") {
-                    val nodes = kept.map { raw -> Pair(raw, UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING)) }
-                    FolderSlice(null, nodes)
+                    FolderSlice(null, kept.map { raw -> Pair(raw, loadingNode(raw)) })
                 } else {
                     val folder = UserLayoutNodeEntity(uid, s)
-                    val nodes = kept.map { raw -> Pair(raw, UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.BOOKMARK_LOADING, parentId = folder.id)) }
-                    FolderSlice(folder, nodes)
+                    FolderSlice(folder, kept.map { raw -> Pair(raw, loadingNode(raw, folder.id)) })
                 }
             }
         }

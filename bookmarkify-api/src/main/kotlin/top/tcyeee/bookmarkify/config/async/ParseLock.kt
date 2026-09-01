@@ -129,5 +129,15 @@ class ParseLock(private val redis: StringRedisTemplate) {
          * 成功时调用方会主动释放它（此后由资产存在性接管），所以留下的必然是失败。
          */
         fun screenshot(pageId: String) = "screenshot:$pageId"
+
+        /**
+         * 「这个站点的相似书签正在冷计算」的抑制 key（[siteId] 是属主站点）。
+         *
+         * 与 [dispatch] 同一个用法：**不主动释放，靠 TTL 退避**。冷计算 = 1 次 DeepSeek + 逐个
+         * 收录 ~8 个域名（每个走一遍加书签抓取链路），耗时几十秒到几分钟。两个用户同时在同域
+         * 书签上点开「更多相似书签」会各触发一次，锁挡住第二次；即使 async 任务中途崩了，也靠
+         * TTL 过期后才允许重试，免得一个必然失败的场景被反复冷计算。
+         */
+        fun similar(siteId: String) = "similar:$siteId"
     }
 }
