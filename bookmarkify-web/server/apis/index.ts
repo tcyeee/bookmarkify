@@ -62,6 +62,13 @@ export const bookmarksUpdateDirCollapsed = (nodeId: string, collapsed: boolean) 
   http.post<boolean>('/bookmark/updateDirCollapsed', { nodeId, collapsed })
 export const bookmarksMoveNode = (nodeId: string, dirNodeId: string | null) =>
   http.post<t.UserLayoutNodeVO>('/bookmark/moveNode', { nodeId, dirNodeId })
+// AI 重新归类：先拿方案（后端会现场调 DeepSeek，可能要几秒到几十秒），用户确认后再 apply
+export const bookmarksReclassifyPlan = (dirNodeId: string) =>
+  http.post<t.ReclassifyPlan>(`/bookmark/dir/reclassify/plan?dirNodeId=${encodeURIComponent(dirNodeId)}`)
+export const bookmarksReclassifyApply = (
+  sourceFolderId: string,
+  groups: Array<{ folderName: string; folderId?: string | null; nodeIds: string[] }>,
+) => http.post<t.UserLayoutNodeVO>('/bookmark/dir/reclassify/apply', { sourceFolderId, groups })
 
 /* =========[ /user ]========= */
 export const updateUserInfo = (param: t.UserInfoUpdate) => http.post<boolean>('/user/updateInfo', param)

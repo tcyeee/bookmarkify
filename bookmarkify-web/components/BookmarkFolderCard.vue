@@ -154,7 +154,11 @@ const props = defineProps<{
   folderId: string
   children: UserLayoutNodeVO[]
 }>()
-const emit = defineEmits<{ edit: [node: UserLayoutNodeVO]; share: [folderId: string] }>()
+const emit = defineEmits<{
+  edit: [node: UserLayoutNodeVO]
+  share: [folderId: string]
+  reclassify: [folderId: string]
+}>()
 
 const bookmarkStore = useBookmarkStore()
 
@@ -497,6 +501,11 @@ function openMenuAt(x: number, y: number) {
   if (!props.isRoot) {
     items.push(
       { label: '重命名', icon: h(Icon, { icon: 'mdi:pencil', class: 'size-4' }), onClick: () => startRename() },
+      {
+        label: '重新归类',
+        icon: h(Icon, { icon: 'mdi:auto-fix', class: 'size-4' }),
+        onClick: () => emit('reclassify', props.folderId),
+      },
       ...(color.value
         ? [
             {

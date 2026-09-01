@@ -8,6 +8,7 @@ import org.springframework.web.multipart.MultipartFile
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
+import top.tcyeee.bookmarkify.entity.ApplyReclassifyParams
 import top.tcyeee.bookmarkify.entity.BookmarkImportPreviewVO
 import top.tcyeee.bookmarkify.entity.BookmarkOpenParams
 import top.tcyeee.bookmarkify.entity.BookmarkPinParams
@@ -20,6 +21,7 @@ import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UpdateDirColorParams
 import top.tcyeee.bookmarkify.entity.UpdateDirCollapsedParams
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
+import top.tcyeee.bookmarkify.entity.dto.ReclassifyPlan
 import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IBookmarkUserLinkService
@@ -114,6 +116,19 @@ class BookmarksController(
     @Operation(summary = "移动书签节点（移入文件夹 / 移出到根目录）")
     fun moveNode(@RequestBody params: MoveNodeParams): UserLayoutNodeVO =
         layoutNodeService.moveNode(params, BaseUtils.uid())
+
+    // AI 归类：一次点击要跨服务发一次 DeepSeek 调用（几秒到几十秒），节流间隔给得比普通写接口长
+    @Throttle(interval = 5000)
+    @PostMapping("/dir/reclassify/plan")
+    @Operation(summary = "AI 重新归类：生成方案（不落库）")
+    fun reclassifyPlan(@RequestParam dirNodeId: String): ReclassifyPlan =
+        layoutNodeService.planReclassify(dirNodeId, BaseUtils.uid())
+
+    @Throttle
+    @PostMapping("/dir/reclassify/apply")
+    @Operation(summary = "AI 重新归类：应用用户确认后的方案")
+    fun reclassifyApply(@RequestBody params: ApplyReclassifyParams): UserLayoutNodeVO =
+        layoutNodeService.applyReclassify(params, BaseUtils.uid())
 
     /**
      * @param params layout元素ID

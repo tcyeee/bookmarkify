@@ -30,4 +30,7 @@ enum class AiCallScene {
 
     /** 系统书签集发布流程 · 步骤3：根据已抓取的书签生成集合标题/描述建议 */
     COLLECTION_META,
+
+    /** 首页「重新归类」：把一个文件夹里的书签重新分配到（已有或新建的）文件夹 */
+    FOLDER_RECLASSIFY,
 }

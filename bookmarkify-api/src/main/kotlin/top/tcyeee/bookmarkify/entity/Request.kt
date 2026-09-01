@@ -170,6 +170,18 @@ data class MoveNodeParams(
     @field:Schema(description = "目标文件夹节点ID，为 null 时表示移出到根目录") val dirNodeId: String?,
 )
 
+/** 应用一份 AI 归类方案：只传用户勾选、且不是「保留在原文件夹」的那些组 */
+data class ApplyReclassifyParams(
+    @field:Schema(description = "被归类的源文件夹节点ID") val sourceFolderId: String,
+    @field:Schema(description = "用户确认要执行的分组") val groups: List<ApplyReclassifyGroup>,
+)
+
+data class ApplyReclassifyGroup(
+    @field:Schema(description = "目标文件夹名称（新建时按此命名）") val folderName: String,
+    @field:Schema(description = "已有文件夹时的节点ID；新建时为 null") val folderId: String? = null,
+    @field:Schema(description = "要移入该文件夹的书签节点ID列表") val nodeIds: List<String>,
+)
+
 data class AllOfMyBookmarkParams(
     var uid: String = BaseUtils.uid(),
     var name: String? = null,

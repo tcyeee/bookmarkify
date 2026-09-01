@@ -75,7 +75,8 @@
                     :folder-id="folder.id"
                     :children="folder.children"
                     @edit="openEditModal"
-                    @share="onShareFolder" />
+                    @share="onShareFolder"
+                    @reclassify="onReclassifyFolder" />
                   <span
                     v-if="dropTargetFolderId === folder.id && dropFolderMode === 'below'"
                     class="pointer-events-none absolute inset-x-0 -bottom-2 h-0.5 rounded-full bg-primary z-10" />
@@ -257,6 +258,12 @@
         <button @click="closeCreateFolderPicker">close</button>
       </form>
     </dialog>
+
+    <ReclassifyDialog
+      v-if="reclassifyTarget"
+      v-model:open="reclassifyOpen"
+      :folder-id="reclassifyTarget.id"
+      :folder-name="reclassifyTarget.name" />
   </div>
 </template>
 
@@ -518,6 +525,16 @@ onBeforeUnmount(() => {
 
 function onShareFolder(folderId: string) {
   navigateTo(`/share/edit?folderId=${encodeURIComponent(folderId)}`)
+}
+
+// ── AI 重新归类 ──
+const reclassifyOpen = ref(false)
+const reclassifyTarget = ref<{ id: string; name: string } | null>(null)
+
+function onReclassifyFolder(folderId: string) {
+  const folder = bookmarkStore.nodes[folderId]
+  reclassifyTarget.value = { id: folderId, name: folder?.name || '文件夹' }
+  reclassifyOpen.value = true
 }
 
 // ── 搜索区工具栏：新增书签 / 新建文件夹 ──

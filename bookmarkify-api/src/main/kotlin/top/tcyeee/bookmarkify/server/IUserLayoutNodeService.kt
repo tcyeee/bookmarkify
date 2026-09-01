@@ -1,8 +1,10 @@
 package top.tcyeee.bookmarkify.server
 
 import com.baomidou.mybatisplus.extension.service.IService
+import top.tcyeee.bookmarkify.entity.ApplyReclassifyParams
 import top.tcyeee.bookmarkify.entity.CreateDirParams
 import top.tcyeee.bookmarkify.entity.MoveNodeParams
+import top.tcyeee.bookmarkify.entity.dto.ReclassifyPlan
 import top.tcyeee.bookmarkify.entity.RenameDirParams
 import top.tcyeee.bookmarkify.entity.UpdateDirColorParams
 import top.tcyeee.bookmarkify.entity.UpdateDirCollapsedParams
@@ -56,6 +58,22 @@ interface IUserLayoutNodeService : IService<UserLayoutNodeEntity> {
      * @param uid 用户ID
      */
     fun moveNode(params: MoveNodeParams, uid: String): UserLayoutNodeVO
+
+    /**
+     * 首页「重新归类」· 第一步：让 DeepSeek 把某文件夹里的书签重新分组，返回方案但**不落库**。
+     *
+     * @param dirNodeId 要重新归类的文件夹节点ID（必须是当前用户的 BOOKMARK_DIR）
+     * @throws top.tcyeee.bookmarkify.config.exception.CommonException E102 文件夹不存在/书签太少，E128 书签过多
+     */
+    fun planReclassify(dirNodeId: String, uid: String): ReclassifyPlan
+
+    /**
+     * 首页「重新归类」· 第二步：应用用户确认后的方案（新建文件夹 + 批量移动），一次事务、一次整树推送。
+     *
+     * 只处理 [ApplyReclassifyParams.groups] 里传来的组（前端已剔除未勾选与「保留」组）。
+     * 源文件夹被搬空或只剩 1 项时按 [moveNode] 的既有规则解散。
+     */
+    fun applyReclassify(params: ApplyReclassifyParams, uid: String): UserLayoutNodeVO
 
     /**
      * 删除当前用户名下的桌面节点及其关联的自定义书签
