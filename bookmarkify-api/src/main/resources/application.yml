@@ -42,6 +42,9 @@ spring:
       read-unknown-enum-values-using-default-value: true
 
 bookmarkify:
+  # 日志文件落盘目录，由 logback-spring.xml 的 RollingFileAppender 消费（online profile 才启用，
+  # 见该文件的 springProfile）。LOG_DIR 是 compose.prod.yml 里早就存在的容器环境变量。
+  log-dir: ${LOG_DIR:./logs}
   # 本实例是否承担后台定时任务（活性巡检、解析对账、日志清理、OSS 对账）。
   #
   # 默认 true —— 线上那台必须跑。dev profile 显式置 false，理由见 application-dev.yml。
@@ -54,6 +57,15 @@ bookmarkify:
     corpid: ${BOOKMARKIFY_WECHAT_WORK_CORPID}
     # 微信企业邮箱-自建应用 SECRET-CODE
     corpsecret: ${BOOKMARKIFY_WECHAT_WORK_CORPSECRET}
+  serverchan:
+    # Server 酱 SendKey（sctapi.ftqq.com）。留空 = ServerChanAlertAppender 整体关闭。
+    # 复用 CI 部署通知已有的同一个 GitHub 仓库 secret(SERVERCHAN_SENDKEY)，见 logback-spring.xml。
+    send-key: ${BOOKMARKIFY_SERVERCHAN_SENDKEY:}
+    # <窗口>分钟内累计<阈值>条 ERROR 级别日志才判定为"连续报错"，单次抖动不报警
+    alert-threshold: 3
+    alert-window-minutes: 5
+    # 报警后<冷却>分钟内不重复推送；若故障仍在持续，冷却期一过下一条 ERROR 立即再报一次
+    alert-cooldown-minutes: 30
   aliyun:
     oss:
       endpoint: ${BOOKMARKIFY_ALIYUN_OSS_ENDPOINT}

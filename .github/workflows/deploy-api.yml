@@ -87,7 +87,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_SSH_PORT || 22 }}
-          envs: COMPOSE_B64,DOCKERFILE_B64,JAR_URL,API_IMAGE,SPRING_DATASOURCE_PASSWORD,SPRING_DATA_REDIS_PASSWORD,BOOKMARKIFY_WECHAT_WORK_CORPID,BOOKMARKIFY_WECHAT_WORK_CORPSECRET,BOOKMARKIFY_DEEPSEEK_API_KEY,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET,OSS_PROXY_DOMAIN,OSS_PROXY_TOKEN,BOOKMARKIFY_GITHUB_CLIENT_SECRET,BOOKMARKIFY_SCRAPPER_AUTH_TOKEN
+          envs: COMPOSE_B64,DOCKERFILE_B64,JAR_URL,API_IMAGE,SPRING_DATASOURCE_PASSWORD,SPRING_DATA_REDIS_PASSWORD,BOOKMARKIFY_WECHAT_WORK_CORPID,BOOKMARKIFY_WECHAT_WORK_CORPSECRET,BOOKMARKIFY_DEEPSEEK_API_KEY,OSS_ACCESS_KEY_ID,OSS_ACCESS_KEY_SECRET,OSS_BUCKET,OSS_PROXY_DOMAIN,OSS_PROXY_TOKEN,BOOKMARKIFY_GITHUB_CLIENT_SECRET,BOOKMARKIFY_SCRAPPER_AUTH_TOKEN,SERVERCHAN_SENDKEY
           script: |
             set -euo pipefail
 
@@ -119,6 +119,7 @@ jobs:
             OSS_PROXY_TOKEN=${OSS_PROXY_TOKEN:-}
             BOOKMARKIFY_GITHUB_CLIENT_SECRET=$BOOKMARKIFY_GITHUB_CLIENT_SECRET
             BOOKMARKIFY_SCRAPPER_AUTH_TOKEN=$BOOKMARKIFY_SCRAPPER_AUTH_TOKEN
+            SERVERCHAN_SENDKEY=${SERVERCHAN_SENDKEY:-}
             EOF
 
             # Assemble the runtime image locally: just COPY the jar onto the JRE base
@@ -168,6 +169,9 @@ jobs:
           # /scrape and /ping. Must match the scrapper container's SCRAPER_AUTH_TOKEN
           # (see bookmarkify-scrapper's deploy-scrapper.yml). Empty until that secret is set.
           BOOKMARKIFY_SCRAPPER_AUTH_TOKEN: ${{ secrets.BOOKMARKIFY_SCRAPPER_AUTH_TOKEN }}
+          # Same SendKey the two notify steps below already use — reused here so the
+          # running container can push its own "consecutive errors" alerts (ServerChanAlertAppender).
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
 
       # Push a WeChat notification via Server酱 once the deploy + health check pass.
       # Set the SERVERCHAN_SENDKEY repo secret to enable; without it this step is a no-op.

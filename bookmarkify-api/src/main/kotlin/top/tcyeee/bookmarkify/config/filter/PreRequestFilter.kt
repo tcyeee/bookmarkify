@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.config.filter
 
+import cn.hutool.core.util.IdUtil
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.*
 import jakarta.servlet.annotation.WebFilter
@@ -9,6 +10,7 @@ import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.Scheduled
@@ -39,26 +41,37 @@ class PreRequestFilter(private val objectMapper: ObjectMapper) : Filter {
         val method = http.method
         val token = http.getHeader(TOKEN_HEADER)?.takeIf { it.isNotBlank() }
 
-        val isWebSocket = "/ws".equals(uri, ignoreCase = true)
-        val isOptions = method.equals("OPTIONS", ignoreCase = true)
-        if (token == null || isOptions || isWebSocket) {
-            filterChain.doFilter(request, response)
-            return
-        }
-
-        if (isThrottled(token)) {
-            log.warn("⛔ 请求过于频繁, token=$token, uri=$uri")
-            httpResp.status = HttpStatus.TOO_MANY_REQUESTS.value()
-            httpResp.contentType = "application/json;charset=UTF-8"
-            httpResp.writer.apply {
-                write(objectMapper.writeValueAsString(ResultWrapper.error(ErrorType.E107)))
-                flush()
+        // 短 requestId：串联一次 HTTP 请求从 controller 到 @Async 线程池（跨线程传递见
+        // MdcTaskDecorator）再到 WebSocket 推送的全部日志。放在最外层、早于下面所有的
+        // 提前返回分支，这样限流、未登录这些路径也带得上。finally 里清空——Tomcat 线程
+        // 是池化复用的，不清理会让这次请求的 id 泄漏进下一个不相关的请求。
+        val requestId = IdUtil.fastSimpleUUID().take(8)
+        MDC.put(REQUEST_ID_KEY, requestId)
+        httpResp.setHeader(REQUEST_ID_HEADER, requestId)
+        try {
+            val isWebSocket = "/ws".equals(uri, ignoreCase = true)
+            val isOptions = method.equals("OPTIONS", ignoreCase = true)
+            if (token == null || isOptions || isWebSocket) {
+                filterChain.doFilter(request, response)
+                return
             }
-            return
-        }
 
-        log.info("⛱ $method request to $uri")
-        filterChain.doFilter(request, response)
+            if (isThrottled(token)) {
+                log.warn("⛔ 请求过于频繁, token=$token, uri=$uri")
+                httpResp.status = HttpStatus.TOO_MANY_REQUESTS.value()
+                httpResp.contentType = "application/json;charset=UTF-8"
+                httpResp.writer.apply {
+                    write(objectMapper.writeValueAsString(ResultWrapper.error(ErrorType.E107)))
+                    flush()
+                }
+                return
+            }
+
+            log.info("⛱ $method request to $uri")
+            filterChain.doFilter(request, response)
+        } finally {
+            MDC.remove(REQUEST_ID_KEY)
+        }
     }
 
     /**
@@ -104,6 +117,8 @@ class PreRequestFilter(private val objectMapper: ObjectMapper) : Filter {
     }
 
     companion object {
+        private const val REQUEST_ID_KEY = "requestId"
+        private const val REQUEST_ID_HEADER = "X-Request-Id"
         private const val TOKEN_HEADER = "satoken"
         private const val WINDOW_MILLIS = 1000L
         private const val MAX_REQUESTS_PER_WINDOW = 20

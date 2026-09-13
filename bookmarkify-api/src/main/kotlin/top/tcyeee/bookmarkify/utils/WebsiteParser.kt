@@ -339,7 +339,7 @@ object WebsiteParser {
         fetchManifest(info.manifestUrl!!)?.let { json ->
             log.debug("[fillManifest] Manifest拉取成功, jsonLength={}", json.length)
             info.manifest = runCatching { parseManifestJson(json) }.getOrElse {
-                it.printStackTrace()
+                log.error("[fillManifest] manifest 解析失败: {}", info.manifestUrl, it)
                 throw CommonException(ErrorType.E222, "Failed to parse manifest from ${info.manifestUrl}, $it")
             }
         } ?: log.debug("[fillManifest] Manifest拉取返回null: {}", info.manifestUrl)
