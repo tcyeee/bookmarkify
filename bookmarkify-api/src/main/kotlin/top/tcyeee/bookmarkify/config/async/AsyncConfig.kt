@@ -31,6 +31,7 @@ class AsyncConfig {
         // 有界队列提供背压：批量导入会逐条投递，队列满后由调用线程兜底执行，避免无限堆积 OOM
         queueCapacity = 500
         setThreadNamePrefix("bm-parse-")
+        setTaskDecorator(MdcTaskDecorator())
         setRejectedExecutionHandler { runnable, executor ->
             // 线程池 + 队列都已饱和才会走到这里：CallerRunsPolicy 会让调用线程同步跑完这个任务
             // （可能是几十秒的网络调用）。先打一条告警留痕，便于运维发现「加书签卡住」是这里导致的，
@@ -64,6 +65,7 @@ class AsyncConfig {
         // 那个调用线程正是解析线程，等于把刚拆出去的耗时又还了回去
         queueCapacity = 10_000
         setThreadNamePrefix("bm-enrich-")
+        setTaskDecorator(MdcTaskDecorator())
         setRejectedExecutionHandler { runnable, executor ->
             log.warn(
                 "[bookmarkEnrichExecutor] 富化队列已满，任务回退到调用线程(解析线程)执行，加书签会变慢: " +
@@ -99,6 +101,7 @@ class AsyncConfig {
         // 内容定期重抓会重新投递，封面是"迟早会有"，不是"必须现在有"。
         queueCapacity = 200
         setThreadNamePrefix("bm-shot-")
+        setTaskDecorator(MdcTaskDecorator())
         setRejectedExecutionHandler { _, executor ->
             log.warn(
                 "[bookmarkScreenshotExecutor] 截图队列已满，本次截图丢弃（不影响书签可用）: " +
@@ -128,6 +131,7 @@ class AsyncConfig {
         maxPoolSize = 2
         queueCapacity = 0
         setThreadNamePrefix("bm-sweep-")
+        setTaskDecorator(MdcTaskDecorator())
         setRejectedExecutionHandler { _, executor ->
             log.warn(
                 "[bookmarkSweepExecutor] 上一轮巡检仍在执行，本轮直接丢弃: " +
@@ -159,6 +163,7 @@ class AsyncConfig {
         // 一轮最多投递 batchSize 条，队列开到足够容纳最大批次，避免退化成调用线程串行执行
         queueCapacity = 1_000
         setThreadNamePrefix("bm-ping-")
+        setTaskDecorator(MdcTaskDecorator())
         // 队列都满了说明批次大小配得离谱，交给调用线程（巡检线程）兜着跑，慢但不丢
         setRejectedExecutionHandler(ThreadPoolExecutor.CallerRunsPolicy())
         setWaitForTasksToCompleteOnShutdown(false)

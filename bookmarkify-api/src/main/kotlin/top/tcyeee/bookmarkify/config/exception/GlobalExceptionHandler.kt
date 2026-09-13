@@ -49,8 +49,17 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
     fun handleException(e: Exception, request: HttpServletRequest): ResultWrapper {
         return when (e) {
             is CommonException -> {
-                // 业务异常属正常控制流，仅 debug 记录，避免噪声与栈打印
-                log.debug("[业务异常] {} | [{}] {}", request.requestURI, e.errorType.name, e.message)
+                if (e.errorType in INFRA_ERROR_TYPES) {
+                    // 这几个错误码代表"我方基础设施/第三方依赖出了问题"，不是调用方的错——
+                    // 混进下面的静默 debug 分支会让 scrapper 挂了、GoatCounter 打不通这类真故障
+                    // 在 root=INFO 的生产环境里没有任何文本日志痕迹，也不会被 ServerChanAlertAppender
+                    // 的"连续报错"监控捕获到。打 warn 而非 error：这些路径通常已有更完整的现场
+                    // 记录在别处(scrapper_call_log 等)，这里只是补一条能被聚合监控看到的信号。
+                    log.warn("[基础设施异常] {} | [{}] {}", request.requestURI, e.errorType.name, e.message)
+                } else {
+                    // 业务异常属正常控制流，仅 debug 记录，避免噪声与栈打印
+                    log.debug("[业务异常] {} | [{}] {}", request.requestURI, e.errorType.name, e.message)
+                }
                 error(e.errorType, e.customMessage ?: e.errorType.msg)
             }
 
@@ -144,5 +153,14 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
     private fun isSwagger(request: ServerHttpRequest): Boolean {
         val path = request.uri.path
         return (path.startsWith("/swagger") || path.startsWith("/v3/api-docs"))
+    }
+
+    companion object {
+        /**
+         * 代表"我方基础设施/第三方依赖出了问题"的错误码，而不是调用方传错了参数——
+         * E307(抓取服务不可用)、E306(埋点统计服务请求失败)。新增这类错误码时记得加进来，
+         * 否则它会默认落进下面 debug 分支，在生产环境(root=INFO)里没有任何文本日志痕迹。
+         */
+        private val INFRA_ERROR_TYPES = setOf(ErrorType.E307, ErrorType.E306)
     }
 }

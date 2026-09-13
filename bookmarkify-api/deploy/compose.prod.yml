@@ -31,6 +31,8 @@ services:
       # --- WeChat Work email API (secrets from .env) ---
       BOOKMARKIFY_WECHAT_WORK_CORPID: ${BOOKMARKIFY_WECHAT_WORK_CORPID}
       BOOKMARKIFY_WECHAT_WORK_CORPSECRET: ${BOOKMARKIFY_WECHAT_WORK_CORPSECRET}
+      # --- 连续报错推送(ServerChanAlertAppender)，复用 CI 部署通知已有的同一个 SendKey ---
+      BOOKMARKIFY_SERVERCHAN_SENDKEY: ${SERVERCHAN_SENDKEY:-}
       # --- Aliyun OSS (keys from shared OSS_* secrets; endpoint/bucket/domain fixed) ---
       BOOKMARKIFY_ALIYUN_OSS_ENDPOINT: oss-cn-hangzhou.aliyuncs.com
       BOOKMARKIFY_ALIYUN_OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}

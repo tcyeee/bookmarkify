@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- 在 Spring Boot 默认 pattern 里插入 requestId 段：PreRequestFilter 给每个 HTTP 请求生成
+         的短 id，跨 @Async 线程池由 MdcTaskDecorator 透传，用来把一次用户操作的日志从
+         controller 串到异步解析/富化/截图。没有 requestId 时（比如 @Scheduled 任务自己触发的
+         日志）就是空的 "[]"。相比 Spring Boot 自带的默认串，只多了紧跟在线程名后面的这一段。 -->
+    <property name="CONSOLE_LOG_PATTERN"
+        value="%clr(%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd HH:mm:ss.SSS}}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr([%X{requestId}]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+    <property name="FILE_LOG_PATTERN"
+        value="%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd HH:mm:ss.SSS}} ${LOG_LEVEL_PATTERN:-%5p} ${PID:- } --- [%15.15t] [%X{requestId}] %-40.40logger{39} : %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"/>
+
+    <!-- 复用 Spring Boot 默认的控制台输出行为（含颜色）；上面两个 property 已经覆盖了它内置的
+         pattern 默认值，其余（appender 结构本身）不变。application*.yml 里的 logging.level.*
+         由 Spring 在启动后以编程方式再设置一遍，与这里的 <root level> 不冲突，以 Spring 那次为准。 -->
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- 见 CLAUDE.md「日志文件路径与滚动策略」。LOG_DIR 是 compose.prod.yml 里早就存在、
+         但此前从未被消费的环境变量——这里补上真正的落盘。本地 dev 不需要文件（见下面的
+         springProfile），避免笔记本上堆日志文件。 -->
+    <springProperty scope="context" name="logDir" source="bookmarkify.log-dir" defaultValue="./logs"/>
+    <springProfile name="!dev">
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${logDir}/bookmarkify-api.log</file>
+            <!-- 按天 + 按大小双重滚动：单文件超 100MB 或跨天都会切；totalSizeCap 兜底防止
+                 长期不清理把磁盘撑爆——30 天历史封顶 2GB，超出部分从最旧的开始删。 -->
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${logDir}/bookmarkify-api.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <maxFileSize>100MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>2GB</totalSizeCap>
+            </rollingPolicy>
+            <encoder>
+                <pattern>${FILE_LOG_PATTERN}</pattern>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- 见 application.yml 的 bookmarkify.serverchan.* ；留空 = 该 appender 整个 no-op -->
+    <springProperty scope="context" name="serverChanSendKey" source="bookmarkify.serverchan.send-key" defaultValue=""/>
+    <springProperty scope="context" name="serverChanThreshold" source="bookmarkify.serverchan.alert-threshold" defaultValue="3"/>
+    <springProperty scope="context" name="serverChanWindowMinutes" source="bookmarkify.serverchan.alert-window-minutes" defaultValue="5"/>
+    <springProperty scope="context" name="serverChanCooldownMinutes" source="bookmarkify.serverchan.alert-cooldown-minutes" defaultValue="30"/>
+
+    <appender name="SERVERCHAN_ALERT" class="top.tcyeee.bookmarkify.config.monitor.ServerChanAlertAppender">
+        <sendKey>${serverChanSendKey}</sendKey>
+        <threshold>${serverChanThreshold}</threshold>
+        <windowMinutes>${serverChanWindowMinutes}</windowMinutes>
+        <cooldownMinutes>${serverChanCooldownMinutes}</cooldownMinutes>
+        <!-- 只看 ERROR 及以上；WARN/INFO/DEBUG 不参与"连续报错"计数 -->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>ERROR</level>
+        </filter>
+    </appender>
+
+    <!-- springProfile 只支持整体包住一个 <root>/<logger>/<appender> 元素，不支持嵌在里面
+         包住某一条 <appender-ref>(嵌套会被 Spring Boot 的 sanity checker 判定为无效配置，
+         参见 SpringProfileIfNestedWithinSecondPhaseElementSanityChecker)——所以这里是两份
+         完整的 <root>，而不是一份 <root> 里嵌一个条件性的 <appender-ref>。 -->
+    <springProfile name="!dev">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="SERVERCHAN_ALERT"/>
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+    <springProfile name="dev">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="SERVERCHAN_ALERT"/>
+        </root>
+    </springProfile>
+</configuration>
