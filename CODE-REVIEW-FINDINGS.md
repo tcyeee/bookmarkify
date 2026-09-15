@@ -1,10 +1,9 @@
 # Code Review Findings
 
 Results of the batched review described in `CODE-REVIEW-PLAN.md`. Each batch is run as
-`/code-review high <path>` per path listed in the plan's table — a **path-target audit against
+`/code-review high <path>` per path listed in the plan's task list — a **path-target audit against
 the current tree**, not a diff against `main` (this branch carries no code changes, only docs).
-Working notes per batch also live in `.context/code-review/<batch-id>.md` (gitignored); this file
-is the durable, committed record.
+This file is the durable, committed record; append each completed batch here before moving to the next one.
 
 Progress: **F1, F2 done.** Remaining batches (A1, A2, F4, W1, M1, A3, M2, W2, M3, F3) not yet run.
 

@@ -19,32 +19,60 @@ spans services is **one `/code-review` invocation per path**, findings merged in
 
 Batches are ordered highest blast-radius first, with **F3 (cross-service type/enum alignment) deliberately
 last** — it's a consistency sweep, most useful after the batches that might reshape a VO have already run.
-Findings from each batch get written to `.context/code-review/<batch-id>.md` before starting the next batch, so
-a fresh session can resume without re-discovering what a prior batch already found.
+Findings from each batch are appended to `CODE-REVIEW-FINDINGS.md` before starting the next batch, so a fresh
+session can resume without re-discovering what a prior batch already found.
 
-## Batches
+## Review tasks
 
-| # | Batch | api | web | admin |
-|---|---|---|---|---|
-| F1 | 加书签全流程 (add-bookmark end-to-end) | `BookmarkController`, `ApiServiceImpl`, async parse event listener, `drainStuckLoading`, `ParseLock` | `stores/bookmark.store.ts`, `stores/websocket.store.ts`, `pages/index.vue` (add flow + `HOME_ITEM_UPDATE`), `components/launchpad/AddOneDialog.vue` | — |
-| F2 | 图标 / 站点资产 (icons & site assets) | `AssetRolePolicy`, `IconResolver`, `CoverResolver`, `SiteAssetIngestor`, `SiteAssetWriter`, `SiteAssetQuery`, `AssetUrlSigner`, `OssUtils.signAsset` | `composables/useBookmarkIcon.ts`, icon rendering in `pages/index.vue` | `views/website/icon-verdict/`, `api/icon.ts` |
-| A1 | 活性巡检与调度 (liveness sweeps & scheduling) | sweep services, `LivenessPolicy`, cron config, `ScrapeTargetGuard` | — | — |
-| A2 | OSS 对象治理 (OSS object governance) | `OssReconcileServiceImpl`, `OrphanCleanupService`, `oss_object` ledger | — | — |
-| F4 | 鉴权与会话 (auth & session) | satoken `USER`/`ADMIN` realms, `/auth/track`, interceptors | `stores/auth.store.ts`, `pages/auth/`, `pages/login.vue`, `composables/useGithubOAuth.ts`, `composables/useGoogleOAuth.ts` | `views/_core/authentication/` |
-| W1 | 布局 / 置顶 / 文件夹 / 重新归类 | — | layout nodes, pin/pin-order, reclassify feature | — |
-| M1 | 书签管理 (bookmark admin) | — | — | `views/bookmark/`, `views/website/page/`, `views/website/site/`, `views/bookmark-collection/` (excl. icon-verdict, covered by F2) |
-| A3 | 外围功能 (peripheral features) | similar-bookmarks, website feedback, `config_change_log`, `ai_call_log`, admin-only endpoints not covered above | — | — |
-| M2 | 用户管理 / 反馈 / scrapper 可观测性 / AI 日志 | — | — | `views/user/`, `views/feedback/`, `views/scrapper/`, `views/ai/` |
-| W2 | 其余页面 (remaining pages) | — | `pages/welcome.vue`, `pages/share/`, `pages/setting.vue`, everything not covered above | — |
-| M3 | 系统配置 (system config pages) | — | — | `views/system/`, `views/subsystem/` |
-| F3 | 跨服务类型 / 枚举对齐 (cross-service type & enum alignment) | shared enum source, `SharedEnumContractTest`, `./gradlew generateSharedEnums` drift | `typing/*.ts` hand-copied VOs vs. `typing/enums.generated.ts` | `src/api/*.ts` hand-copied VOs vs. `src/api/enums.generated.ts`, `pnpm typecheck` health |
+Progress: **2 / 12 batches completed.** Completion status is synchronized with
+`CODE-REVIEW-FINDINGS.md`.
+
+- [x] **F1 — 加书签全流程 (add-bookmark end-to-end)**
+  - [x] api: `BookmarkController`, `ApiServiceImpl`, async parse event listener,
+    `drainStuckLoading`, `ParseLock`
+  - [x] web: `stores/bookmark.store.ts`, `stores/websocket.store.ts`, `pages/index.vue`
+    (add flow + `HOME_ITEM_UPDATE`), `components/launchpad/AddOneDialog.vue`
+- [x] **F2 — 图标 / 站点资产 (icons & site assets)**
+  - [x] api: `AssetRolePolicy`, `IconResolver`, `CoverResolver`, `SiteAssetIngestor`,
+    `SiteAssetWriter`, `SiteAssetQuery`, `AssetUrlSigner`, `OssUtils.signAsset`
+  - [x] web: `composables/useBookmarkIcon.ts`, icon rendering in `pages/index.vue`
+  - [x] admin: `views/website/icon-verdict/`, `api/icon.ts`
+- [ ] **A1 — 活性巡检与调度 (liveness sweeps & scheduling)**
+  - [ ] api: sweep services, `LivenessPolicy`, cron config, `ScrapeTargetGuard`
+- [ ] **A2 — OSS 对象治理 (OSS object governance)**
+  - [ ] api: `OssReconcileServiceImpl`, `OrphanCleanupService`, `oss_object` ledger
+- [ ] **F4 — 鉴权与会话 (auth & session)**
+  - [ ] api: satoken `USER`/`ADMIN` realms, `/auth/track`, interceptors
+  - [ ] web: `stores/auth.store.ts`, `pages/auth/`, `pages/login.vue`,
+    `composables/useGithubOAuth.ts`, `composables/useGoogleOAuth.ts`
+  - [ ] admin: `views/_core/authentication/`
+- [ ] **W1 — 布局 / 置顶 / 文件夹 / 重新归类**
+  - [ ] web: layout nodes, pin/pin-order, reclassify feature
+- [ ] **M1 — 书签管理 (bookmark admin)**
+  - [ ] admin: `views/bookmark/`, `views/website/page/`, `views/website/site/`,
+    `views/bookmark-collection/` (excl. icon-verdict, covered by F2)
+- [ ] **A3 — 外围功能 (peripheral features)**
+  - [ ] api: similar-bookmarks, website feedback, `config_change_log`, `ai_call_log`,
+    admin-only endpoints not covered above
+- [ ] **M2 — 用户管理 / 反馈 / scrapper 可观测性 / AI 日志**
+  - [ ] admin: `views/user/`, `views/feedback/`, `views/scrapper/`, `views/ai/`
+- [ ] **W2 — 其余页面 (remaining pages)**
+  - [ ] web: `pages/welcome.vue`, `pages/share/`, `pages/setting.vue`, everything not
+    covered above
+- [ ] **M3 — 系统配置 (system config pages)**
+  - [ ] admin: `views/system/`, `views/subsystem/`
+- [ ] **F3 — 跨服务类型 / 枚举对齐 (cross-service type & enum alignment)**
+  - [ ] api: shared enum source, `SharedEnumContractTest`,
+    `./gradlew generateSharedEnums` drift
+  - [ ] web: `typing/*.ts` hand-copied VOs vs. `typing/enums.generated.ts`
+  - [ ] admin: `src/api/*.ts` hand-copied VOs vs. `src/api/enums.generated.ts`,
+    `pnpm typecheck` health
 
 ## Execution notes
 
 - Run batches sequentially, one `/code-review high <path>` per path listed in a batch, one batch at a time.
-- Persist findings to `.context/code-review/<batch-id>.md` (e.g. `.context/code-review/F1.md`) immediately after
-  each batch so progress survives a context reset. For multi-path batches, one file holds all paths' findings,
-  grouped by path.
+- Append findings to `CODE-REVIEW-FINDINGS.md` immediately after each batch so progress survives a context reset.
+  For multi-path batches, group the findings by path.
 - Re-check drift-prone seams called out in `CLAUDE.md` while reviewing the relevant batch: `SharedEnumContractTest`
   (F3), `contract/scrape-response.sample.json` (F2 — Kotlin side only, `ScrapeContract.kt`; the Rust side is out of
   scope per the scrapper exclusion below), `OssReconcileServiceImpl.collectReferencedKeys` (F2/A2),
