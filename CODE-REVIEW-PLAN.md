@@ -24,7 +24,7 @@ session can resume without re-discovering what a prior batch already found.
 
 ## Review tasks
 
-Progress: **2 / 12 batches completed.** Completion status is synchronized with
+Progress: **5 / 12 batches completed.** Completion status is synchronized with
 `CODE-REVIEW-FINDINGS.md`.
 
 - [x] **F1 — 加书签全流程 (add-bookmark end-to-end)**
@@ -37,17 +37,17 @@ Progress: **2 / 12 batches completed.** Completion status is synchronized with
     `SiteAssetWriter`, `SiteAssetQuery`, `AssetUrlSigner`, `OssUtils.signAsset`
   - [x] web: `composables/useBookmarkIcon.ts`, icon rendering in `pages/index.vue`
   - [x] admin: `views/website/icon-verdict/`, `api/icon.ts`
-- [ ] **A1 — 活性巡检与调度 (liveness sweeps & scheduling)**
-  - [ ] api: sweep services, `LivenessPolicy`, cron config, `ScrapeTargetGuard`
-- [ ] **A2 — OSS 对象治理 (OSS object governance)**
-  - [ ] api: `OssReconcileServiceImpl`, `OrphanCleanupService`, `oss_object` ledger
+- [x] **A1 — 活性巡检与调度 (liveness sweeps & scheduling)**
+  - [x] api: sweep services, `LivenessPolicy`, cron config, `ScrapeTargetGuard`
+- [x] **A2 — OSS 对象治理 (OSS object governance)**
+  - [x] api: `OssReconcileServiceImpl`, `OrphanCleanupService`, `oss_object` ledger
 - [ ] **F4 — 鉴权与会话 (auth & session)**
   - [ ] api: satoken `USER`/`ADMIN` realms, `/auth/track`, interceptors
   - [ ] web: `stores/auth.store.ts`, `pages/auth/`, `pages/login.vue`,
     `composables/useGithubOAuth.ts`, `composables/useGoogleOAuth.ts`
   - [ ] admin: `views/_core/authentication/`
-- [ ] **W1 — 布局 / 置顶 / 文件夹 / 重新归类**
-  - [ ] web: layout nodes, pin/pin-order, reclassify feature
+- [x] **W1 — 布局 / 置顶 / 文件夹 / 重新归类**
+  - [x] web: layout nodes, pin/pin-order, reclassify feature
 - [ ] **M1 — 书签管理 (bookmark admin)**
   - [ ] admin: `views/bookmark/`, `views/website/page/`, `views/website/site/`,
     `views/bookmark-collection/` (excl. icon-verdict, covered by F2)
