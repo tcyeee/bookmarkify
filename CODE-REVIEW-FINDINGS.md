@@ -5,7 +5,7 @@ Results of the batched review described in `CODE-REVIEW-PLAN.md`. Each batch is 
 the current tree**, not a diff against `main` (this branch carries no code changes, only docs).
 This file is the durable, committed record; append each completed batch here before moving to the next one.
 
-Progress: **F1, F2 done.** Remaining batches (A1, A2, F4, W1, M1, A3, M2, W2, M3, F3) not yet run.
+Progress: **F1, F2, A1, A2, W1 done.** Remaining batches (F4, M1, A3, M2, W2, M3, F3) not yet run.
 
 ---
 
@@ -216,3 +216,221 @@ Paths reviewed:
 - **Security-adjacent:** #4 (content-type check bypassable when header omitted)
 - **High-confidence correctness bugs:** #1, #2, #4, #5, #6, #12, #13
 - **Lower-severity / cleanup:** #3, #7, #8, #9, #10, #11, #14, #15
+
+---
+
+# A1 — 活性巡检与调度 (liveness sweeps & scheduling)
+
+Paths reviewed:
+- api: `server/liveness/` (`LivenessSweepService`, `LivenessPolicy`, `PageScheduleWriter`, `ILivenessSweepService`)
+- api: `server/impl/BookmarkPingLogServiceImpl.kt`, `server/impl/BookmarkLivenessConfigServiceImpl.kt`, `server/impl/ApiServiceImpl.kt` (`pingWebsite`)
+- api: `controller/scheduled/ScheduledTasks.kt`, `controller/admin/AdminBookmarkPingLogController.kt`
+- api: `config/async/AsyncConfig.kt` (sweep/ping executors), `config/init/SingleInstanceGuard.kt`, scheduling properties
+- api: `utils/ScrapeTargetGuard.kt` plus the delegated `WebsiteParser.classifyLinkType`
+
+## api/liveness sweeps & scheduling
+
+1. **[correctness/efficiency, medium] Pages short-circuited by an already-dead site never use the site's failure count for their backoff, so the configured exponential curve collapses to the page's frozen first-failure interval and dead domains are retried/archived far too quickly.**
+   `LivenessSweepService.kt:774` — `scheduleWriter.advance(... directlyProbed = false)` deliberately leaves `bookmark.consecutiveFail` unchanged, and `PageScheduleWriter.advance` then feeds that unchanged page counter into `LivenessPolicy.nextCheckAt`. `persistProbeResult` switches to `evidence.siteConsecutiveFail` only *afterward*, for the death/archive thresholds. A page that failed once when its site was first declared dead therefore keeps getting `base × multiplier^(1-1)` (24h by default), even while the site's real root-probe count grows through 2, 3, … 10; it can reach terminal `ARCHIVED` in roughly daily rounds instead of the documented two-month backoff curve, repeatedly consuming the head of the due-candidate queue along the way. The current root probe is also not included in `evidence.siteConsecutiveFail` (`siteMap` is captured before `updateSiteLiveness`), so threshold transitions lag one probe, and the archival warning prints the frozen page count rather than the site count (e.g. “连续失败 1 次，转入归档”).
+   **Recommend prioritizing — this defeats all three admin-configurable abnormal-backoff knobs exactly on the high-cardinality dead-domain path the site-level short circuit exists to optimize.**
+
+2. **[correctness, medium] The sweep executor says the two sweeps must be serial, but `corePoolSize=1`, `maxPoolSize=2`, `queueCapacity=0` actually permits two rounds to run concurrently.**
+   `AsyncConfig.kt:128` — Spring turns a zero-capacity queue into `SynchronousQueue`; after the core thread is occupied, a second submission cannot queue and is therefore accepted on a second worker up to `maxPoolSize`. The Redis locks are keyed by `taskLabel`, so `livenessCheckStaleBookmarks` and `retryUnreachableBookmarks` do not block one another. A slow `:30` round can overlap the `:00` round (or an admin can trigger the other task), contrary to the class's “1 thread / two tasks serial / reject overlap” invariant. The rounds then share the ping pool and parse queue and can read/write the same site's liveness counters from stale snapshots; pages transitioning SUCCESS → UNREACHABLE during the overlap make the nominally disjoint status filters insufficient protection.
+
+3. **[correctness, medium] The manual-trigger preview labels `mayTriggerParse` as a maximum but excludes every page currently under a dead site, even though those pages can be revived and re-crawled by the actual round.**
+   `LivenessSweepService.kt:258` — the count is computed only from `pagesOfLiveSites`. During execution, each dead site's root is probed; if it responds ALIVE, all its pages move into `revived`, are probed individually, and can satisfy the same parse predicate. The confirmation dialog can consequently say “最多 0 条” while the accepted operation dispatches up to the whole batch (50/200) for re-crawl. This is not just preview/execution timing drift: the candidates and site state can remain identical, and the undercount follows deterministically from a successful recovery probe.
+
+4. **[observability, medium] Sweep health has only one global `lastRoundAt`, so one of the two hourly tasks can stop permanently while the other keeps the standing “巡检仍在运行” alert green.**
+   `BookmarkPingLogServiceImpl.kt:75` — the latest row is selected across all task labels. If (for example) `livenessCheckStaleBookmarks` fails before `recordSweepRound` on every run but `retryUnreachableBookmarks` continues to write its half-hour rows, `lastRoundAt` never becomes older than three hours and the admin alert cannot detect that all SUCCESS bookmarks have stopped receiving liveness/content refreshes. Breaker streaks are correctly grouped per task already; liveness timestamps need the same per-task treatment (or an explicit missing/stale-task list).
+
+5. **[correctness, low] IPv4-mapped IPv6 literals bypass the “only domains are scrapable” guard and are classified as domains.**
+   `WebsiteParser.kt:128` / `ScrapeTargetGuard.kt:45` — `[::ffff:127.0.0.1]` becomes `::ffff:127.0.0.1`; the IPv6 recognizer rejects it because it contains dots, then `hostname.contains(".")` classifies it as `DOMAIN`. `ScrapeTargetGuard.isScrapable("http://[::ffff:127.0.0.1]/")` therefore returns true and sends the request across the service boundary, defeating the guard's stated purpose (the scrapper's own SSRF validation remains the final security boundary).
+
+6. **[correctness, low] A manual trigger can return `accepted=true` even when no round will run or appear in `sweep_log`.**
+   `AdminBookmarkPingLogController.kt:85` — `preview.running` and the async method's later Redis acquire are separated by a race the comment acknowledges. Two simultaneous requests can both see false and both return “已触发”; one worker then loses SETNX and exits without a round row. The response contract and KDoc promise that `accepted=false` represents this case, so operators can be told an action was accepted and to wait for a result that will never exist.
+
+7. **[correctness, low] `PageScheduleWriter` can overflow `consecutiveFail` before the policy's overflow-safe backoff code ever sees it.**
+   `PageScheduleWriter.kt:70` — `page.consecutiveFail + 1` wraps `Int.MAX_VALUE` to `Int.MIN_VALUE`. `nextCheckAt` then falls back to the base interval and `shouldArchive` sees a negative count, leaving the row permanently unarchived. `LivenessPolicy.backoffHours` explicitly defends against anomalously large database counters, but the unchecked increment one layer above invalidates that guarantee at the largest legal PostgreSQL `integer` value.
+
+8. **[docs, low] The health DTO still states that breaker rounds do not advance the cursor and therefore self-deadlock on the same candidates, but the execution path now advances every probed cursor by one hour specifically to prevent that incident.**
+   `Response.kt:1178` — this stale statement is also copied into the admin alert's operator guidance. `LivenessSweepService.kt:553-562` calls `scheduleWriter.protect` for every breaker result before recording the round, so the next hour is not guaranteed to select the same batch. The outdated warning can send an operator toward threshold changes for a failure mode the current code already removed.
+
+### A1 Summary
+
+- **Recommend prioritizing:** #1 (dead-site short circuits bypass configured exponential backoff)
+- **High-confidence correctness bugs:** #1, #2, #3, #4, #5
+- **Lower-severity / edge cases:** #6, #7, #8
+- **Coverage gap:** `LivenessPolicy` and `ScrapeTargetGuard` have strong pure-function tests, but there are no tests for `LivenessSweepService`, `PageScheduleWriter`, the sweep executor topology, manual preview/trigger behavior, or per-task health. All orchestration findings above sit in that untested layer.
+
+---
+
+# A2 — OSS 对象治理 (OSS object governance)
+
+Paths reviewed:
+- api core: `server/impl/OssReconcileServiceImpl.kt`, `server/impl/OssObjectServiceImpl.kt`,
+  `server/repair/OrphanCleanupService.kt`, `server/IOssObjectService.kt`,
+  `server/IOssReconcileService.kt`, `mapper/OssObjectMapper.kt`
+- api boundaries: `config/entity/OssGovernanceConfig.kt`, `entity/entity/OssObjectEntity.kt`,
+  `entity/enums/OssObjectEnums.kt`, `controller/scheduled/ScheduledTasks.kt`,
+  `controller/admin/AdminOssObjectController.kt`, `controller/admin/AdminBookmarkCleanupController.kt`,
+  `utils/OssUtils.kt`, `deploy/schema.sql`
+- reference producers/removers: `server/asset/SiteAssetWriter.kt`, `server/impl/FileServiceImpl.kt`,
+  `server/impl/BackgroundImageServiceImpl.kt`, `server/impl/UserServiceImpl.kt`
+- registry guard: `server/repair/RegistryCoverageTest.kt`
+
+## api/OssReconcileServiceImpl.kt + OssUtils.kt
+
+1. **[correctness, high] Managed prefixes are not directory-delimited, so enabling reclamation can delete objects from a neighbouring/unmanaged namespace.**
+   `OssReconcileServiceImpl.kt:185` removes the trailing slash from every configured folder and passes values such as `bookmarkify/avatar` and `scrapper` to OSS. OSS prefix matching is textual (`OssUtils.kt:373`), and the ledger filter/source classifier repeat the same plain `startsWith` test at lines 101/193. Consequently `bookmarkify/avatar-backup/x` is included in the `bookmarkify/avatar` sweep and `scrapper-old/x` in the `scrapper` sweep. With `reclaim-orphans=true`, an older object in either neighbouring prefix has no registered referrer and is physically deleted, contradicting the method's stated safety boundary that unrelated/shared-bucket content is never touched. Normalize managed directories to exactly one trailing `/` (and use the same boundary for ledger/source matching).
+   **Recommend fixing before enabling reclamation.**
+
+2. **[correctness, high] Both OSS garbage-collection paths have a check-then-delete race that can remove a content-addressed object while a concurrent scrape is attaching a new reference to it.**
+   In the nightly path, `collectReferencedKeys()` takes one snapshot at `OssReconcileServiceImpl.kt:106`; deletion happens much later at lines 288-298 without rechecking the referrers. An object that has been orphaned for 30 days can be reused by a concurrent scrape (content-addressed keys deliberately make this common), whose `site_asset` row commits after the snapshot but before the delete; the old `lastRefAt` still satisfies the grace predicate and the newly-live bytes are deleted. `registerAll` does not close the window because `ON CONFLICT DO NOTHING` leaves the existing ledger row's ORPHAN state/old `lastRefAt` unchanged. The immediate path has the same race at `SiteAssetWriter.kt:387`: it queries committed `site_asset` rows, cannot see another owner's in-flight transaction (the scrapper has already PUT the shared key), deletes at line 399, then that other transaction commits a reference to the missing object. Parse locks are per page, so different pages/sites do not exclude each other. A candidate must be revalidated against all referrers at the destructive boundary with a protocol writers participate in (or deletion must be made conditional/serialized); a stale in-memory set is not sufficient for irreversible GC.
+   **Recommend fixing before enabling/retaining either automatic deletion path.**
+
+3. **[correctness, medium] Hitting `reconcileMaxKeys` returns a partial bucket snapshot but the caller treats it as complete and marks every omitted ledger row DELETED.**
+   `OssUtils.listAllObjects` (`OssUtils.kt:368-383`) returns only a `Map`; when the safety cap is reached it logs and returns early without carrying an `isComplete` flag. `reconcile()` then computes `ledgerKeys - bucket.keys` at line 136 and reports/marks that entire suffix as missing from OSS. At the default 200,000-key threshold, all later lexicographic keys are permanently classified DELETED on every run even when the objects and their live referrers still exist; the report still has no `errorMsg` and logs “对账完成”. Physical reclamation happens only inside the partial map, so this does not itself delete the omitted keys, but it makes the ledger and operational report cease to represent the bucket exactly when the safety valve is needed most.
+
+4. **[correctness, medium] OSS delete failures are swallowed, after which the ledger and report still claim that every candidate was deleted.**
+   `OssUtils.delete` (`OssUtils.kt:393`) returns `Unit` and catches every SDK failure. `reclaimOrphans` cannot observe that outcome: it calls delete for each candidate, unconditionally updates all rows to DELETED, returns `candidates.size`, and logs all keys as reclaimed (`OssReconcileServiceImpl.kt:297-304`). The same false transition occurs in the immediate asset/user-file cleanup callers that invoke `markDeleted` after this void method. A transient credential/network failure therefore produces a successful admin report and a DELETED ledger row for bytes still present in the bucket; only a later full reconciliation can repair it.
+
+5. **[correctness, medium] Destructive governance settings accept unsafe values without validation; a negative grace period defeats the fresh-upload safety gate.**
+   `OssGovernanceConfig.kt:11-33` has no `@Validated`/range constraints or explicit startup validation. With reclamation enabled, `orphanGraceDays=-1` makes the cutoff one day in the future, so a just-uploaded object observed before its API reference commits satisfies both age predicates and can be deleted in the same run. Zero/negative `reconcileMaxKeys` also degenerates the “complete bucket” view to its first OSS page, triggering finding #3. These are operator-controlled values, but this switch performs irreversible deletion and should fail closed on invalid configuration rather than silently removing its own safety margin.
+
+6. **[correctness, low] Backfilled system default backgrounds are permanently labelled as USER_UPLOAD rather than SYSTEM.**
+   `sourceOf` (`OssReconcileServiceImpl.kt:192`) only distinguishes the scrapper prefix from everything else. Default backgrounds share `FileType.BACKGROUND.folder`, so their backfilled ledger rows receive USER_UPLOAD even though `OssObjectSource.SYSTEM` exists specifically for “人工预置，例如系统默认背景图”. This makes source filters/audits lie and the row is never corrected because subsequent registrations use `ON CONFLICT DO NOTHING`.
+
+## api/OrphanCleanupService.kt
+
+7. **[correctness, high] Cleanup can race an add/revival and delete the canonical page or site after the new bookmark has started using it, leaving dangling rows because the schema has no foreign keys.**
+   `run()` snapshots every referenced page at lines 175-180, selects doomed pages/sites in memory at lines 182-212, then deletes them at lines 216-228. A concurrent add can obtain an old UNREACHABLE/ARCHIVED page after the snapshot and insert its `bookmark` row before cleanup deletes the page; `RECENT_GRACE` does not protect an old canonical row. Likewise, a new page can be inserted under an empty dead site after `doomedSiteIds` is computed and before the site delete. The local/IP creation path is even exposed for brand-new sites because there is no site-level grace and those sites satisfy `NON_CRAWLABLE` immediately. The result is a user bookmark pointing to a missing page, or a page pointing to a missing site, with no constraint error to stop the delete. The preview and execute endpoints are separate unsnapshotted requests, so the confirmation counts can also become stale before execution.
+   **Recommend fixing before using the execute endpoint in production.**
+
+8. **[correctness, medium] Published system collections are not treated as references, so cleanup irreversibly removes their pages and the collection silently loses items.**
+   The only protection set is built from `bookmark.page_id` (`OrphanCleanupService.kt:175-180`). `SystemCollectionPageEntity` is explicitly registered as `Retained` at lines 141-145, meaning its row is kept while the target page is allowed to be deleted. `BookmarkAdminService.loadSystemCollectionVO` then silently drops missing targets with `mapNotNull`, so a curated collection shrinks with no error and the dangling row cannot reconnect when the same URL is later recreated under a new page ID. A published collection is itself a real reference; retaining only the join row preserves neither the content nor a useful audit trail.
+
+9. **[correctness, low] `releasedFiles` is neither a reliable unique-file count nor complete for the rows cleanup actually releases.**
+   `purgeAssets` (`OrphanCleanupService.kt:267`) counts distinct nonblank `fileId` values separately for PAGE and SITE purges. A content-addressed object referenced in both groups is counted twice, while a bare `storageUrl` whose ledger registration failed (a supported fallback shape) is not counted at all even though deleting that asset row releases an OSS object that the next reconciliation will classify as orphan. The confirmation report can therefore over- or under-state the storage impact.
+
+## api/oss_object ledger + registry guard
+
+10. **[correctness, medium] `registerAll` promises per-item failure isolation but catches SQL errors inside one PostgreSQL transaction, where one bad statement aborts the whole batch.**
+    `OssObjectServiceImpl.kt:73-99` opens a single `REQUIRES_NEW` transaction and wraps each `insertIgnore` in `runCatching`. `ON CONFLICT` handles duplicates, but any other SQL error (for example one overlong/malformed object key) puts PostgreSQL's transaction in the aborted state; every later insert and the final `findByKeys` then fail, and earlier successful inserts roll back at commit. One bad asset therefore strips `fileId` from the entire scrape batch, contrary to `IOssObjectService.registerAll`'s “单条失败不影响其余” contract. Per-item validation/savepoints or truly separate transactions are required for that guarantee.
+
+11. **[correctness, low] The admin ledger query says it puts orphans first but orders only by creation time.**
+    `OssObjectSearchParams.toWrapper()` (`Request.kt:427-428`) comments “孤儿排前面” and then applies only `orderByDesc(createTime)`. Without an explicit state expression, recent ACTIVE rows push old ORPHAN rows off the first pages, undermining the page's stated purpose of making reclamation candidates visible.
+
+12. **[test-guard, low] Registry coverage verifies that every owned entity is named, but not that every `Cascade` entry has an actual purge implementation.**
+    `RegistryCoverageTest.kt:95-116` considers an entity covered as soon as it is present in `OWNERSHIP_REGISTRY`; it cannot connect `Disposition.Cascade` to a corresponding call in `OrphanCleanupService.run`. A future table can make the guard green by adding one map entry while still leaking all of its rows. The current Cascade entries do have matching purge calls, so this is a false-assurance gap rather than a present data leak.
+
+### Cross-batch dependency
+
+- F1 finding #15 applies directly here: `OssReconcileServiceImpl` relies on the shared fail-open `ParseLock.acquire`. On a Redis error, every contender receives a synthetic token and proceeds, even though this task's own KDoc says concurrent rounds may both delete against inconsistent reference snapshots. For bookmark parsing the fail-open tradeoff is duplicate work; for irreversible OSS GC it is not the same risk class. This is not renumbered as a second finding, but it should be addressed as part of the A2 fix.
+- No reconciliation/cleanup behavior test exists beyond reflection-based registry coverage. The full API suite is green, but none of findings #1-#10 is exercised by it.
+
+### A2 Summary
+
+- **Fix before destructive use:** #1 (prefix escape), #2 (reference-check/delete races), #7 (cleanup/add race), plus the F1 #15 fail-open lock dependency
+- **High-confidence correctness bugs:** #1, #2, #3, #4, #6, #7, #8, #10, #11
+- **Configuration/reporting/guard gaps:** #5, #9, #12
+- **Verification:** `./gradlew test` passed (including all 5 `RegistryCoverageTest` cases); the existing suite has no direct `OssReconcileServiceImpl` or `OrphanCleanupService` behavior tests
+
+---
+
+# W1 — 布局 / 置顶 / 文件夹 / 重新归类
+
+Paths reviewed:
+- web: `composables/useBookmarkMove.ts`, `components/BookmarkFolderCard.vue`, `components/BookmarkTreeRow.vue`,
+  `components/PinnedBookmarkGrid.vue`, `components/ReclassifyDialog.vue`, `components/setting/BookmarkLibrary.vue`
+
+(`stores/bookmark.store.ts` layout/pin logic was already given a full high-effort pass under F1 — findings #18-21
+in that batch cover `dedupeLayout`, `replaceContent`/`replaceFolder`, `createFolderLocal`, and `setPinnedLocal`.
+Not re-run here to avoid duplicate findings against an unchanged file.)
+
+## web/composables/useBookmarkMove.ts
+
+1. **[correctness, medium] `moveToFolder()` calls `bookmarksMoveNode` regardless of whether the preceding `persistOrder('move')` succeeded, because `persistOrder` swallows its own `bookmarksSort` failure.**
+   Line 71 — `persistOrder`'s internal `.catch` (line 26-28) logs and resolves normally, so `await persistOrder('move')` never throws. `bookmarksMoveNode` still runs and — per its own preceding comment — builds the `HOME_DIR_UPDATE` broadcast from the server's current sort table, which never got the move's sort write. Every open tab, including this one, receives a broadcast placing the moved bookmark at its stale pre-move position — the exact corruption the sequential-await ordering was written to prevent.
+
+2. **[correctness, low] A `bookmarksMoveNode` failure (including a silently-rejected 3xx application code) produces no user-facing feedback after the optimistic local move has already been applied.**
+   Line 72 — `moveLocal` moves the node in local state before either network call runs. Per `server/apis/http.ts`'s `handleResult`, a 3xx code is deliberately rejected with no toast; the catch at line 75-77 only `console.error`s. The bookmark stays visually in the new folder with no indication the server never recorded it.
+
+3. **[correctness, low] `moveLocal`'s synchronous auto-dissolve of an emptied source folder fires its own unawaited `persistDissolve()` network calls with no coordination against `moveToFolder`'s own `persistOrder`/`bookmarksMoveNode` sequence.**
+   Line 68 — moving the second-to-last item out of folder A triggers `bookmark.store.ts`'s `dissolveFolderLocal` → `persistDissolve` (`bookmarksMoveNode(remainingId, null)` then `bookmarksDel(folderId)`), running concurrently and unawaited alongside `moveToFolder`'s two awaited calls. Four backend writes race with no cross-chain ordering guarantee; another open tab (or this one, via broadcast) can momentarily observe an inconsistent tree if they arrive out of order.
+
+4. **[simplification, low] The file's own header comment claims persistence logic is centralized here so the drag path and this path "won't evolve independently," but `BookmarkFolderCard.vue`'s `persist()` reimplements the identical `bookmarksSort`-then-`bookmarksMoveNode` sequence instead of calling this composable.**
+   Line 12 — a future fix to sequencing/error-handling here (e.g. fixing #1/#2) won't propagate to `BookmarkFolderCard.vue`'s separate `persist()` (line 383), which duplicates the same pattern with its own try/catch — exactly the divergence the centralization comment says it prevents.
+
+5. **[correctness, low] `moveWithin()` fires an uncoalesced `bookmarksSort` POST on every call with no debounce/lock, so rapid repeated clicks can have their responses resolve out of request order.**
+   Line 44 — each "上移" click reorders local state correctly but also fires a fresh `persistOrder('reorder')` call; `http.ts`'s `withDebounce` keys on method+url+body, and each call's body differs, so nothing is deduped. A late-arriving response from an earlier click can overwrite the backend's persisted order with a stale intermediate state until the next full refresh.
+
+## web/components/BookmarkFolderCard.vue
+
+6. **[correctness, medium] `persist()` proceeds to call `bookmarksMoveNode` even when the preceding `bookmarksSort` call fails, defeating the documented sequencing invariant — same root cause as #1, independently reimplemented.**
+   Line 383 — the catch block only logs; execution falls through and still calls `bookmarksMoveNode`, which reads the stale pre-reorder sort map and broadcasts it back, overwriting the just-set correct local order via `replaceFolder()`.
+
+7. **[correctness, low] `delFolder`'s confirmation dialog labels every direct child as a "书签" and only counts direct children, undercounting/mislabeling when a child is itself a nested subfolder.**
+   Line 464 — a folder from a bulk import containing 1 bookmark + 1 subfolder (20 bookmarks) shows "确定删除文件夹「X」及其中的 2 个书签吗？" but the cascading delete actually removes 21 bookmarks plus the subfolder.
+
+8. **[efficiency, low] Each `BookmarkFolderCard` instance registers its own global `monitorForElements` and document-level `pointerdown` listener, so every drop/pointerdown anywhere on the page is redundantly handled by every mounted folder card.**
+   Line 322 — with dozens of folders, each drag-and-drop or click anywhere triggers N near-immediate no-op callbacks, scaling linearly with folder count instead of being centralized once.
+
+9. **[duplication, low] `openMenuFromButton`'s rect-based menu-anchoring logic is duplicated verbatim in `BookmarkTreeRow.vue`'s own `openMenuFromButton`.**
+   Line 540 — a future change to button-triggered menu anchoring (e.g. viewport-edge clamping) has to be applied in two places with no compiler warning if one is missed.
+
+## web/components/BookmarkTreeRow.vue
+
+10. **[correctness, low] The per-row `useLongPress()` timer is never cancelled on component teardown, so a pending long-press can fire a context menu for a bookmark already removed from the tree.**
+    Line 35 — if the row's bookmark is deleted/moved via a WebSocket push while a touch-and-hold is in progress (unmounting this row via the `v-for` key disappearing), the composable's `setTimeout` still lives in its own closure and fires `openMenu(x, y, node)` with the stale `node`.
+
+11. **[correctness, low] The `BOOKMARK_DIR` branch (a folder nested inside another folder) has no collapse toggle, context menu, or rename/delete/move support, unlike top-level folders in `BookmarkFolderCard.vue`.**
+    Line 3 — the store's `order`/`childrenOf` getters are folder-id-agnostic and support nesting (e.g. via multi-level bulk import), but this component renders such a subfolder's descendants fully expanded with zero interactivity beyond deleting bookmarks one at a time.
+
+12. **[correctness, low] A node with `type === BOOKMARK` but a falsy `typeApp` matches none of the three template branches and silently renders nothing.**
+    Line 21 — the contract says `typeApp` is always non-null, but a transient partial store update, corrupted `localStorage` restore, or future backend regression producing one makes the bookmark disappear from the list with no visual trace or console warning.
+
+13. **[duplication, low] `recordOpen` and `delOne` are copy-pasted verbatim (including confirm-dialog wording) into both this file and `PinnedBookmarkGrid.vue` instead of a shared composable.**
+    Line 100 — the same class of drift this file's own comment on the context-menu definition warns against ("复制一份的话，以后加菜单项必然漏改一处"), applied to action handlers rather than menu items.
+
+## web/components/PinnedBookmarkGrid.vue
+
+14. **[correctness, low] Rapid successive reorders (drag-drop or repeated 左移/右移 clicks) fire independent, unawaited `bookmarksPinSort` requests with no sequencing, so a slower earlier request can overwrite a faster later one.**
+    Line 189 — two overlapping full-order payloads race; if the server finishes the stale first request after the second, persisted `pinned_sort` reflects the stale order while the UI shows the newer one, invisible until the next `bookmarkStore.refresh()`.
+
+15. **[correctness, low] The 左移/右移 menu items' `disabled` state is computed once at menu-open time from `props.nodes.findIndex` and never re-evaluated while the menu stays open.**
+    Line 249 — a concurrent WS-driven pin-order change from another tab (e.g. a new tile appended after this one) leaves an open menu's disabled state stale; `moveBy` self-guards against the enabled-but-invalid case, but the disabled-when-should-be-enabled case leaves the action unreachable without closing/reopening the menu.
+
+## web/components/ReclassifyDialog.vue
+
+16. **[correctness, medium] `runPlan()` has no guard against overlapping calls, so reopening the dialog for a different folder while a previous plan request is still in flight lets the stale response overwrite the fresh one.**
+    Line 162 — closing the dialog on folder A before its `bookmarksReclassifyPlan` resolves, then opening it on folder B, can have A's response land after B's `props.folderId`/`folderName` are already active, displaying A's plan under B's header. Confirming calls apply with `folderId=B` but A's `nodeIds`; the backend's `movable` filter (children-of-source check) silently drops all of them, so confirm still shows a success toast even though nothing moved.
+
+17. **[correctness, low] `apply()`'s success path unconditionally calls `close()`, which can dismiss a dialog session the user has already reopened for a new plan while the previous `apply()` request was still pending.**
+    Line 184 — an old apply resolving after the user dismissed and reopened the dialog for a new session still runs `close()`, yanking away the dialog the user is currently reviewing with no explanation.
+
+18. **[correctness, low] The native `<dialog>`'s Esc/backdrop cancel is never intercepted, so it can dismiss the dialog while `applying=true` even though the visible close button is disabled.**
+    Line 2 — pressing Esc during an in-flight `bookmarksReclassifyApply` still fires the browser's native cancel behavior regardless of the disabled button state, hiding the dialog mid-request with no way to tell whether the move happened.
+
+19. **[efficiency, low] `apply()` calls `bookmarkStore.setLayout(root)` with the HTTP response, duplicating the work the subsequent `HOME_LAYOUT_REFRESH` WebSocket push (sent by the same backend transaction) performs moments later.**
+    Line 185 — the full tree is normalized and the desktop re-rendered twice in quick succession per apply; idempotent, so not incorrect, just wasted work.
+
+## web/components/setting/BookmarkLibrary.vue
+
+20. **[correctness, medium] `deleteFolder()` deletes a folder and its bookmarks locally and server-side but never refreshes/invalidates the backend-paginated `page` ref, leaving deleted bookmarks as ghost rows in the "全部书签" view.**
+    Line 397 — the stale `page.value` (still containing the now-deleted bookmarks) renders on returning to the all-bookmarks view, until an unrelated action happens to re-trigger `fetchPage()`.
+
+21. **[correctness, low] `performDelete()` only refreshes the cached `page` (全部书签 list) when the deletion happened in the all-bookmarks view; deletions performed while browsing a folder leave the previously-fetched `page.value` stale.**
+    Line 532 — deleting a bookmark inside a folder while `page.value` was already fetched from an earlier all-bookmarks visit leaves that cached page unrefreshed; returning to 全部书签 (with `keyword` unchanged, so the debounced watcher doesn't fire) still shows the deleted row, and re-deleting it hits the backend with an already-gone `layoutNodeId`.
+
+22. **[correctness, low] `cleanInvalid()`'s guard against sweeping up still-parsing (`BOOKMARK_LOADING`) bookmarks relies on `bookmarkStore.nodes[id]` already containing that id — an id absent from the local tree (e.g. added from another session/tab, local Pinia snapshot not yet caught up) bypasses the exclusion.**
+    Line 632 — `bookmarkStore.nodes[id]?.type !== HomeItemType.BOOKMARK_LOADING` evaluates `undefined !== ...` as `true` when the id isn't locally known yet, so a bookmark still legitimately being parsed elsewhere can be included in the "清理失效链接" batch and deleted.
+
+23. **[correctness, low] The sidebar's per-folder bookmark count includes `BOOKMARK_LOADING` placeholders, while the folder's own content list and its "· N 项" header exclude them — the two counts for the same folder can disagree on screen simultaneously.**
+    Line 57 — a folder with 5 just-imported items, 2 still `BOOKMARK_LOADING`, shows "5" in the sidebar but "· 3 项" and only 3 rows when opened, reading as a rendering bug rather than pending imports.
+
+### W1 Summary
+
+- **High-confidence correctness bugs:** #1, #6 (same underlying sequencing bug, two independent implementations), #16, #20
+- **Recommend prioritizing:** #1/#6 — the "await sort before move" invariant exists specifically to prevent order corruption and is silently defeated by both implementations on the exact failure path (a transient sort-write error) it was written for
+- **Duplication worth consolidating:** #4 (persist logic split between the composable and `BookmarkFolderCard.vue`), #9 (menu-anchoring math), #13 (`recordOpen`/`delOne`) — three separate instances of the same "no shared home for this logic" pattern across this batch
+- **Lower-severity / cleanup:** the rest (stale-menu-state, missing refresh-after-delete, nested-folder UX gaps, double-render on apply)
