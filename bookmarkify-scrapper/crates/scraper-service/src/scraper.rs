@@ -329,6 +329,13 @@ const ERROR_SNIPPET_CHARS: usize = 300;
 /// 不含 429（限流下立刻重试只会更糟）和 5xx（站点自身故障，重试姿势帮不上忙）。
 const RETRYABLE_ANTI_BOT: [u16; 3] = [403, 406, 412];
 
+/// `FetchFailed`（连接层从未建立：DNS/TLS/连接被拒等）重试前的退避时长。
+///
+/// 只对这一类错误重试一次：生产观测显示它常是几百毫秒内就失败的瞬时抖动（同一
+/// URL 20 秒后重试即成功），而 `Timeout` 已经烧满整段请求预算、`HttpStatus` 已
+/// 拿到站点的明确答复，两者重试都没有这个"抖动"前提，不在此列。
+const FETCH_FAILED_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
+
 /// 一次"服务器答了，但不是 2xx"的完整现场。
 ///
 /// 单独建模而不是塞进 `FetchFailed(String)`，是因为这两类失败的排障方向相反：
@@ -811,7 +818,9 @@ pub async fn probe(url: &reqwest::Url, client: &reqwest::Client) -> ProbeOutcome
 /// 这里再挡一道，顺便让被拦下的那一跳能给出明确原因。
 ///
 /// 被反爬拦下时（见 [`RETRYABLE_ANTI_BOT`]）会做一轮**根路径预热**后重试，见
-/// [`warm_up_origin`]。
+/// [`warm_up_origin`]。连接层从未建立时（`FetchFailed`）会先做一次短退避重试，见
+/// [`FETCH_FAILED_RETRY_DELAY`]；`Timeout`/`HttpStatus` 不适用这条，前者已经烧满
+/// 预算，后者已经拿到站点的明确答复。
 ///
 /// `client` 必须同时配置为 `redirect::Policy::none()`（否则拿不到中间跳）和
 /// `cookie_store(true)`（否则预热拿到的 cookie 留不住，重试等于白做）。
@@ -821,7 +830,14 @@ pub async fn fetch_html(
     user_agent: Option<&str>,
     locale: Option<&str>,
 ) -> Result<HttpCapture, ScrapeError> {
-    let first = fetch_html_once(url, client, user_agent, locale, None).await;
+    let mut first = fetch_html_once(url, client, user_agent, locale, None).await;
+
+    // 连接层从未建立的失败常是瞬时抖动，短退避后重试一次即可分辨"真连不上"和
+    // "这一下没连上"——见 [`FETCH_FAILED_RETRY_DELAY`]。
+    if matches!(first, Err(ScrapeError::FetchFailed(_))) {
+        tokio::time::sleep(FETCH_FAILED_RETRY_DELAY).await;
+        first = fetch_html_once(url, client, user_agent, locale, None).await;
+    }
 
     let Err(ScrapeError::HttpStatus(detail)) = first else {
         return first;
@@ -1344,5 +1360,32 @@ mod tests {
         let outcome = probe(&url, &reqwest::Client::new()).await;
         assert!(outcome.blocked, "got {outcome:?}");
         assert!(!outcome.reachable, "got {outcome:?}");
+    }
+
+    /// `FetchFailed`（连接层从未建立）要在退避后重试一次，而不是当场认输——生产观测
+    /// 里这类失败常在几百毫秒到几十秒后自愈。用 `.invalid`（RFC 6761 保留，DNS 永远
+    /// 解析不出地址）制造一个确定性的 `FetchFailed`：两次都会失败，但经过的时间必须
+    /// 覆盖住 [`FETCH_FAILED_RETRY_DELAY`] 的退避，才说明真的重试过而不是当场放弃。
+    #[tokio::test]
+    async fn fetch_html_retries_once_after_a_transient_connect_failure() {
+        let _env = crate::env_guard().await;
+        std::env::remove_var("SSRF_ALLOW_PRIVATE");
+        let start = std::time::Instant::now();
+        let result = fetch_html(
+            "https://gone.invalid/some/page",
+            &reqwest::Client::new(),
+            None,
+            None,
+        )
+        .await;
+        assert!(
+            matches!(result, Err(ScrapeError::FetchFailed(_))),
+            "{result:?}"
+        );
+        assert!(
+            start.elapsed() >= FETCH_FAILED_RETRY_DELAY,
+            "两次尝试之间应有退避，说明确实重试过: {:?}",
+            start.elapsed()
+        );
     }
 }
