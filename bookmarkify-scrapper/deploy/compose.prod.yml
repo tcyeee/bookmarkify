@@ -4,6 +4,16 @@ services:
     image: ${SCRAPPER_IMAGE}
     container_name: bookmarkify-scraper
     restart: unless-stopped
+    # PID 1 in this container is the Rust binary itself (no tini/dumb-init in the
+    # Dockerfile). Headless Chrome forks a whole process tree per instance
+    # (zygote/GPU/utility/renderer/crashpad); when an instance is recycled and the
+    # graceful CDP close falls through to a SIGKILL of just the top-level chrome
+    # process, any of its own children still alive at that moment get reparented
+    # to PID 1 instead of exiting cleanly. `./scraper-service` never wait()s on
+    # processes it didn't spawn itself, so those orphans pile up as permanent
+    # <defunct> zombies (170 counted in prod after ~34 days uptime). `init: true`
+    # runs Docker's built-in tini as the real PID 1, which reaps them for us.
+    init: true
     # Give in-flight requests time to finish under graceful shutdown before Docker
     # SIGKILLs the container. The worst-case headless request is now
     # HEADLESS_QUEUE_WAIT_SECS (20s waiting for a slot) + HEADLESS_TIMEOUT_SECS (30s
