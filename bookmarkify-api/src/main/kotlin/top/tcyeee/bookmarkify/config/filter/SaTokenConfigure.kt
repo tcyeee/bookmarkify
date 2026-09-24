@@ -2,6 +2,8 @@ package top.tcyeee.bookmarkify.config.filter
 
 import cn.dev33.satoken.interceptor.SaInterceptor
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.MediaType
+import org.springframework.web.servlet.config.annotation.ContentNegotiationConfigurer
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 import top.tcyeee.bookmarkify.utils.StpKit
@@ -34,5 +36,15 @@ class SaTokenConfigure(private val extensionTokenInterceptor: ExtensionTokenInte
         // 插件 AccessToken 鉴权：仅拦截 /extension/**
         registry.addInterceptor(extensionTokenInterceptor)
             .addPathPatterns("/extension/**")
+    }
+
+    // 内容协商：忽略客户端 Accept 头，恒定按 JSON 写响应体——这是一个纯 JSON 的 REST API，
+    // 不需要真的做协商。否则一个 Accept: text/html 的请求撞上 NotLoginException 时，
+    // GlobalExceptionHandler 已经正常返回了 ResultWrapper，却在写响应体阶段抛
+    // HttpMediaTypeNotAcceptableException——这发生在 @ExceptionHandler 已返回之后的消息转换
+    // 阶段，不会再被 @RestControllerAdvice 捕获，直接冒到 Tomcat 打成 ERROR 日志，把一次无害的
+    // 未登录探测误报成 ServerChanAlertAppender 的「连续报错」告警。
+    override fun configureContentNegotiation(configurer: ContentNegotiationConfigurer) {
+        configurer.ignoreAcceptHeader(true).defaultContentType(MediaType.APPLICATION_JSON)
     }
 }
