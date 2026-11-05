@@ -3,22 +3,27 @@
 // 调用方（按钮/绑定弹窗）拿到 code 后自行决定走登录还是绑定 API。
 //
 // 移动端浏览器/微信内置浏览器对 window.open 弹窗支持不稳定(常被拦截或行为异常)，
-// 因此额外提供 redirectToGithubLogin：整页跳转，state 存 sessionStorage，
-// 回调页 pages/auth/github/callback.vue 检测到没有 window.opener 时按此流程校验并直接完成登录。
+// 因此额外提供整页跳转：state 存 sessionStorage，intent（login/bind）一并存入，
+// 回调页 pages/auth/github/callback.vue 检测到没有 window.opener 时按 intent 校验并
+// 直接完成登录或关联——两个场景都要有跳转兜底，而不只是登录入口。
 const MSG_SOURCE = 'bookmarkify-github-oauth'
 const REDIRECT_STATE_KEY = 'bookmarkify-github-oauth-redirect-state'
+const REDIRECT_INTENT_KEY = 'bookmarkify-github-oauth-redirect-intent'
+
+export type GithubOAuthRedirectIntent = 'login' | 'bind'
 
 export function useGithubOAuth() {
   const config = useRuntimeConfig()
   const githubClientId = (config.public.githubClientId as string | undefined) || ''
 
-  function redirectToGithubLogin() {
+  function redirectToGithubAuth(intent: GithubOAuthRedirectIntent) {
     if (!import.meta.client) return
     if (!githubClientId) return
 
     const redirectUri = `${location.origin}/auth/github/callback`
     const state = Math.random().toString(36).slice(2) + Date.now().toString(36)
     sessionStorage.setItem(REDIRECT_STATE_KEY, state)
+    sessionStorage.setItem(REDIRECT_INTENT_KEY, intent)
 
     const url =
       `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(githubClientId)}` +
@@ -27,6 +32,14 @@ export function useGithubOAuth() {
       `&state=${encodeURIComponent(state)}`
 
     location.href = url
+  }
+
+  function redirectToGithubLogin() {
+    redirectToGithubAuth('login')
+  }
+
+  function redirectToGithubBind() {
+    redirectToGithubAuth('bind')
   }
 
   function requestGithubCode(): Promise<{ code: string; redirectUri: string }> {
@@ -75,7 +88,8 @@ export function useGithubOAuth() {
     })
   }
 
-  return { githubClientId, requestGithubCode, redirectToGithubLogin }
+  return { githubClientId, requestGithubCode, redirectToGithubLogin, redirectToGithubBind }
 }
 
 export const GITHUB_OAUTH_REDIRECT_STATE_KEY = REDIRECT_STATE_KEY
+export const GITHUB_OAUTH_REDIRECT_INTENT_KEY = REDIRECT_INTENT_KEY
