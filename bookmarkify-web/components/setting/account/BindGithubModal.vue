@@ -20,6 +20,7 @@
 </template>
 
 <script lang="ts" setup>
+import { useMediaQuery } from '@vueuse/core'
 import { bindGithub, unbindGithub } from '@api'
 import { useAuthStore } from '@stores/auth.store'
 
@@ -27,11 +28,19 @@ const props = defineProps<{ githubLogin?: string | null; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'success'): void }>()
 
 const authStore = useAuthStore()
-const { githubClientId, requestGithubCode } = useGithubOAuth()
+const { githubClientId, requestGithubCode, redirectToGithubBind } = useGithubOAuth()
 const loading = ref(false)
+
+// 弹窗在移动端浏览器/微信内置浏览器中不可靠，和登录入口一样改走整页跳转
+// （回调页 pages/auth/github/callback.vue 按 intent='bind' 直接完成关联）
+const isMobile = useMediaQuery('(max-width: 640px)')
 
 async function handleBind() {
   if (loading.value) return
+  if (isMobile.value) {
+    redirectToGithubBind()
+    return
+  }
   loading.value = true
   try {
     const { code, redirectUri } = await requestGithubCode()
