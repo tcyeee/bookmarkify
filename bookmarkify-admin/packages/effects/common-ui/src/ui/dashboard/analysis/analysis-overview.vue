@@ -9,6 +9,7 @@ import {
   CardTitle,
   VbenCountToAnimator,
   VbenIcon,
+  VbenTooltip,
 } from '@vben-core/shadcn-ui';
 
 interface Props {
@@ -33,7 +34,23 @@ withDefaults(defineProps<Props>(), {
         </CardHeader>
 
         <CardContent class="flex items-center justify-between">
+          <VbenTooltip
+            v-if="item.valueTooltip"
+            content-class="max-w-60"
+            side="top"
+          >
+            <template #trigger>
+              <VbenCountToAnimator
+                :end-val="item.value"
+                :start-val="1"
+                class="text-xl cursor-help"
+                prefix=""
+              />
+            </template>
+            {{ item.valueTooltip }}
+          </VbenTooltip>
           <VbenCountToAnimator
+            v-else
             :end-val="item.value"
             :start-val="1"
             class="text-xl"
@@ -43,7 +60,23 @@ withDefaults(defineProps<Props>(), {
         </CardContent>
         <CardFooter class="justify-between">
           <span>{{ item.totalTitle }}</span>
+          <VbenTooltip
+            v-if="item.totalTooltip"
+            content-class="max-w-60"
+            side="top"
+          >
+            <template #trigger>
+              <VbenCountToAnimator
+                :end-val="item.totalValue"
+                :start-val="1"
+                class="cursor-help"
+                prefix=""
+              />
+            </template>
+            {{ item.totalTooltip }}
+          </VbenTooltip>
           <VbenCountToAnimator
+            v-else
             :end-val="item.totalValue"
             :start-val="1"
             prefix=""

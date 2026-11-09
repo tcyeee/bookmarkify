@@ -4,8 +4,12 @@ interface AnalysisOverviewItem {
   icon: Component | string;
   title: string;
   totalTitle: string;
+  /** 鼠标悬浮在 totalValue 数字上时展示的说明文案 */
+  totalTooltip?: string;
   totalValue: number;
   value: number;
+  /** 鼠标悬浮在 value 数字上时展示的说明文案 */
+  valueTooltip?: string;
 }
 
 interface WorkbenchProjectItem {
