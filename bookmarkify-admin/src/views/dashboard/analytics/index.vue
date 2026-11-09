@@ -34,6 +34,29 @@ import AnalyticsVisits from './analytics-visits.vue';
 
 const cardIcons = [SvgCardIcon, SvgCakeIcon, SvgDownloadIcon, SvgBellIcon];
 
+// 与后端 AnalyticsServiceImpl 的卡片口径一一对应：
+// - pageviews/events 的 total 是 GoatCounter 近 365 天区间累计（并非全部历史），recent 是近 7 日；
+// - users/bookmarks 的 total 是全站全部历史累计，recent 则是近 7 日新增/活跃。
+// 两个数字口径不同，鼠标悬浮在哪个数字上就提示哪个数字的含义。
+const cardTooltips: Record<string, { total: string; value: string }> = {
+  bookmarks: {
+    total: '全站累计保存的书签总数（全部历史）',
+    value: '近 7 日新增的书签数',
+  },
+  events: {
+    total: '近 365 天内站内自定义埋点事件（如分享、搜索等）累计触发次数（GoatCounter 统计）',
+    value: '近 7 日站内自定义埋点事件触发次数',
+  },
+  pageviews: {
+    total: '近 365 天内站点页面累计被访问的次数（GoatCounter 统计）',
+    value: '近 7 日站点页面被访问的次数',
+  },
+  users: {
+    total: '全站已验证的注册用户总数（全部历史）',
+    value: '近 7 日有过操作行为的活跃用户数',
+  },
+};
+
 // 持久化缓存：将上一次的看板数据写入 localStorage，使得
 // 1. 页面切换 / 组件重新挂载之间保留数据；
 // 2. 浏览器刷新后仍能立即展示旧数据，等后台拉到新数据再静默替换，
@@ -54,8 +77,10 @@ const overviewItems = computed<AnalysisOverviewItem[]>(() =>
     icon: cardIcons[index % cardIcons.length]!,
     title: card.title,
     totalTitle: `总${card.title}`,
+    totalTooltip: cardTooltips[card.key]?.total,
     totalValue: card.total,
     value: card.recent,
+    valueTooltip: cardTooltips[card.key]?.value,
   })),
 );
 
