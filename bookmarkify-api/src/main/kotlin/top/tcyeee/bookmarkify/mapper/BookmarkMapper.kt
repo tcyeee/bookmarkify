@@ -233,4 +233,12 @@ interface BookmarkMapper : BaseMapper<BookmarkEntity> {
         """
     )
     fun stuckLoadingStats(): StuckLoadingStats
+
+    @Select("SELECT count(*) FROM bookmark WHERE deleted = false")
+    @Description("统计全部用户累计添加过的书签总数，供后台分析看板卡片使用")
+    fun countTotal(): Long
+
+    @Select("SELECT count(*) FROM bookmark WHERE deleted = false AND create_time >= #{since}")
+    @Description("统计 [since] 以来全部用户新增的书签数，供后台分析看板卡片使用")
+    fun countSince(@Param("since") since: LocalDateTime): Long
 }

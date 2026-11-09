@@ -1,10 +1,11 @@
 package top.tcyeee.bookmarkify.entity.dto
 
 /**
- * 后台分析看板聚合数据，全部来源于自托管 GoatCounter（bookmarkify 站点）。
+ * 后台分析看板聚合数据。访问类图表来自自托管 GoatCounter（bookmarkify 站点），
+ * 用户数/书签数两张卡片则是业务数据，直接查本地数据库，见 AnalyticsServiceImpl。
  */
 data class AnalyticsOverview(
-    /** 顶部四张统计卡片：访问量 / 事件数 / 来源数 / 浏览器数 */
+    /** 顶部四张统计卡片：访问量 / 事件数（GoatCounter）、用户 / 书签（数据库） */
     val cards: List<StatCard>,
     /** 流量趋势：按天的访问量与 7 日移动平均 */
     val trend: TrendSeries,

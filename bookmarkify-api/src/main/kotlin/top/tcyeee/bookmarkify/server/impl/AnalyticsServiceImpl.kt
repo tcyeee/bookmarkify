@@ -13,18 +13,27 @@ import top.tcyeee.bookmarkify.entity.dto.NamedCount
 import top.tcyeee.bookmarkify.entity.dto.PageCount
 import top.tcyeee.bookmarkify.entity.dto.StatCard
 import top.tcyeee.bookmarkify.entity.dto.TrendSeries
+import top.tcyeee.bookmarkify.mapper.BookmarkMapper
+import top.tcyeee.bookmarkify.mapper.UserBehaviorLogMapper
+import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.server.IAnalyticsService
 import top.tcyeee.bookmarkify.config.log
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 /**
- * 通过 GoatCounter REST API（stats/total、stats/toprefs 等）拉取真实访问数据并聚合为看板所需结构。
- * 统计区间取近一年（站点上线时间短，约等于全量），近 7 日作为卡片的「最近」值。
+ * 看板的访问类卡片/图表（流量趋势、来源、浏览器……）通过 GoatCounter REST API 拉取；
+ * 用户数/书签数这两张卡片是业务数据，直接查本地数据库——两者统计口径不同，不能混在一次
+ * GoatCounter 请求里，也没有必要为了统一而把数据库数字也经由 GoatCounter 绕一圈。
+ * 访问类统计区间取近一年（站点上线时间短，约等于全量），近 7 日作为卡片的「最近」值。
  */
 @Service
 class AnalyticsServiceImpl(
     private val goatCounterConfig: GoatCounterConfig,
     private val objectMapper: ObjectMapper,
+    private val userMapper: UserMapper,
+    private val userBehaviorLogMapper: UserBehaviorLogMapper,
+    private val bookmarkMapper: BookmarkMapper,
 ) : IAnalyticsService {
 
     companion object {
@@ -88,6 +97,8 @@ class AnalyticsServiceImpl(
         val sizesFull = fetchStats("sizes", fullStart, today)
         val hitsFull = fetchStats("hits", fullStart, today)
 
+        val sevenDaysAgo = LocalDateTime.now().minusDays(7)
+
         val cards = listOf(
             StatCard(
                 key = "pageviews",
@@ -100,6 +111,20 @@ class AnalyticsServiceImpl(
                 title = "事件数",
                 total = totalFull.path("total_events").asLong(),
                 recent = totalRecent.path("total_events").asLong(),
+            ),
+            // 以下两张卡片是业务数据（数据库），不经 GoatCounter：
+            // total = 全量累计，recent = 近 7 日，与上面两张卡片的语义保持一致。
+            StatCard(
+                key = "users",
+                title = "用户",
+                total = userMapper.countVerifiedUsers(),
+                recent = userBehaviorLogMapper.countActiveUsers(sevenDaysAgo),
+            ),
+            StatCard(
+                key = "bookmarks",
+                title = "书签",
+                total = bookmarkMapper.countTotal(),
+                recent = bookmarkMapper.countSince(sevenDaysAgo),
             ),
         )
 
