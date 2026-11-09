@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.entity.dto.scrape
 import org.slf4j.LoggerFactory
 import top.tcyeee.bookmarkify.entity.entity.PageEntity
 import top.tcyeee.bookmarkify.entity.enums.AssetRole
+import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.ParseStatusEnum
 import top.tcyeee.bookmarkify.server.asset.AssetRolePolicy
 import top.tcyeee.bookmarkify.utils.OssUtils
@@ -71,6 +72,26 @@ val ScrapeResponse.faviconUrl: String? get() = bestUrlOf(AssetRole.FAVICON)
 
 /** 最合适的品牌 LOGO 地址 */
 val ScrapeResponse.logoUrl: String? get() = bestUrlOf(AssetRole.LOGO)
+
+/**
+ * 按展示模式挑图标地址，拿不到首选角色时按 [AssetRolePolicy.roleOrder] 退到另一个角色。
+ *
+ * 供插件 `/extension/site-info` 用：小图标场景要 FAVICON 优先（退 LOGO），大图标场景要
+ * LOGO 优先（退 FAVICON）——与桌面端 TILE/LIST 的优先级同一套策略，只是这条路径是单次
+ * 实时抓取、没有持久化的 `site_asset` 行，用不上 [AssetRolePolicy.resolve] 那套页面归属/
+ * 可信度/尺寸筛选，所以直接复用 [bestUrlOf] 逐角色取值。
+ */
+fun ScrapeResponse.iconUrlFor(mode: DisplayMode): String? =
+    AssetRolePolicy.roleOrder(mode).firstNotNullOfOrNull { bestUrlOf(it) }
+
+/**
+ * 大图标场景下方的简称：manifest 没声明 `short_name` 时退页面标题。
+ *
+ * 与 `BookmarkDisplayPolicy` 同构的简化版——那边的候选链还包含用户自定义标题、DeepSeek
+ * 推断的 `page.app_name`、站点品牌名，全部来自持久化的 `site`/`bookmark` 行；插件这条路径
+ * 只有一次性的实时抓取结果，没有这些行可读，所以候选链收窄成"manifest 短名 → 页面标题"。
+ */
+val ScrapeResponse.appName: String? get() = shortName?.takeIf { it.isNotBlank() } ?: title
 
 /** 社交分享图地址（即旧代码里的"OG 图"）*/
 val ScrapeResponse.socialUrl: String? get() = bestUrlOf(AssetRole.SOCIAL)

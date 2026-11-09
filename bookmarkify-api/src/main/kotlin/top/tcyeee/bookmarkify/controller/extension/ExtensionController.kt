@@ -1,12 +1,7 @@
 package top.tcyeee.bookmarkify.controller.extension
 
-import top.tcyeee.bookmarkify.entity.dto.scrape.cached
-import top.tcyeee.bookmarkify.entity.dto.scrape.description
-import top.tcyeee.bookmarkify.entity.dto.scrape.faviconUrl
-import top.tcyeee.bookmarkify.entity.dto.scrape.logoUrl
-import top.tcyeee.bookmarkify.entity.dto.scrape.primarySource
-import top.tcyeee.bookmarkify.entity.dto.scrape.screenshotUrl
-import top.tcyeee.bookmarkify.entity.dto.scrape.socialUrl
+import top.tcyeee.bookmarkify.entity.dto.scrape.appName
+import top.tcyeee.bookmarkify.entity.dto.scrape.iconUrlFor
 import top.tcyeee.bookmarkify.entity.dto.scrape.title
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -20,6 +15,7 @@ import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AccessTokenVO
 import top.tcyeee.bookmarkify.entity.ExtensionSiteInfoVO
+import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.server.IAccessTokenService
 import top.tcyeee.bookmarkify.server.IApiService
@@ -44,11 +40,16 @@ class ExtensionController(
     // 无 satoken 会话可用于限流键，会自动回退为按客户端 IP 限流(见 ThrottleAspect)
     @Throttle(interval = 300)
     @GetMapping("/site-info")
-    @Operation(summary = "查询网站标题与图标，供插件在浏览页面时展示/预填")
+    @Operation(summary = "查询网站标题/简称与大小图标，供插件在浏览页面时展示/预填")
     fun siteInfo(@RequestParam url: String): ExtensionSiteInfoVO {
         val scraped = apiService.queryWebsiteInfo(url)
         userBehaviorLogService.record(ExtensionAuthUtils.currentUid(), UserBehaviorType.QUERY_BY_TOKEN, url)
-        return ExtensionSiteInfoVO(title = scraped.title, favicon = scraped.faviconUrl)
+        return ExtensionSiteInfoVO(
+            title = scraped.title,
+            favicon = scraped.iconUrlFor(DisplayMode.LIST),
+            logo = scraped.iconUrlFor(DisplayMode.TILE),
+            appName = scraped.appName,
+        )
     }
 
     // 供第三方(插件/脚本/AI 助手)在正式接入前自检 token 是否配置正确，无需真的发起一次抓取
