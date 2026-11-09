@@ -174,7 +174,7 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 ### Key Patterns
 
 1. **Dual auth realms:** `StpKit.USER` for regular users, `StpKit.ADMIN` for admin panel. Completely separate session stores.
-2. **Anonymous-first identity:** Every visitor gets a `deviceUid` cookie and auto-created `user_info` row. Users "upgrade" by verifying phone/email.
+2. **No anonymous identity:** every endpoint except the handful of `@SaIgnore` `/auth/**` entries (`login`, `captcha/email`, `captcha/verifyEmail`, `google`, `github`, `quickLogin`) requires a logged-in `StpKit.USER` session. All four creation paths call `UserServiceImpl.createVerifiedUser()`, which inserts `verified = true` directly — there is no unverified/anonymous row and no "upgrade" step. (`ProjectConfig.uidCookieName` and `user_info.verified` are leftover fields from a removed anonymous-session design; `verified` is never written `false` by current code.)
 3. **Three-layer model (`site` / `page` / `bookmark`):** `site` is one row per domain, `page` one row per canonical page under it, `bookmark` one row per user's saved item. Deduplication happens at the `page` level — two users saving the same URL share one `page` row. The names were corrected on 2026-08-03; before that `bookmark` meant the page and the user's item was `bookmark_user_link`, which is why a `site` row can have many `page` rows (bilibili: homepage + 3 videos).
 4. **Async parsing pipeline:** Adding a bookmark returns a loading placeholder immediately. A Spring `ApplicationEvent` is published; an `@Async` listener (`BookmarkParseEventListener`, running on the `bookmarkParseExecutor` thread pool) parses the website, uploads logos to OSS, and pushes the result via WebSocket (`HOME_ITEM_UPDATE`). Failed parses are not retried inline — see *Reconciliation* below.
    - **Bulk import publishes no events at all.** `importBookmarkFile` only writes rows (`bookmark.page_id = 'LOADING'` marks the unfinished ones). Fanning out thousands of events would saturate the parse pool *and* its bounded queue, after which `CallerRunsPolicy` runs the remaining scrapes on the caller — which is the Tomcat request thread. `drainStuckLoading()` (every 30s) feeds the pool from the DB instead, sized to the queue's free capacity.
@@ -189,7 +189,7 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 
 | Table | Description |
 |---|---|
-| `user_info` | Users (anonymous + registered, role: USER/ADMIN) |
+| `user_info` | Users (all rows created already-verified, role: USER/ADMIN) |
 | `site` | **Layer 1** — one row per domain. Brand name, favicon/logo, NSFW verdict, domain liveness |
 | `page` | **Layer 2** — one row per canonical page, keyed `(site_id, url_path, url_query, url_fragment)`. Page title/description, page liveness. Was named `bookmark` until 2026-08-03 |
 | `bookmark` | **Layer 3** — one row per user's saved item; this is what a user means by "bookmark". Their own title/note, pin, open count. Was named `bookmark_user_link` |
