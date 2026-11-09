@@ -1106,10 +1106,19 @@ data class AccessTokenCreatedVO(
     @field:Schema(description = "创建时间") var createTime: LocalDateTime = LocalDateTime.now(),
 )
 
-/** 插件查询网站信息的响应(/extension/site-info) */
+/**
+ * 插件查询网站信息的响应(/extension/site-info)。
+ *
+ * 一次调用把两种展示场景要的字段都给出：[favicon]+[title] 配小图标场景，[logo]+[appName]
+ * 配大图标场景——两对字段各自按 FAVICON/LOGO 的相反优先级独立解析（见
+ * [top.tcyeee.bookmarkify.server.asset.AssetRolePolicy.roleOrder]），插件按自己当前的
+ * 展示场景取对应的一对即可，不需要额外传展示模式、也不需要为另一种场景再发一次请求。
+ */
 data class ExtensionSiteInfoVO(
     @field:Schema(description = "网站标题") var title: String? = null,
-    @field:Schema(description = "网站图标，base64 data URL") var favicon: String? = null,
+    @field:Schema(description = "网站小图标地址（FAVICON 优先，退 LOGO）") var favicon: String? = null,
+    @field:Schema(description = "网站大图标地址（LOGO 优先，退 FAVICON）") var logo: String? = null,
+    @field:Schema(description = "网站简称（manifest short_name，缺失时退页面标题）") var appName: String? = null,
 )
 
 /** 管理后台展示的一条 OSS 对象账本记录 */

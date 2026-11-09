@@ -284,6 +284,18 @@ object AssetRolePolicy {
     }
 
     /**
+     * 展示模式 → 图标角色的优先级顺序，[resolve] 的排序依据。
+     *
+     * 抽成公开函数是因为 `ScrapeResponseExt`（插件 `/extension/site-info` 用的实时抓取路径）
+     * 也要按同一顺序挑图，但那条路径没有持久化的 [SiteAssetEntity]，用不上 [resolve] 剩下那套
+     * 页面归属/可信度/尺寸筛选——分两份各写一次 `when` 的话，这条顺序迟早会在两处悄悄长歪。
+     */
+    fun roleOrder(mode: DisplayMode): List<AssetRole> = when (mode) {
+        DisplayMode.TILE -> listOf(AssetRole.LOGO, AssetRole.FAVICON)
+        DisplayMode.LIST -> listOf(AssetRole.FAVICON, AssetRole.LOGO)
+    }
+
+    /**
      * 按展示模式挑出该渲染哪张图。
      *
      * **两种模式的优先级是反的**，这正是"不能用单一 is_primary 全局标记"的原因：
@@ -314,10 +326,7 @@ object AssetRolePolicy {
         val usable = assets.filter { it.renderable() && !isScreenshot(it) }
         if (usable.isEmpty()) return null
 
-        val roleOrder = when (mode) {
-            DisplayMode.TILE -> listOf(AssetRole.LOGO, AssetRole.FAVICON)
-            DisplayMode.LIST -> listOf(AssetRole.FAVICON, AssetRole.LOGO)
-        }
+        val roleOrder = roleOrder(mode)
 
         // 页面自有图标一旦存在就**整体**接管这个书签，筛选必须发生在按 role 分流**之前**。
         // 放进循环里就变成了"逐 role 接管"：页面往往只拥有其中一个 role —— 只声明了一个
