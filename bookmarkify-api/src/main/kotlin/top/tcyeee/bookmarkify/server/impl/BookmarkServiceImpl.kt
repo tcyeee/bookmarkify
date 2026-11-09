@@ -76,6 +76,7 @@ import java.time.Duration
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Semaphore
 
 /**
  * @author tcyeee
@@ -438,10 +439,23 @@ class BookmarkServiceImpl(
         )
         if (items.isEmpty()) return
 
+        // 导入来源（unbound）的并发单独限流：解析池的 headroom 只保证"队列排得进去"，
+        // 排进去之后这些任务仍会在池内并发跑满，每条都可能触发 scrapper 的无头浏览器兜底。
+        // 2026-11-09 生产实测一次约 433 条的批量导入在 10 分钟内并发跑满并带出 18 次 Chrome
+        // 冷启动，把这台与其它容器共享 CPU 的小机器直接打到告警。许可证不足的条目这一轮
+        // 直接跳过（不占 Redis 补投递锁），下一轮 30s 后自然会被重新捞到——不是丢弃，只是延后。
+        val gated = items.filter { !it.unbound || importDispatchSemaphore.tryAcquire() }
+
         // 取锁失败说明这条已经在途（上一轮投递的任务还没跑完），跳过即可，别投第二遍
-        val dispatched = items.filter { parseLock.tryAcquire(ParseLock.dispatch(it.userLinkId), DISPATCH_LOCK_TTL) }
+        val dispatched = gated.filter { item ->
+            val locked = parseLock.tryAcquire(ParseLock.dispatch(item.userLinkId), DISPATCH_LOCK_TTL)
+            // 没拿到补投递锁就不会真正发出这个事件，对应的许可证要还回去，否则会被白白占用
+            // 到下一轮——那一轮本来就该重新尝试这条记录，而不是被一个从未发生的调度卡住名额。
+            if (!locked && item.unbound) importDispatchSemaphore.release()
+            locked
+        }
         if (dispatched.isEmpty()) {
-            log.debug("[drainStuckLoading] 本轮 ${items.size} 条全部在途，无需补投递")
+            log.debug("[drainStuckLoading] 本轮 ${items.size} 条全部在途或导入并发已满，无需补投递")
             return
         }
 
@@ -869,6 +883,16 @@ class BookmarkServiceImpl(
      * 答: 用户添加网址的时候是批量添加的,只能提前批量返回用户自定义的书签,用户自定义的书签具体有没有存在源书签还不知道,所以查询完毕知道以后,再重新关联回去
      */
     override fun parseAndResetUserItem(
+        uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String
+    ) = try {
+        parseAndResetUserItemBody(uid, rawUrl, userLinkId, layoutNodeId)
+    } finally {
+        // 对应 drainStuckLoading 里为这条 unbound 占位取的许可证：无论下面哪条 return 退出、
+        // 还是中途抛出未捕获异常，都要还给池子，否则导入并发会越跑越少，直到彻底卡死。
+        importDispatchSemaphore.release()
+    }
+
+    private fun parseAndResetUserItemBody(
         uid: String, rawUrl: String, userLinkId: String, layoutNodeId: String
     ) {
         // 网址本身就解析不出来（浏览器书签栏里的 javascript: 小书签、about: 页面之类，导入时不做过滤），
@@ -1409,5 +1433,14 @@ class BookmarkServiceImpl(
         // 失效书签在「用户新增」时的重检冷却：既保证用户手动添加能立刻触发一次重试，
         // 又避免同一个已经挂掉的站点被连续添加时把 ping/抓取打满。
         private const val DEAD_RECHECK_COOLDOWN_MINUTES = 10L
+        // 批量导入（unbound 占位）同一时刻允许多少条处于"已投递、尚未收口"状态。
+        // 与解析池的 corePoolSize(8)/maxPoolSize(32) 刻意分开调：那两个数字同时服务交互式
+        // addOne，调小会让单条添加也变慢；这里只收紧导入这一条链路。取 4 是因为下游 scrapper
+        // 的无头浏览器并发上限（HEADLESS_CONCURRENCY）默认只有 2——给它两三倍余量，既不会让
+        // 大部分请求在无头准入队列里空等，又远小于过去"8~32 条并发同时抓取"的量级。
+        private const val IMPORT_PARSE_CONCURRENCY = 4
     }
+
+    /** 见 [IMPORT_PARSE_CONCURRENCY]；在 [drainStuckLoading] 获取，在 [parseAndResetUserItem] 结束时释放。 */
+    private val importDispatchSemaphore = Semaphore(IMPORT_PARSE_CONCURRENCY)
 }
