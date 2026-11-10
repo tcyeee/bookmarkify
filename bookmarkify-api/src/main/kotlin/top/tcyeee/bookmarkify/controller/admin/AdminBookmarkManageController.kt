@@ -5,6 +5,7 @@ import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.core.metadata.IPage
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import top.tcyeee.bookmarkify.config.audit.AdminAudit
 import top.tcyeee.bookmarkify.entity.AppNameSuggestVO
 import top.tcyeee.bookmarkify.entity.BookmarkAdminVO
 import top.tcyeee.bookmarkify.entity.BookmarkAssetRefetchVO
@@ -45,6 +46,7 @@ class AdminBookmarkManageController(
         bookmarkAdminService.adminListAll(params)
 
     // 修改单个书签基础信息（标题/简介/简称），非空字段才会覆盖；简称传空串表示清空
+    @AdminAudit("修改书签基础信息")
     @PostMapping("/{pageId}/update")
     fun updateBookmark(
         @PathVariable pageId: String, @RequestBody params: BookmarkBasicInfoUpdateParams
@@ -56,18 +58,21 @@ class AdminBookmarkManageController(
         bookmarkAdminService.adminRefetch(pageId)
 
     // 应用重新获取的结果：按选择采用新标题/新图标并持久化
+    @AdminAudit("采用重新抓取结果")
     @PostMapping("/{pageId}/refetch/apply")
     fun applyRefetchBookmark(
         @PathVariable pageId: String, @RequestBody params: BookmarkRefetchApplyParams
     ): BookmarkAdminVO = bookmarkAdminService.adminApplyRefetch(pageId, params)
 
     // 手动覆盖式设置某书签的分类
+    @AdminAudit("修改书签分类")
     @PostMapping("/{pageId}/categories")
     fun updateCategories(
         @PathVariable pageId: String, @RequestBody params: BookmarkCategoriesParams
     ): List<CategoryVO> = bookmarkAdminService.adminUpdateCategories(pageId, params.categoryIds)
 
     // 对某书签重新执行 DeepSeek 自动归类
+    @AdminAudit("AI 重新分类")
     @PostMapping("/{pageId}/categorize")
     fun recategorize(@PathVariable pageId: String): List<CategoryVO> =
         bookmarkAdminService.adminRecategorize(pageId)
@@ -78,6 +83,7 @@ class AdminBookmarkManageController(
         bookmarkAdminService.adminSimilarSites(pageId)
 
     // 「一键收录」：异步收录传入的相似网站域名，立即返回；逐站进度经 WebSocket(SIMILAR_INGEST_UPDATE) 推送
+    @AdminAudit("收录相似站点")
     @PostMapping("/{pageId}/similar/ingest")
     fun ingestSimilar(
         @PathVariable pageId: String, @RequestBody params: SimilarIngestParams
@@ -94,6 +100,7 @@ class AdminBookmarkManageController(
         AppNameSuggestVO(bookmarkAdminService.adminGenerateAppName(pageId))
 
     // 删除单个书签信息 (使用POST替换DELETE)
+    @AdminAudit("删除页面")
     @PostMapping("/{pageId}/delete")
     fun deleteBookmark(@PathVariable pageId: Long): ResponseEntity<Void> {
         // 实现删除单个书签信息的逻辑
@@ -101,16 +108,19 @@ class AdminBookmarkManageController(
     }
 
     // 对某个书签进行活性检测：直接调用 scrapper 重新抓取一次，回传其给出的全部字段，并同步落库 isActivity/parseStatus
+    @AdminAudit("手动活性检测")
     @PostMapping("/{pageId}/liveness")
     fun checkBookmarkLiveness(@PathVariable pageId: String): BookmarkLivenessVO =
         bookmarkAdminService.adminCheckLiveness(pageId)
 
     // 图片资产重新抓取：只重抓图片，不覆盖标题/简介、不解锁人工锁；本次没抓到则保留原图
+    @AdminAudit("重抓站点资产")
     @PostMapping("/{pageId}/assets/refetch")
     fun refetchAssets(@PathVariable pageId: String): BookmarkAssetRefetchVO =
         bookmarkAdminService.adminRefetchAssets(pageId)
 
     // 「一键更新」：重新抓取网站信息并直接覆盖持久化标题/简介/图标/高清 LOGO，同步落库 isActivity/parseStatus
+    @AdminAudit("一键更新书签")
     @PostMapping("/{pageId}/refresh")
     fun refreshBookmark(@PathVariable pageId: String): BookmarkAdminVO =
         bookmarkAdminService.adminRefresh(pageId)
@@ -127,6 +137,7 @@ class AdminBookmarkManageController(
         ExtractCollectionLinksResult(bookmarkAdminService.adminExtractCollectionLinks(params.text))
 
     // 步骤2：创建批量抓取任务，立即返回 jobId；每条链接的抓取结果经管理员 WebSocket 逐条推送
+    @AdminAudit("书签集批量抓取")
     @PostMapping("/collections/system/crawl")
     fun startCollectionCrawl(@RequestBody params: StartCollectionCrawlParams): StartCollectionCrawlResult {
         val urls = params.urls.distinct()
@@ -141,11 +152,13 @@ class AdminBookmarkManageController(
         bookmarkAdminService.adminGenerateCollectionMeta(params.bookmarks)
 
     // 发布一条系统书签集（上面三步确认后的最终提交）
+    @AdminAudit("发布系统书签集")
     @PostMapping("/collections/system/publish")
     fun publishSystemCollection(@RequestBody params: PublishSystemCollectionParams): SystemCollectionVO =
         bookmarkAdminService.adminPublishSystemCollection(StpKit.ADMIN.loginIdAsString, params)
 
     // 修改一条系统书签集：标题/描述/包含的书签整体覆盖 (使用POST替换PUT)
+    @AdminAudit("修改系统书签集")
     @PostMapping("/collections/system/{collectionId}/update")
     fun updateSystemCollection(
         @PathVariable collectionId: String, @RequestBody params: PublishSystemCollectionParams
@@ -159,6 +172,7 @@ class AdminBookmarkManageController(
     }
 
     // 修改一条用户书签集 (使用POST替换PUT)
+    @AdminAudit("修改用户书签集")
     @PostMapping("/collections/user/{collectionId}/update")
     fun updateUserCollection(
         @PathVariable collectionId: Long, @RequestBody collectionData: Map<String, Any>

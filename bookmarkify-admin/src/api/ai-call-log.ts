@@ -24,6 +24,12 @@ export interface AiCallLogVO {
   totalTokens?: null | number;
   durationMs: number;
   errorMsg?: null | string;
+  /**
+   * 产生这一行的那次请求的短 id（响应头 X-Request-Id，也打在服务端每行文本日志上）。
+   * 拿它去 `docker logs bookmarkify-api | grep <requestId>` 能捞出那次请求的全部现场 ——
+   * 账本与文本日志从前没有任何共同键，这一列就是补上的那把钥匙。
+   */
+  requestId?: null | string;
   createTime: string;
 }
 

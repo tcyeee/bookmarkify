@@ -48,9 +48,13 @@
         <threshold>${serverChanThreshold}</threshold>
         <windowMinutes>${serverChanWindowMinutes}</windowMinutes>
         <cooldownMinutes>${serverChanCooldownMinutes}</cooldownMinutes>
-        <!-- 只看 ERROR 及以上；WARN/INFO/DEBUG 不参与"连续报错"计数 -->
+        <!-- 放到 WARN 而不是 ERROR：真正的判据在 appender 的 qualifies() 里（ERROR 全收 +
+             带 INFRA 标记的 WARN），而 appender 必须先**看得到** WARN 才挑得出后者。
+             普通 WARN 到了 append() 会被 qualifies() 挡掉，不参与计数。
+             为什么需要这一类：E307「抓取服务不可用」刻意打的是 warn，从前卡在 ERROR 的过滤器
+             让它一条告警都发不出去，而它的后果是用户桌面上的书签转圈 30 分钟。见 LogMarkers -->
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>ERROR</level>
+            <level>WARN</level>
         </filter>
     </appender>
 

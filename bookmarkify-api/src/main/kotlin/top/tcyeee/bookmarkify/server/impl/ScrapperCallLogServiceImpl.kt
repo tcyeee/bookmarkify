@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.server.impl
 
 import com.baomidou.mybatisplus.core.metadata.IPage
+import com.baomidou.mybatisplus.extension.kotlin.KtQueryWrapper
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
 import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.entity.ScrapperCallLogSearchParams
@@ -13,6 +14,7 @@ import top.tcyeee.bookmarkify.entity.entity.ScrapperCallLogEntity
 import top.tcyeee.bookmarkify.mapper.ScrapperCallLogMapper
 import top.tcyeee.bookmarkify.server.IScrapperCallLogService
 import top.tcyeee.bookmarkify.server.asset.IconResolver
+import top.tcyeee.bookmarkify.server.log.LogRetention
 import java.time.LocalDateTime
 
 /**
@@ -91,5 +93,12 @@ class ScrapperCallLogServiceImpl(
                 faviconUrl = faviconByHost[row.urlHost],
             )
         }
+    }
+
+    override fun purgeExpired(): Int {
+        val before = LocalDateTime.now().minusDays(LogRetention.SCRAPPER_CALL_DAYS)
+        return baseMapper.delete(
+            KtQueryWrapper(ScrapperCallLogEntity::class.java).lt(ScrapperCallLogEntity::createTime, before)
+        )
     }
 }

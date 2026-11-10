@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.config.audit.AdminAudit
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.log
@@ -78,6 +79,7 @@ class AdminBookmarkPingLogController(
      * 定时入口（本地连着生产库时不该再自动跑一套），而手动触发是管理员的明示动作，
      * 两者是不同的问题；也正因如此，本地起服务时点这个按钮，跑的是生产库上的一轮真实巡检。
      */
+    @AdminAudit("手动触发巡检")
     @PostMapping("/sweep-trigger")
     fun triggerSweep(@RequestBody params: SweepTriggerParams): SweepTriggerResultVO {
         // 先校验任务名，再看锁：预览拿不到 spec 会抛 E102，这里的语义要一致，

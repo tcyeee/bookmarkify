@@ -129,10 +129,21 @@ jobs:
             cd "$APP_DIR"
             docker compose up -d
 
-            # Health check: poll the API on its host-mapped port (auth/track is a GET that returns 200).
+            # Health check: /internal/health probes PostgreSQL + Redis and answers 200 or 503.
+            #
+            # It used to poll /auth/track, which proved nothing: this API carries business errors
+            # inside an HTTP 200 body, so *every* path — including paths that do not exist — answers
+            # `200 {"ok":false,"code":101,"msg":"请先登录!"}`. `curl -f` was therefore satisfied as
+            # soon as Tomcat bound the port; a jar that could not reach the database still passed the
+            # gate and still sent a "deploy succeeded" WeChat push. (/auth/track itself had been
+            # deleted with the anonymous-session flow — it was only ever matching that fallback.)
+            #
+            # /internal/ is not reachable from the public internet: nginx returns 404 for
+            # /api/internal/ (see deploy/nginx/bookmakify.cc.conf). This curl is on the host, direct
+            # to the container's mapped port, so it bypasses nginx.
             ok=0
             for i in $(seq 1 40); do
-              if curl -fsS http://127.0.0.1:7001/auth/track >/dev/null 2>&1; then ok=1; break; fi
+              if curl -fsS http://127.0.0.1:7001/internal/health >/dev/null 2>&1; then ok=1; break; fi
               sleep 3
             done
 

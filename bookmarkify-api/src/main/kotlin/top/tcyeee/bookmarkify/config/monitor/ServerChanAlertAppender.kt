@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.config.monitor
 
+import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.AppenderBase
 import cn.hutool.http.HttpUtil
@@ -47,17 +48,34 @@ class ServerChanAlertAppender : AppenderBase<ILoggingEvent>() {
         // 防御性保护：这个包本身不产生任何日志，但万一以后有人在这加了一条 log.error，
         // 绝不能让"推送失败"反过来又被自己计数，那样一次网络抖动会自我放大成无限重试。
         if (event.loggerName.startsWith(ALERT_LOGGER_PREFIX)) return
+        if (!qualifies(event)) return
         if (!tracker.onError()) return
         dispatch(event)
     }
 
+    /**
+     * 哪些事件参与"连续报错"计数。
+     *
+     * XML 里的 `ThresholdFilter` 现在放到 WARN，因为 appender 必须**看得到** WARN 才可能挑出
+     * 其中带 [LogMarkers.INFRA] 的那几条；真正的判据在这里，不在过滤器上：
+     *
+     * - `ERROR` 及以上：一律计数（与从前一致）；
+     * - `WARN` + `INFRA` 标记：计数。这是本次新增的那一类 —— "我方基础设施坏了"刻意打成 warn
+     *   （现场另有更完整的记录，且调用量大），但它恰恰是最该有人知道的故障；
+     * - 其余 `WARN`：不计数。这一级有 120 多处调用点，大多是正常控制流里的提示
+     *   （巡检保留原内容、清理了多少行日志），整条纳入等于把告警变成噪音发生器。
+     */
+    private fun qualifies(event: ILoggingEvent): Boolean =
+        event.level.isGreaterOrEqual(Level.ERROR) || LogMarkers.isInfra(event.markerList)
+
     private fun dispatch(event: ILoggingEvent) {
         val title = "⚠️ bookmarkify-api 连续报错"
         val desp = buildString {
+            append("**Level**: ${event.level}${if (LogMarkers.isInfra(event.markerList)) " (INFRA)" else ""}\n\n")
             append("**Logger**: `${event.loggerName}`\n\n")
             append("**Message**: ${event.formattedMessage.take(300)}\n\n")
             event.throwableProxy?.let { append("**Exception**: `${it.className}: ${it.message}`\n\n") }
-            append("触发条件：${windowMinutes} 分钟内连续 ${threshold} 条 ERROR 级别日志\n\n")
+            append("触发条件：${windowMinutes} 分钟内连续 ${threshold} 条 ERROR / INFRA 级别日志\n\n")
             append("请尽快 `docker logs bookmarkify-api` 或后台看板确认现场。")
         }
         executor.submit {

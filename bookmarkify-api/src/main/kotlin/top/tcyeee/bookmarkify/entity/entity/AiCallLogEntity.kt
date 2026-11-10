@@ -3,6 +3,7 @@ package top.tcyeee.bookmarkify.entity.entity
 import cn.hutool.core.util.IdUtil
 import com.baomidou.mybatisplus.annotation.TableId
 import com.baomidou.mybatisplus.annotation.TableName
+import top.tcyeee.bookmarkify.config.monitor.LogContext
 import top.tcyeee.bookmarkify.entity.enums.AiCallScene
 import java.time.LocalDateTime
 
@@ -35,6 +36,18 @@ data class AiCallLogEntity(
     val totalTokens: Int? = null,
     val durationMs: Long,
     val errorMsg: String? = null,
+    /**
+     * 产生这一行的那次 HTTP 请求的短 id（`X-Request-Id`，同时打在每行文本日志里）。
+     *
+     * **默认值刻意是从 MDC 现取的**，而不是让调用方传：这张表的写入点分散在好几个类里，
+     * 多一个必填参数就多一处可以忘记的地方，而忘了之后没有任何症状。构造实体与写库发生在
+     * 同一个线程上，`@Async` 线程池里也有（`MdcTaskDecorator` 把 MDC 透传了进去），
+     * 所以就地取值是对的。定时任务等非 HTTP 入口取不到值，为 null —— 那是事实。
+     *
+     * 有了它，"这条失败记录对应的那几十行文本日志"第一次能被 grep 出来；反向也成立。
+     * 参见 [top.tcyeee.bookmarkify.config.monitor.LogContext]。
+     */
+    val requestId: String? = LogContext.currentRequestId(),
     val createTime: LocalDateTime = LocalDateTime.now(),
 ) {
     companion object {

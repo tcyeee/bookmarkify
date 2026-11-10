@@ -8,6 +8,18 @@ services:
       # nginx (on app_network) reaches this as http://bookmarkify-api:7001; the host
       # mapping is kept only for direct debugging (curl localhost:7001) and CI health checks.
       - "7001:7001"
+    # 容器探活：打 /internal/health（真探 PostgreSQL + Redis，见 InternalHealthController）。
+    # curl 在 eclipse-temurin:21-jre 里自带（/usr/bin/curl），不需要往镜像里装东西。
+    #
+    # 注意它**不会**自动重启容器 —— `restart: unless-stopped` 只认进程退出，不认 unhealthy。
+    # 它买到的是 `docker ps` 里那一列状态：从前"进程活着但连不上数据库"这种半死状态，
+    # 在容器层面与完全正常长得一模一样。start_period 给 40s，JVM 冷启动实测十几秒。
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:7001/internal/health"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     volumes:
       - "/root/bookmarkify/file:/opt/bookmarkify/file"
       - "/root/bookmarkify/logs:/opt/bookmarkify/logs"

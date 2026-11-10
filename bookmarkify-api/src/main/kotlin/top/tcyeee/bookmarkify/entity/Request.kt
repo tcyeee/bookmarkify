@@ -321,6 +321,37 @@ data class UserBehaviorLogSearchParams(
 }
 
 /**
+ * 后台操作审计查询入参。
+ *
+ * 搜索口径与 [UserBehaviorLogSearchParams] 刻意一致（关键字 + 类型 + 时间窗），
+ * 只是"类型"这里是自由文本的动作名（取自 `@AdminAudit`）而不是枚举 —— 动作名是人写给人看的，
+ * 把它做成枚举等于每加一个后台按钮就要改一次跨服务的枚举契约，而审计并不需要那种强约束。
+ */
+data class AdminActionLogSearchParams(
+    @field:Schema(description = "关键字：动作名/路径/操作者昵称 模糊匹配") var keyword: String? = null,
+    @field:Schema(description = "只看失败的操作") var onlyFailed: Boolean? = null,
+    @field:Schema(description = "操作者ID") var operatorId: String? = null,
+    @field:Schema(description = "发生时间下界(含)") var createTimeFrom: LocalDateTime? = null,
+    @field:Schema(description = "发生时间上界(含)") var createTimeTo: LocalDateTime? = null,
+) : PageBean() {
+    fun toWrapper(): Wrapper<AdminActionLogEntity> {
+        val query = KtQueryWrapper(AdminActionLogEntity::class.java)
+        if (!keyword.isNullOrBlank()) {
+            query.and {
+                it.like(AdminActionLogEntity::action, keyword)
+                    .or().like(AdminActionLogEntity::path, keyword)
+                    .or().like(AdminActionLogEntity::operatorName, keyword)
+            }
+        }
+        if (onlyFailed == true) query.eq(AdminActionLogEntity::success, false)
+        operatorId?.takeIf { it.isNotBlank() }?.let { query.eq(AdminActionLogEntity::operatorId, it) }
+        createTimeFrom?.let { query.ge(AdminActionLogEntity::createTime, it) }
+        createTimeTo?.let { query.le(AdminActionLogEntity::createTime, it) }
+        return query.orderByDesc(AdminActionLogEntity::createTime)
+    }
+}
+
+/**
  * 失败站点排行查询入参。
  *
  * 刻意**不继承 [PageBean]**：这是一张排行榜，不是一个可以无限往下翻的数据集。做它的目的是

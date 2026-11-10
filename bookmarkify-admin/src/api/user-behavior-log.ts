@@ -45,6 +45,16 @@ export const USER_BEHAVIOR_TYPE_DESC: Record<
   UserBehaviorType,
   { desc: string; label: string; type: 'info' | 'primary' | 'success' | 'warning' }
 > = {
+  LOGIN: {
+    label: '登录',
+    type: 'primary',
+    desc: '登录成功；详情列是登录方式(ACCOUNT/EMAIL_CODE/GOOGLE/GITHUB/QUICK)。登录失败不在这里——那时往往连 uid 都没有，只记在服务端文本日志里',
+  },
+  LOGOUT: {
+    label: '退出',
+    type: 'info',
+    desc: '主动退出登录。与登录成对，用来看一个会话实际存续了多久',
+  },
   ADD_BOOKMARK: {
     label: '新增书签',
     type: 'success',

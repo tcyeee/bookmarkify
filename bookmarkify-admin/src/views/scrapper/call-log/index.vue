@@ -272,6 +272,10 @@ const gridOptions: VxeGridProps<ScrapperCallLogVO> = {
       width: 200,
       formatter: ({ cellValue }) => formatDateTime(cellValue),
     },
+    // 请求号：服务端文本日志每行都带它（`[requestId]`），拿它 grep 就能看到这次抓取在
+    // 我方链路里的全部上下文。默认隐藏——排查时才需要，平时占位置
+    // (toolbarConfig.custom 让管理员自己勾出来)
+    { field: "requestId", title: "请求号", width: 110, visible: false },
     // field 必填：点击行要弹书签详情，靠它把「操作」列排除在外
     { field: "rowActions", title: "操作", width: 90, fixed: "right", slots: { default: "action" } },
   ],

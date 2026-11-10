@@ -72,7 +72,7 @@ export default class http {
           body: formData,
         })
         const data = (await response.json()) as Result<T>
-        return (await handleResult(data, `UPLOAD::${path}`)) as T
+        return (await handleResult(data, `UPLOAD::${path}`, requestIdOf(response))) as T
       } catch (error) {
         if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) {
           console.error(`[API] 网络错误 UPLOAD::${path}`, error)
@@ -115,7 +115,7 @@ export default class http {
         const text = await response.text()
         if (!text) return null as T
         const data = JSON.parse(text) as Result<T>
-        return (await handleResult(data, `${method}::${path}`)) as T
+        return (await handleResult(data, `${method}::${path}`, requestIdOf(response))) as T
       } catch (error) {
         if ((error instanceof TypeError || error instanceof SyntaxError) && import.meta.client) {
           console.error(`[API] 网络错误 ${method}::${path}`, error)
@@ -134,8 +134,23 @@ function fileIdentity(file: File): string {
   return `${file.name}:${file.size}:${file.lastModified}`
 }
 
+// 后端给每个响应都带了 X-Request-Id(PreRequestFilter 生成)。同一串同时打在服务端每行文本日志上，
+// 并写进 ai_call_log / scrapper_call_log / user_behavior_log 的 request_id 列 ——
+// 也就是说把它显示给用户，用户报障时这一串就是唯一的定位凭据：拿它能把那次请求的全部现场捞出来。
+// 跨域下读得到它靠的是服务端的 Access-Control-Expose-Headers(见 CorsFilterConfig)，
+// 读不到就返回空，提示照旧，不影响任何功能。
+function requestIdOf(response: Response): string {
+  return response.headers.get('X-Request-Id') ?? ''
+}
+
+// 给用户看的错误文案补上请求号。只在真正的故障提示上带，业务提示(1xx)保持原样 ——
+// "该网址已存在"这种提示后面跟一串 id 只会让人困惑
+function withRequestId(text: string, requestId: string): string {
+  return requestId ? `${text} [${requestId}]` : text
+}
+
 // 对返回结果进行检查；requestLabel 形如 "GET::/user/info"，用于让报错能定位到具体请求
-async function handleResult<T>(result: Result<T>, requestLabel: string): Promise<T> {
+async function handleResult<T>(result: Result<T>, requestLabel: string, requestId = ''): Promise<T> {
   if (result.ok) return result.data
 
   // token 失效(101):登出并跳转欢迎页,不再静默重新登录
@@ -157,8 +172,8 @@ async function handleResult<T>(result: Result<T>, requestLabel: string): Promise
   if (result.code.toString().startsWith('3')) return Promise.reject(result)
 
   if (import.meta.client) {
-    console.error(`[API] 未知响应码 ${requestLabel}`, result)
-    useToastStore().error(`Oops,网络错误(${requestLabel}),请重试`)
+    console.error(`[API] 未知响应码 ${requestLabel} requestId=${requestId}`, result)
+    useToastStore().error(withRequestId(`Oops,网络错误(${requestLabel}),请重试`, requestId))
   }
   return Promise.reject(result)
 }

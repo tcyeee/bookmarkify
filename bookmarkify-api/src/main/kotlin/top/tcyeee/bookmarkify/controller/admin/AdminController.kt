@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaIgnore
 import cn.dev33.satoken.stp.SaTokenInfo
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
+import top.tcyeee.bookmarkify.config.audit.AdminAudit
 import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
@@ -25,6 +26,7 @@ class AdminController(private val userService: IUserService) {
 
     @Throttle(byIp = true)
     @SaIgnore
+    @AdminAudit("后台登录")
     @PostMapping("/login")
     fun login(@RequestBody params: AdminLoginParams): SaTokenInfo {
         val user = userService.findByNameAndPwd(params.account, params.password)

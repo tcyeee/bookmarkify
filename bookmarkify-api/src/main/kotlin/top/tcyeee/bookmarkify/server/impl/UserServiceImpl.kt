@@ -25,11 +25,13 @@ import top.tcyeee.bookmarkify.entity.*
 import top.tcyeee.bookmarkify.entity.dto.UserSessionInfo
 import top.tcyeee.bookmarkify.entity.dto.UserSetting
 import top.tcyeee.bookmarkify.entity.entity.*
+import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.mapper.UserMapper
 import top.tcyeee.bookmarkify.mapper.UserPreferenceMapper
 import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IFileService
 import top.tcyeee.bookmarkify.server.IOssObjectService
+import top.tcyeee.bookmarkify.server.IUserBehaviorLogService
 import top.tcyeee.bookmarkify.server.IUserService
 import top.tcyeee.bookmarkify.server.admin.AdminUserViewAssembler
 import top.tcyeee.bookmarkify.utils.BaseUtils
@@ -38,6 +40,7 @@ import top.tcyeee.bookmarkify.utils.MailUtils
 import top.tcyeee.bookmarkify.utils.OssUtils
 import top.tcyeee.bookmarkify.utils.PasswordUtils
 import top.tcyeee.bookmarkify.utils.RedisUtils
+import top.tcyeee.bookmarkify.utils.LogSafe
 import top.tcyeee.bookmarkify.utils.StpKit
 import top.tcyeee.bookmarkify.utils.currentEnvironment
 
@@ -58,6 +61,7 @@ class UserServiceImpl(
     private val bookmarkService: IBookmarkService,
     private val userPreferenceMapper: UserPreferenceMapper,
     private val adminUserViewAssembler: AdminUserViewAssembler,
+    private val userBehaviorLogService: IUserBehaviorLogService,
 ) : IUserService, ServiceImpl<UserMapper, UserInfoEntity>() {
 
     // 不能用全局的 `log` 扩展属性: ServiceImpl 自带一个 org.apache.ibatis.logging.Log 成员会把它遮蔽,
@@ -102,7 +106,34 @@ class UserServiceImpl(
         return userEntity
     }
 
+    /**
+     * 建立一次用户会话 —— **五条登录路径唯一的门**（账号密码 / 邮箱验证码 / Google / GitHub / 快捷）。
+     *
+     * 从前这三行（判断登录态、登出、登入）在五个方法里各写一遍，而"登录成功"这件事一行记录都没有：
+     * `user_behavior_log` 有加书签、有导入、有发分享，**偏偏没有登录**，`user_info` 也没有
+     * `last_login_at`。于是"这个人最后一次登录是什么时候""这个账号最近有没有在异地登录"这类
+     * 最基本的安全问题，在整套系统里没有任何数据源能回答。
+     *
+     * 收成一个方法而不是在五处各加一行审计，是因为后者正是会漏的那种改法 —— 漏掉之后没有症状，
+     * 只是那条登录路径从此在审计里不存在。顺带统一了 `loginByAccount` 那处无条件 logout 的小差异
+     * （未登录时 logout 本来就是空操作，行为不变）。
+     *
+     * @param method 登录方式，落在审计记录的 detail 列上：同一个账号从密码切到 Google 登录，
+     *   在审计里看得出来才有意义。
+     * @return 新会话的 token
+     */
+    private fun startSession(user: UserInfoEntity, method: String): String {
+        if (StpKit.USER.isLogin) StpKit.USER.logout()
+        StpKit.USER.login(user.id, true)
+        // 昵称就在手边，直接传进去，省掉 record() 内部按 uid 的那次反查
+        userBehaviorLogService.record(user.id, UserBehaviorType.LOGIN, method, user.nickName)
+        return StpKit.USER.tokenValue
+    }
+
     override fun loginOut(response: HttpServletResponse) {
+        // 退出同样记一条：审计里只有"登进来"而没有"退出去"，就看不出一个会话实际存续了多久
+        runCatching { StpKit.USER.loginIdAsString }.getOrNull()
+            ?.let { userBehaviorLogService.record(it, UserBehaviorType.LOGOUT) }
         // 清除session
         StpKit.USER.session.clear()
         StpKit.USER.logout()
@@ -128,14 +159,25 @@ class UserServiceImpl(
         val account = String(Base64.getDecoder().decode(params.account)).trim().lowercase()
         // 客户端传来的是 Base64(md5(明文))，解码后即规范凭据（md5 串），不再用它做整列等值查询
         val credential = String(Base64.getDecoder().decode(params.password))
+        // 登录失败此前**一行日志都没有**（这个控制器里一条 log 调用都没有），于是"这个账号是不是
+        // 正在被撞库""这个人到底登录过没有"在整套系统里无从回答。三种失败分开打，因为处置不同：
+        // 账号不存在是枚举尝试，账号被禁是正常拒绝，密码错误才是撞库的形状。
+        // 邮箱按 LogSafe.maskEmail 打码 —— 判断"是不是同一个账号在被反复试"只需要前缀与域名
         val user = ktQuery().eq(UserInfoEntity::email, account).eq(UserInfoEntity::deleted, false).one()
-            ?: throw CommonException(ErrorType.E110)
-        if (user.disabled) throw CommonException(ErrorType.E110)
-        if (!PasswordUtils.matches(credential, user.password)) throw CommonException(ErrorType.E110)
+            ?: run {
+                logger.warn("[登录失败] 账号不存在: account={}", LogSafe.maskEmail(account))
+                throw CommonException(ErrorType.E110)
+            }
+        if (user.disabled) {
+            logger.warn("[登录失败] 账号已禁用: uid={}, account={}", user.id, LogSafe.maskEmail(account))
+            throw CommonException(ErrorType.E110)
+        }
+        if (!PasswordUtils.matches(credential, user.password)) {
+            logger.warn("[登录失败] 密码错误: uid={}, account={}", user.id, LogSafe.maskEmail(account))
+            throw CommonException(ErrorType.E110)
+        }
         upgradePasswordIfLegacy(user, credential)
-        StpKit.USER.logout()
-        StpKit.USER.login(user.id, true)
-        return user.authVO(StpKit.USER.tokenValue).writeToSession()
+        return user.authVO(startSession(user, "ACCOUNT")).writeToSession()
     }
 
     /** 测试环境快捷登录：仅本地环境（ENV=local）开放，登录/自动创建固定测试账号，免密码 */
@@ -143,9 +185,7 @@ class UserServiceImpl(
         if (currentEnvironment() != CurrentEnvironment.LOCAL) throw CommonException(ErrorType.E120)
         val email = "quick-login-test@bookmarkify.local"
         val userEntity = ktQuery().eq(UserInfoEntity::email, email).eq(UserInfoEntity::deleted, false).one() ?: createVerifiedUser(email)
-        if (StpKit.USER.isLogin) StpKit.USER.logout()
-        StpKit.USER.login(userEntity.id, true)
-        return userEntity.authVO(StpKit.USER.tokenValue).writeToSession()
+        return userEntity.authVO(startSession(userEntity, "QUICK")).writeToSession()
     }
 
     override fun changePassword(uid: String, params: ChangePasswordParams): Boolean {
@@ -192,10 +232,8 @@ class UserServiceImpl(
         var isNewUser = false
         val userEntity = ktQuery().eq(UserInfoEntity::email, email).eq(UserInfoEntity::deleted, false).one()
             ?: createVerifiedUser(email).also { isNewUser = true }
-        // 该接口为公开端点,正常调用时无登录态;若携带了有效旧 token 则先登出再切换账户
-        if (StpKit.USER.isLogin) StpKit.USER.logout()
-        StpKit.USER.login(userEntity.id, true)
-        return userEntity.authVO(StpKit.USER.tokenValue, isNewUser).writeToSession()
+        // 该接口为公开端点,正常调用时无登录态;若携带了有效旧 token 则先登出再切换账户(见 startSession)
+        return userEntity.authVO(startSession(userEntity, "EMAIL_CODE"), isNewUser).writeToSession()
     }
 
     /**
@@ -227,9 +265,7 @@ class UserServiceImpl(
                 isNewUser = true
             }
 
-        if (StpKit.USER.isLogin) StpKit.USER.logout()
-        StpKit.USER.login(userEntity.id, true)
-        return userEntity.authVO(StpKit.USER.tokenValue, isNewUser).writeToSession()
+        return userEntity.authVO(startSession(userEntity, "GOOGLE"), isNewUser).writeToSession()
     }
 
     /**
@@ -257,9 +293,7 @@ class UserServiceImpl(
                 isNewUser = true
             }
 
-        if (StpKit.USER.isLogin) StpKit.USER.logout()
-        StpKit.USER.login(userEntity.id, true)
-        return userEntity.authVO(StpKit.USER.tokenValue, isNewUser).writeToSession()
+        return userEntity.authVO(startSession(userEntity, "GITHUB"), isNewUser).writeToSession()
     }
 
     /**

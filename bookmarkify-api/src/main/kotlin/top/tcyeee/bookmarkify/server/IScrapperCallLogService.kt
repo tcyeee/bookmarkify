@@ -31,4 +31,7 @@ interface IScrapperCallLogService : IService<ScrapperCallLogEntity> {
      * 的依据。见 [ScrapperFailedHostVO]。
      */
     fun failedHostRanking(params: ScrapperFailedHostParams): List<ScrapperFailedHostVO>
+
+    /** 清理过期记录，见 [top.tcyeee.bookmarkify.server.log.LogRetention] */
+    fun purgeExpired(): Int
 }

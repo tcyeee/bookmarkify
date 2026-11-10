@@ -116,6 +116,11 @@ const ROLE_LABEL: Record<string, string> = {
           <span>{{ request.maxTokens ?? "-" }}</span>
         </div>
         <div>
+          <!-- 请求号：服务端文本日志每行都带它，拿它能把这次调用的上下游日志串起来 -->
+          <span class="text-gray-400">请求号：</span>
+          <span>{{ row.requestId ?? "-" }}</span>
+        </div>
+        <div>
           <span class="text-gray-400">时间：</span>
           <span>{{ formatDateTime(row.createTime) }}</span>
         </div>

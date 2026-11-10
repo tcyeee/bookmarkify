@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.config.audit.AdminAudit
 import top.tcyeee.bookmarkify.entity.SiteAdminVO
 import top.tcyeee.bookmarkify.entity.SiteBasicInfoUpdateParams
 import top.tcyeee.bookmarkify.entity.SiteSearchParams
@@ -55,6 +56,7 @@ class AdminSiteController(
      *
      * 返回改完之后的完整快照（与 [detail] 同构），调用方就地替换列表行即可，不必整页重查。
      */
+    @AdminAudit("修改站点信息(含 NSFW 判定)")
     @PostMapping("/{siteId}")
     fun updateBasicInfo(
         @PathVariable siteId: String,

@@ -14,7 +14,10 @@ import top.tcyeee.bookmarkify.utils.StpKit
  * @date 3/11/25 15:01
  */
 @Configuration
-class SaTokenConfigure(private val extensionTokenInterceptor: ExtensionTokenInterceptor) : WebMvcConfigurer {
+class SaTokenConfigure(
+    private val extensionTokenInterceptor: ExtensionTokenInterceptor,
+    private val mdcUserInterceptor: MdcUserInterceptor,
+) : WebMvcConfigurer {
     // 注册拦截器
     override fun addInterceptors(registry: InterceptorRegistry) {
         // USER 模块鉴权：拦截所有路径，排除 /admin/**、/extension/**、/internal/** 与 /error
@@ -36,6 +39,10 @@ class SaTokenConfigure(private val extensionTokenInterceptor: ExtensionTokenInte
         // 插件 AccessToken 鉴权：仅拦截 /extension/**
         registry.addInterceptor(extensionTokenInterceptor)
             .addPathPatterns("/extension/**")
+
+        // 日志 MDC 补齐"当前是谁"。**必须注册在上面三个鉴权拦截器之后**：登录态是它们确定的，
+        // 提前注册只会每次都拿到"未登录"。它自己永不拦请求（preHandle 恒 true）
+        registry.addInterceptor(mdcUserInterceptor).addPathPatterns("/**")
     }
 
     // 内容协商：忽略客户端 Accept 头，恒定按 JSON 写响应体——这是一个纯 JSON 的 REST API，

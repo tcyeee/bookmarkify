@@ -10,16 +10,23 @@ import org.springframework.http.converter.HttpMessageConverter
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.http.server.ServerHttpRequest
 import org.springframework.http.server.ServerHttpResponse
+import org.springframework.http.server.ServletServerHttpRequest
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.multipart.support.MissingServletRequestPartException
+import org.springframework.web.servlet.NoHandlerFoundException
+import org.springframework.web.servlet.resource.NoResourceFoundException
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice
+import top.tcyeee.bookmarkify.config.monitor.LogContext
+import top.tcyeee.bookmarkify.config.monitor.LogMarkers
 import top.tcyeee.bookmarkify.config.result.ResultWrapper
 import top.tcyeee.bookmarkify.config.result.ResultWrapper.Companion.error
+import top.tcyeee.bookmarkify.utils.LogSafe
 
 @RestControllerAdvice
 class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
@@ -37,11 +44,18 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
         request: ServerHttpRequest,
         response: ServerHttpResponse
     ): Any? {
-        if (body == null) return ResultWrapper.ok()
-        if (body is ResultWrapper) return body
+        // 顺带把业务码记到 request attribute 上，给请求完成日志用（见 LogContext.BIZ_CODE_ATTR）。
+        // 这里是唯一看得到它的地方：本项目一切都是 HTTP 200，成败只在响应体里
+        if (body == null) return ResultWrapper.ok().also { markBizCode(request, it.code) }
+        if (body is ResultWrapper) return body.also { markBizCode(request, it.code) }
         if (body is String) return body
         if (isSwagger(request)) return body
-        return ResultWrapper.ok(body)
+        return ResultWrapper.ok(body).also { markBizCode(request, it.code) }
+    }
+
+    /** `ServerHttpRequest` 底下就是那个 servlet 请求；拿不到就算了，完成日志那一栏留 `-` */
+    private fun markBizCode(request: ServerHttpRequest, code: Int) {
+        (request as? ServletServerHttpRequest)?.servletRequest?.let { LogContext.markBizCode(it, code) }
     }
 
 
@@ -55,7 +69,15 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
                     // 在 root=INFO 的生产环境里没有任何文本日志痕迹，也不会被 ServerChanAlertAppender
                     // 的"连续报错"监控捕获到。打 warn 而非 error：这些路径通常已有更完整的现场
                     // 记录在别处(scrapper_call_log 等)，这里只是补一条能被聚合监控看到的信号。
-                    log.warn("[基础设施异常] {} | [{}] {}", request.requestURI, e.errorType.name, e.message)
+                    //
+                    // ⚠️ 光是 warn **并不会**被那个监控看到 —— 它的 ThresholdFilter 卡在 ERROR。
+                    // 带上 LogMarkers.INFRA 才会：级别保持 warn（文本日志里的噪音权重不变），
+                    // 但 appender 认这个标记并把它与 ERROR 一同计入"连续报错"。E307 的代价是
+                    // 用户桌面上的书签转圈 30 分钟，它不该是一条没人会收到的日志。
+                    log.warn(
+                        LogMarkers.INFRA,
+                        "[基础设施异常] {} | [{}] {}", request.requestURI, e.errorType.name, e.message
+                    )
                 } else {
                     // 业务异常属正常控制流，仅 debug 记录，避免噪声与栈打印
                     log.debug("[业务异常] {} | [{}] {}", request.requestURI, e.errorType.name, e.message)
@@ -95,6 +117,17 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
 
             is MethodArgumentTypeMismatchException ->
                 badRequest("参数 ${e.name} 类型错误，期望 ${e.requiredType?.simpleName ?: "?"}", e, request)
+
+            // 方法不对 / 路径不存在：同样是调用方的错，而它们此前一路落到 else 分支 —— 也就是
+            // **ERROR + 完整栈 + E999「服务器繁忙」**。代价不只是噪音：`/api/` 下的一切都从公网
+            // 够得到，于是任何扫描器用错方法打三次（或挨个猜路径），就凑满了
+            // ServerChanAlertAppender 的「5 分钟 3 条 ERROR」，把一次无害探测变成一条微信告警。
+            // 实测：`GET /auth/login`（它是 POST）当场打出一条 ERROR 带 40 行栈。
+            is HttpRequestMethodNotSupportedException ->
+                badRequest("请求方法不支持: ${e.method}，应为 ${e.supportedMethods?.joinToString("/") ?: "?"}", e, request)
+
+            is NoHandlerFoundException, is NoResourceFoundException ->
+                badRequest("接口不存在", e, request)
 
             is RedisCommandTimeoutException -> print(ErrorType.E203, e, request)
             else -> print(ErrorType.E999, e, request)
@@ -146,9 +179,8 @@ class GlobalExceptionHandler : ResponseBodyAdvice<Any> {
             "referer=${request.getHeader("Referer") ?: "-"} | ua=${request.getHeader("User-Agent") ?: "-"}"
     }
 
-    /** token 仅保留首尾，避免整串泄漏到日志 */
-    private fun mask(token: String): String =
-        if (token.length <= 8) "***" else "${token.take(4)}…${token.takeLast(4)}"
+    /** token 仅保留首尾，避免整串泄漏到日志。实现收口到 [LogSafe]，与限流日志共用同一套判断 */
+    private fun mask(token: String): String = LogSafe.maskToken(token)
 
     private fun isSwagger(request: ServerHttpRequest): Boolean {
         val path = request.uri.path

@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.config.audit.AdminAudit
 import top.tcyeee.bookmarkify.entity.ShareAdminDetailVO
 import top.tcyeee.bookmarkify.entity.ShareSearchParams
 import top.tcyeee.bookmarkify.entity.UserShareAdminVO
@@ -36,6 +37,7 @@ class AdminShareController(
     @GetMapping("/detail")
     fun detail(@RequestParam id: String): ShareAdminDetailVO? = userShareService.adminDetail(id)
 
+    @AdminAudit("下架用户分享")
     @PostMapping("/takedown")
     fun takedown(@RequestParam id: String): Boolean = userShareService.adminTakeDown(id)
 }

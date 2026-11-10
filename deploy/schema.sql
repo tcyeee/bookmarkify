@@ -68,6 +68,28 @@ CREATE TABLE public.access_token (
 
 
 --
+-- Name: admin_action_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.admin_action_log (
+    id character varying(40) NOT NULL,
+    action character varying(64) NOT NULL,
+    handler character varying(200) NOT NULL,
+    http_method character varying(10),
+    path character varying(500),
+    target_id character varying(64),
+    params character varying(1000),
+    success boolean NOT NULL,
+    error_msg character varying(500),
+    operator_id character varying(64),
+    operator_name character varying(200),
+    duration_ms bigint DEFAULT 0 NOT NULL,
+    request_id character varying(16),
+    create_time timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: admin_grid_config; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -100,7 +122,8 @@ CREATE TABLE public.ai_call_log (
     total_tokens integer,
     duration_ms bigint DEFAULT 0 NOT NULL,
     error_msg character varying(500),
-    create_time timestamp without time zone DEFAULT now() NOT NULL
+    create_time timestamp without time zone DEFAULT now() NOT NULL,
+    request_id character varying(16)
 );
 
 
@@ -390,7 +413,8 @@ CREATE TABLE public.scrapper_call_log (
     create_time timestamp without time zone DEFAULT now() NOT NULL,
     layer_used character varying(20),
     error_code character varying(64),
-    target_status integer
+    target_status integer,
+    request_id character varying(16)
 );
 
 
@@ -537,7 +561,8 @@ CREATE TABLE public.user_behavior_log (
     nick_name_snapshot character varying(200),
     behavior_type character varying(32) NOT NULL,
     detail character varying(500),
-    create_time timestamp without time zone DEFAULT now() NOT NULL
+    create_time timestamp without time zone DEFAULT now() NOT NULL,
+    request_id character varying(16)
 );
 
 
@@ -636,6 +661,14 @@ CREATE TABLE public.user_share_bookmark (
 
 ALTER TABLE ONLY public.access_token
     ADD CONSTRAINT access_token_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: admin_action_log admin_action_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.admin_action_log
+    ADD CONSTRAINT admin_action_log_pkey PRIMARY KEY (id);
 
 
 --
@@ -941,6 +974,27 @@ CREATE INDEX idx_access_token_uid ON public.access_token USING btree (uid);
 
 
 --
+-- Name: idx_admin_action_log_create_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_admin_action_log_create_time ON public.admin_action_log USING btree (create_time DESC);
+
+
+--
+-- Name: idx_admin_action_log_failed; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_admin_action_log_failed ON public.admin_action_log USING btree (create_time DESC) WHERE (success = false);
+
+
+--
+-- Name: idx_admin_action_log_operator; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_admin_action_log_operator ON public.admin_action_log USING btree (operator_id, create_time DESC);
+
+
+--
 -- Name: idx_ai_call_log_create_time; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1204,6 +1258,13 @@ CREATE INDEX idx_uln_parent ON public.user_layout_node USING btree (parent_id) W
 --
 
 CREATE INDEX idx_uln_uid ON public.user_layout_node USING btree (uid);
+
+
+--
+-- Name: idx_user_behavior_log_create_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_behavior_log_create_time ON public.user_behavior_log USING btree (create_time);
 
 
 --

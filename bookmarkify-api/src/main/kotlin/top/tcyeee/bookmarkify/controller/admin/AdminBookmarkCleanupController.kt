@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.Operation
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.config.audit.AdminAudit
 import top.tcyeee.bookmarkify.entity.OrphanCleanupReport
 import top.tcyeee.bookmarkify.server.repair.OrphanCleanupService
 
@@ -27,6 +28,7 @@ class AdminBookmarkCleanupController(
     fun preview(): OrphanCleanupReport = orphanCleanupService.run(dryRun = true)
 
     @Operation(summary = "执行清理：删除无人引用的本地/IP 与已失活页面及其站点")
+    @AdminAudit("执行孤儿清理")
     @PostMapping("/run")
     fun run(): OrphanCleanupReport = orphanCleanupService.run(dryRun = false)
 }

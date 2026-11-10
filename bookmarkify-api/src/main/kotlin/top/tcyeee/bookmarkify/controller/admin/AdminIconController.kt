@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.config.audit.AdminAudit
 import top.tcyeee.bookmarkify.entity.AssetVerdictRecomputeReport
 import top.tcyeee.bookmarkify.entity.IconVerdictOverviewVO
 import top.tcyeee.bookmarkify.entity.IconVerdictQueryParams
@@ -45,6 +46,7 @@ class AdminIconController(
      * 做成显式按钮而不是启动时自动跑：它会改写全站图标的显示结果，必须是一个有人按下、
      * 有日志、可复测的动作。`dryRun=true` 只统计不写库，改规则前先空跑一次看变更量。
      */
+    @AdminAudit("重算图标判定")
     @PostMapping("/recompute-verdict")
     fun recomputeVerdict(@RequestParam(defaultValue = "false") dryRun: Boolean): AssetVerdictRecomputeReport =
         assetVerdictRecomputeService.recomputeAll(dryRun)
