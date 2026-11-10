@@ -30,8 +30,8 @@ class ScrapeResponseApplyToTest {
         siteId = "site-example",
     )
 
-    private fun response(finalUrl: String) =
-        ScrapeResponse(fetch = FetchInfo(finalUrl = finalUrl, httpStatus = 200))
+    private fun response(finalUrl: String, meta: PageMeta? = null) =
+        ScrapeResponse(fetch = FetchInfo(finalUrl = finalUrl, httpStatus = 200), meta = meta)
 
     @Test
     fun `http page landing on https is upgraded`() {
@@ -83,5 +83,39 @@ class ScrapeResponseApplyToTest {
         val page = page("http")
         response("not a url").applyTo(page)
         assertEquals("http", page.urlScheme)
+    }
+
+    // ────── 抓取值按列宽截断 ──────
+
+    /**
+     * `page.title` 是 varchar(200)。GitHub 仓库页的 `<title>` 是 `owner/repo: 描述`，长描述
+     * 会超过 200 字符，直接落库会抛 `value too long for type character varying(200)`，整条解析
+     * 失败还会被对账任务反复重试。截断而不是拒绝。
+     */
+    @Test
+    fun `title longer than 200 chars is truncated to the column width`() {
+        val page = page("https")
+        val longTitle = "A".repeat(460)
+        response("https://example.com/", meta = PageMeta(title = longTitle)).applyTo(page)
+        assertEquals(200, page.title!!.length)
+        assertEquals(longTitle.take(200), page.title)
+    }
+
+    /** `page.description` 是 varchar(1000)，同类截断，防止抓取值过长把解析整条带崩 */
+    @Test
+    fun `description longer than 1000 chars is truncated to the column width`() {
+        val page = page("https")
+        val longDescription = "B".repeat(2000)
+        response("https://example.com/", meta = PageMeta(description = longDescription)).applyTo(page)
+        assertEquals(1000, page.description!!.length)
+        assertEquals(longDescription.take(1000), page.description)
+    }
+
+    /** 短标题原样保留：截断只在确实超长时才发生 */
+    @Test
+    fun `short title passes through untouched`() {
+        val page = page("https")
+        response("https://example.com/", meta = PageMeta(title = "short title")).applyTo(page)
+        assertEquals("short title", page.title)
     }
 }

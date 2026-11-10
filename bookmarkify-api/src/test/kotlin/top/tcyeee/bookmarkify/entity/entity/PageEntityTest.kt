@@ -1,6 +1,7 @@
 package top.tcyeee.bookmarkify.entity.entity
 
 import top.tcyeee.bookmarkify.entity.dto.BookmarkUrlWrapper
+import top.tcyeee.bookmarkify.entity.dto.BookmarkWrapper
 import top.tcyeee.bookmarkify.entity.enums.PageLockedField
 import java.time.LocalDateTime
 import kotlin.test.Test
@@ -102,5 +103,22 @@ class PageEntityTest {
     fun `unknown values in the column are ignored`() {
         val bookmark = bookmarkParsedAt(null).apply { lockedFields = "TITLE, WHAT_IS_THIS ,,APP_NAME" }
         assertEquals(setOf(PageLockedField.TITLE, PageLockedField.APP_NAME), bookmark.lockedFieldSet)
+    }
+
+    // ────── 抓取值按列宽截断 ──────
+
+    /**
+     * 本地 Jsoup 路径（`successInit`）同样要截断：`page.title` 是 varchar(200)，而 `<title>` 标签
+     * 长过 200 字符的页面并不罕见（GitHub 仓库页）。落库前按列宽截断，避免整条解析报错。
+     */
+    @Test
+    fun `successInit truncates an overlong title to 200 chars`() {
+        val longTitle = "C".repeat(460)
+        val bookmark = bookmarkParsedAt(null).apply {
+            successInit(BookmarkWrapper(title = longTitle, description = "D".repeat(2000)))
+        }
+        assertEquals(200, bookmark.title!!.length)
+        assertEquals(longTitle.take(200), bookmark.title)
+        assertEquals(1000, bookmark.description!!.length)
     }
 }

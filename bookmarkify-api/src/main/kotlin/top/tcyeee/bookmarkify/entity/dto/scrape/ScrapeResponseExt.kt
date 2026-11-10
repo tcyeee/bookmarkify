@@ -108,8 +108,11 @@ val ScrapeResponse.screenshotUrl: String?
  * `site_page_meta`，主表这份是给列表查询用的冗余。
  */
 fun ScrapeResponse.applyTo(bookmark: PageEntity): PageEntity = bookmark.apply {
-    title = this@applyTo.title
-    description = this@applyTo.description
+    // title/description 列分别是 varchar(200)/varchar(1000)，抓取值可能更长（GitHub 仓库页的
+    // <title> 是 `owner/repo: 描述`，长描述直接超 200）。按列宽截断，否则 insertOrUpdate
+    // 抛 DataIntegrityViolationException，整条解析失败还反复被对账任务重试。
+    title = this@applyTo.title?.take(PageEntity.MAX_TITLE_LENGTH)
+    description = this@applyTo.description?.take(PageEntity.MAX_DESCRIPTION_LENGTH)
     isActivity = true
     parseStatus = ParseStatusEnum.SUCCESS
     parseErrMsg = null

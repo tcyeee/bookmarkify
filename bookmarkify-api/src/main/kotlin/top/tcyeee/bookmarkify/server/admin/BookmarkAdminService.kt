@@ -233,7 +233,7 @@ class BookmarkAdminService(
 
         // 管理员显式选择采用抓取来的标题：这个字段此后不再是人工值，解锁交回自动链路
         if (params.useNewTitle) {
-            bookmark.title = vo.title
+            bookmark.title = vo.title?.take(PageEntity.MAX_TITLE_LENGTH)
             bookmark.unlock(PageLockedField.TITLE)
         }
         // 资产是整体替换的：图标与 LOGO 同源于一次抓取，没法只采用其中一半而保持一致，
@@ -261,8 +261,8 @@ class BookmarkAdminService(
         runCatching { apiService.scrape(bookmark.rawUrl, apiService.scrapeRequest(bookmark.rawUrl, CacheMode.BYPASS)) }.fold(
             onSuccess = { vo ->
                 parseStateWriter.markSucceeded(bookmark).apply {
-                    title = vo.title
-                    description = vo.description
+                    title = vo.title?.take(PageEntity.MAX_TITLE_LENGTH)
+                    description = vo.description?.take(PageEntity.MAX_DESCRIPTION_LENGTH)
                     // 「一键更新」是管理员显式要求采用抓取值，标题/简介此后不再是人工值 → 解锁
                     unlock(PageLockedField.TITLE, PageLockedField.DESCRIPTION)
                 }
@@ -288,8 +288,8 @@ class BookmarkAdminService(
         val bookmark = bookmarkService.findListByUrl(listOf(url)).firstOrNull() ?: return false
         log.debug("[adminSyncFromExternalScrape] 网站管理活性检测命中已有书签，同步落库: pageId=${bookmark.id}, url=$url")
         parseStateWriter.markSucceeded(bookmark).apply {
-            title = vo.title
-            description = vo.description
+            title = vo.title?.take(PageEntity.MAX_TITLE_LENGTH)
+            description = vo.description?.take(PageEntity.MAX_DESCRIPTION_LENGTH)
         }
         siteAssetWriter.persist(bookmark.siteId, bookmark.id, bookmark.rawUrl, vo, 0, bookmark.isRootPage)
         pageMapper.updateById(bookmark)

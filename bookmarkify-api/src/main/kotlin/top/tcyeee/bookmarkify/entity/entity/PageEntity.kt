@@ -111,8 +111,10 @@ data class PageEntity(
         this.appName = wrapper.name
         this.isActivity = true
         this.parseErrMsg = null
-        this.title = wrapper.title
-        this.description = wrapper.description
+        // 页面 <title> 长过 200 字符的并不罕见（GitHub 仓库页的 <title> 是 `owner/repo: 描述`，
+        // 描述一长就超），而 title 列是 varchar(200)。截断而不是拒绝：丢几个字远好过整条解析报错
+        this.title = wrapper.title?.take(MAX_TITLE_LENGTH)
+        this.description = wrapper.description?.take(MAX_DESCRIPTION_LENGTH)
         this.parseStatus = ParseStatusEnum.SUCCESS
         this.antiCrawlerBlocked = wrapper.antiCrawlerDetected
         this.updateTime = LocalDateTime.now()
@@ -150,5 +152,11 @@ data class PageEntity(
     companion object {
         /** 解析结果的有效期：超过这么久，用户再添加同一网址时重抓一次。 */
         private const val STALE_AFTER_HOURS = 24L
+
+        /** 对应 `page.title varchar(200)`（见 deploy/schema.sql）。抓取来的标题落库前必须截断。 */
+        const val MAX_TITLE_LENGTH = 200
+
+        /** 对应 `page.description varchar(1000)`（见 deploy/schema.sql）。 */
+        const val MAX_DESCRIPTION_LENGTH = 1000
     }
 }
