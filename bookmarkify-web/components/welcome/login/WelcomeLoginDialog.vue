@@ -22,7 +22,10 @@
     </div>
     <div class="mt-4 flex flex-col items-center gap-3">
       <GoogleLoginButton />
-      <GithubLoginButton @success="onSuccess" />
+      <!-- 整页跳转到 github.com 官方授权页，而不是弹窗——弹窗在用户已授权过本应用时会被 GitHub 瞬间自动关闭，
+           表现为"点了按钮毫无反应就直接登录成功"，体验上不够正式。登录结果在回调页 pages/auth/github/callback.vue 处理，
+           这里不会触发 success 事件。 -->
+      <GithubLoginButton redirect />
     </div>
 
     <!-- 测试环境快捷登录：仅本地开发环境显示，免密码登录固定测试账号 -->
