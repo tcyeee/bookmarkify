@@ -6,6 +6,7 @@ import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import top.tcyeee.bookmarkify.config.async.AsyncConfig
 import top.tcyeee.bookmarkify.server.IBookmarkService
+import top.tcyeee.bookmarkify.server.parse.ParseFailureRecorder
 
 /**
  * 书签异步解析事件监听器，取代原 KafkaMessageListener。
@@ -14,20 +15,31 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
  * （与 Kafka 时期 auto-commit + 吞异常的行为一致），失败记录由 checkAll() 定时对账兜底重解析。
  */
 @Component
-class BookmarkParseEventListener(private val bookmarkService: IBookmarkService) {
+class BookmarkParseEventListener(
+    private val bookmarkService: IBookmarkService,
+    private val parseFailureRecorder: ParseFailureRecorder,
+) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Async(AsyncConfig.BOOKMARK_PARSE_EXECUTOR)
     @EventListener
     fun onParse(event: BookmarkParseEvent) = runCatching {
         bookmarkService.parseAndSave(event.pageId)
-    }.onFailure { log.error("[Async] BookmarkParseEvent 处理失败: pageId={}", event.pageId, it) }.let { }
+    }.onFailure {
+        // 栈进文本日志，同时落一条可查询的失败快照 —— 只有日志的话，这种"抓取成功但落库失败"
+        // 的故障在结构化数据里不留任何痕迹。见 ParseFailureRecorder
+        log.error("[Async] BookmarkParseEvent 处理失败: pageId={}", event.pageId, it)
+        parseFailureRecorder.record(event.pageId, it)
+    }.let { }
 
     @Async(AsyncConfig.BOOKMARK_PARSE_EXECUTOR)
     @EventListener
     fun onParseAndNotice(event: BookmarkParseAndNoticeEvent) = runCatching {
         bookmarkService.parseAndNotice(event.uid, event.pageId, event.userLinkId, event.nodeLayoutId)
-    }.onFailure { log.error("[Async] BookmarkParseAndNoticeEvent 处理失败: pageId={}", event.pageId, it) }.let { }
+    }.onFailure {
+        log.error("[Async] BookmarkParseAndNoticeEvent 处理失败: pageId={}", event.pageId, it)
+        parseFailureRecorder.record(event.pageId, it)
+    }.let { }
 
     @Async(AsyncConfig.BOOKMARK_PARSE_EXECUTOR)
     @EventListener

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service
 import top.tcyeee.bookmarkify.config.entity.DeepSeekConfig
 import top.tcyeee.bookmarkify.config.entity.ScrapperConfig
 import top.tcyeee.bookmarkify.config.exception.CommonException
+import top.tcyeee.bookmarkify.config.monitor.LogMarkers
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.log
 import top.tcyeee.bookmarkify.entity.dto.AiReviewOutcome
@@ -278,7 +279,11 @@ class ApiServiceImpl(
                     errorMsg = errorMsg?.take(500),
                 )
             )
-        }.onFailure { log.warn("[logScrapperCall] 写入 scrapper 调用日志失败: ${it.message}") }
+        }.onFailure {
+            // 带 INFRA 标记：账本写不进去意味着**观测本身坏了**（最常见的原因是列还没迁移），
+            // 而这件事从前只有一行没人看的 warn —— 代价是整段窗口里一条抓取调用都查不到
+            log.warn(LogMarkers.INFRA, "[logScrapperCall] 写入 scrapper 调用日志失败: ${it.message}")
+        }
     }
 
     /**
@@ -382,7 +387,7 @@ class ApiServiceImpl(
                     errorMsg = errorMsg?.take(500),
                 )
             )
-        }.onFailure { log.warn("[logAiCall] 写入 AI 调用日志失败: ${it.message}") }
+        }.onFailure { log.warn(LogMarkers.INFRA, "[logAiCall] 写入 AI 调用日志失败: ${it.message}") }
     }
 
     override fun inferAppName(title: String): String? {
@@ -703,7 +708,12 @@ class ApiServiceImpl(
         }.getOrElse {
             // 传输层异常必然发生在 API ↔ scrapper 之间：目标站点能否打开是由 scrapper
             // 判定后写在响应体里的，我方连响应都没拿到，对站点死活没有任何结论
-            log.warn("[pingWebsite] 抓取服务不可达，本次探测无结论: url=$targetUrl, endpoint=$endpoint, err=${it.message}$scrapperStartupHint")
+            // INFRA：这是我方链路断了（不是站点的事），整轮巡检会因此全部无结论。
+            // 它与 E307 同源，必须能触发告警 —— 见 LogMarkers
+            log.warn(
+                LogMarkers.INFRA,
+                "[pingWebsite] 抓取服务不可达，本次探测无结论: url=$targetUrl, endpoint=$endpoint, err=${it.message}$scrapperStartupHint"
+            )
             return PingProbeResult(PingOutcome.UNKNOWN)
         }
 
@@ -739,7 +749,11 @@ class ApiServiceImpl(
 
         val body = runCatching { objectMapper.readValue<PingResponse>(httpResponse.body()) }.getOrElse {
             // 契约对不上是我方两侧代码不同步，同样不是站点的问题
-            log.warn("[pingWebsite] 响应解析失败(契约不匹配)，本次探测无结论: url=$targetUrl, err=${it.message}")
+            // 契约对不上是我方两侧代码不同步，与目标站点无关 —— 同样是 INFRA
+            log.warn(
+                LogMarkers.INFRA,
+                "[pingWebsite] 响应解析失败(契约不匹配)，本次探测无结论: url=$targetUrl, err=${it.message}"
+            )
             return PingProbeResult(PingOutcome.UNKNOWN)
         }
 

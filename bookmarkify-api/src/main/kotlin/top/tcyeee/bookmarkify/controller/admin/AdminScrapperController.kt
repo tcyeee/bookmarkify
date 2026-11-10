@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.config.audit.AdminAudit
 import top.tcyeee.bookmarkify.entity.dto.ScrapeDebugVO
 import top.tcyeee.bookmarkify.entity.dto.ScrapePreviews
 import top.tcyeee.bookmarkify.entity.dto.scrape.ScrapeRequest
@@ -40,6 +41,7 @@ class AdminScrapperController(
      * 后台拿裸 key 渲染不出任何东西。签名是本服务的职责，所以在这里补上 —— 但补在
      * [ScrapeDebugVO.previews] 里，[ScrapeDebugVO.response] 仍是 scrapper 的原样输出。
      */
+    @AdminAudit("调试抓取")
     @PostMapping("/scrape")
     @Operation(summary = "以完整参数调用 scrapper 并原样返回响应，附后台预览用的签名地址（无副作用）")
     fun scrape(@RequestBody request: ScrapeRequest): ScrapeDebugVO {

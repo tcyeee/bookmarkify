@@ -200,6 +200,7 @@ HTTP → PreRequestFilter (20 req/s) → SaTokenConfigure (auth) → Controller 
 | `oss_object` | **The ledger for every object in the OSS bucket** — one row per set of bytes, no owner. Replaced `user_file`; see root `FILE-SYSTEM-REFACTOR.md` |
 | `site_asset` / `page_meta` / `scrape_snapshot` | Crawl results, one writer (`SiteAssetWriter`), crawl facts only (replaced `bookmark_logo`; see root `CLAUDE.md`). A fourth, `site_display_pref`, held admin icon tweaks and was dropped on 2026-08-17 — icon quality is a rules problem, see `docs/ICON-DISPLAY-TODO.md` |
 | `page_ping_log` | One row per liveness probe (`outcome` = ALIVE/DEAD/UNKNOWN), purged after 90 days |
+| `admin_action_log` | One row per **consequential admin action** (every endpoint tagged `@AdminAudit`) — operator + target + redacted params + success/error + `request_id`. Purged after 2 years. See *Logging & observability* |
 | `sweep_log` | One row per **sweep round** — candidates/backlog/outcome counts/deferred/breaker reason. The sweep's only SLI; see "Liveness sweeps" |
 | `ai_call_log` | One row per DeepSeek call, **including request/response bodies** — see below |
 | `system_config` | Generic key-value config (JSON), e.g. the liveness sweep intervals |
@@ -383,6 +384,24 @@ The deadlock came from the abort path returning *before* the persist loop, so `n
 
 **Pools and mutual exclusion.** Sweeps run on `bookmarkSweepExecutor` (1 thread, no queue) rather than the parse pool, so a long round cannot push user-facing adds into `CallerRunsPolicy`. Inside a round, pings go out `AsyncConfig.PING_CONCURRENCY`-wide on `bookmarkPingExecutor` — **this value is coupled to the scrapper's `MAX_CONCURRENT_REQUESTS` (default 32)**: exceed it and `load_shed` returns 503s, which register as `UNKNOWN` and trip the breaker, i.e. too much concurrency makes the sweep abort itself. `ParseLock.sweep(taskLabel)` guarantees one round at a time; `@Async` removed the scheduler's built-in non-overlap guarantee, and being in Redis the lock also covers multi-instance deploys.
 
+### Logging & observability
+
+The logs here are **two layers**, and a 2026-11-10 pass joined them and closed the holes each one had.
+
+**Layer 1 — the text log.** `logback-spring.xml`: console + a rolling file (`!dev` only, 100MB/day, 30 days, 2GB cap). Every line carries `[requestId]` (`PreRequestFilter`, 8 chars, propagated into the `@Async` pools by `MdcTaskDecorator`); `MdcUserInterceptor` adds `uid` to the MDC once a realm has authenticated (it must be registered **after** the Sa-Token interceptors — the Sa-Token context does not exist at filter time). `PreRequestFilter` now logs one line **per completed request**: `method uri -> <http>/<bizCode> cost=..ms uid=..`, `warn` when the business code is a failure (E101 excluded — expired-token polling is routine) or the request crossed 1.5s. The business code is the only signal available: this API answers HTTP 200 for everything, so neither the servlet status nor nginx's access log can distinguish success from failure. `GlobalExceptionHandler` stashes it (`LogContext.BIZ_CODE_ATTR`) from both of its exits.
+
+**Layer 2 — the ledgers.** `ai_call_log`, `scrapper_call_log`, `page_ping_log`, `sweep_log`, `user_behavior_log`, `config_change_log`, `admin_action_log`, plus `scrape_snapshot`. The four written on a request thread (`ai_call_log`, `scrapper_call_log`, `user_behavior_log`, `admin_action_log`) now carry `request_id` — that column is what makes a pivot between the two layers possible at all. The sweep pair is keyed the other way (`page_ping_log.sweep_id` → its round) because nothing in it comes from an HTTP request.
+
+Rules that are easy to get wrong:
+
+- **`LogRetention` owns every retention period.** Four of these tables had never deleted a row. `purgeExpiredLogTables` (03:05) runs them through `LogRetentionService`; `ai_call_log` is two-tier (bodies 30d, rows 1y).
+- **Alerting is by blame, not by level.** `ServerChanAlertAppender` fires on ERROR **or** WARN + `LogMarkers.INFRA`. Mark "our chain is broken" lines (E307/E306, scrapper unreachable, a failed ledger write) with `INFRA`; leave per-site failures unmarked.
+- **`GET /internal/health`** probes PostgreSQL + Redis and answers 200/503 — the CI gate and the Compose healthcheck both use it. Do not point a health probe at a business endpoint again (see root `CLAUDE.md`).
+- **Debug level is reachable at runtime** via `POST /admin/log-level/set` (`LogLevelService`): ADMIN realm, mandatory TTL (default 30 min, max 24h) with automatic revert, and the change itself is audited. There are ~194 `log.debug` calls in this codebase and production runs at INFO; before this, reading one meant a redeploy. Actuator is deliberately not used — nginx forwards `/api/` wholesale, so its endpoints would be public (the `TestController` lesson).
+- **`@AdminAudit` on consequential admin endpoints only**, with `AuditParamRedactor` masking credential-shaped field names. Reasoning in root `CLAUDE.md`.
+- **`LogSafe` for anything secret-shaped** (`maskToken` / `maskEmail`). Login failures in `UserServiceImpl` log a masked account plus which of the three reasons it was; successful logins go to `user_behavior_log` as `LOGIN`/`LOGOUT` through the single door `startSession`.
+- **`ParseFailureRecorder` makes "the scrape worked but the write failed" visible.** The 2026-11-09/10 `title varchar(200)` overflow produced `scrapper_call_log.success = true`, an empty `page.parse_err_msg`, no failure snapshot, and 156 stack traces a day in a file that is deleted after 30 days — i.e. a user-visible symptom with **zero** structured trace. The parse event listener now also writes a failure `scrape_snapshot` row.
+
 ### Redis Cache Keys
 
 - `CODE_PHONE:<uid>` / `CODE_EMAIL:<uid>` / `CAPTCHA_CODE:<uid>` — Verification codes (3-15 min TTL)
@@ -400,9 +419,10 @@ The deadlock came from the abort path returning *before* the persist loop, so `n
 - **Error codes:** Defined in `config/exception/ErrorType.kt` (E101–E999)
 - **Logging:** `LoggingExtensions.kt` provides a `log` extension property on any receiver. **It does not work inside `ServiceImpl` subclasses** — MyBatis-Plus's `ServiceImpl` carries its own `org.apache.ibatis.logging.Log` member that shadows it, and that interface has no `info()` and no placeholder overloads. There, declare `private val logger = LoggerFactory.getLogger(javaClass)` (as `SiteServiceImpl` / `UserServiceImpl` do)
 - **User context:** `BaseUtils.uid()` and `BaseUtils.user()` retrieve current user from Sa-Token session
-- **Tests:** 235 cases in `src/test/kotlin/`. They are **not** evenly distributed and you should know the shape before trusting them:
+- **Tests:** 290 cases in `src/test/kotlin/`. They are **not** evenly distributed and you should know the shape before trusting them:
   - the bulk is pure-function policy tests (`AssetRolePolicy`, `LivenessPolicy`, `SsrfGuard`, `WebsiteParser`, `ScrapeContract`, `JsonConfigAccessor`) — the part least likely to be wrong;
   - `RegistryCoverageTest` / `SharedEnumContractTest` guard two hand-maintained lists and the frontend enum contract by reflection;
+  - the observability set pins the things that fail *silently*: `LogSafeTest` (a credential must never reach a log line), `AuditParamRedactorTest` + `AdminAuditAspectTest` (a password must never reach `admin_action_log`; a failed admin action must still be recorded **and** still throw), `PreRequestFilterTest` (the completion line's level/uid/business code — the uid is read from a request attribute precisely because the interceptor clears the MDC first, and that mistake has no symptom beyond a permanently empty column);
   - `PageConstraintTest` boots a **real embedded PostgreSQL** (zonky, no Docker required) to verify what only a database can: the partial predicate on `uk_bookmark_uid_page`, concurrent inserts converging on it and on `uk_page_canonical`, and that `insertNodeAndLink`'s transaction leaves no orphan layout node. Those were previously asserted only in comments — and the indexes are hand-applied migrations, so "this environment never created it" is a real state with no symptom.
   - **there are still no Spring-context, controller, or mapper tests.** Bean wiring is checked only by the compiler; a missing `@Component` on a newly injected dependency surfaces at boot, not in CI.
 

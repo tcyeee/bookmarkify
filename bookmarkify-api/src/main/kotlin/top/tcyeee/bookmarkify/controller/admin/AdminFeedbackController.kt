@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.config.audit.AdminAudit
 import top.tcyeee.bookmarkify.entity.FeedbackBatchParams
 import top.tcyeee.bookmarkify.entity.FeedbackSearchParams
 import top.tcyeee.bookmarkify.entity.FeedbackTargetSaveParams
@@ -34,6 +35,7 @@ class AdminFeedbackController(
         return true
     }
 
+    @AdminAudit("删除反馈")
     @PostMapping("/delete")
     fun delete(@RequestBody params: FeedbackBatchParams): Boolean {
         feedbackService.delete(params.ids)
@@ -45,10 +47,12 @@ class AdminFeedbackController(
     @PostMapping("/targets")
     fun targets(): List<FeedbackTargetVO> = feedbackService.listTargets()
 
+    @AdminAudit("新增反馈产品")
     @PostMapping("/targets/add")
     fun addTarget(@RequestBody params: FeedbackTargetSaveParams): FeedbackTargetVO =
         feedbackService.addTarget(params.name)
 
+    @AdminAudit("删除反馈产品")
     @PostMapping("/targets/{id}/delete")
     fun deleteTarget(@PathVariable id: String): Boolean {
         feedbackService.deleteTarget(id)

@@ -21,6 +21,12 @@ export interface ScrapperCallLogVO {
   layerUsed?: string | null;
   durationMs: number;
   errorMsg?: string | null;
+  /**
+   * 产生这一行的那次请求的短 id（响应头 X-Request-Id，也打在服务端每行文本日志上）。
+   * 拿它去 `docker logs bookmarkify-api | grep <requestId>` 能捞出那次请求的全部现场 ——
+   * 账本与文本日志从前没有任何共同键，这一列就是补上的那把钥匙。
+   */
+  requestId?: null | string;
   createTime: string;
   /**
    * 该域名的站点图标，后端按 urlHost 反查 site_asset 后签出的我方 OSS 地址。

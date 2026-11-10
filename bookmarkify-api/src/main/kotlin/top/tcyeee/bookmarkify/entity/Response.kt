@@ -777,6 +777,12 @@ data class ScrapperCallLogVO(
     @field:Schema(description = "实际抓取层：HTTP/HEADLESS/SITE_API") var layerUsed: String? = null,
     @field:Schema(description = "耗时(ms)") var durationMs: Long = 0,
     @field:Schema(description = "错误信息") var errorMsg: String? = null,
+    /**
+     * 产生这一行的那次请求的短 id（响应头 `X-Request-Id`，也打在服务端每行文本日志上）。
+     * 后台展示它，是为了让"这条账本记录"与"那次请求的全部文本日志"能互相跳转 —— 两套日志
+     * 从前没有任何共同键。参见 [top.tcyeee.bookmarkify.config.monitor.LogContext]。
+     */
+    @field:Schema(description = "请求号，可据此在服务端日志里捞出该次请求的全部现场") var requestId: String? = null,
     @field:Schema(description = "调用时间") var createTime: LocalDateTime = LocalDateTime.now(),
     /**
      * 该域名的站点图标（我方 OSS 签名地址）。
@@ -825,6 +831,12 @@ data class UserBehaviorLogVO(
     @field:Schema(description = "该用户当前的后台视图；用户已注销等找不到的情况下为空") var user: UserAdminVO? = null,
     @field:Schema(description = "行为类型") var behaviorType: UserBehaviorType,
     @field:Schema(description = "行为详情") var detail: String? = null,
+    /**
+     * 产生这一行的那次请求的短 id（响应头 `X-Request-Id`，也打在服务端每行文本日志上）。
+     * 后台展示它，是为了让"这条账本记录"与"那次请求的全部文本日志"能互相跳转 —— 两套日志
+     * 从前没有任何共同键。参见 [top.tcyeee.bookmarkify.config.monitor.LogContext]。
+     */
+    @field:Schema(description = "请求号，可据此在服务端日志里捞出该次请求的全部现场") var requestId: String? = null,
     @field:Schema(description = "发生时间") var createTime: LocalDateTime = LocalDateTime.now(),
 ) {
     constructor(entity: UserBehaviorLogEntity) : this(
@@ -936,6 +948,12 @@ data class AiCallLogVO(
     @field:Schema(description = "总token数") var totalTokens: Int? = null,
     @field:Schema(description = "耗时(ms)") var durationMs: Long = 0,
     @field:Schema(description = "错误信息") var errorMsg: String? = null,
+    /**
+     * 产生这一行的那次请求的短 id（响应头 `X-Request-Id`，也打在服务端每行文本日志上）。
+     * 后台展示它，是为了让"这条账本记录"与"那次请求的全部文本日志"能互相跳转 —— 两套日志
+     * 从前没有任何共同键。参见 [top.tcyeee.bookmarkify.config.monitor.LogContext]。
+     */
+    @field:Schema(description = "请求号，可据此在服务端日志里捞出该次请求的全部现场") var requestId: String? = null,
     @field:Schema(description = "调用时间") var createTime: LocalDateTime = LocalDateTime.now(),
 ) {
     constructor(entity: AiCallLogEntity) : this(

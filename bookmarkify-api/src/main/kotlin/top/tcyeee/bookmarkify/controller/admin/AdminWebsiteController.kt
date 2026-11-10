@@ -1,5 +1,6 @@
 package top.tcyeee.bookmarkify.controller.admin
 
+import top.tcyeee.bookmarkify.config.audit.AdminAudit
 import top.tcyeee.bookmarkify.entity.dto.scrape.cached
 import top.tcyeee.bookmarkify.entity.dto.scrape.description
 import top.tcyeee.bookmarkify.entity.dto.scrape.faviconUrl
@@ -38,6 +39,7 @@ class AdminWebsiteController(
 ) {
 
     // 对全部书签重新按 host 计算并回写 linkType(域名/本地/IP/其他)；同时批量检查全部书签是否 NSFW(涉黄/涉赌等)
+    @AdminAudit("回填链接类型")
     @PostMapping("/classify-link-type")
     fun classifyLinkType(): Map<String, Int> {
         val total = bookmarkUserLinkService.reclassifyAllLinkTypes()
@@ -58,6 +60,7 @@ class AdminWebsiteController(
      *
      * 详见根目录 `SITE_LAYERING_DESIGN.md` §8 第 4 步。
      */
+    @AdminAudit("修复深链拆分")
     @PostMapping("/repair-deep-link-split")
     fun repairDeepLinkSplit(@RequestParam(defaultValue = "true") dryRun: Boolean): DeepLinkSplitRepair.Report =
         deepLinkSplitRepair.run(dryRun = dryRun)
@@ -65,6 +68,7 @@ class AdminWebsiteController(
     // 任意 URL 活性检测：直接调用 scrapper /scrape 并原样返回其全部字段；不要求该 URL 已收录为书签。
     // 抓取成功且该 URL 命中已有 canonical 书签时，同步覆盖持久化该书签(标题/简介/图标/活性状态)；
     // 未命中已有书签或抓取失败时不落库。
+    @AdminAudit("批量活性检测")
     @PostMapping("/liveness-check")
     fun checkLiveness(@RequestBody params: WebsiteLivenessCheckParams): WebsiteLivenessCheckVO =
         runCatching { apiService.queryWebsiteInfo(params.url) }.fold(

@@ -122,6 +122,8 @@ export type SystemCollectionStatus = (typeof SystemCollectionStatus)[keyof typeo
 
 /** 对应 Kotlin `UserBehaviorType` */
 export const UserBehaviorType = {
+  LOGIN: 'LOGIN',
+  LOGOUT: 'LOGOUT',
   ADD_BOOKMARK: 'ADD_BOOKMARK',
   PUBLISH_SHARE: 'PUBLISH_SHARE',
   IMPORT_BOOKMARK: 'IMPORT_BOOKMARK',

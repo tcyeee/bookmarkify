@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import top.tcyeee.bookmarkify.config.audit.AdminAudit
 import top.tcyeee.bookmarkify.entity.OssObjectSearchParams
 import top.tcyeee.bookmarkify.entity.OssObjectVO
 import top.tcyeee.bookmarkify.entity.OssReconcileReport
@@ -36,6 +37,7 @@ class AdminOssObjectController(
      * 那是个配置级的判断，不该挂在一次点击上。
      */
     @Operation(summary = "立即执行一轮对账（是否回收由配置决定）")
+    @AdminAudit("手动 OSS 对账")
     @PostMapping("/reconcile")
     fun reconcile(): OssReconcileReport = ossReconcileService.reconcile()
 }

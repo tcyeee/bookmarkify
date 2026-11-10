@@ -53,20 +53,29 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       const errorMessage = responseData?.error ?? responseData?.message ?? responseData?.msg ?? '';
       const errorCode = responseData?.code ?? 0;
 
+      // 后端给每个响应都带了 X-Request-Id（PreRequestFilter 生成，同一串也打在每行文本日志上、
+      // 并写进 ai_call_log / scrapper_call_log 等账本的 request_id 列）。把它显示出来，
+      // "报错了但查不到是哪次请求"才算有解：拿这一串就能 grep 出那次调用的全部现场。
+      // 只在错误提示里带，正常响应不打扰。
+      const requestId = error?.response?.headers?.['x-request-id'];
+      const withRequestId = (text: string) =>
+        requestId ? `${text}（请求号 ${requestId}）` : text;
+
       if (errorCode === 101) {
         const authStore = useAuthStore();
+        // 未登录是会话过期，不是故障，不必给请求号
         ElMessage.error(errorMessage || msg);
         void authStore.logout();
         return;
       }
 
       if (errorCode >= 100 && errorCode < 200) {
-        ElMessage.error(errorMessage || msg);
+        ElMessage.error(withRequestId(errorMessage || msg));
         return;
       }
 
       // 如果没有错误信息，则会根据状态码进行提示
-      ElMessage.error(errorMessage || msg);
+      ElMessage.error(withRequestId(errorMessage || msg));
     }),
   );
 

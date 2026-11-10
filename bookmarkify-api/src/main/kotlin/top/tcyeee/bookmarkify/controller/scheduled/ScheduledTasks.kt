@@ -9,6 +9,7 @@ import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IOssReconcileService
 import top.tcyeee.bookmarkify.server.liveness.ILivenessSweepService
 import top.tcyeee.bookmarkify.server.asset.SiteAssetWriter
+import top.tcyeee.bookmarkify.server.log.LogRetentionService
 
 /**
  * 全部后台定时任务。
@@ -48,6 +49,7 @@ class ScheduledTasks(
     private val ossReconcileService: IOssReconcileService,
     private val livenessSweepService: ILivenessSweepService,
     private val siteAssetWriter: SiteAssetWriter,
+    private val logRetentionService: LogRetentionService,
 ) {
     @Description("每5分钟对账一次未完成解析的书签")
     @Scheduled(cron = "0 */5 * * * ?")
@@ -84,6 +86,19 @@ class ScheduledTasks(
     @Description("每天凌晨 3 点清理过期的活性探测日志，避免这张只增不减的表无限膨胀")
     @Scheduled(cron = "0 0 3 * * ?")
     fun purgeExpiredPingLogs() = bookmarkPingLogService.purgeExpired()
+
+    /**
+     * 与上面那条隔 5 分钟：同样是删行，没必要和它抢同一秒的 IO。
+     *
+     * 为什么要有这一条：`page_ping_log` / `sweep_log` 早就有清理，而另外四张日志表
+     * （scrapper 调用、AI 调用、用户行为、后台审计）此前**一行都没删过** —— 生产上
+     * `ai_call_log` 的最早一行就是建表那天。量不大不等于没问题：它们的写入量随用户数线性增长，
+     * 而读取永远只看最近几天；`ai_call_log` 还存着请求/响应原文，那同时是隐私面。
+     * 各表留多久、为什么是那个数，见 `LogRetention`。
+     */
+    @Description("每天凌晨 3:05 按保留期清理四张日志表（scrapper 调用/AI 调用/用户行为/后台审计）")
+    @Scheduled(cron = "0 5 3 * * ?")
+    fun purgeExpiredLogTables() = logRetentionService.purgeAll()
 
     /**
      * 与上面的日志清理错开 15 分钟：两者都是删行，但这一条要跑窗口函数扫全表，

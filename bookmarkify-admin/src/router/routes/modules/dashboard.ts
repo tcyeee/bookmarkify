@@ -215,6 +215,17 @@ const routes: RouteRecordRaw[] = [
           title: '系统配置',
         },
       },
+      {
+        // 「系统配置 > 变更记录」只覆盖 system_config 的写入；删页面/下架分享/改 NSFW/跑清理
+        // 这些不可逆的动作此前没有任何操作者痕迹，这一页就是补上的那张审计表
+        name: 'SystemActionLog',
+        path: '/system/action-log',
+        component: () => import('#/views/system/action-log/index.vue'),
+        meta: {
+          icon: 'carbon:catalog',
+          title: '操作审计',
+        },
+      },
     ],
   },
 ];
