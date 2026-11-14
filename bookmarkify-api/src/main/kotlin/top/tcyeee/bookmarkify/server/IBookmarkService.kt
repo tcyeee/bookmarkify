@@ -6,6 +6,7 @@ import top.tcyeee.bookmarkify.entity.AllOfMyBookmarkParams
 import top.tcyeee.bookmarkify.entity.BookmarkBasicInfoUpdateParams
 import top.tcyeee.bookmarkify.entity.BookmarkSearchParams
 import top.tcyeee.bookmarkify.entity.BookmarkShow
+import top.tcyeee.bookmarkify.entity.ExtensionSiteInfoVO
 import top.tcyeee.bookmarkify.entity.UserLayoutNodeVO
 import top.tcyeee.bookmarkify.entity.entity.PageEntity
 
@@ -149,6 +150,19 @@ interface IBookmarkService : IService<PageEntity> {
      * 需要抓取的调用方自己判断 [PageEntity.parseStatus] 后发事件。
      */
     fun getOrCreateCanonical(url: String): PageEntity
+
+    /**
+     * 供 `/extension/site-info` 用：与加书签走同一条 [getOrCreateCanonical] + 解析管线，
+     * 但不建 `bookmark` 用户关联行——抓取结果落在 `page`/`site_asset` 上，被所有调用方共享，
+     * 并从此加入正常巡检（`next_check_at`），往后的内容新鲜度由 `livenessCheckStaleBookmarks`
+     * 按 30 天周期自动续抓，这里只看"有没有抓过"，不做自己的新鲜度判断。
+     *
+     * 已经成功解析过的页面直接读库返回；首次查询或上次解析失败的页面会在本次调用里同步抓取一次。
+     *
+     * @throws top.tcyeee.bookmarkify.config.exception.CommonException E309 目标不是域名；
+     *   E304 目标站点打不开；E307 我方抓取服务不可用，或与另一次并发抓取撞上了同一页面的解析锁
+     */
+    fun queryExtensionSiteInfo(url: String): ExtensionSiteInfoVO
 
     /**
      * 管理员「一键分类」批量检查全部 canonical 书签是否 NSFW(涉黄/涉赌等违规内容)，命中的直接回写 nsfw=true。
