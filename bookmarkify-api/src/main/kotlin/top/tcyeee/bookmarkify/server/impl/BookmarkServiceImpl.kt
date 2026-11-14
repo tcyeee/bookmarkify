@@ -140,6 +140,32 @@ class BookmarkServiceImpl(
     override fun getOrCreateCanonical(url: String): PageEntity =
         getOrCreateByUrl(WebsiteParser.urlWrapper(url))
 
+    override fun queryExtensionSiteInfo(url: String): ExtensionSiteInfoVO {
+        // 挡在最前面抛 E309：parseBookmarkExclusively 内部的同类判断会把这种目标直接标成
+        // SUCCESS 静默收口成空磁贴，插件接口不能把"我方拒绝抓取"伪装成"抓到了，但什么都没有"
+        ScrapeTargetGuard.assertScrapable(url)
+
+        val page = getOrCreateCanonical(url)
+        val resolved = if (page.parseStatus == ParseStatusEnum.SUCCESS) page else {
+            parseAndSave(page.id)
+            getById(page.id) ?: page
+        }
+
+        when (resolved.parseStatus) {
+            ParseStatusEnum.SUCCESS -> {}
+            ParseStatusEnum.UNREACHABLE -> throw CommonException(ErrorType.E304)
+            // 仍是 PENDING：抓取服务不可用，或撞上了同一页面的并发解析锁(另一次抓取正在进行)
+            else -> throw CommonException(ErrorType.E307)
+        }
+
+        return ExtensionSiteInfoVO(
+            title = resolved.title,
+            favicon = iconResolver.resolveOne(resolved.id, DisplayMode.LIST).url,
+            logo = iconResolver.resolveOne(resolved.id, DisplayMode.TILE).url,
+            appName = resolved.appName ?: resolved.title,
+        )
+    }
+
     @Transactional
     override fun setDefaultFunction(uid: String) =
         UserLayoutNodeEntity(uid = uid, type = NodeTypeEnum.FUNCTION).also { layoutNodeMapper.insert(it) }

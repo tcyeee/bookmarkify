@@ -1,8 +1,5 @@
 package top.tcyeee.bookmarkify.controller.extension
 
-import top.tcyeee.bookmarkify.entity.dto.scrape.appName
-import top.tcyeee.bookmarkify.entity.dto.scrape.iconUrlFor
-import top.tcyeee.bookmarkify.entity.dto.scrape.title
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.GetMapping
@@ -14,11 +11,9 @@ import top.tcyeee.bookmarkify.config.exception.CommonException
 import top.tcyeee.bookmarkify.config.exception.ErrorType
 import top.tcyeee.bookmarkify.config.throttle.Throttle
 import top.tcyeee.bookmarkify.entity.AccessTokenVO
-import top.tcyeee.bookmarkify.entity.ExtensionSiteInfoVO
-import top.tcyeee.bookmarkify.entity.enums.DisplayMode
 import top.tcyeee.bookmarkify.entity.enums.UserBehaviorType
 import top.tcyeee.bookmarkify.server.IAccessTokenService
-import top.tcyeee.bookmarkify.server.IApiService
+import top.tcyeee.bookmarkify.server.IBookmarkService
 import top.tcyeee.bookmarkify.server.IUserBehaviorLogService
 import top.tcyeee.bookmarkify.utils.ExtensionAuthUtils
 
@@ -32,7 +27,7 @@ import top.tcyeee.bookmarkify.utils.ExtensionAuthUtils
 @Tag(name = "插件专用接口")
 @RequestMapping("/extension")
 class ExtensionController(
-    private val apiService: IApiService,
+    private val bookmarkService: IBookmarkService,
     private val accessTokenService: IAccessTokenService,
     private val userBehaviorLogService: IUserBehaviorLogService,
 ) {
@@ -41,16 +36,9 @@ class ExtensionController(
     @Throttle(interval = 300)
     @GetMapping("/site-info")
     @Operation(summary = "查询网站标题/简称与大小图标，供插件在浏览页面时展示/预填")
-    fun siteInfo(@RequestParam url: String): ExtensionSiteInfoVO {
-        val scraped = apiService.queryWebsiteInfo(url)
-        userBehaviorLogService.record(ExtensionAuthUtils.currentUid(), UserBehaviorType.QUERY_BY_TOKEN, url)
-        return ExtensionSiteInfoVO(
-            title = scraped.title,
-            favicon = scraped.iconUrlFor(DisplayMode.LIST),
-            logo = scraped.iconUrlFor(DisplayMode.TILE),
-            appName = scraped.appName,
-        )
-    }
+    fun siteInfo(@RequestParam url: String) =
+        bookmarkService.queryExtensionSiteInfo(url)
+            .also { userBehaviorLogService.record(ExtensionAuthUtils.currentUid(), UserBehaviorType.QUERY_BY_TOKEN, url) }
 
     // 供第三方(插件/脚本/AI 助手)在正式接入前自检 token 是否配置正确，无需真的发起一次抓取
     @Throttle(interval = 300)
